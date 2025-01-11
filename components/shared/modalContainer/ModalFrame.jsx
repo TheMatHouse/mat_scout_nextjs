@@ -4,6 +4,7 @@ import EditPersonalInfo from "./EditPersonaInfo";
 import UpdateAvatar from "./UpdateAvatar";
 import AddStyle from "./AddStyle";
 import EditStyle from "./EditStyle";
+import StyleForm from "../dashboard/forms/Style";
 
 const ModalFrame = ({
   user,
@@ -16,7 +17,7 @@ const ModalFrame = ({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div
-        className="fixed inset-0 w-full h-full bg-gray-600 opacity-40"
+        className="fixed inset-0 w-[80%] h-full bg-gray-600 opacity-40"
         onClick={handleClose}
       ></div>
       <div className="flex items-center min-h-screen px-4 py-8 z=50">
@@ -47,11 +48,16 @@ const ModalFrame = ({
           )}
 
           {modalType === "addStyle" && (
-            <AddStyle
+            <StyleForm
               user={user}
               userType={userType}
               handleClose={handleClose}
             />
+            // <AddStyle
+            //   user={user}
+            //   userType={userType}
+            //   handleClose={handleClose}
+            // />
           )}
 
           {modalType === "editStyle" && (

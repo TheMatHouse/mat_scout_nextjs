@@ -5,6 +5,17 @@ import moment from "moment";
 import ModalFrame from "../modalContainer/ModalFrame";
 import { GrEdit } from "react-icons/gr";
 import StyleCard from "./StyleCard";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import StyleForm from "./forms/Style";
 
 const DashboardStyles = ({ user, userType }) => {
   const myStyles = user.userStyles;
@@ -69,6 +80,27 @@ const DashboardStyles = ({ user, userType }) => {
         >
           Add Style
         </button>
+        <Dialog className="min-w-[300px">
+          <DialogTrigger asChild>
+            <Button className="bg-gray-900 hover:bg-gray-500  border-gray-500 dark:border-gray-100 border-2 drop-shadow-md text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ml-6">
+              Add Style
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="overflow-y-scroll max-h-[90%]">
+            <DialogHeader>
+              <DialogTitle>Edit profile</DialogTitle>
+              <DialogDescription>
+                Make changes to your profile here. Click save when you're done.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4 min-width-full">
+              <StyleForm
+                user={user}
+                userType="user"
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
       <hr className="inline-block w-full border-t-1 border-gray-100" />
       <div className="grid grid-cols-3 gap-4">
