@@ -1,0 +1,19 @@
+"use client";
+import Spinner from "@/components/shared/Spinner";
+
+const override = {
+  display: "block",
+  margin: "100px auto",
+};
+const LoadingPage = () => {
+  return (
+    <Spinner
+      color="#3b82f6"
+      cssOverride={override}
+      size={150}
+      aria-label="Loading Spinner"
+    />
+  );
+};
+
+export default LoadingPage;
