@@ -19,6 +19,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -66,287 +67,251 @@ const StyleForm = ({ user, data, userType, type }) => {
     console.log("VALUES ", values);
   };
   return (
-    <AlertDialog>
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle>Add Style/Sport</CardTitle>
-          <CardDescription>
-            {data?.id
-              ? `Update ${data?.styleName} information`
-              : "Create a style/sport to be displayed on your profile.  You can edit style settings later from the style/sport tab in your dashboard."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit(handleSubmit)}
-              className="space-y-4"
-            >
-              <FormField
-                disabled={isLoading}
-                control={form.control}
-                name="styleName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Style/Sport</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
+    <Form {...form}>
+      <form
+        onSubmit={form.handleSubmit(handleSubmit)}
+        className="space-y-4"
+      >
+        <FormField
+          disabled={isLoading}
+          control={form.control}
+          name="styleName"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Style/Sport</FormLabel>
+              <Select
+                onValueChange={field.onChange}
+                defaultValue={field.value}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Style/Sport" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="Brazilian Jiu Jitsu">
+                    Brazilian Jiu Jitsum
+                  </SelectItem>
+                  <SelectItem value="Judo">Judo</SelectItem>
+                  <SelectItem value="Wrestling">Wrestling</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          disabled={isLoading}
+          control={form.control}
+          name="rank"
+          render={({ field }) => (
+            <FormItem className="flex-1">
+              <FormLabel>
+                {" "}
+                {`${
+                  userType === "familyMember" ? user.firstName + "'s" : "My"
+                }  rank`}
+              </FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="Rank"
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="dob"
+          render={({ field }) => (
+            <FormItem className="flex flex-col">
+              <FormLabel>Date of birth</FormLabel>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-[240px] pl-3 text-left font-normal",
+                        !field.value && "text-muted-foreground"
+                      )}
                     >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select Style/Sport" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="Brazilian Jiu Jitsu">
-                          Brazilian Jiu Jitsum
-                        </SelectItem>
-                        <SelectItem value="Judo">Judo</SelectItem>
-                        <SelectItem value="Wrestling">Wrestling</SelectItem>
-                      </SelectContent>
-                    </Select>
-
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                disabled={isLoading}
-                control={form.control}
-                name="rank"
-                render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel>
-                      {" "}
-                      {`${
-                        userType === "familyMember"
-                          ? user.firstName + "'s"
-                          : "My"
-                      }  rank`}
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Rank"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="promotionDate"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>
-                      {" "}
-                      {`${
-                        userType === "familyMember"
-                          ? user.firstName + "'s"
-                          : "My"
-                      }  promotion date`}
-                    </FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "w-[240px] pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP")
-                            ) : (
-                              <span>Pick a date</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        className="w-auto p-0"
-                        align="start"
-                      >
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          disabled={(date) =>
-                            date > new Date() || date < new Date("1900-01-01")
-                          }
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                disabled={isLoading}
-                control={form.control}
-                name="division"
-                render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel>
-                      {" "}
-                      {`${
-                        userType === "familyMember"
-                          ? user.firstName + "'s"
-                          : "My"
-                      }  division`}
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Division"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                disabled={isLoading}
-                control={form.control}
-                name="weightClass"
-                render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel>
-                      {" "}
-                      {`${
-                        userType === "familyMember"
-                          ? user.firstName + "'s"
-                          : "My"
-                      }  weight class`}
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Weight class"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                disabled={isLoading}
-                control={form.control}
-                name="rank"
-                render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel>
-                      {" "}
-                      {`${
-                        userType === "familyMember"
-                          ? user.firstName + "'s"
-                          : "My"
-                      }  rank`}
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        className=" focus-visible:outline-2"
-                        placeholder="Rank"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="grip"
-                render={({ field }) => (
-                  <FormItem className="space-y-3">
-                    <FormLabel>
-                      {" "}
-                      {`${
-                        userType === "familyMember"
-                          ? user.firstName + "'s"
-                          : "My"
-                      }  grip/stance`}{" "}
-                      (Lefty or Righty)
-                    </FormLabel>
-                    <FormControl>
-                      <RadioGroup
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                        className="flex flex-col space-y-1"
-                      >
-                        <FormItem className="flex items-center space-x-3 space-y-0">
-                          <FormControl>
-                            <RadioGroupItem value="righty" />
-                          </FormControl>
-                          <FormLabel className="font-normal">Righty</FormLabel>
-                        </FormItem>
-                        <FormItem className="flex items-center space-x-3 space-y-0">
-                          <FormControl>
-                            <RadioGroupItem value="lefty" />
-                          </FormControl>
-                          <FormLabel className="font-normal">Lefty</FormLabel>
-                        </FormItem>
-                      </RadioGroup>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                disabled={isLoading}
-                control={form.control}
-                name="favoriteTechnique"
-                render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel>
-                      {" "}
-                      {`${
-                        userType === "familyMember"
-                          ? user.firstName + "'s"
-                          : "My"
-                      }  favorite technique`}
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Favorite technique"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="flex items-center justify-center">
-                <Button
-                  type="submit"
-                  disabled={isLoading}
-                  className="bg-gray-900 hover:bg-gray-500  border-gray-500 dark:border-gray-100 border-2 drop-shadow-md text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline mt-4"
+                      {field.value ? (
+                        format(field.value, "PPP")
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-auto p-0"
+                  align="start"
                 >
-                  {isLoading
-                    ? "loading..."
-                    : data?.id
-                    ? "Save category information"
-                    : "Add Style"}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-    </AlertDialog>
+                  <Calendar
+                    mode="single"
+                    selected={field.value}
+                    onSelect={field.onChange}
+                    disabled={(date) =>
+                      date > new Date() || date < new Date("1900-01-01")
+                    }
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <FormDescription>
+                Your date of birth is used to calculate your age.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          disabled={isLoading}
+          control={form.control}
+          name="division"
+          render={({ field }) => (
+            <FormItem className="flex-1">
+              <FormLabel>
+                {" "}
+                {`${
+                  userType === "familyMember" ? user.firstName + "'s" : "My"
+                }  division`}
+              </FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="Division"
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          disabled={isLoading}
+          control={form.control}
+          name="weightClass"
+          render={({ field }) => (
+            <FormItem className="flex-1">
+              <FormLabel>
+                {" "}
+                {`${
+                  userType === "familyMember" ? user.firstName + "'s" : "My"
+                }  weight class`}
+              </FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="Weight class"
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          disabled={isLoading}
+          control={form.control}
+          name="rank"
+          render={({ field }) => (
+            <FormItem className="flex-1">
+              <FormLabel>
+                {" "}
+                {`${
+                  userType === "familyMember" ? user.firstName + "'s" : "My"
+                }  rank`}
+              </FormLabel>
+              <FormControl>
+                <Input
+                  className=" focus-visible:outline-2"
+                  placeholder="Rank"
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="grip"
+          render={({ field }) => (
+            <FormItem className="space-y-3">
+              <FormLabel>
+                {" "}
+                {`${
+                  userType === "familyMember" ? user.firstName + "'s" : "My"
+                }  grip/stance`}{" "}
+                (Lefty or Righty)
+              </FormLabel>
+              <FormControl>
+                <RadioGroup
+                  onValueChange={field.onChange}
+                  defaultValue={field.value}
+                  className="flex flex-col space-y-1"
+                >
+                  <FormItem className="flex items-center space-x-3 space-y-0">
+                    <FormControl>
+                      <RadioGroupItem value="righty" />
+                    </FormControl>
+                    <FormLabel className="font-normal">Righty</FormLabel>
+                  </FormItem>
+                  <FormItem className="flex items-center space-x-3 space-y-0">
+                    <FormControl>
+                      <RadioGroupItem value="lefty" />
+                    </FormControl>
+                    <FormLabel className="font-normal">Lefty</FormLabel>
+                  </FormItem>
+                </RadioGroup>
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          disabled={isLoading}
+          control={form.control}
+          name="favoriteTechnique"
+          render={({ field }) => (
+            <FormItem className="flex-1">
+              <FormLabel>
+                {" "}
+                {`${
+                  userType === "familyMember" ? user.firstName + "'s" : "My"
+                }  favorite technique`}
+              </FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="Favorite technique"
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <div className="flex items-center justify-center">
+          <Button
+            type="submit"
+            disabled={isLoading}
+            className="bg-gray-900 hover:bg-gray-500  border-gray-500 dark:border-gray-100 border-2 drop-shadow-md text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline mt-4"
+          >
+            {isLoading
+              ? "loading..."
+              : data?.id
+              ? "Save category information"
+              : "Add Style"}
+          </Button>
+        </div>
+      </form>
+    </Form>
   );
 };
 

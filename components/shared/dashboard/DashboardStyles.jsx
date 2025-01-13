@@ -80,7 +80,7 @@ const DashboardStyles = ({ user, userType }) => {
         >
           Add Style
         </button>
-        <Dialog className="min-w-[300px">
+        <Dialog className="min-w-[800px]">
           <DialogTrigger asChild>
             <Button className="bg-gray-900 hover:bg-gray-500  border-gray-500 dark:border-gray-100 border-2 drop-shadow-md text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ml-6">
               Add Style
