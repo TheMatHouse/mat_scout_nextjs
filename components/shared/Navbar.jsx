@@ -4,6 +4,12 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import logo from "@/assets/mat_scout_logo.png";
+import {
+  SignedIn,
+  SignedOut,
+  SignInButton,
+  SignOutButton,
+} from "@clerk/nextjs";
 // ICONS
 
 //import { IoMenu } from "react-icons/io5";
@@ -77,20 +83,12 @@ const Navbar = ({ session }) => {
             >
               About Us
             </Link>
-            <Link
-              href="/login"
-              className="text-2xl hover:text-gray-400 px-3"
-              onClick={() => setIsOpen(isOpen && setIsOpen(false))}
-            >
-              Login
-            </Link>
-            <Link
-              href="/register"
-              className="text-2xl hover:text-gray-400 px-3"
-              onClick={() => setIsOpen(isOpen && setIsOpen(false))}
-            >
-              Register
-            </Link>
+            <SignedIn>
+              <SignOutButton className="text-2xl hover:text-gray-400 px-3 -mt-2" />
+            </SignedIn>
+            <SignedOut>
+              <SignInButton className="text-2xl hover:text-gray-400 px-3 -mt-2" />
+            </SignedOut>
           </>
         </div>
 
