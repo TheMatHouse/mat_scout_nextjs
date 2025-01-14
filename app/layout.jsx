@@ -5,7 +5,7 @@ import Header from "@/components/shared/Header";
 import "react-toastify/ReactToastify.css";
 import { ToastContainer } from "react-toastify";
 
-import { auth } from "@/auth";
+//import { auth } from "@/auth";
 import SidebarMenuBar from "@/components/shared/sidebar/SidebarMenuBar";
 import { ClerkProvider, ClerkLoaded, ClerkLoading } from "@clerk/nextjs";
 import Loader from "@/components/shared/Loader";
@@ -15,7 +15,7 @@ export const metadata = customMetaDataGenerator({
 });
 
 export default async function RootLayout({ children }) {
-  const session = await auth();
+  //const session = await auth();
   return (
     <ClerkProvider>
       <html
@@ -35,10 +35,7 @@ export default async function RootLayout({ children }) {
             >
               <ToastContainer />
               <Header />
-              <main className="flex h-1vh w[100$">
-                {session?.user && <SidebarMenuBar />}
-                {children}
-              </main>
+              <main className="flex h-1vh w[100$">{children}</main>
             </ThemeProvider>
           </ClerkLoaded>
         </body>

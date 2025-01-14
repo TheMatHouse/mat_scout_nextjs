@@ -1,7 +1,12 @@
-import { Schema, model, models } from "mongoose";
+import mongoose from "mongoose";
 
-const userSchema = new Schema(
+const userSchema = new mongoose.Schema(
   {
+    clerkId: {
+      type: String,
+      required: true,
+      unique: true,
+    },
     firstName: {
       type: String,
       required: true,
@@ -12,8 +17,12 @@ const userSchema = new Schema(
     },
     email: {
       type: String,
+      //required: true,
+      //unique: true,
+    },
+    username: {
+      type: String,
       required: true,
-      unique: true,
     },
     password: {
       type: String,
@@ -22,13 +31,7 @@ const userSchema = new Schema(
     city: { type: String },
     state: { type: String },
     country: { type: String },
-    username: {
-      type: String,
-      // required: true,
-      trim: true,
-      text: true,
-      unique: true,
-    },
+
     bYear: {
       type: Number,
       trim: true,
@@ -55,25 +58,29 @@ const userSchema = new Schema(
     },
     avatar: {
       type: String,
-      default:
-        "https://firebasestorage.googleapis.com/v0/b/matscout.appspot.com/o/images%2Fdefault_user.jpg?alt=media&token=314573ee-36df-471e-bb4e-17f47d0750e1",
+      required: true,
     },
-    googleAvatar: {
-      type: String,
-    },
-    avatarType: {
-      type: String,
-      default: "default",
-    },
-    verified: {
-      type: Boolean,
-      default: false,
-    },
-    tokens: [String],
-    athlete: {
-      type: Schema.Types.ObjectId,
-      ref: "Athlete",
-    },
+    // avatar: {
+    //   type: String,
+    //   default:
+    //     "https://firebasestorage.googleapis.com/v0/b/matscout.appspot.com/o/images%2Fdefault_user.jpg?alt=media&token=314573ee-36df-471e-bb4e-17f47d0750e1",
+    // },
+    // googleAvatar: {
+    //   type: String,
+    // },
+    // avatarType: {
+    //   type: String,
+    //   default: "default",
+    // },
+    // verified: {
+    //   type: Boolean,
+    //   default: false,
+    // },
+    // tokens: [String],
+    // athlete: {
+    //   type: Schema.Types.ObjectId,
+    //   ref: "Athlete",
+    // },
     allowPublic: {
       type: Boolean,
     },
@@ -84,6 +91,9 @@ const userSchema = new Schema(
   }
 );
 
-export const User = models.User || model("User", userSchema);
+//export const User = models.User || model("User", userSchema);
+const User = mongoose.models.User || mongoose.model("User", userSchema);
+
+export default User;
 
 //export default User;
