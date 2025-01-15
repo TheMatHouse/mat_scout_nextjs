@@ -11,7 +11,7 @@ export const createOrUpdateUser = async (
 ) => {
   try {
     await connectDB();
-
+    console.log("first name ", first_name);
     const user = await User.findOneAndUpdate(
       { clerkId: id },
       {
