@@ -6,7 +6,7 @@ import { createOrUpdateUser, deleteUser } from "@/app/actions/user";
 export async function POST(request) {
   // You can find this in the Clerk Dashboard -> Webhooks -> choose the endpoint
   const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
-  console.log("TESTING!!!!!!!!!!!!");
+
   if (!WEBHOOK_SECRET) {
     throw new Error(
       "Please add WEBHOOK_SECRET from Clerk Dashboard to .env or .env.local"
@@ -69,6 +69,7 @@ export async function POST(request) {
         username
       );
       if (user && eventType === "user.created") {
+        console.log("MONGO ID ", user._id);
         try {
           await clerkClient.users.updateUserMetadata(id, {
             publicMetadata: {
