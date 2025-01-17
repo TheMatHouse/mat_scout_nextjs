@@ -17,7 +17,7 @@ import DashboardTabs from "@/components/shared/dashboard/DashboardTabs";
 const Dashboard = async () => {
   // const session = await auth();
   const user = await currentUser();
-
+  console.log(user);
   // console.log(user.id);
   const clerk = user.emailAddresses[0].emailAddress;
 
