@@ -10,22 +10,7 @@ export const createOrUpdateUser = async (
   username
 ) => {
   try {
-    await connectDB();
-    const userExists = await User.findOneAndUpdate({
-      email: email_addresses[0].email_address,
-    });
-    if (userExists && !userExists.clerkId === "") {
-      const addClerk = await User.findOneAndUpdate(
-        {
-          email: email_addresses[0].email_address,
-        },
-        {
-          clerkId: id,
-        }
-      );
-    } else {
-      console.log("USER DOES NOT EXIST");
-    }
+    await connect();
     const user = await User.findOneAndUpdate(
       { clerkId: id },
       {
@@ -47,7 +32,7 @@ export const createOrUpdateUser = async (
 
 export const deleteUser = async (id) => {
   try {
-    await connectDB();
+    await connect();
     await User.findOneAndDelete({ clerkId: id });
   } catch (error) {
     console.log("Error deleting user:", error);

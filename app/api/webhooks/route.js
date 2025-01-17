@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { clerkClient } from "@clerk/nextjs/server";
 import { createOrUpdateUser, deleteUser } from "@/app/actions/user";
 
-export async function POST(request) {
+export async function POST(req) {
   // You can find this in the Clerk Dashboard -> Webhooks -> choose the endpoint
   const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 
@@ -27,7 +27,7 @@ export async function POST(request) {
   }
 
   // Get the body
-  const payload = await request.json();
+  const payload = await req.json();
   const body = JSON.stringify(payload);
 
   // Create a new Svix instance with your secret.
@@ -68,17 +68,15 @@ export async function POST(request) {
         email_addresses,
         username
       );
-      if (user) {
-        if (eventType === "user.created") {
-          try {
-            await clerkClient.users.updateUserMetadata(id, {
-              publicMetadata: {
-                userMongoId: user._id,
-              },
-            });
-          } catch (error) {
-            console.log("Error updating user metadata:", error);
-          }
+      if (user && eventType === "user.created") {
+        try {
+          await clerkClient.users.updateUserMetadata(id, {
+            publicMetadata: {
+              userMongoId: user._id,
+            },
+          });
+        } catch (error) {
+          console.log("Error updating user metadata:", error);
         }
       }
     } catch (error) {
