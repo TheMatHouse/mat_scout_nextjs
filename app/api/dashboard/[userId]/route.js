@@ -1,7 +1,7 @@
 "use server";
 import { NextResponse } from "next/server";
+import User from "@/models/userModel";
 import { Types, ObjectId } from "mongoose";
-import { User } from "@/models/userModel";
 import { connectDB } from "@/config/mongo";
 import { revalidatePath } from "next/cache";
 
@@ -15,7 +15,6 @@ export async function GET(request, { params }) {
       );
     }
 
-    await connectDB();
     const user = await User.aggregate([
       { $match: { _id: Types.ObjectId.createFromHexString(userId) } },
       {

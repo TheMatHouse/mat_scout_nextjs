@@ -16,20 +16,29 @@ import DashboardTabs from "@/components/shared/dashboard/DashboardTabs";
 // };
 const Dashboard = async () => {
   // const session = await auth();
-  // const user = await currentUser();
-  // console.log("USER ", user);
+  const user = await currentUser();
+  console.log("USER ", user.id);
   // console.log(user.id);
-  // const res = await fetch(
-  //   `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user?.id}`
-  // );
-  // const data = await res.json();
-  // const profile = data;
-  // console.log(profile && profile);
+  const clerk = user.id;
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/clerk/${clerk}`
+  );
+
+  const data = await res.json();
+  console.log("id ", data.data._id);
+  const userId = data?.data._id;
+
+  const resUser = await fetch(
+    `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${userId}`
+  );
+  const userData = await resUser.json();
+  console.log(userData);
+  const profile = userData.user;
 
   return (
     <div className="w-full">
       <div className="relative right-0">
-        {/* <DashboardTabs user={user && user[0]} /> */}
+        <DashboardTabs user={profile && profile[0]} />
       </div>
     </div>
   );
