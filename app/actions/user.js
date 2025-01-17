@@ -20,6 +20,7 @@ export const createOrUpdateUser = async (
           avatar: image_url,
           email: email_addresses[0].email_address,
           username,
+          role: "USER",
         },
       },
       { new: true, upsert: true }

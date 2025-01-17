@@ -66,8 +66,7 @@ export async function POST(request) {
         last_name,
         image_url,
         email_addresses,
-        username,
-        role: user.role || "USER"
+        username
       );
       if (user && eventType === "user.created") {
         try {
@@ -76,7 +75,7 @@ export async function POST(request) {
               userMongoId: user._id,
             },
             privateMetaData: {
-              role: "USER",
+              role: user.role || "USER",
             },
           });
           console.log(response);
