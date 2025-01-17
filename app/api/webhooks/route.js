@@ -73,7 +73,7 @@ export async function POST(request) {
       if (user) {
         try {
           const client = await clerkClient();
-          await client.users.updateUserMetadata(data.id, {
+          await client.users.updateUserMetadata(id, {
             privateMetadata: {
               userMongoId: user._id,
             },
