@@ -38,7 +38,10 @@ export default async function RootLayout({ children }) {
             >
               <ToastContainer />
               <Header />
-              <main className="flex h-1vh w[100$">{children}</main>
+              <main className="flex h-1vh w[100%]">
+                {user && <SidebarMenuBar />}
+                {children}
+              </main>
             </ThemeProvider>
           </ClerkLoaded>
         </body>
