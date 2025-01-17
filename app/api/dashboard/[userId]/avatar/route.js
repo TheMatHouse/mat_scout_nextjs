@@ -8,10 +8,10 @@ import cloudinary from "@/config/cloudinary";
 export const PATCH = async (request, { params }) => {
   try {
     const { userId } = await params;
-    console.log(userId);
+
     const body = await request.json();
     const { image, avatarType } = body;
-    console.log(avatarType);
+
     if (!userId || !Types.ObjectId.isValid(userId)) {
       return new NextResponse(
         JSON.stringify({ message: "Invalid or missing user id" })

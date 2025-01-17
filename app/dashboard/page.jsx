@@ -26,7 +26,6 @@ const Dashboard = async () => {
   );
 
   const data = await res.json();
-  console.log("DATA ", data);
   //console.log("id ", data.data._id);
   const userId = data?.data._id;
 
@@ -34,7 +33,7 @@ const Dashboard = async () => {
     `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${userId}`
   );
   const userData = await resUser.json();
-  console.log(userData);
+
   const profile = userData.user;
 
   return (
