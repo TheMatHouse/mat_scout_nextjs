@@ -21,7 +21,9 @@ export const createOrUpdateUser = async (
           email: email_addresses[0].email_address,
         },
         {
-          clerkId: id,
+          $set: {
+            clerkId: id,
+          },
         }
       );
     }

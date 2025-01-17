@@ -70,10 +70,7 @@ export async function POST(request) {
         email_addresses,
         username
       );
-      if (
-        (user && eventType === "user.created") ||
-        eventType === "user.updated"
-      ) {
+      if (user) {
         try {
           const client = await clerkClient();
           await client.users.updateUserMetadata(data.id, {
