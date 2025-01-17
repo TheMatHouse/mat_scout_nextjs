@@ -9,6 +9,8 @@ import {
   SignedOut,
   SignInButton,
   SignOutButton,
+  SignUpButton,
+  UserButton,
 } from "@clerk/nextjs";
 // ICONS
 
@@ -62,32 +64,45 @@ const Navbar = ({ session }) => {
           </div>
 
           <>
-            <Link
-              href="/"
-              className="text-2xl  hover:text-gray-400 px-3"
-              onClick={() => setIsOpen(isOpen && setIsOpen(false))}
-            >
-              Home
-            </Link>
-            <Link
-              href="/features"
-              className="text-2xl hover:text-gray-400 px-3"
-              onClick={() => setIsOpen(isOpen && setIsOpen(false))}
-            >
-              Features
-            </Link>
-            <Link
-              href="/about"
-              className="text-2xl hover:text-gray-400 px-3"
-              onClick={() => setIsOpen(isOpen && setIsOpen(false))}
-            >
-              About Us
-            </Link>
             <SignedIn>
-              <SignOutButton className="text-2xl hover:text-gray-400 px-3 -mt-2" />
+              <>
+                <Link
+                  href="/dashboard"
+                  className="text-2xl  hover:text-gray-400 px-3"
+                  onClick={() => setIsOpen(isOpen && setIsOpen(false))}
+                >
+                  Dashboard
+                </Link>
+                <div className="px-3">
+                  <UserButton size={24} />
+                </div>
+              </>
+              {/* <SignOutButton className="text-2xl hover:text-gray-400 px-3 -mt-2" /> */}
             </SignedIn>
             <SignedOut>
+              <Link
+                href="/"
+                className="text-2xl  hover:text-gray-400 px-3"
+                onClick={() => setIsOpen(isOpen && setIsOpen(false))}
+              >
+                Home
+              </Link>
+              <Link
+                href="/features"
+                className="text-2xl hover:text-gray-400 px-3"
+                onClick={() => setIsOpen(isOpen && setIsOpen(false))}
+              >
+                Features
+              </Link>
+              <Link
+                href="/about"
+                className="text-2xl hover:text-gray-400 px-3"
+                onClick={() => setIsOpen(isOpen && setIsOpen(false))}
+              >
+                About Us
+              </Link>
               <SignInButton className="text-2xl hover:text-gray-400 px-3 -mt-2" />
+              <SignUpButton className="text-2xl hover:text-gray-400 px-3 -mt-2" />
             </SignedOut>
           </>
         </div>
