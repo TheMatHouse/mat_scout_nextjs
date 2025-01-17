@@ -16,15 +16,15 @@ import DashboardTabs from "@/components/shared/dashboard/DashboardTabs";
 // };
 const Dashboard = async () => {
   // const session = await auth();
-  const user = await currentUser();
-  console.log("USER ", user);
-  console.log(user.id);
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user?.id}`
-  );
-  const data = await res.json();
-  const profile = data;
-  console.log(profile && profile);
+  // const user = await currentUser();
+  // console.log("USER ", user);
+  // console.log(user.id);
+  // const res = await fetch(
+  //   `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user?.id}`
+  // );
+  // const data = await res.json();
+  // const profile = data;
+  // console.log(profile && profile);
 
   return (
     <div className="w-full">
