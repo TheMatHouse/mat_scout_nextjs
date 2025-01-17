@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 
 export async function GET(request, { params }) {
   const { id } = params;
-
-  const user = await User.findById(id).select("-password -tokens");
+  console.log("ID ", id);
+  const user = await User.findById({ clerkId: id }).select("-password -tokens");
 
   return new NextResponse(user);
 }

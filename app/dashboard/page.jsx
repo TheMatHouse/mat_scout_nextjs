@@ -18,11 +18,13 @@ const Dashboard = async () => {
   // const session = await auth();
   const user = await currentUser();
   console.log("USER ", user);
-  // const res = await fetch(
-  //   `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${session?.user?.userId}`
-  // );
-  // const data = await res.json();
-  // const user = data.user;
+  console.log(user.id);
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user?.id}`
+  );
+  const data = await res.json();
+  const profile = data;
+  console.log(profile && profile);
 
   return (
     <div className="w-full">
