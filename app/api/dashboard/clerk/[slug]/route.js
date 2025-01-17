@@ -7,8 +7,6 @@ import { revalidatePath } from "next/cache";
 
 export async function GET(request, { params }) {
   const { slug } = await params;
-  console.log(slug);
-  const clerkId = slug;
   try {
     await connectDB();
 

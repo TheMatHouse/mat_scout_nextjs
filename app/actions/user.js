@@ -10,14 +10,25 @@ export const createOrUpdateUser = async (
   username
 ) => {
   try {
-    console.log("email ", email_addresses);
-    console.log("id ", id);
     await connectDB();
+    const userExists = await User.findOneAndUpdate({
+      email: email_addresses[0].email_address,
+    });
+
+    if (userExists && !clerkId) {
+      const addClerk = await User.findOneAndUpdate(
+        {
+          email: email_addresses[0].email_address,
+        },
+        {
+          clerkId: id,
+        }
+      );
+    }
     const user = await User.findOneAndUpdate(
-      { email: email_addresses[0].email_address },
+      { clerkId: id },
       {
         $set: {
-          clerkId: id,
           firstName: first_name,
           lastName: last_name,
           avatar: image_url,
