@@ -55,10 +55,11 @@ export async function POST(request) {
   const eventType = evt?.type;
   console.log(`Webhook with and ID of ${id} and type of ${eventType}`);
   console.log("Webhook body:", body);
-
+  console.log(id);
   if (eventType === "user.created" || eventType === "user.updated") {
     const { id, first_name, last_name, image_url, email_addresses, username } =
       evt?.data;
+    console.log(email_addresses);
     try {
       const user = await createOrUpdateUser(
         id,
@@ -68,7 +69,11 @@ export async function POST(request) {
         email_addresses,
         username
       );
-      if (user && eventType === "user.created") {
+      if (
+        (user && eventType === "user.created") ||
+        eventType === "user.updated"
+      ) {
+        console.log("THERE IS A USER ", user);
         try {
           await clerkClient.users.updateUserMetadata(id, {
             publicMetadata: {
@@ -78,6 +83,8 @@ export async function POST(request) {
         } catch (error) {
           console.log("Error updating user metadata:", error);
         }
+      } else {
+        console.log("THERE IS NO USER");
       }
     } catch (error) {
       console.log("Error creating or updating user:", error);

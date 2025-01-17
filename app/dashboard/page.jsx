@@ -17,15 +17,17 @@ import DashboardTabs from "@/components/shared/dashboard/DashboardTabs";
 const Dashboard = async () => {
   // const session = await auth();
   const user = await currentUser();
-  console.log("USER ", user.id);
+  console.log("USER ", user);
   // console.log(user.id);
-  const clerk = user.id;
+  const clerk = user.emailAddresses[0].emailAddress;
+  console.log(clerk);
   const res = await fetch(
     `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/clerk/${clerk}`
   );
 
   const data = await res.json();
-  console.log("id ", data.data._id);
+  console.log("DATA ", data);
+  //console.log("id ", data.data._id);
   const userId = data?.data._id;
 
   const resUser = await fetch(

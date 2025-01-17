@@ -13,7 +13,7 @@ export async function GET(request, { params }) {
     await connectDB();
 
     const data = await User.findOne({
-      clerkId: slug,
+      email: slug,
     });
 
     if (!data) {
