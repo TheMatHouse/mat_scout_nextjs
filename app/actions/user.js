@@ -11,19 +11,21 @@ export const createOrUpdateUser = async (
 ) => {
   try {
     await connectDB();
-    const userExists = await User.findOneAndUpdate({
-      email: email_addresses[0].email_address,
-    });
-
-    if (userExists && !clerkId) {
+    const userExists = await User.findOneAndUpdate(
+      {
+        email: email_addresses[0].email_address,
+      },
+      { clerkId: { $exists: false } }
+    );
+    console.log("USER EXISTS ", userExists);
+    if (userExists) {
+      console.log("user exists");
       const addClerk = await User.findOneAndUpdate(
         {
           email: email_addresses[0].email_address,
         },
         {
-          $addFields: {
-            clerkId: id,
-          },
+          clerkId: id,
         }
       );
     }
