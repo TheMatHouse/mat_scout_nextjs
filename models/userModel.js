@@ -24,10 +24,14 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    password: {
+    role: {
       type: String,
-      //required: true,
+      default: "USER",
     },
+    // password: {
+    //   type: String,
+    //   //required: true,
+    // },
     city: { type: String },
     state: { type: String },
     country: { type: String },

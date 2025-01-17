@@ -66,14 +66,17 @@ export async function POST(request) {
         last_name,
         image_url,
         email_addresses,
-        username
+        username,
+        role: user.role || "USER"
       );
       if (user && eventType === "user.created") {
-        console.log("MONGO ID ", user._id);
         try {
           const response = await clerkClient.users.updateUserMetadata(id, {
             publicMetadata: {
               userMongoId: user._id,
+            },
+            privateMetaData: {
+              role: "USER",
             },
           });
           console.log(response);
