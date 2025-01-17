@@ -15,7 +15,7 @@ export const createOrUpdateUser = async (
       email: email_addresses[0].email_address,
     });
 
-    if (userExists && !clerkId) {
+    if (userExists && !userExists.clerkId) {
       const addClerk = await User.findOneAndUpdate(
         {
           email: email_addresses[0].email_address,
