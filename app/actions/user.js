@@ -15,13 +15,13 @@ export const createOrUpdateUser = async (
       email: email_addresses[0].email_address,
     });
 
-    if (userExists && !userExists.clerkId) {
+    if (userExists && !clerkId) {
       const addClerk = await User.findOneAndUpdate(
         {
           email: email_addresses[0].email_address,
         },
         {
-          $set: {
+          $addFields: {
             clerkId: id,
           },
         }
