@@ -77,7 +77,7 @@ export async function POST(request) {
           publicMetadata: {
             userMongoId: user._id,
           },
-          privateMetaData: {
+          privateMetadata: {
             role: user.role || "USER",
           },
         });
