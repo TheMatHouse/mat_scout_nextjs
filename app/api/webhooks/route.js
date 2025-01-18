@@ -68,21 +68,24 @@ export async function POST(request) {
         email_addresses,
         username
       );
-      if (user && eventType === "user.created") {
-        try {
-          const response = await clerkClient.users.updateUserMetadata(id, {
-            publicMetadata: {
-              userMongoId: user._id,
-            },
-            privateMetaData: {
-              role: user.role || "USER",
-            },
-          });
-          console.log(response);
-        } catch (error) {
-          console.log("Error updating user metadata:", error);
-        }
+      if (!user) return;
+
+      //if (user && eventType === "user.created") {
+      try {
+        const client = await clerkClient();
+        await client.users.updateUserMetadata(id, {
+          publicMetadata: {
+            userMongoId: user._id,
+          },
+          privateMetaData: {
+            role: user.role || "USER",
+          },
+        });
+        console.log(response);
+      } catch (error) {
+        console.log("Error updating user metadata:", error);
       }
+      //}
     } catch (error) {
       console.log("Error creating or updating user:", error);
       return new Response("Error occured", {
