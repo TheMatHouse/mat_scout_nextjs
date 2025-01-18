@@ -26,24 +26,19 @@ export default async function RootLayout({ children }) {
         suppressHydrationWarning
       >
         <body>
-          <ClerkLoading>
-            <Loader />
-          </ClerkLoading>
-          <ClerkLoaded>
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="system"
-              enableSystem
-              disableTransitionOnChange
-            >
-              <ToastContainer />
-              <Header />
-              <main className="flex h-1vh w[100%]">
-                {user && <SidebarMenuBar />}
-                {children}
-              </main>
-            </ThemeProvider>
-          </ClerkLoaded>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <ToastContainer />
+            <Header />
+            <main className="flex h-1vh w[100%]">
+              {user && <SidebarMenuBar />}
+              {children}
+            </main>
+          </ThemeProvider>
         </body>
       </html>
     </ClerkProvider>
