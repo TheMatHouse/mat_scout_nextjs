@@ -8,7 +8,7 @@ const override = {
 const LoadingPage = () => {
   return (
     <Spinner
-      color="#3b82f6"
+      color="#d90429"
       cssOverride={override}
       size={150}
       aria-label="Loading Spinner"

@@ -18,7 +18,6 @@ const ThemeToggle = () => {
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
-          size="icon"
           className="w-10 h-10 rounded-full"
         >
           <SunIcon className="h-[1.4rem] w-[1.4rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
