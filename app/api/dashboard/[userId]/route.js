@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 
 export async function GET(request, { params }) {
   const { userId } = await params;
-
+  console.log(userId);
   try {
     if (!userId || !Types.ObjectId.isValid(userId)) {
       return new NextResponse(
@@ -15,8 +15,9 @@ export async function GET(request, { params }) {
       );
     }
 
+    //const user = await User.findById({ _id: userId });
     const user = await User.aggregate([
-      { $match: { _id: Types.ObjectId.createFromHexString(userId) } },
+      { $match: { _id: userId } },
       {
         $lookup: {
           from: "userstyles",
@@ -171,7 +172,7 @@ export async function GET(request, { params }) {
         status: 404,
       });
     }
-
+    console.log("USER ", user);
     return new NextResponse(JSON.stringify({ user }));
   } catch (error) {
     return new NextResponse(

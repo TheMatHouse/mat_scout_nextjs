@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import StyleForm from "./forms/Style";
 
 const DashboardStyles = ({ user, userType }) => {
-  const myStyles = user.userStyles;
+  const myStyles = user?.userStyles;
   console.log(user);
 
   // Add Style Modal State
