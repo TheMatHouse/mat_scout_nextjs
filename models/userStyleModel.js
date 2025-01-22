@@ -29,11 +29,6 @@ const userStyleSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    styleId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Style",
-      required: true,
-    },
   },
   {
     timestamps: true,

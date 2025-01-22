@@ -47,7 +47,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useState } from "react";
 
 const StyleForm = ({ user, data, userType, type, handleClose }) => {
-  console.log(user)
+  console.log(user);
   const router = useRouter();
   const form = useForm({
     mode: "onChange", // form validation mode
@@ -87,7 +87,7 @@ const StyleForm = ({ user, data, userType, type, handleClose }) => {
             },
             body: JSON.stringify({
               id: user._id,
-              styleName: values.styleName,
+              style: values.styleName,
               rank: values.rank,
               promotionDate: values.promotionDate,
               division: values.division,

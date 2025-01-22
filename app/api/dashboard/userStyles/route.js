@@ -26,7 +26,7 @@ export const POST = async (request) => {
   const body = await request.json();
   const {
     userId,
-    styleId,
+    styleName,
     rank,
     promotionDate,
     division,
@@ -42,12 +42,6 @@ export const POST = async (request) => {
       );
     }
 
-    if (!styleId || !Types.ObjectId.isValid(styleId)) {
-      return new NextResponse(
-        JSON.stringify({ message: "Invalid or missing style id" })
-      );
-    }
-
     await connectDB();
 
     // Check to see if the user exists
@@ -58,16 +52,16 @@ export const POST = async (request) => {
     }
 
     // Check to see if the style exists
-    const styleExists = await Style.findById(styleId);
+    const styleExists = await Style.findOne({ styleName });
 
     if (!styleExists) {
-      return new NextResponse(JSON.stringify({ message: "Style nout found" }));
+      return new NextResponse(JSON.stringify({ message: "Style not found" }));
     }
 
     // Check to make sure this user does not already have this style
     const userStyleExists = await UserStyle.findOne({
       userId,
-      styleId,
+      styleName,
     });
 
     if (userStyleExists) {
@@ -77,7 +71,7 @@ export const POST = async (request) => {
     }
 
     const newUserStyle = await UserStyle.create({
-      styleName: styleExists.styleName,
+      styleName: styleName,
       rank,
       promotionDate,
       division,
@@ -85,7 +79,6 @@ export const POST = async (request) => {
       grip,
       favoriteTechnique,
       userId,
-      styleId,
     });
 
     if (newUserStyle) {
