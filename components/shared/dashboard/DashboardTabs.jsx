@@ -6,7 +6,7 @@ import DashboardStyles from "./DashboardStyles";
 
 const DashboardTabs = ({ user }) => {
   const searchParams = useSearchParams();
-  console.log(user);
+  console.log("user - line 9 ", user);
   const view = searchParams.get("v");
 
   // const athlete = JSON.parse(user);

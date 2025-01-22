@@ -44,8 +44,11 @@ import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useState } from "react";
 
-const StyleForm = ({ user, data, userType, type }) => {
+const StyleForm = ({ user, data, userType, type, handleClose }) => {
+  console.log(user)
+  const router = useRouter();
   const form = useForm({
     mode: "onChange", // form validation mode
     resolver: zodResolver(StyleFormSchema), // resolver for form validation
@@ -63,8 +66,51 @@ const StyleForm = ({ user, data, userType, type }) => {
 
   const isLoading = form.formState.isSubmitting;
 
+  const [promotionDate, setPromotionDate] = useState("");
+
   const handleSubmit = async (values) => {
+    values.promotionDate = promotionDate;
     console.log("VALUES ", values);
+    console.log(promotionDate);
+
+    try {
+      if (userType === "user") {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyle`,
+          {
+            method: "POST",
+            headers: {
+              "Access-Control-Allow-Origin": "*",
+              "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+              "Access-Control-Allow-Headers": "Content-Type, Authorization",
+              "Content-type": "application/json; charset=UTF-8",
+            },
+            body: JSON.stringify({
+              id: user._id,
+              styleName: values.styleName,
+              rank: values.rank,
+              promotionDate: values.promotionDate,
+              division: values.division,
+              weightClass: values.weightClass,
+              grip: values.grip,
+              favoriteTechnique: values.favoriteTechnique,
+            }),
+          }
+        );
+        if (response.status === 200) {
+          const data = await response.json();
+          const timer = setTimeout(() => {
+            router.refresh();
+            handleClose();
+            toast.success(data.message);
+          }, 1000);
+          return () => clearTimeout(timer);
+        }
+      }
+    } catch (error) {
+      const data = await error.json();
+      toast.error("Unable to update style ", data.message);
+    }
   };
   return (
     <AlertDialog>
@@ -139,47 +185,19 @@ const StyleForm = ({ user, data, userType, type }) => {
 
               <FormField
                 control={form.control}
-                name="dob"
+                name="promotionDate"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
-                    <FormLabel>Date of birth</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "w-[240px] pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP")
-                            ) : (
-                              <span>Pick a date</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        className="w-auto p-0"
-                        align="start"
-                      >
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          disabled={(date) =>
-                            date > new Date() || date < new Date("1900-01-01")
-                          }
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormDescription>
-                      Your date of birth is used to calculate your age.
-                    </FormDescription>
+                    <FormLabel>Promotion Date</FormLabel>
+                    <input
+                      className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
+                      type="date"
+                      id="promotionDate"
+                      name="promotionDate"
+                      placeholder="Enter promotion date"
+                      onChange={(e) => setPromotionDate(e.target.value)}
+                    />
+
                     <FormMessage />
                   </FormItem>
                 )}
@@ -233,31 +251,7 @@ const StyleForm = ({ user, data, userType, type }) => {
                   </FormItem>
                 )}
               />
-              <FormField
-                disabled={isLoading}
-                control={form.control}
-                name="rank"
-                render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel>
-                      {" "}
-                      {`${
-                        userType === "familyMember"
-                          ? user.firstName + "'s"
-                          : "My"
-                      }  rank`}
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        className=" focus-visible:outline-2"
-                        placeholder="Rank"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+
               <FormField
                 control={form.control}
                 name="grip"

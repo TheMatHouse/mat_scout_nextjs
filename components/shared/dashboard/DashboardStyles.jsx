@@ -48,7 +48,7 @@ const DashboardStyles = ({ user, userType }) => {
   ];
 
   user &&
-    user.matchReports.length > 0 &&
+    user?.matchReports?.length > 0 &&
     user.matchReports?.map((match) => {
       if (match.matchType === "Brazilian Jiu Jitus") {
         if (match.result === "Won") {
@@ -97,6 +97,7 @@ const DashboardStyles = ({ user, userType }) => {
               <StyleForm
                 user={user}
                 userType="user"
+                handleClose={handleAddStyleClose}
               />
             </div>
           </DialogContent>
@@ -104,19 +105,20 @@ const DashboardStyles = ({ user, userType }) => {
       </div>
       <hr className="inline-block w-full border-t-1 border-gray-100" />
       <div className="grid grid-cols-3 gap-4">
-        {myStyles.map((style, index) => (
-          <div
-            key={index}
-            className="max-w-sm rounded overflow-hidden shadow-lg bg-gray-300 mt-2"
-          >
-            <StyleCard
-              style={style}
-              user={user}
-              userType={userType}
-              styleResults={styleResults}
-            />
-          </div>
-        ))}
+        {myStyles &&
+          myStyles.map((style, index) => (
+            <div
+              key={index}
+              className="max-w-sm rounded overflow-hidden shadow-lg bg-gray-300 mt-2"
+            >
+              <StyleCard
+                style={style}
+                user={user}
+                userType={userType}
+                styleResults={styleResults}
+              />
+            </div>
+          ))}
       </div>
 
       {showAddStyleModal && (

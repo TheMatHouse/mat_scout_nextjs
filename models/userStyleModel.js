@@ -1,6 +1,6 @@
-import { Schema, model, models } from "mongoose";
+import mongoose from "mongoose";
 
-const userStyleSchema = new Schema(
+const userStyleSchema = new mongoose.Schema(
   {
     styleName: {
       type: String,
@@ -25,8 +25,13 @@ const userStyleSchema = new Schema(
       type: String,
     },
     userId: {
-      type: Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+      required: true,
+    },
+    styleId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Style",
       required: true,
     },
   },
@@ -35,5 +40,10 @@ const userStyleSchema = new Schema(
   }
 );
 
-export const UserStyle =
-  models.UserStyle || model("UserStyle", userStyleSchema);
+// export const UserStyle =
+//   models.UserStyle || model("UserStyle", userStyleSchema);
+
+const UserStyle =
+  mongoose.models.UserStyle || mongoose.model("UserStyle", userStyleSchema);
+
+export default UserStyle;

@@ -16,7 +16,7 @@ const Dashboard = async () => {
     `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${clerkData.data._id}`
   );
   const userData = await resUser.json();
-  // console.log(userData);
+  console.log(userData);
   const profile = userData.user;
   console.log("profile ", profile);
   return (
