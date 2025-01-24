@@ -75,7 +75,7 @@ const StyleForm = ({ user, data, userType, type, setOpen }) => {
     try {
       if (userType === "user") {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/userStyles`,
+          `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyles`,
           {
             method: "POST",
             headers: {
@@ -85,7 +85,6 @@ const StyleForm = ({ user, data, userType, type, setOpen }) => {
               "Content-type": "application/json; charset=UTF-8",
             },
             body: JSON.stringify({
-              userId: user._id,
               styleName: values.styleName,
               rank: values.rank,
               promotionDate: values.promotionDate,
