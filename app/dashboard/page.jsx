@@ -11,14 +11,14 @@ const Dashboard = async () => {
   );
 
   const clerkData = await rs.json();
-  console.log(clerkData.data._id);
+
   const resUser = await fetch(
     `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${clerkData.data._id}`
   );
   const userData = await resUser.json();
-  console.log(userData);
+
   const profile = userData.user;
-  console.log("profile ", profile);
+
   return (
     <div className="w-full">
       <div className="relative right-0">

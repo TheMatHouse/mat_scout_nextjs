@@ -32,7 +32,18 @@ export default async function RootLayout({ children }) {
             enableSystem
             disableTransitionOnChange
           >
-            <ToastContainer />
+            <ToastContainer
+              position="top-right"
+              autoClose={5000}
+              hideProgressBar={false}
+              newestOnTop={false}
+              closeOnClick={false}
+              rtl={false}
+              pauseOnFocusLoss
+              draggable
+              pauseOnHover
+              theme="light"
+            />
             <Header />
             <main className="flex h-1vh w[100%]">
               {user && <SidebarMenuBar />}

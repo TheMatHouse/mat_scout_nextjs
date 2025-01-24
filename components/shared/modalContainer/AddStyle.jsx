@@ -6,7 +6,7 @@ import { toast } from "react-toastify";
 
 const AddStyle = ({ user, userType, type, handleClose }) => {
   const router = useRouter();
-
+  console.log("USER ", user);
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -22,7 +22,7 @@ const AddStyle = ({ user, userType, type, handleClose }) => {
 
       if (userType === "user") {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyle`,
+          `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/userStyles`,
           {
             method: "POST",
             headers: {
@@ -32,6 +32,7 @@ const AddStyle = ({ user, userType, type, handleClose }) => {
               "Content-type": "application/json; charset=UTF-8",
             },
             body: JSON.stringify({
+              userId: user._id,
               styleName,
               rank,
               promotionDate,

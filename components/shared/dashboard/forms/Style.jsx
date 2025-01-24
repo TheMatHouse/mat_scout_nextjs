@@ -46,21 +46,20 @@ import { Calendar } from "@/components/ui/calendar";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useState } from "react";
 
-const StyleForm = ({ user, data, userType, type, handleClose }) => {
-  console.log(user);
+const StyleForm = ({ user, data, userType, type, setOpen }) => {
   const router = useRouter();
   const form = useForm({
     mode: "onChange", // form validation mode
     resolver: zodResolver(StyleFormSchema), // resolver for form validation
     defaultValues: {
       // setting default form values from data (if available)
-      styleName: data?.styleName,
-      rank: data?.rank,
-      promotionDate: data?.promotionDate,
-      division: data?.division,
-      weightClass: data?.weightClass,
-      grip: data?.grip,
-      favoriteTechnique: data?.favoriteTechnique,
+      styleName: data?.styleName || "",
+      rank: data?.rank || "",
+      //promotionDate: data?.promotionDate || "",
+      division: data?.division || "",
+      weightClass: data?.weightClass || "",
+      grip: data?.grip || "",
+      favoriteTechnique: data?.favoriteTechnique || "",
     },
   });
 
@@ -70,13 +69,13 @@ const StyleForm = ({ user, data, userType, type, handleClose }) => {
 
   const handleSubmit = async (values) => {
     values.promotionDate = promotionDate;
-    console.log("VALUES ", values);
-    console.log(promotionDate);
+    // console.log("VALUES ", values);
+    // console.log(promotionDate);
 
     try {
       if (userType === "user") {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyle`,
+          `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/userStyles`,
           {
             method: "POST",
             headers: {
@@ -86,8 +85,8 @@ const StyleForm = ({ user, data, userType, type, handleClose }) => {
               "Content-type": "application/json; charset=UTF-8",
             },
             body: JSON.stringify({
-              id: user._id,
-              style: values.styleName,
+              userId: user._id,
+              styleName: values.styleName,
               rank: values.rank,
               promotionDate: values.promotionDate,
               division: values.division,
@@ -97,21 +96,34 @@ const StyleForm = ({ user, data, userType, type, handleClose }) => {
             }),
           }
         );
-        if (response.status === 200) {
-          const data = await response.json();
+        const data = await response.json();
+        console.log(data);
+        if (data.status === 201) {
           const timer = setTimeout(() => {
             router.refresh();
-            handleClose();
-            toast.success(data.message);
+            toast.success(data.message, {
+              position: "top-right",
+              autoClose: 5000,
+              hideProgressBar: false,
+              closeOnClick: false,
+              pauseOnHover: true,
+              draggable: true,
+              progress: undefined,
+              theme: "light",
+            });
+            setOpen(false);
           }, 1000);
           return () => clearTimeout(timer);
+        } else {
+          toast.error(data.message);
         }
       }
     } catch (error) {
-      const data = await error.json();
-      toast.error("Unable to update style ", data.message);
+      console.log(error);
+      //toast.error(error.message);
     }
   };
+  console.log("STYLE FORM");
   return (
     <AlertDialog>
       <Card className="w-full">

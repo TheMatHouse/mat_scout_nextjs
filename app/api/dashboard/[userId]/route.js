@@ -172,7 +172,7 @@ export async function GET(request, { params }) {
         status: 404,
       });
     }
-    console.log("USER line 175 ", user);
+
     return new NextResponse(JSON.stringify({ user }));
   } catch (error) {
     return new NextResponse(

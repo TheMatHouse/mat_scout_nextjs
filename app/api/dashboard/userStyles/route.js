@@ -6,23 +6,24 @@ import { connectDB } from "@/config/mongo";
 import User from "@/models/userModel";
 import { Style } from "@/models/styleModel";
 
-export const GET = async (request) => {
-  try {
-    await connectDB();
-    const UserStyles = await UserStyle.find();
-    if (UserStyles) {
-      return new NextResponse(JSON.stringify(UserStyles), { status: 200 });
-    } else {
-      return new NextResponse("No styles found", { status: 404 });
-    }
-  } catch (error) {
-    return new NextResponse("Error fetching users " + error.message, {
-      status: 500,
-    });
-  }
-};
+// export const GET = async (request) => {
+//   try {
+//     await connectDB();
+//     const UserStyles = await UserStyle.find();
+//     if (UserStyles) {
+//       return new NextResponse(JSON.stringify(UserStyles), { status: 201 });
+//     } else {
+//       return new NextResponse("No styles found", { status: 404 });
+//     }
+//   } catch (error) {
+//     return new NextResponse("Error fetching users " + error.message, {
+//       status: 500,
+//     });
+//   }
+// };
 
 export const POST = async (request) => {
+  console.log("INSIDE POST");
   const body = await request.json();
   const {
     userId,
@@ -48,14 +49,18 @@ export const POST = async (request) => {
     const userExists = await User.findById(userId);
 
     if (!userExists) {
-      return new NextResponse(JSON.stringify({ message: "User nout found" }));
+      return new NextResponse(
+        JSON.stringify({ message: "User not found", status: 404 })
+      );
     }
 
     // Check to see if the style exists
     const styleExists = await Style.findOne({ styleName });
 
     if (!styleExists) {
-      return new NextResponse(JSON.stringify({ message: "Style not found" }));
+      return new NextResponse(
+        JSON.stringify({ message: "Style not found", status: 404 })
+      );
     }
 
     // Check to make sure this user does not already have this style
@@ -66,7 +71,10 @@ export const POST = async (request) => {
 
     if (userStyleExists) {
       return new NextResponse(
-        JSON.stringify({ message: "You already have this style." })
+        JSON.stringify({
+          status: 400,
+          message: "You already have this style.",
+        })
       );
     }
 
@@ -84,10 +92,10 @@ export const POST = async (request) => {
     if (newUserStyle) {
       return new NextResponse(
         JSON.stringify({
+          status: 201,
           message: "User style created successfully",
-          userStyle: newUserStyle,
-        }),
-        { status: 201 }
+          //userStyle: newUserStyle,
+        })
       );
     }
   } catch (error) {

@@ -48,16 +48,16 @@ const ModalFrame = ({
           )}
 
           {modalType === "addStyle" && (
-            <StyleForm
-              user={user}
-              userType={userType}
-              handleClose={handleClose}
-            />
-            // <AddStyle
+            // <StyleForm
             //   user={user}
             //   userType={userType}
             //   handleClose={handleClose}
             // />
+            <AddStyle
+              user={user}
+              userType={userType}
+              handleClose={handleClose}
+            />
           )}
 
           {modalType === "editStyle" && (

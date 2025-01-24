@@ -19,13 +19,13 @@ import StyleForm from "./forms/Style";
 
 const DashboardStyles = ({ user, userType }) => {
   const myStyles = user?.userStyles;
-  console.log(user);
 
   // Add Style Modal State
   const [showAddStyleModal, setShowAddStyleModal] = useState(false);
   const handleAddStyleShow = () => setShowAddStyleModal(true);
   const handleAddStyleClose = () => setShowAddStyleModal(false);
 
+  const [open, setOpen] = useState(false);
   const scoutingReportsSharedWithMe = user
     ? user?.scoutingReportsSharedWithMe
     : "";
@@ -74,13 +74,17 @@ const DashboardStyles = ({ user, userType }) => {
     <div>
       <div className="flex items-center">
         <h1 className="text-2xl">My Styles/Sports</h1>
-        <button
+        {/* <button
           className="bg-gray-900 hover:bg-gray-500  border-gray-500 dark:border-gray-100 border-2 drop-shadow-md text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ml-6"
           onClick={handleAddStyleShow}
         >
           Add Style
-        </button>
-        <Dialog className="min-w-[800px]">
+        </button> */}
+        <Dialog
+          open={open}
+          onOpenChange={setOpen}
+          className="min-w-[800px]"
+        >
           <DialogTrigger asChild>
             <Button className="bg-gray-900 hover:bg-gray-500  border-gray-500 dark:border-gray-100 border-2 drop-shadow-md text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ml-6">
               Add Style
@@ -97,7 +101,7 @@ const DashboardStyles = ({ user, userType }) => {
               <StyleForm
                 user={user}
                 userType="user"
-                handleClose={handleAddStyleClose}
+                setOpen={setOpen}
               />
             </div>
           </DialogContent>
@@ -121,7 +125,7 @@ const DashboardStyles = ({ user, userType }) => {
           ))}
       </div>
 
-      {showAddStyleModal && (
+      {/* {showAddStyleModal && (
         <ModalFrame
           show={showAddStyleModal}
           handleClose={handleAddStyleClose}
@@ -129,7 +133,7 @@ const DashboardStyles = ({ user, userType }) => {
           userType="user"
           modalType="addStyle"
         />
-      )}
+      )} */}
     </div>
   );
 };

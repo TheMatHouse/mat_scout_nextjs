@@ -9,7 +9,7 @@ const AvatarForm = ({ user, userType, handleClose }) => {
 
   const handleImage = (e) => {
     const file = e.target.files[0];
-    console.log("FILE ", file);
+
     if (
       file.type !== "image/jpeg" &&
       file.type !== "image/jpg" &&
