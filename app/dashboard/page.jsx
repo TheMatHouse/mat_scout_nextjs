@@ -1,23 +1,21 @@
 import { currentUser } from "@clerk/nextjs/server";
-
 import DashboardTabs from "@/components/shared/dashboard/DashboardTabs";
-import { CloseButton } from "react-toastify";
 
 const Dashboard = async () => {
-  // const session = await auth();
   const user = await currentUser();
 
-  const rs = await fetch(
-    `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/clerk/${user.emailAddresses[0].emailAddress}`
-  );
+  // const rs = await fetch(
+  //   `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/clerk/${user.emailAddresses[0].emailAddress}`
+  // );
 
-  const clerkData = await rs.json();
-  console.log("clerk Data ", clerkData);
-  const resUser = await fetch(
-    `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${clerkData?.data._id}`
+  // const clerkData = await rs.json();
+
+  const res = await fetch(
+    //`${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${clerkData?.data._id}`
+    `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user?.publicMetadata.userMongoId}`
   );
-  const userData = await resUser.json();
-  console.log("user data ", userData);
+  const userData = await res.json();
+
   const profile = userData.user[0];
 
   return (
