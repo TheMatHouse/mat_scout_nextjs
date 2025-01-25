@@ -1,11 +1,12 @@
 "use server";
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
-import { UserStyle } from "@/models/userStyleModel";
+import UserStyle from "@/models/userStyleModel";
 import { connectDB } from "@/config/mongo";
-import { User } from "@/models/userModel";
+import User from "@/models/userModel";
 
 export const PATCH = async (request, { params }) => {
+  console.log("PATCHING");
   try {
     const { userId, userStyleId } = await params;
 
@@ -39,15 +40,15 @@ export const PATCH = async (request, { params }) => {
       return new NextResponse(
         JSON.stringify({
           message: "User not found",
-        }),
-        { status: 404 }
+          status: 404,
+        })
       );
     }
     const userStyle = await UserStyle.findOne({ _id: userStyleId, userId });
 
     if (!userStyle) {
       return new NextResponse(
-        JSON.stringify(({ message: "User style not found" }, { status: 404 }))
+        JSON.stringify({ message: "User style not found", status: 404 })
       );
     }
 
@@ -64,18 +65,14 @@ export const PATCH = async (request, { params }) => {
 
       if (updatedUserStyle) {
         return new NextResponse(
-          JSON.stringify({ message: "Style updated successfully" }),
-          {
-            status: 200,
-          }
+          JSON.stringify({ message: "Style updated successfully", status: 200 })
         );
       }
     }
   } catch (error) {
-    return new NextResponse(
-      JSON.stringify({ message: "Error updating style " + error.message }),
-      { status: 500 }
-    );
+    return new NextResponse("Error updating style " + error.message, {
+      status: 500,
+    });
   }
 };
 

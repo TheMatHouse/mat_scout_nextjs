@@ -92,9 +92,9 @@ const DashboardStyles = ({ user, userType }) => {
           </DialogTrigger>
           <DialogContent className="overflow-y-scroll max-h-[90%]">
             <DialogHeader>
-              <DialogTitle>Edit profile</DialogTitle>
+              <DialogTitle>Add Style</DialogTitle>
               <DialogDescription>
-                Make changes to your profile here. Click save when you're done.
+                Add a new style/sport here. You can edit this style at any time.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4 min-width-full">

@@ -8,7 +8,9 @@ import { revalidatePath } from "next/cache";
 
 export async function GET(request, { params }) {
   const { userId } = await params;
-  console.log(userId);
+  //console.log(typeof userId);
+  const mongoId = ObjectId.createFromHexString(userId);
+  console.log("mongoid ", mongoId);
   try {
     if (!userId || !Types.ObjectId.isValid(userId)) {
       return new NextResponse(
@@ -16,6 +18,7 @@ export async function GET(request, { params }) {
       );
     }
 
+    await connectDB();
     //const user = await User.findById({ _id: userId });
     const user = await User.aggregate([
       { $match: { _id: ObjectId.createFromHexString(userId) } },

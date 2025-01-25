@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
+import moment from "moment";
 
 // Form handling utilities
 import * as z from "zod";
@@ -46,26 +47,33 @@ import { Calendar } from "@/components/ui/calendar";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useState } from "react";
 
-const StyleForm = ({ user, data, userType, type, setOpen }) => {
+const StyleForm = ({ user, style, userType, type, setOpen }) => {
+  console.log(style);
   const router = useRouter();
   const form = useForm({
     mode: "onChange", // form validation mode
     resolver: zodResolver(StyleFormSchema), // resolver for form validation
     defaultValues: {
       // setting default form values from data (if available)
-      styleName: data?.styleName || "",
-      rank: data?.rank || "",
+      styleName: style?.styleName || "",
+      rank: style?.rank || "",
       //promotionDate: data?.promotionDate || "",
-      division: data?.division || "",
-      weightClass: data?.weightClass || "",
-      grip: data?.grip || "",
-      favoriteTechnique: data?.favoriteTechnique || "",
+      division: style?.division || "",
+      weightClass: style?.weightClass || "",
+      grip: style?.grip || "",
+      favoriteTechnique: style?.favoriteTechnique || "",
     },
   });
 
+  // Date picker from shadcn ui isn't working so I've add it as a separate input
+  // Setting the inital date value if data exists
+  const [promotionDate, setPromotionDate] = useState(
+    style?.promotionDate ? moment(style.promotionDate).format("yyyy-MM-DD") : ""
+  );
+
   const isLoading = form.formState.isSubmitting;
 
-  const [promotionDate, setPromotionDate] = useState("");
+  //const [promotionDate, setPromotionDate] = useState("");
 
   const handleSubmit = async (values) => {
     values.promotionDate = promotionDate;
@@ -73,11 +81,20 @@ const StyleForm = ({ user, data, userType, type, setOpen }) => {
     // console.log(promotionDate);
 
     try {
+      console.log(style._id);
       if (userType === "user") {
+        let domain = "";
+        if (style._id) {
+          domain = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyles/${style._id}`;
+        } else {
+          domain = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyles`;
+        }
+        console.log(domain);
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyles`,
+          domain,
+          //`${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyles`,
           {
-            method: "POST",
+            method: `${style?._id ? "PATCH" : "POST"}`,
             headers: {
               "Access-Control-Allow-Origin": "*",
               "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -129,8 +146,8 @@ const StyleForm = ({ user, data, userType, type, setOpen }) => {
         <CardHeader>
           <CardTitle>Style/Sport</CardTitle>
           <CardDescription>
-            {data?.id
-              ? `Update ${data?.styleName} style information`
+            {style?._id
+              ? `Update ${style?.styleName} style information`
               : "Add a user style.  You can edit this style later from the style/sport tab on your dashboard page."}
           </CardDescription>
         </CardHeader>
@@ -206,6 +223,7 @@ const StyleForm = ({ user, data, userType, type, setOpen }) => {
                       id="promotionDate"
                       name="promotionDate"
                       placeholder="Enter promotion date"
+                      defaultValue={promotionDate}
                       onChange={(e) => setPromotionDate(e.target.value)}
                     />
 
@@ -333,8 +351,8 @@ const StyleForm = ({ user, data, userType, type, setOpen }) => {
                 >
                   {isLoading
                     ? "loading..."
-                    : data?.id
-                    ? "Save category information"
+                    : style?._id
+                    ? "Update style"
                     : "Add Style"}
                 </Button>
               </div>

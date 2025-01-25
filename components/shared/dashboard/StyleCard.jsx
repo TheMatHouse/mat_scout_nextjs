@@ -8,6 +8,16 @@ import { useRouter } from "next/navigation";
 
 // ICONS
 import { GrEdit } from "react-icons/gr";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import StyleForm from "./forms/Style";
+import { Button } from "@/components/ui/button";
 
 const StyleCard = ({ style, styleResults, user, userType }) => {
   const router = useRouter();
@@ -16,6 +26,7 @@ const StyleCard = ({ style, styleResults, user, userType }) => {
   const handleEditStyleShow = () => setShowEditStyleModal(true);
   const handleEditStyleClose = () => setShowEditStyleModal(false);
 
+  const [open, setOpen] = useState(false);
   const handleDelsteStyle = async () => {
     if (window.confirm(`Are you sure you want to delete ${style.styleName}?`)) {
       try {
@@ -56,9 +67,42 @@ const StyleCard = ({ style, styleResults, user, userType }) => {
             size={32}
             type="button"
             onClick={handleEditStyleShow}
-            alt="Edit Personal Information"
+            alt={`Edit ${style.styleName}`}
             className="ps-4 cursor-pointer"
           />
+          <Dialog
+            open={open}
+            onOpenChange={setOpen}
+            className="min-w-[800px]"
+          >
+            <DialogTrigger asChild>
+              <GrEdit
+                size={32}
+                type="button"
+                alt={`Edit ${style.styleName}`}
+                className="ps-4 cursor-pointer"
+              />
+              {/* <Button className="bg-gray-900 hover:bg-gray-500  border-gray-500 dark:border-gray-100 border-2 drop-shadow-md text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ml-6">
+                Add Style
+              </Button> */}
+            </DialogTrigger>
+            <DialogContent className="overflow-y-scroll max-h-[90%]">
+              <DialogHeader>
+                <DialogTitle>Edit style</DialogTitle>
+                <DialogDescription>
+                  Make changes to your style here. Click save when you're done.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4 min-width-full">
+                <StyleForm
+                  user={user}
+                  style={style}
+                  userType="user"
+                  setOpen={setOpen}
+                />
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
       <div className="flex flex-col justify-start items-start text-black p-2">
@@ -114,7 +158,7 @@ const StyleCard = ({ style, styleResults, user, userType }) => {
             {style.styleName === "Wrestling" &&
               `${styleResults && styleResults[2]?.Losses}`}
           </span>
-          <div className="mt-2">View my ${style.styleName} (coming soon!)</div>
+          <div className="mt-2">View my {style.styleName} (coming soon!)</div>
         </div>
       </div>
       {showEditStyleModal && (
