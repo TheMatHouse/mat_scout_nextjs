@@ -63,13 +63,7 @@ const StyleCard = ({ style, styleResults, user, userType }) => {
       <div className="font-bold text-2xl mb-2 bg-ms-blue dark:bg-ms-blue-gray text-gray-100">
         <div className="flex p-2 justify-center">
           {style.styleName}
-          <GrEdit
-            size={32}
-            type="button"
-            onClick={handleEditStyleShow}
-            alt={`Edit ${style.styleName}`}
-            className="ps-4 cursor-pointer"
-          />
+
           <Dialog
             open={open}
             onOpenChange={setOpen}

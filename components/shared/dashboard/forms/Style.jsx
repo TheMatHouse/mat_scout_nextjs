@@ -114,7 +114,7 @@ const StyleForm = ({ user, style, userType, type, setOpen }) => {
         );
         const data = await response.json();
         console.log(data);
-        if (data.status === 201) {
+        if (data.status === 201 || data.status === 200) {
           const timer = setTimeout(() => {
             router.refresh();
             toast.success(data.message, {
@@ -211,25 +211,14 @@ const StyleForm = ({ user, style, userType, type, setOpen }) => {
                 )}
               />
 
-              <FormField
-                control={form.control}
+              <input
+                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
+                type="date"
+                id="promotionDate"
                 name="promotionDate"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Promotion Date</FormLabel>
-                    <input
-                      className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-                      type="date"
-                      id="promotionDate"
-                      name="promotionDate"
-                      placeholder="Enter promotion date"
-                      defaultValue={promotionDate}
-                      onChange={(e) => setPromotionDate(e.target.value)}
-                    />
-
-                    <FormMessage />
-                  </FormItem>
-                )}
+                placeholder="Enter promotion date"
+                defaultValue={promotionDate}
+                onChange={(e) => setPromotionDate(e.target.value)}
               />
 
               <FormField
@@ -346,7 +335,6 @@ const StyleForm = ({ user, style, userType, type, setOpen }) => {
               <div className="flex items-center justify-center">
                 <Button
                   type="submit"
-                  disabled={isLoading}
                   className="bg-gray-900 hover:bg-gray-500  border-gray-500 dark:border-gray-100 border-2 drop-shadow-md text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline mt-4"
                 >
                   {isLoading
