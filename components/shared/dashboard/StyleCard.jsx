@@ -31,7 +31,7 @@ const StyleCard = ({ style, styleResults, user, userType }) => {
     if (window.confirm(`Are you sure you want to delete ${style.styleName}?`)) {
       try {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyle/${style._id}`,
+          `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyles/${style._id}`,
           {
             method: "DELETE",
             headers: {
@@ -59,7 +59,7 @@ const StyleCard = ({ style, styleResults, user, userType }) => {
   };
 
   return (
-    <div>
+    <div className="max-w-sm rounded overflow-hidden shadow-lg bg-gray-300 mt-">
       <div className="font-bold text-2xl mb-2 bg-ms-blue dark:bg-ms-blue-gray text-gray-100">
         <div className="flex p-2 justify-center">
           {style.styleName}

@@ -108,27 +108,22 @@ const DashboardStyles = ({ user, userType }) => {
         </Dialog>
       </div>
       <hr className="inline-block w-full border-t-1 border-gray-100" />
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5 lg:gap-6">
         {myStyles &&
           myStyles.map((style, index) => (
-            <div
-              key={index}
-              className="max-w-sm rounded overflow-hidden shadow-lg bg-gray-300 mt-2"
-            >
-              <StyleCard
-                style={style}
-                user={user}
-                userType={userType}
-                styleResults={styleResults}
-              />
-            </div>
+            <StyleCard
+              style={style}
+              user={user}
+              userType={userType}
+              styleResults={styleResults}
+            />
           ))}
       </div>
 
       {/* {showAddStyleModal && (
         <ModalFrame
-          show={showAddStyleModal}
-          handleClose={handleAddStyleClose}
+        show={showAddStyleModal}
+        handleClose={handleAddStyleClose}
           user={user}
           userType="user"
           modalType="addStyle"

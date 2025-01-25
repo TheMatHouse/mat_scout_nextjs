@@ -6,7 +6,6 @@ import { connectDB } from "@/config/mongo";
 import User from "@/models/userModel";
 
 export const PATCH = async (request, { params }) => {
-  console.log("PATCHING");
   try {
     const { userId, userStyleId } = await params;
 
@@ -77,6 +76,7 @@ export const PATCH = async (request, { params }) => {
 };
 
 export const DELETE = async (request, { params }) => {
+  console.log("DELETING");
   try {
     const { userId, userStyleId } = await params;
 
