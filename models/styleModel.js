@@ -1,6 +1,6 @@
-import { Schema, model, models } from "mongoose";
+import mongoose from "mongoose";
 
-const styleSchema = new Schema(
+const styleSchema = new mongoose.Schema(
   {
     styleName: {
       type: String,
@@ -12,4 +12,6 @@ const styleSchema = new Schema(
   }
 );
 
-export const Style = models.Style || model("Style", styleSchema);
+const Style = mongoose.models.Style || mongoose.models("Style", styleSchema);
+
+export default Style;

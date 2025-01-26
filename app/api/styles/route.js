@@ -1,7 +1,7 @@
 "use server";
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
-import { Style } from "@/models/styleModel";
+import Style from "@/models/styleModel";
 import { connectDB } from "@/config/mongo";
 
 export const GET = async (request) => {
@@ -14,7 +14,7 @@ export const GET = async (request) => {
       return new NextResponse("No styles found", { status: 404 });
     }
   } catch (error) {
-    return new NextResponse("Error fetching users " + error.message, {
+    return new NextResponse("Error fetching styles " + error.message, {
       status: 500,
     });
   }

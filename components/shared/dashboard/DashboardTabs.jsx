@@ -3,8 +3,9 @@ import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import DashboardSettings from "./DashboardSettings";
 import DashboardStyles from "./DashboardStyles";
+import DashboardMatches from "./DashboardMatches";
 
-const DashboardTabs = ({ user }) => {
+const DashboardTabs = ({ user, styles, techniques }) => {
   const searchParams = useSearchParams();
 
   const view = searchParams.get("v");
@@ -42,6 +43,32 @@ const DashboardTabs = ({ user }) => {
         </li>
         <li className="me-2">
           <a
+            href="?v=matches"
+            aria-current="page"
+            className={`inline-block p-4 text-gray-100 bg-gray-900 dark:bg-gray-100 dark:text-gray-900 hover:bg-ms-blue-gray dark:hover:bg-ms-blue-gray rounded-t-lg ${
+              view === "matches" || view === null
+                ? "bg-ms-blue-gray dark:bg-ms-blue-gray"
+                : "bg-gray-100"
+            }`}
+          >
+            Matche Reports
+          </a>
+        </li>
+        <li className="me-2">
+          <a
+            href="?v=scouting"
+            aria-current="page"
+            className={`inline-block p-4 text-gray-100 bg-gray-900 dark:bg-gray-100 dark:text-gray-900 hover:bg-ms-blue-gray dark:hover:bg-ms-blue-gray rounded-t-lg ${
+              view === "scouting" || view === null
+                ? "bg-ms-blue-gray dark:bg-ms-blue-gray"
+                : "bg-gray-100"
+            }`}
+          >
+            Scouting Reports
+          </a>
+        </li>
+        <li className="me-2">
+          <a
             href="?v=family"
             aria-current="page"
             className={`inline-block p-4 text-gray-100 bg-gray-900 dark:bg-gray-100 dark:text-gray-900 hover:bg-ms-blue-gray dark:hover:bg-ms-blue-gray rounded-t-lg ${
@@ -59,6 +86,12 @@ const DashboardTabs = ({ user }) => {
           <DashboardSettings user={user} />
         ) : view === "styles" ? (
           <DashboardStyles user={user} />
+        ) : view === "matches" ? (
+          <DashboardMatches
+            user={user}
+            styles={styles}
+            techniques={techniques}
+          />
         ) : view === "family" ? (
           "Family Info"
         ) : (
