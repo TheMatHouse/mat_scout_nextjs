@@ -112,6 +112,7 @@ const DashboardStyles = ({ user, userType }) => {
         {myStyles &&
           myStyles.map((style, index) => (
             <StyleCard
+              key={index}
               style={style}
               user={user}
               userType={userType}

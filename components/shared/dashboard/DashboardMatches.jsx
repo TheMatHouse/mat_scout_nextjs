@@ -71,10 +71,10 @@ const DashboardMatches = ({ user, styles, techniques }) => {
             </DialogHeader>
             <div className="grid gap-4 py-4 min-width-full">
               <MatchReportForm
-                user={user}
-                styles={styles}
+                athlete={user}
+                styles={styles && styles.styles}
                 techniques={techniques}
-                userType="user"
+                type="user"
                 setOpen={setOpen}
               />
             </div>

@@ -31,8 +31,7 @@ export const GET = async (request, { params }) => {
 
 export const POST = async (request, { params }) => {
   const { userId } = await params;
-  console.log("inside POST");
-  console.log(userId);
+
   const body = await request.json();
   const {
     styleName,

@@ -9,7 +9,7 @@ export const GET = async (request) => {
     await connectDB();
     const styles = await Style.find();
     if (styles) {
-      return new NextResponse(JSON.stringify(styles), { status: 200 });
+      return new NextResponse(JSON.stringify({ styles }, { status: 200 }));
     } else {
       return new NextResponse("No styles found", { status: 404 });
     }

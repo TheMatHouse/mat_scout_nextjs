@@ -12,6 +12,6 @@ const styleSchema = new mongoose.Schema(
   }
 );
 
-const Style = mongoose.models.Style || mongoose.models("Style", styleSchema);
+const Style = mongoose.models.Style || mongoose.model("Style", styleSchema);
 
 export default Style;

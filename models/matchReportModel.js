@@ -1,26 +1,28 @@
-import { Schema, model, models } from "mongoose";
+import mongoose from "mongoose";
 
-const matchReportSchema = new Schema(
+const matchReportSchema = new mongoose.Schema(
   {
     athlete: {
-      type: Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+      required: true,
     },
 
-    familyMember: {
-      type: Schema.Types.ObjectId,
-      ref: "FamilyMember",
-    },
-    team: {
-      type: Schema.Types.ObjectId,
-      ref: "Team",
-    },
+    // familyMember: {
+    //   type: mongoose.Schema.Types.ObjectId,
+    //   ref: "FamilyMember",
+    //   required: true,
+    // },
+    // team: {
+    //   type: mongoose.Schema.Types.ObjectId,
+    //   ref: "Team",
+    // },
     createdByName: {
       type: String,
       required: true,
     },
     createdBy: {
-      type: Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
     matchType: {
@@ -57,5 +59,11 @@ const matchReportSchema = new Schema(
   }
 );
 
-export const MatchReport =
-  models.MatchReport || model("MatchReport", matchReportSchema);
+// export const MatchReport =
+//   models.MatchReport || model("MatchReport", matchReportSchema);
+
+const MatchReport =
+  mongoose.models.MatchReport ||
+  mongoose.model("MatchReport", matchReportSchema);
+
+export default MatchReport;
