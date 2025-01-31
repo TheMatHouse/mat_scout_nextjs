@@ -11,7 +11,6 @@ const UpdateAvatar = ({ user, userType, handleClose }) => {
   const handleUseGoogle = async () => {
     try {
       if (userType === "user") {
-        console.log("user type is user line 13");
         const response = await fetch(
           `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/avatar`,
           {
@@ -39,21 +38,16 @@ const UpdateAvatar = ({ user, userType, handleClose }) => {
           }, 1000);
           return () => clearTimeout(timer);
         } else {
-          console.log("There was a problem - line 39");
           toast.error(data.message);
         }
       } else if (userType === "familyMember") {
         // add family member upload here
       }
     } catch (error) {
-      console.log("There was a problem - line 46");
       toast.error("Unable to upload avatar ", error);
     }
   };
-  console.log(user.avatarType);
-  console.log(user.googleAvatar && user.googleAvatar);
 
-  user.avatarType === "google" && console.log("GOOGLE AVATAR");
   return (
     <div>
       <h2 className="text-sm font-medium text-gray-900 dark:text-gray-100 border-b border-gray-300 py-3 px-4 mb-4 opacity-100">
@@ -63,7 +57,6 @@ const UpdateAvatar = ({ user, userType, handleClose }) => {
         {user.avatarType === "uploaded" ? (
           user.googleAvatar ? (
             <>
-              {console.log("avatar uploaded and you have a google avatar")}
               <p>
                 You have a google avatar on file. You can either chose to use
                 your google avatar by clicking the &quot;Use Google Avatar&quot;
@@ -85,7 +78,6 @@ const UpdateAvatar = ({ user, userType, handleClose }) => {
             </>
           ) : (
             <>
-              {console.log("avatar type uploaded but no google avatar on file")}
               <p>Selecte an image from the form below.</p>
               <AvatarForm
                 user={user}
@@ -97,9 +89,6 @@ const UpdateAvatar = ({ user, userType, handleClose }) => {
         ) : user.avatarType === "google" ? (
           user.googleAvatar && (
             <>
-              {console.log(
-                "google avatar type and you are currently using google avatar"
-              )}
               <p>
                 You are currently using your google avatar. To use a different
                 avatar, selecte an image from the form below.
@@ -116,7 +105,6 @@ const UpdateAvatar = ({ user, userType, handleClose }) => {
           )
         ) : (
           <>
-            {console.log("you are using default avatar")}
             <p>Selecte an image from the form below.</p>
             <AvatarForm
               user={user}

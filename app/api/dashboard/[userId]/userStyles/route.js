@@ -8,7 +8,6 @@ import { Style } from "@/models/styleModel";
 
 export const GET = async (request, { params }) => {
   const { userId } = await params;
-  console.log(userId);
   try {
     if (!userId || !Types.ObjectId.isValid(userId)) {
       return new NextResponse(
@@ -51,7 +50,6 @@ export const POST = async (request, { params }) => {
     }
 
     await connectDB();
-    console.log("DB connected");
     // Check to see if the user exists
     const userExists = await User.findById(userId);
 
@@ -61,7 +59,6 @@ export const POST = async (request, { params }) => {
       );
     }
 
-    console.log("user exists");
     // Check to see if the style exists
     const styleExists = await Style.findOne({ styleName });
 
@@ -76,7 +73,6 @@ export const POST = async (request, { params }) => {
       userId,
       styleName,
     });
-    console.log("line 76");
     if (userStyleExists) {
       return new NextResponse(
         JSON.stringify({
@@ -85,7 +81,7 @@ export const POST = async (request, { params }) => {
         })
       );
     }
-    console.log("line 85");
+
     const newUserStyle = await UserStyle.create({
       styleName: styleName,
       rank,

@@ -81,13 +81,11 @@ export async function POST(request) {
             role: user.role || "USER",
           },
         });
-        console.log(response);
       } catch (error) {
         console.log("Error updating user metadata:", error);
       }
       //}
     } catch (error) {
-      console.log("Error creating or updating user:", error);
       return new Response("Error occured", {
         status: 400,
       });
@@ -99,7 +97,6 @@ export async function POST(request) {
     try {
       await deleteUser(id);
     } catch (error) {
-      console.log("Error deleting user:", error);
       return new Response("Error occured", {
         status: 400,
       });

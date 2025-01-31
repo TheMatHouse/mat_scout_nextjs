@@ -33,7 +33,6 @@ export const PATCH = async (request, { params }) => {
       }
 
       if (avatarType === "google") {
-        console.log("avatar type does equal google");
         user.avatarType = "google";
         user.avatar = "";
       } else {

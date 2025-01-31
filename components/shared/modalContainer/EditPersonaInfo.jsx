@@ -4,7 +4,7 @@ import Countries from "@/assets/countries.json";
 import { useRouter } from "next/navigation";
 
 const EditPersonalInfo = ({ user, userType, handleClose }) => {
-  const router = useRouter()
+  const router = useRouter();
   // get user's current location
 
   useEffect(() => {
@@ -47,7 +47,6 @@ const EditPersonalInfo = ({ user, userType, handleClose }) => {
   );
 
   const handleSubmit = async (e) => {
-    console.log("Inside handle submit");
     e.preventDefault();
 
     try {

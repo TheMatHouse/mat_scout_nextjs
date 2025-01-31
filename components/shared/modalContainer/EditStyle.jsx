@@ -6,7 +6,6 @@ import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";
 
 const EditStyle = ({ user, style, userType, handleClose }) => {
-  console.log("style ", style);
   const router = useRouter();
 
   const [rank, setRank] = useState(style?.rank ? style.rank : "");
@@ -48,7 +47,6 @@ const EditStyle = ({ user, style, userType, handleClose }) => {
           }),
         }
       );
-      console.log("RESPONSE ", response);
       if (response.status === 200) {
         const data = await response.json();
         const timer = setTimeout(() => {
@@ -60,7 +58,6 @@ const EditStyle = ({ user, style, userType, handleClose }) => {
       }
     } catch (error) {
       const data = await error.json();
-      // console.log("MESSAGE ", data.message);
       toast.error("Unable to update this style ", data.message);
     }
   };

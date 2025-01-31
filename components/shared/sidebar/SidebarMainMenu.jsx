@@ -14,7 +14,6 @@ const SidebarMainMenu = ({ menu, expanded }) => {
     <li className="my-2">
       {menu && menu.subMenu.length != 0 && (
         <>
-          {console.log("menu ", menu.name.toLowerCase())}
           <a
             onClick={() => setSubMenu(!subMenu)}
             className={`flex items-center w-full px-3 py-2  text-white font-bold rounded-md cursor-pointer shadow ${

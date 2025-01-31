@@ -12,7 +12,6 @@ const Dashboard = async () => {
   const profile = userData?.user[0];
 
   const resStyles = await fetch(`${process.env.NEXT_PUBLIC_API_DOMAIN}/styles`);
-  console.log(resStyles);
   const styles = await resStyles?.json();
 
   const resTechniques = await fetch(

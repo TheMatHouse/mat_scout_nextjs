@@ -10,7 +10,7 @@ export async function GET(request, { params }) {
   const { userId } = await params;
   //console.log(typeof userId);
   const mongoId = ObjectId.createFromHexString(userId);
-  console.log("mongoid ", mongoId);
+
   try {
     if (!userId || !Types.ObjectId.isValid(userId)) {
       return new NextResponse(

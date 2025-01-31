@@ -5,7 +5,6 @@ import { User } from "@/models/userModel";
 
 export const GET = async (request, { params }) => {
   const username = (await params).username;
-  console.log(username);
   // try {
   //   console.log(username);
   //   await connectDB();

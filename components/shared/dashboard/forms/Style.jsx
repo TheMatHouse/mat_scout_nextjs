@@ -48,7 +48,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useState } from "react";
 
 const StyleForm = ({ user, style, userType, type, setOpen }) => {
-  console.log(style);
   const router = useRouter();
   const form = useForm({
     mode: "onChange", // form validation mode
@@ -77,11 +76,8 @@ const StyleForm = ({ user, style, userType, type, setOpen }) => {
 
   const handleSubmit = async (values) => {
     values.promotionDate = promotionDate;
-    // console.log("VALUES ", values);
-    // console.log(promotionDate);
 
     try {
-      console.log(style._id);
       if (userType === "user") {
         let domain = "";
         if (style._id) {
@@ -89,7 +85,7 @@ const StyleForm = ({ user, style, userType, type, setOpen }) => {
         } else {
           domain = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyles`;
         }
-        console.log(domain);
+
         const response = await fetch(
           domain,
           //`${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyles`,
@@ -113,7 +109,7 @@ const StyleForm = ({ user, style, userType, type, setOpen }) => {
           }
         );
         const data = await response.json();
-        console.log(data);
+
         if (data.status === 201 || data.status === 200) {
           const timer = setTimeout(() => {
             router.refresh();
@@ -139,7 +135,7 @@ const StyleForm = ({ user, style, userType, type, setOpen }) => {
       //toast.error(error.message);
     }
   };
-  console.log("STYLE FORM");
+
   return (
     <AlertDialog>
       <Card className="w-full">

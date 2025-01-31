@@ -71,7 +71,6 @@ export async function POST(request, { params }) {
     videoURL,
     isPublic,
   } = body;
-  console.log(isPublic);
   try {
     if (!userId || !Types.ObjectId.isValid(userId)) {
       return new NextResponse(

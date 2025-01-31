@@ -6,7 +6,7 @@ import { toast } from "react-toastify";
 
 const AddStyle = ({ user, userType, type, handleClose }) => {
   const router = useRouter();
-  console.log("USER ", user);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {

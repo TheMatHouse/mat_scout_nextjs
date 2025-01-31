@@ -36,7 +36,7 @@ export const columns = [
     header: "Division",
   },
   {
-    accessorKey: "opponentsName",
+    accessorKey: "opponentName",
     header: "Opponent's Name",
   },
   {
