@@ -3,9 +3,11 @@
 import { useState } from "react";
 import {
   ColumnDef,
+  ColumnFiltersState,
   SortingState,
   flexRender,
   getCoreRowModel,
+  getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
@@ -19,25 +21,68 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import moment from "moment";
+import { Input } from "@/components/ui/input";
 //mport { Button } from "react-day-picker";
 
 export function MatchDataTable({ columns, data }) {
   const [sorting, setSorting] = useState([]);
+  const [columnFilters, setColumnFilters] = useState([]);
+  const [columnVisibility, setColumnVisibility] = useState({});
+
   const table = useReactTable({
     data,
     columns,
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    onSortingChange: setSorting,
     getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    onColumnVisibilityChange: setColumnVisibility,
     state: {
       sorting,
+      columnFilters,
+      columnVisibility,
     },
   });
 
   return (
     <div>
+      <div className="flex items-center py-4">
+        <Input
+          placeholder="Filter by match type..."
+          value={table.getColumn("matchType")?.getFilterValue() ?? ""} // Ensure it's always a string
+          onChange={(event) =>
+            table.getColumn("matchType")?.setFilterValue(event.target.value)
+          }
+          className="max-w-sm"
+        />
+        <Input
+          placeholder="Filter by event name..."
+          value={table.getColumn("eventName")?.getFilterValue() ?? ""} // Ensure it's always a string
+          onChange={(event) =>
+            table.getColumn("eventName")?.setFilterValue(event.target.value)
+          }
+          className="max-w-sm"
+        />
+        <Input
+          placeholder="Filter by match date (YYYY-MM-DD)"
+          value={table.getColumn("matchDate")?.getFilterValue() ?? ""} // Ensure it's always a string
+          onChange={(event) =>
+            table.getColumn("matchDate")?.setFilterValue(event.target.value)
+          }
+          className="max-w-sm"
+        />
+      </div>
       <div className="rounded-md border">
         <Table className="table-auto my-4 dark:border-white">
           <TableHeader>
@@ -74,18 +119,10 @@ export function MatchDataTable({ columns, data }) {
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
-                      {console.log(cell.id.includes("_matchDate"))}
-                      {cell.id.includes("_matchDate")
-                        ? moment(
-                            flexRender(
-                              cell.column.columnDef.cell,
-                              cell.getContext()
-                            )
-                          ).format("MMMM D, YYYY")
-                        : flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext()
-                          )}
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext()
+                      )}
                     </TableCell>
                   ))}
                 </TableRow>

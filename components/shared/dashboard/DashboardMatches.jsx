@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import MatchReportForm from "./forms/MatchReportForm";
 import { useState } from "react";
 import { ArrowUpDown } from "lucide-react";
+import moment from "moment";
 
 export const columns = [
   {
@@ -61,7 +62,9 @@ export const columns = [
         </Button>
       );
     },
+    cell: ({ getValue }) => moment.utc(getValue()).format("MMMM D, YYYY"), // Ensure UTC handling
   },
+
   {
     accessorKey: "division",
     header: ({ column }) => {
