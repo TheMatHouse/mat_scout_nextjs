@@ -20,11 +20,11 @@ import { useState } from "react";
 
 export const columns = [
   {
-    accessorKey: "type",
+    accessorKey: "matchType",
     header: "Type",
   },
   {
-    accessorKey: "event",
+    accessorKey: "eventName",
     header: "Event",
   },
   {
@@ -38,6 +38,10 @@ export const columns = [
   {
     accessorKey: "opponentName",
     header: "Opponent's Name",
+  },
+  {
+    accessorKey: "opponentCountry",
+    header: "Opponent's Country",
   },
   {
     accessorKey: "result",

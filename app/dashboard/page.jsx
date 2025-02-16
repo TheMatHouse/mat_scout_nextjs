@@ -3,12 +3,14 @@ import DashboardTabs from "@/components/shared/dashboard/DashboardTabs";
 
 const Dashboard = async () => {
   const user = await currentUser();
-
+  //console.log("USER ", user);
   const res = await fetch(
     //`${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${clerkData?.data._id}`
     `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user?.publicMetadata.userMongoId}`
   );
+
   const userData = await res?.json();
+  console.log("User Data ", userData);
   const profile = userData?.user[0];
 
   const resStyles = await fetch(`${process.env.NEXT_PUBLIC_API_DOMAIN}/styles`);

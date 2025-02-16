@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import moment from "moment";
 export const MatchDataTable = ({ columns, data }) => {
   const table = useReactTable({
     data,
@@ -50,7 +51,18 @@ export const MatchDataTable = ({ columns, data }) => {
               >
                 {row.getVisibleCells().map((cell) => (
                   <TableCell key={cell.id}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    {console.log(cell.id.includes("_matchDate"))}
+                    {cell.id.includes("_matchDate")
+                      ? moment(
+                          flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext()
+                          )
+                        ).format("MMMM D, YYYY")
+                      : flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
                   </TableCell>
                 ))}
               </TableRow>

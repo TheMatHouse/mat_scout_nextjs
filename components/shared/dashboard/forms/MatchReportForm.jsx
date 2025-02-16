@@ -111,6 +111,8 @@ const MatchReportForm = ({
     match?.opponentAttackNotes ? match.opponentAttackNotes : ""
   );
 
+  const [editorValue, setEditorValue] = useState("");
+
   const [athleteAttackNotes, setathleteAttackNotes] = useState(
     match?.athleteAttackNotes ? match.athleteAttackNotes : ""
   );
@@ -174,6 +176,7 @@ const MatchReportForm = ({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log("opponent attacks ", opponentAttacks);
 
     const oppAttacks = [];
 
@@ -230,6 +233,9 @@ const MatchReportForm = ({
         const videoURL = newVideoURL && newVideoURL;
         const isPublic = formData.get("isPublic") === "on" ? true : false;
         console.log("is Public in submit ", isPublic);
+        console.log("RESULT ", result);
+        console.log("Grip ", opponentGrip);
+        console.log("Score ", score);
         const response = await fetch(domain, {
           method,
           headers: {
@@ -484,7 +490,7 @@ const MatchReportForm = ({
             <div className="my-4">
               <label
                 className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="opponentCountry"
+                htmlFor="opponentGrip"
               >
                 Opponent's Grip <br />
                 <span className="text-xl text-muted-foreground my-2">
@@ -494,8 +500,8 @@ const MatchReportForm = ({
               <div className="flex items-center">
                 <input
                   type="radio"
-                  id="righty"
-                  name="grip"
+                  id="opponentGrip"
+                  name="opponentGrip"
                   value="Righty"
                 />
                 <label
@@ -508,8 +514,8 @@ const MatchReportForm = ({
               <div className="flex items-center">
                 <input
                   type="radio"
-                  id="lefty"
-                  name="grip"
+                  id="opponentGrip"
+                  name="opponentGrip"
                   value="Lefty"
                 />
                 <label
@@ -563,14 +569,19 @@ const MatchReportForm = ({
                 Notes on Opponent's Attacks
                 <br />
               </label>
-
               <Editor
+                name={opponentAttackNotes}
+                onChange={setEditorValue}
+              />
+
+              {/* <Editor
                 //theme="snow"
                 id={opponentAttackNotes}
                 name={opponentAttackNotes}
                 className="quill-editor"
                 onChange={setOpponentAttackNotes}
-              />
+                opponentAttackNotes={opponentAttackNotes}
+              /> */}
             </div>
 
             <div className="my-4">
@@ -629,26 +640,31 @@ const MatchReportForm = ({
               </label>
 
               <Editor
+                name={athleteAttackNotes}
+                onChange={setEditorValue}
+              />
+              {/* <Editor
                 //theme="snow"
                 id={athleteAttackNotes}
                 name={athleteAttackNotes}
                 className="quill-editor"
                 onChange={setOpponentAttackNotes}
-              />
+              /> */}
             </div>
 
             <div className="my-4">
               <label
                 className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="opponentCountry"
+                htmlFor="result"
               >
                 Match Result
               </label>
               <div className="flex items-center">
                 <input
                   type="radio"
-                  id="Won"
+                  id="won"
                   name="result"
+                  value="Won"
                 />
                 <label
                   htmlFor="won"
@@ -665,7 +681,7 @@ const MatchReportForm = ({
                   value="Lost"
                 />
                 <label
-                  htmlFor="lefty"
+                  htmlFor="lost"
                   className="block text-gray-900 dark:text-gray-100 text-lg font-bold md:text-left mb-1 md:mb-0 pl-4"
                 >
                   Lost
@@ -748,7 +764,7 @@ const MatchReportForm = ({
                   onChange={() => setIsPublic((prev) => !prev)}
                 />
                 <label
-                  htmlFor="won"
+                  htmlFor="isPublic"
                   className="block text-gray-900 dark:text-gray-100 text-lg font-bold md:text-left mb-1 md:mb-0 pl-4"
                 >
                   Set as public
