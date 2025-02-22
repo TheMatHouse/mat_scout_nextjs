@@ -33,7 +33,7 @@ import moment from "moment";
 import { Input } from "@/components/ui/input";
 //mport { Button } from "react-day-picker";
 
-export function MatchDataTable({ columns, data }) {
+export function MatchDataTable({ columns, data, setSelectedMatch }) {
   const [sorting, setSorting] = useState([]);
   const [columnFilters, setColumnFilters] = useState([]);
   const [columnVisibility, setColumnVisibility] = useState({});
@@ -55,33 +55,38 @@ export function MatchDataTable({ columns, data }) {
     },
   });
 
+  // const [currentMatch, setCurrentMatch] = useState({});
   return (
     <div>
-      <div className="flex items-center py-4">
-        <Input
-          placeholder="Filter by match type..."
-          value={table.getColumn("matchType")?.getFilterValue() ?? ""} // Ensure it's always a string
-          onChange={(event) =>
-            table.getColumn("matchType")?.setFilterValue(event.target.value)
-          }
-          className="max-w-sm"
-        />
-        <Input
-          placeholder="Filter by event name..."
-          value={table.getColumn("eventName")?.getFilterValue() ?? ""} // Ensure it's always a string
-          onChange={(event) =>
-            table.getColumn("eventName")?.setFilterValue(event.target.value)
-          }
-          className="max-w-sm"
-        />
-        <Input
-          placeholder="Filter by match date (YYYY-MM-DD)"
-          value={table.getColumn("matchDate")?.getFilterValue() ?? ""} // Ensure it's always a string
-          onChange={(event) =>
-            table.getColumn("matchDate")?.setFilterValue(event.target.value)
-          }
-          className="max-w-sm"
-        />
+      <div className="items-center py-4">
+        <h4 className="text-lg font-bold">Filter by:</h4>
+        <br />
+        <div className="flex">
+          <Input
+            placeholder="Match type..."
+            value={table.getColumn("matchType")?.getFilterValue() ?? ""} // Ensure it's always a string
+            onChange={(event) =>
+              table.getColumn("matchType")?.setFilterValue(event.target.value)
+            }
+            className="max-w-fit"
+          />
+          <Input
+            placeholder="Event name..."
+            value={table.getColumn("eventName")?.getFilterValue() ?? ""} // Ensure it's always a string
+            onChange={(event) =>
+              table.getColumn("eventName")?.setFilterValue(event.target.value)
+            }
+            className="max-w-fit"
+          />
+          <Input
+            placeholder="Match date (YYYY-MM-DD)"
+            value={table.getColumn("matchDate")?.getFilterValue() ?? ""} // Ensure it's always a string
+            onChange={(event) =>
+              table.getColumn("matchDate")?.setFilterValue(event.target.value)
+            }
+            className="max-w-fit"
+          />
+        </div>
       </div>
       <div className="rounded-md border">
         <Table className="table-auto my-4 dark:border-white">

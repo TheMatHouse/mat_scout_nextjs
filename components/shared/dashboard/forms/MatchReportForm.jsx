@@ -36,6 +36,7 @@ import Editor from "../../Editor";
 import { Button } from "@/components/ui/button";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";
+import moment from "moment";
 
 const MatchReportForm = ({
   athlete,
@@ -107,6 +108,7 @@ const MatchReportForm = ({
   const [opponentGrip, setOpponentGrip] = useState(
     match?.opponentGrip ? match.opponentGrip : ""
   );
+
   const [opponentAttackNotes, setOpponentAttackNotes] = useState(
     match?.opponentAttackNotes ? match.opponentAttackNotes : ""
   );
@@ -138,6 +140,7 @@ const MatchReportForm = ({
   }));
 
   // Opponent Opponent
+  console.log("Opponent Attacks ", match?.opponentAttakcs);
   const [opponentSelected, setOpponentSelected] = useState([]);
   const [opponentAttacks, setOpponentAttacks] = useState([]);
 
@@ -323,6 +326,8 @@ const MatchReportForm = ({
                 name="matchType"
                 aria-label="Match Type"
                 required
+                value={matchType}
+                onChange={(e) => setMatchType(e.target.value)}
               >
                 <option value="">Select Match Type...</option>
                 {styles &&
@@ -351,6 +356,7 @@ const MatchReportForm = ({
                 name="eventName"
                 placeholder="Event name"
                 required
+                defaultValue={eventName}
               />
             </div>
 
@@ -368,6 +374,7 @@ const MatchReportForm = ({
                 name="matchDate"
                 placeholder="Event name"
                 required
+                defaultValue={matchDate}
               />
             </div>
 
@@ -388,6 +395,7 @@ const MatchReportForm = ({
                 id="division"
                 name="division"
                 placeholder="Division"
+                defaultValue={division}
               />
             </div>
 
@@ -405,6 +413,7 @@ const MatchReportForm = ({
                 id="weightCategory"
                 name="weightCategory"
                 placeholder="Weight Category"
+                defaultValue={weightCategory}
               />
             </div>
 
@@ -423,6 +432,7 @@ const MatchReportForm = ({
                 name="opponentName"
                 placeholder="Opponent's Name"
                 required
+                defaultValue={opponentName}
               />
             </div>
 
@@ -440,6 +450,7 @@ const MatchReportForm = ({
                 id="opponentClub"
                 name="opponentClub"
                 placeholder="Opponent's Club"
+                defaultValue={opponentClub}
               />
             </div>
 
@@ -457,6 +468,7 @@ const MatchReportForm = ({
                 id="opponentRank"
                 name="opponentRank"
                 placeholder="Opponent's Rank"
+                defaultValue={opponentRank}
               />
             </div>
 
@@ -470,7 +482,7 @@ const MatchReportForm = ({
               <select
                 id="opponentCountry"
                 name="opponentCountry"
-                value={newCountry}
+                value={opponentCountry}
                 onChange={(e) => setNewCountry(e.target.value)}
                 required
               >
@@ -503,6 +515,8 @@ const MatchReportForm = ({
                   id="opponentGrip"
                   name="opponentGrip"
                   value="Righty"
+                  checked={opponentGrip === "Righty"}
+                  onChange={(e) => setOpponentGrip(e.target.value)}
                 />
                 <label
                   htmlFor="righty"
@@ -517,6 +531,8 @@ const MatchReportForm = ({
                   id="opponentGrip"
                   name="opponentGrip"
                   value="Lefty"
+                  checked={opponentGrip === "Lefty"}
+                  onChange={(e) => setOpponentGrip(e.target.value)}
                 />
                 <label
                   htmlFor="lefty"
@@ -554,7 +570,7 @@ const MatchReportForm = ({
               <Tags
                 labelText="Select techniques"
                 name={opponentAttacks}
-                selected={opponentSelected}
+                selected={opponentAttacks ? opponentAttacks : opponentSelected}
                 suggestions={suggestions}
                 onAdd={onOpponentAdd}
                 onDelete={onOpponentDelete}

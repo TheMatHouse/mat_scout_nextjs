@@ -14,13 +14,25 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import MatchReportForm from "./forms/MatchReportForm";
 import { useState } from "react";
 import { ArrowUpDown } from "lucide-react";
 import moment from "moment";
 
-export const columns = [
+// ICONS
+import { MoreHorizontal } from "lucide-react";
+
+export const columns = ({ setSelectedMatch, setOpen }) => [
   {
     accessorKey: "matchType",
     header: ({ column }) => {
@@ -121,12 +133,49 @@ export const columns = [
       );
     },
   },
+  {
+    id: "actions",
+    header: <div className="text-center">Actions</div>,
+    cell: ({ row }) => {
+      const match = row.original;
+
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              className="h-8 w-8 p-0"
+            >
+              <span className="sr-only">Open menu</span>
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            <DropdownMenuItem
+              onClick={() => {
+                setSelectedMatch(match);
+                setOpen(true);
+              }}
+            >
+              Edit Match
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem>View customer</DropdownMenuItem>
+            <DropdownMenuItem>View payment details</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    },
+  },
 ];
 const DashboardMatches = ({ user, styles, techniques }) => {
   const data = user.matchReports;
 
   const [open, setOpen] = useState(false);
+  const [selectedMatch, setSelectedMatch] = useState(null);
 
+  console.log("MATCH ", selectedMatch);
   return (
     <div>
       <div className="flex items-center">
@@ -142,9 +191,13 @@ const DashboardMatches = ({ user, styles, techniques }) => {
           </DialogTrigger>
           <DialogContent className="overflow-y-scroll max-h-[90%]">
             <DialogHeader>
-              <DialogTitle>Add a Match Report</DialogTitle>
+              <DialogTitle>
+                {selectedMatch ? "Edit this " : "Add a "} Match Report
+              </DialogTitle>
               <DialogDescription>
-                Add a new report here. You can edit this report at any time.
+                {selectedMatch
+                  ? " "
+                  : "Add a new report here. You can edit this report at any time."}
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4 min-width-full">
@@ -154,6 +207,7 @@ const DashboardMatches = ({ user, styles, techniques }) => {
                 techniques={techniques}
                 type="user"
                 setOpen={setOpen}
+                match={selectedMatch}
               />
             </div>
           </DialogContent>
@@ -161,8 +215,9 @@ const DashboardMatches = ({ user, styles, techniques }) => {
       </div>
       <div>
         <MatchDataTable
-          columns={columns}
+          columns={columns({ setSelectedMatch, setOpen })}
           data={data}
+          setSelectedMatch={setSelectedMatch}
         />
       </div>
     </div>
