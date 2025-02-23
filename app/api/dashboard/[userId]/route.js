@@ -9,7 +9,7 @@ import { revalidatePath } from "next/cache";
 export async function GET(request, { params }) {
   const { userId } = await params;
   //console.log(typeof userId);
-  console.log("USER ID ", userId);
+
   const mongoId = ObjectId.createFromHexString(userId);
 
   try {

@@ -109,13 +109,15 @@ const MatchReportForm = ({
     match?.opponentGrip ? match.opponentGrip : ""
   );
 
-  const [opponentAttackNotes, setOpponentAttackNotes] = useState(
+  // const [opponentAttackNotes, setOpponentAttackNotes] = useState(
+  //   match?.opponentAttackNotes ? match.opponentAttackNotes : ""
+  // );
+
+  const [oppAttackNotes, setOppAttackNotes] = useState(
     match?.opponentAttackNotes ? match.opponentAttackNotes : ""
   );
 
-  const [editorValue, setEditorValue] = useState("");
-
-  const [athleteAttackNotes, setathleteAttackNotes] = useState(
+  const [athAttackNotes, setAthAttackNotes] = useState(
     match?.athleteAttackNotes ? match.athleteAttackNotes : ""
   );
 
@@ -140,8 +142,21 @@ const MatchReportForm = ({
   }));
 
   // Opponent Opponent
-  console.log("Opponent Attacks ", match?.opponentAttakcs);
-  const [opponentSelected, setOpponentSelected] = useState([]);
+  const oppAttacksFromDB = [];
+  if (match) {
+    if (match.opponentAttacks) {
+      match.opponentAttacks.map((item, i) => {
+        oppAttacksFromDB.push({
+          value: i,
+          label: item,
+        });
+      });
+    }
+  }
+
+  const [opponentSelected, setOpponentSelected] = useState(
+    oppAttacksFromDB ? oppAttacksFromDB : []
+  );
   const [opponentAttacks, setOpponentAttacks] = useState([]);
 
   const onOpponentAdd = useCallback(
@@ -159,7 +174,20 @@ const MatchReportForm = ({
   );
 
   // Athlete Attacks
-  const [athleteSelected, setAthleteSelected] = useState([]);
+  const athAttacksFromDB = [];
+  if (match) {
+    if (match.athleteAttacks) {
+      match.athleteAttacks.map((item, i) => {
+        athAttacksFromDB.push({
+          value: i,
+          label: item,
+        });
+      });
+    }
+  }
+  const [athleteSelected, setAthleteSelected] = useState(
+    athAttacksFromDB ? athAttacksFromDB : []
+  );
 
   const [athleteAttacks, setAthleteAttacks] = useState([]);
 
@@ -179,29 +207,27 @@ const MatchReportForm = ({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("opponent attacks ", opponentAttacks);
+
+    const formData = new FormData(e.currentTarget);
 
     const oppAttacks = [];
 
-    if (opponentAttacks) {
-      opponentAttacks.map((item) => {
-        oppAttacks.push(item.text.toLowerCase());
+    if (opponentSelected) {
+      opponentSelected.map((item) => {
+        oppAttacks.push(item.label.toLowerCase());
       });
     }
 
-    const myAthleteAttacks = [];
-
-    if (athleteAttacks) {
-      athleteAttacks.map((item) => {
-        myAthleteAttacks.push(item.text.toLowerCase());
+    const athAttacks = [];
+    if (athleteSelected) {
+      athleteSelected.map((item) => {
+        athAttacks.push(item.label.toLowerCase());
       });
     }
 
     const videoURLTemp = e.target.videoURL.value.split("https://");
     const newVideoURL = "https://" + videoURLTemp[1];
 
-    const formData = new FormData(e.currentTarget);
-    console.log("athlete ", athlete);
     try {
       console.log("type = ", type);
 
@@ -216,6 +242,8 @@ const MatchReportForm = ({
           method = "POST";
           domain = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${athlete._id}/matchReports`;
         }
+        console.log("domain ", domain);
+        console.log("method ", method);
         const matchType = formData.get("matchType");
         const eventName = formData.get("eventName");
         const matchDate = formData.get("matchDate");
@@ -226,19 +254,17 @@ const MatchReportForm = ({
         const opponentRank = formData.get("opponentRank");
         const opponentGrip = formData.get("opponentGrip");
         const opponentCountry = newCountry;
+        //const opponentAttacks = oppAttacks && oppAttacks;
         const opponentAttacks = oppAttacks && oppAttacks;
-        const opponentAttackNotes = formData.get("opponentAttackNotes");
-        const athleteAttacks = myAthleteAttacks && myAthleteAttacks;
-        const athleteAttackNotes = formData.get("athleteAttackNotes");
+        const opponentAttackNotes = oppAttackNotes && oppAttackNotes;
+        const athleteAttacks = athAttacks && athAttacks;
+        const athleteAttackNotes = athAttackNotes && athAttackNotes;
         const result = formData.get("result");
         const score = formData.get("score");
         const videoTitle = formData.get("videoTitle");
         const videoURL = newVideoURL && newVideoURL;
         const isPublic = formData.get("isPublic") === "on" ? true : false;
-        console.log("is Public in submit ", isPublic);
-        console.log("RESULT ", result);
-        console.log("Grip ", opponentGrip);
-        console.log("Score ", score);
+
         const response = await fetch(domain, {
           method,
           headers: {
@@ -484,7 +510,6 @@ const MatchReportForm = ({
                 name="opponentCountry"
                 value={opponentCountry}
                 onChange={(e) => setNewCountry(e.target.value)}
-                required
               >
                 <option value="">Select country...</option>
                 {Countries &&
@@ -570,7 +595,7 @@ const MatchReportForm = ({
               <Tags
                 labelText="Select techniques"
                 name={opponentAttacks}
-                selected={opponentAttacks ? opponentAttacks : opponentSelected}
+                selected={opponentSelected}
                 suggestions={suggestions}
                 onAdd={onOpponentAdd}
                 onDelete={onOpponentDelete}
@@ -586,10 +611,11 @@ const MatchReportForm = ({
                 <br />
               </label>
               <Editor
-                name={opponentAttackNotes}
-                onChange={setEditorValue}
+                name="oppAttackNotes"
+                onChange={setOppAttackNotes}
+                attackNotes={oppAttackNotes}
               />
-
+              {console.log("line 616 ", oppAttackNotes)}
               {/* <Editor
                 //theme="snow"
                 id={opponentAttackNotes}
@@ -656,8 +682,9 @@ const MatchReportForm = ({
               </label>
 
               <Editor
-                name={athleteAttackNotes}
-                onChange={setEditorValue}
+                name="athAttackNotes"
+                onChange={setAthAttackNotes}
+                attackNotes={athAttackNotes}
               />
               {/* <Editor
                 //theme="snow"

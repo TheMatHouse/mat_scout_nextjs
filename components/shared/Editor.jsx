@@ -1,9 +1,35 @@
 "use client";
 
+import { useEffect } from "react";
 import { useState, useRef } from "react";
 
-export default function Editor({ name, onChange, opponentAttackNotes }) {
+export default function Editor({ name, onChange, attackNotes }) {
   const [content, setContent] = useState("");
+  useEffect(() => {
+    if (editorRef.current && attackNotes !== undefined) {
+      const selection = window.getSelection();
+      let range = document.createRange();
+
+      // Store cursor position
+      let lastOffset = 0;
+      if (selection.rangeCount > 0) {
+        const activeRange = selection.getRangeAt(0);
+        lastOffset = activeRange.startOffset;
+      }
+
+      editorRef.current.innerHTML = attackNotes;
+
+      // Restore cursor position
+      const lastChild = editorRef.current.lastChild;
+      if (lastChild) {
+        range.setStart(lastChild, Math.min(lastOffset, lastChild.length));
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    }
+  }, [attackNotes]);
+
   const editorRef = useRef(null);
 
   const handleInput = () => {
@@ -43,7 +69,6 @@ export default function Editor({ name, onChange, opponentAttackNotes }) {
     }
   };
 
-  console.log("NOTES ", opponentAttackNotes);
   return (
     <div className="max-w-3xl mx-auto p-6  rounded-lg">
       {/* <h2 className="text-2xl font-bold mb-4">Next.js WYSIWYG Editor</h2> */}
@@ -72,7 +97,7 @@ export default function Editor({ name, onChange, opponentAttackNotes }) {
         ref={editorRef}
         id={name}
         name={name}
-        onInput={handleInput} // Keep this
+        onInput={handleInput}
         className="text-gray-900 dark:text-gray-100 rounded-lg shadow-md p-4 min-h-[200px] border border-gray-300 outline-none"
       />
 
