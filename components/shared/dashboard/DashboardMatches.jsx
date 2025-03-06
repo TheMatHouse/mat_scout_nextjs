@@ -32,7 +32,7 @@ import moment from "moment";
 // ICONS
 import { MoreHorizontal } from "lucide-react";
 
-export const columns = ({ setSelectedMatch, setOpen }) => [
+export const columns = ({ setSelectedMatch, setOpen, handleDeleteMatch }) => [
   {
     accessorKey: "matchType",
     header: ({ column }) => {
@@ -161,7 +161,14 @@ export const columns = ({ setSelectedMatch, setOpen }) => [
               Edit Match
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>View customer</DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                setSelectedMatch(match);
+                handleDeleteMatch();
+              }}
+            >
+              Delete Match
+            </DropdownMenuItem>
             <DropdownMenuItem>View payment details</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -175,7 +182,13 @@ const DashboardMatches = ({ user, styles, techniques }) => {
   const [open, setOpen] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState(null);
 
-  console.log("MATCH ", selectedMatch);
+  const handleDeleteMatch = async (match) => {
+    if (
+      window.confirm(`This report will be permanently deleted!  Are you sure?`)
+    ) {
+      console.log(match);
+    }
+  };
   return (
     <div>
       <div className="flex items-center">
@@ -215,7 +228,7 @@ const DashboardMatches = ({ user, styles, techniques }) => {
       </div>
       <div>
         <MatchDataTable
-          columns={columns({ setSelectedMatch, setOpen })}
+          columns={columns({ setSelectedMatch, setOpen, handleDeleteMatch })}
           data={data}
           setSelectedMatch={setSelectedMatch}
         />

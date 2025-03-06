@@ -24,11 +24,6 @@ export const PATCH = async (request, { params }) => {
       );
     }
 
-    if (!matchReportId || !Types.ObjectId.isValid(matchReportId)) {
-      return new NextResponse(
-        JSON.stringify({ message: "Invalid or missing match report id" })
-      );
-    }
     if (!request.body) {
       return new NextResponse(
         JSON.stringify({ message: "Empty request body" }),
@@ -57,7 +52,7 @@ export const PATCH = async (request, { params }) => {
     const videoTitle = body.videoTitle;
     const videoURL = body.videoURL;
     const isPublic = body.isPublic;
-
+    console.log("video URL ", videoURL);
     if (!body) {
       return new NextResponse(
         JSON.stringify({ message: "Invalid JSON data" }),
@@ -119,10 +114,10 @@ export const PATCH = async (request, { params }) => {
 
       if (updatedMatchReport) {
         return new NextResponse(
-          JSON.stringify({ message: "Match report updated successfully!!!!" }),
-          {
-            status: 200,
-          }
+          JSON.stringify({
+            message: "Match report updated successfully",
+          }),
+          { status: 200 }
         );
       }
     }
@@ -130,6 +125,66 @@ export const PATCH = async (request, { params }) => {
     return new NextResponse(
       JSON.stringify({
         message: "Error updating match report: " + error.message,
+      }),
+      { status: 500 }
+    );
+  }
+};
+
+export const DELETE = async (request, { params }) => {
+  try {
+    const { userId, matchReportId } = await params;
+
+    if (!userId || !Types.ObjectId.isValid(userId)) {
+      return new NextResponse(
+        JSON.stringify({ message: "Invalid or missing user id" })
+      );
+    }
+
+    if (!matchReportId || !Types.ObjectId.isValid(matchReportId)) {
+      return new NextResponse(
+        JSON.stringify({ message: "Invalid or missing match report id" })
+      );
+    }
+
+    await connectDB();
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return new NextResponse(JSON.stringify({ message: "User not found" }), {
+        status: 404,
+      });
+    }
+
+    const match = await MatchReport.findOne({
+      _id: matchReportId,
+      athlete: userId,
+    });
+
+    if (!match) {
+      return new NextResponse(
+        JSON.stringify({
+          message: "Match not found or does not belong to user.",
+        }),
+        {
+          status: 404,
+        }
+      );
+    }
+
+    await MatchReport.findByIdAndDelete(matchReportId);
+
+    return new NextResponse(
+      JSON.stringify({
+        message: "Match report deleted successfully",
+      }),
+      { status: 200 }
+    );
+  } catch (error) {
+    return new NextResponse(
+      JSON.stringify({
+        message: "Error deleting match report: " + error.message,
       }),
       { status: 500 }
     );

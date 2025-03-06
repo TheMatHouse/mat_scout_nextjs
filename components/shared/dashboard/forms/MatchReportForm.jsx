@@ -45,6 +45,7 @@ const MatchReportForm = ({
   techniques,
   type,
   setOpen,
+  handleDeleteMatch,
 }) => {
   const router = useRouter();
   const [add, setAdd] = useState("");
@@ -226,11 +227,11 @@ const MatchReportForm = ({
     }
 
     const videoURLTemp = e.target.videoURL.value.split("https://");
-    const newVideoURL = "https://" + videoURLTemp[1];
+
+    const newVideoURL =
+      videoURLTemp.length > 1 ? "https://" + videoURLTemp[1] : "";
 
     try {
-      console.log("type = ", type);
-
       if (type === "user") {
         let domain = "";
         let method = "";
@@ -242,8 +243,7 @@ const MatchReportForm = ({
           method = "POST";
           domain = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${athlete._id}/matchReports`;
         }
-        console.log("domain ", domain);
-        console.log("method ", method);
+
         const matchType = formData.get("matchType");
         const eventName = formData.get("eventName");
         const matchDate = formData.get("matchDate");
@@ -262,7 +262,7 @@ const MatchReportForm = ({
         const result = formData.get("result");
         const score = formData.get("score");
         const videoTitle = formData.get("videoTitle");
-        const videoURL = newVideoURL && newVideoURL;
+        const videoURL = newVideoURL;
         const isPublic = formData.get("isPublic") === "on" ? true : false;
 
         const response = await fetch(domain, {
@@ -294,12 +294,13 @@ const MatchReportForm = ({
             result,
             score,
             videoTitle,
-            videoURL,
+            videoURL: videoURL === "https://undefined" ? "" : videoURL,
             isPublic,
           }),
         });
         const data = await response.json();
-        if (data.status === 201 || data.status === 200) {
+
+        if (response.ok) {
           const timer = setTimeout(() => {
             router.refresh();
             toast.success(data.message, {
@@ -708,6 +709,8 @@ const MatchReportForm = ({
                   id="won"
                   name="result"
                   value="Won"
+                  checked={result === "Won"}
+                  onChange={(e) => setResult(e.target.value)}
                 />
                 <label
                   htmlFor="won"
@@ -722,6 +725,8 @@ const MatchReportForm = ({
                   id="lost"
                   name="result"
                   value="Lost"
+                  checked={result === "Lost"}
+                  onChange={(e) => setResult(e.target.value)}
                 />
                 <label
                   htmlFor="lost"
@@ -746,6 +751,7 @@ const MatchReportForm = ({
                 id="score"
                 name="score"
                 placeholder="Match score"
+                defaultValue={score}
               />
             </div>
 
@@ -763,6 +769,7 @@ const MatchReportForm = ({
                 id="videoTitle"
                 name="videoTitle"
                 placeholder="Video Title"
+                defaultValue={videoTitle}
               />
             </div>
 
@@ -795,6 +802,7 @@ const MatchReportForm = ({
                 id="videoURL"
                 name="videoURL"
                 placeholder="Video URL"
+                defaultValue={videoURL}
               />
             </div>
 
@@ -804,6 +812,7 @@ const MatchReportForm = ({
                   type="checkbox"
                   id="isPublic"
                   name="isPublic"
+                  checked={isPublic === true}
                   onChange={() => setIsPublic((prev) => !prev)}
                 />
                 <label
