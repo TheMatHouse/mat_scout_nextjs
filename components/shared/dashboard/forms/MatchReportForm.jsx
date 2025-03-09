@@ -45,7 +45,7 @@ const MatchReportForm = ({
   techniques,
   type,
   setOpen,
-  handleDeleteMatch,
+  setPreviewOpen,
 }) => {
   const router = useRouter();
   const [add, setAdd] = useState("");

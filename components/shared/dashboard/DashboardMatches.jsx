@@ -1,10 +1,4 @@
-import {
-  Table,
-  TableCaption,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { useRouter } from "next/navigation";
 import { MatchDataTable } from "./data/match-data-table";
 import {
   Dialog,
@@ -31,8 +25,15 @@ import moment from "moment";
 
 // ICONS
 import { MoreHorizontal } from "lucide-react";
+import { toast } from "react-toastify";
+import PreviewMatchReportModal from "./previewMatchReportModal";
 
-export const columns = ({ setSelectedMatch, setOpen, handleDeleteMatch }) => [
+export const columns = ({
+  setSelectedMatch,
+  setOpen,
+  setPreviewOpen,
+  handleDeleteMatch,
+}) => [
   {
     accessorKey: "matchType",
     header: ({ column }) => {
@@ -155,6 +156,14 @@ export const columns = ({ setSelectedMatch, setOpen, handleDeleteMatch }) => [
             <DropdownMenuItem
               onClick={() => {
                 setSelectedMatch(match);
+                setPreviewOpen(true);
+              }}
+            >
+              View Match Details
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                setSelectedMatch(match);
                 setOpen(true);
               }}
             >
@@ -162,14 +171,14 @@ export const columns = ({ setSelectedMatch, setOpen, handleDeleteMatch }) => [
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
+              className="text-ms-dark-red"
               onClick={() => {
                 setSelectedMatch(match);
-                handleDeleteMatch();
+                handleDeleteMatch(match);
               }}
             >
               Delete Match
             </DropdownMenuItem>
-            <DropdownMenuItem>View payment details</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       );
@@ -177,16 +186,50 @@ export const columns = ({ setSelectedMatch, setOpen, handleDeleteMatch }) => [
   },
 ];
 const DashboardMatches = ({ user, styles, techniques }) => {
+  const router = useRouter();
   const data = user.matchReports;
 
   const [open, setOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState(null);
 
   const handleDeleteMatch = async (match) => {
     if (
       window.confirm(`This report will be permanently deleted!  Are you sure?`)
     ) {
-      console.log(match);
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/matchReports/${match._id}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Content-type": "application/json; charset=UTF-8",
+          },
+        }
+      );
+      const data = await response.json();
+
+      if (response.ok) {
+        const timer = setTimeout(() => {
+          router.refresh();
+          toast.success(data.message, {
+            position: "top-right",
+            autoClose: 5000,
+            hideProgressBar: false,
+            closeOnClick: false,
+            pauseOnHover: true,
+            draggable: true,
+            progress: undefined,
+            theme: "light",
+          });
+        }, 1000);
+        return () => clearTimeout(timer);
+      } else {
+        toast.error(data.message);
+        console.log(data.message);
+      }
     }
   };
   return (
@@ -228,11 +271,23 @@ const DashboardMatches = ({ user, styles, techniques }) => {
       </div>
       <div>
         <MatchDataTable
-          columns={columns({ setSelectedMatch, setOpen, handleDeleteMatch })}
+          columns={columns({
+            setSelectedMatch,
+            setOpen,
+            setPreviewOpen,
+            handleDeleteMatch,
+          })}
           data={data}
           setSelectedMatch={setSelectedMatch}
         />
       </div>
+      {previewOpen && (
+        <PreviewMatchReportModal
+          previewOpen={previewOpen}
+          setPreviewOpen={setPreviewOpen}
+          report={selectedMatch}
+        />
+      )}
     </div>
   );
 };

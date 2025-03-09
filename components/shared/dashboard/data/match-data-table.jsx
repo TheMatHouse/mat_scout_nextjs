@@ -33,12 +33,7 @@ import moment from "moment";
 import { Input } from "@/components/ui/input";
 //mport { Button } from "react-day-picker";
 
-export function MatchDataTable({
-  columns,
-  data,
-  setSelectedMatch,
-  handleDeleteMatch,
-}) {
+export function MatchDataTable({ columns, data }) {
   const [sorting, setSorting] = useState([]);
   const [columnFilters, setColumnFilters] = useState([]);
   const [columnVisibility, setColumnVisibility] = useState({});
@@ -60,14 +55,6 @@ export function MatchDataTable({
     },
   });
 
-  // const handleDeleteMatch = async (match) => {
-  //   if (
-  //     window.confirm(`This report will be permanently deleted!  Are you sure?`)
-  //   ) {
-  //     console.log(match);
-  //   }
-  // };
-  // const [currentMatch, setCurrentMatch] = useState({});
   return (
     <div>
       <div className="items-center py-4">
