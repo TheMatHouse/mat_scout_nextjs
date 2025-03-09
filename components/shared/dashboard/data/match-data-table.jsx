@@ -88,18 +88,18 @@ export function MatchDataTable({ columns, data }) {
         </div>
       </div>
       <div className="rounded-md border">
-        <Table className="table-auto my-4 dark:border-white">
-          <TableHeader>
+        <Table className="table-auto my-4 border border-gray-900 dark:border-white border-collapse">
+          <TableHeader className="border-b-2 border-gray-900 dark:border-white">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow
                 key={headerGroup.id}
-                className="bg-ms-blue hover:bg-ms-blue dark:bg-ms-blue-gray border-white border-2"
+                className="bg-ms-blue hover:bg-ms-blue dark:bg-ms-blue-gray border-b-2 border-gray-900 dark:border-white"
               >
                 {headerGroup.headers.map((header) => {
                   return (
                     <TableHead
                       key={header.id}
-                      className="text-gray-100 dark:text-gray-900 text-center font-bold border-2"
+                      className="text-gray-100 dark:text-gray-900 text-center font-bold border-r-2 border-gray-900 dark:border-white"
                     >
                       {header.isPlaceholder
                         ? null
@@ -115,14 +115,23 @@ export function MatchDataTable({ columns, data }) {
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
+              table.getRowModel().rows.map((row, index) => (
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className="border-gray-900 dark:border-gray-100 border-2"
+                  className={`border-b-2 border-gray-900 dark:border-white hover:bg-gray-400 ${
+                    index === 0 ? "border-t-2" : ""
+                  } ${
+                    index === table.getRowModel().rows.length - 1
+                      ? "border-b-2"
+                      : ""
+                  }`}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell
+                      key={cell.id}
+                      className="border-gray-900 dark:border-white"
+                    >
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -135,7 +144,7 @@ export function MatchDataTable({ columns, data }) {
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center"
+                  className="h-24 text-center border-t-2 border-b-2 border-gray-900 dark:border-white"
                 >
                   No results.
                 </TableCell>

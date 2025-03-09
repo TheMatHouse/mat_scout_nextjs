@@ -264,7 +264,7 @@ const MatchReportForm = ({
         const videoTitle = formData.get("videoTitle");
         const videoURL = newVideoURL;
         const isPublic = formData.get("isPublic") === "on" ? true : false;
-
+        console.log("video url ", videoURL);
         const response = await fetch(domain, {
           method,
           headers: {

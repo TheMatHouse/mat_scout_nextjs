@@ -404,3 +404,11 @@ input[type="checkbox"]:focus {
 }
 
 /*-----Form END-----*/
+
+.depth-1 + .depth-0 {
+  border-top: solid 3px red;
+}
+
+.depth-1:last-child {
+  border-bottom: solid 3px red;
+}
