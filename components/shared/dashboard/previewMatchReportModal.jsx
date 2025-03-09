@@ -109,6 +109,15 @@ const PreviewMatchReportModal = ({ previewOpen, setPreviewOpen, report }) => {
               <div className="py-1">
                 <strong>Score: </strong> {report.score}
               </div>
+
+              <div className="py-1">
+                <strong>
+                  This report is set to{" "}
+                  <strong>
+                    {report.isPublic === true ? "Public" : "Private"}
+                  </strong>
+                </strong>
+              </div>
             </div>
           </div>
           <div>
