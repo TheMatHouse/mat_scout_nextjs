@@ -22,8 +22,20 @@ export default function Editor({ name, onChange, attackNotes }) {
   // };
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
-      e.preventDefault();
-      document.execCommand("insertHTML", false, "<br><br>"); // Insert a proper line break
+      e.preventDefault(); // Prevent the default behavior of inserting a newline
+      const selection = window.getSelection();
+      const range = selection.getRangeAt(0); // Get the current selection range
+
+      // Create a new <br> element
+      const br = document.createElement("br");
+      range.deleteContents(); // Delete any selected content
+      range.insertNode(br); // Insert the <br> element at the current selection
+      range.setStartAfter(br); // Move the cursor after the inserted <br>
+      range.setEndAfter(br);
+
+      // Reapply the selection
+      selection.removeAllRanges();
+      selection.addRange(range);
     }
   };
 
