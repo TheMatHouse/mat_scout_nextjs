@@ -8,27 +8,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { MatchReportSchema } from "@/lib/schemas";
-import { zodResolver } from "@hookform/resolvers/zod";
 
 import Countries from "@/assets/countries.json";
 
-import { useForm } from "react-hook-form";
 import Tooltip from "../../Tooltip";
 import { CircleHelp } from "lucide-react";
 import Tags from "../../Tags";
@@ -45,7 +27,6 @@ const MatchReportForm = ({
   techniques,
   type,
   setOpen,
-  setPreviewOpen,
 }) => {
   const router = useRouter();
   const [add, setAdd] = useState("");
@@ -63,17 +44,23 @@ const MatchReportForm = ({
 
   const myCountry_code = add?.country_code;
 
-  const myCountry = Countries.filter(
+  const myCountry = Countries.find(
     (country) => country.code2.toLowerCase() === myCountry_code
   );
 
-  const Country = myCountry[0]?.code3;
+  const Country = myCountry?.code3 || ""; // Ensure default is an empty string
 
-  const [newCountry, setNewCountry] = useState("");
+  const [newCountry, setNewCountry] = useState(Country);
 
+  // Update newCountry when Country changes
   useEffect(() => {
     setNewCountry(Country);
   }, [Country]);
+
+  // Ensure athleteCountry updates when newCountry changes
+  useEffect(() => {
+    setOpponentCountry(newCountry);
+  }, [newCountry]);
 
   const [matchType, setMatchType] = useState(
     match?.matchType ? match?.matchType : ""
@@ -99,12 +86,15 @@ const MatchReportForm = ({
   const [opponentRank, setOpponentRank] = useState(
     match?.opponentRank ? match?.opponentRank : ""
   );
+  // const [opponentCountry, setOpponentCountry] = useState(
+  //   match?.opponentCountry
+  //     ? match?.opponentCountry
+  //     : newCountry
+  //     ? newCountry
+  //     : ""
+  //);
   const [opponentCountry, setOpponentCountry] = useState(
-    match?.opponentCountry
-      ? match?.opponentCountry
-      : newCountry
-      ? newCountry
-      : ""
+    match?.athleteCountry || Country || ""
   );
   const [opponentGrip, setOpponentGrip] = useState(
     match?.opponentGrip ? match.opponentGrip : ""
@@ -510,18 +500,20 @@ const MatchReportForm = ({
                 id="opponentCountry"
                 name="opponentCountry"
                 value={opponentCountry}
-                onChange={(e) => setNewCountry(e.target.value)}
+                onChange={(e) => {
+                  setNewCountry(e.target.value);
+                  setOpponentCountry(e.target.value);
+                }}
               >
                 <option value="">Select country...</option>
-                {Countries &&
-                  Countries.map((country) => (
-                    <option
-                      key={country.code3}
-                      value={country.code3}
-                    >
-                      {country.name}
-                    </option>
-                  ))}
+                {Countries.map((country) => (
+                  <option
+                    key={country.code3}
+                    value={country.code3}
+                  >
+                    {country.name}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -572,7 +564,7 @@ const MatchReportForm = ({
             <div className="my-4">
               <label
                 className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="opponentRank"
+                htmlFor="opponentAttacks"
               >
                 Opponent's Techniques Used
               </label>
@@ -595,6 +587,7 @@ const MatchReportForm = ({
               </div>
               <Tags
                 labelText="Select techniques"
+                id={opponentAttacks}
                 name={opponentAttacks}
                 selected={opponentSelected}
                 suggestions={suggestions}
@@ -630,7 +623,7 @@ const MatchReportForm = ({
             <div className="my-4">
               <label
                 className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="opponentRank"
+                htmlFor="athleteAttacks"
               >
                 {`${
                   type === "user"
@@ -642,7 +635,7 @@ const MatchReportForm = ({
               </label>
               <div className="max-w-md">
                 <Tooltip
-                  alt="Opponent techniques used tooltip"
+                  alt="athleteAttacks techniques used tooltip"
                   text={`Click inside the box below. A list of techniques already
                             in our database will appear. Click on a technique to
                             selected it. The selected techniques will appear above the

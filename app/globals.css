@@ -405,10 +405,36 @@ input[type="checkbox"]:focus {
 
 /*-----Form END-----*/
 
-.depth-1 + .depth-0 {
-  border-top: solid 3px red;
+/*-----Tabs Scroll Container START-----*/
+.scroll-container {
+  position: relative;
 }
 
-.depth-1:last-child {
-  border-bottom: solid 3px red;
+.scroll-container::before,
+.scroll-container::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 30px;
+  pointer-events: none;
 }
+
+.scroll-container::before {
+  left: 0;
+  background: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 1),
+    rgba(255, 255, 255, 0)
+  );
+}
+
+.scroll-container::after {
+  right: 0;
+  background: linear-gradient(
+    to left,
+    rgba(255, 255, 255, 1),
+    rgba(255, 255, 255, 0)
+  );
+}
+/*-----Tabs Scroll Container END-----*/

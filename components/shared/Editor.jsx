@@ -1,113 +1,67 @@
 "use client";
 
-import { useEffect } from "react";
-import { useState, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 export default function Editor({ name, onChange, attackNotes }) {
-  const [content, setContent] = useState("");
+  const editorRef = useRef(null);
+
   useEffect(() => {
     if (editorRef.current && attackNotes !== undefined) {
-      const selection = window.getSelection();
-      let range = document.createRange();
-
-      // Store cursor position
-      let lastOffset = 0;
-      if (selection.rangeCount > 0) {
-        const activeRange = selection.getRangeAt(0);
-        lastOffset = activeRange.startOffset;
-      }
-
       editorRef.current.innerHTML = attackNotes;
-
-      // Restore cursor position
-      const lastChild = editorRef.current.lastChild;
-      if (lastChild) {
-        range.setStart(lastChild, Math.min(lastOffset, lastChild.length));
-        range.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(range);
-      }
     }
   }, [attackNotes]);
 
-  const editorRef = useRef(null);
+  // const handleInput = () => {
+  //   if (onChange) {
+  //     onChange(editorRef.current.innerHTML);
+  //   }
+  // };
 
-  const handleInput = () => {
-    const newContent = editorRef.current.innerHTML;
-    setContent(newContent);
-    if (onChange) {
-      onChange(newContent); // Pass updated content to parent
-    }
-  };
-
-  const applyStyle = (tag, event) => {
-    event.preventDefault();
-    const selection = window.getSelection();
-    if (!selection.rangeCount) return;
-
-    const range = selection.getRangeAt(0);
-    const selectedNode = range.startContainer;
-    const parentNode = selectedNode.parentNode;
-
-    // Check if the selected range is inside the tag
-    if (parentNode.nodeName.toLowerCase() === tag) {
-      // Unwrap the element by replacing it with its child nodes
-      const children = Array.from(parentNode.childNodes);
-      parentNode.replaceWith(...children);
-    } else {
-      // Wrap the selected text in the tag
-      const wrapper = document.createElement(tag);
-      const selectedContent = range.extractContents();
-      wrapper.appendChild(selectedContent);
-      range.insertNode(wrapper);
-    }
-
-    // Update state and notify parent
-    setContent(editorRef.current.innerHTML);
-    if (onChange) {
-      onChange(editorRef.current.innerHTML);
+  // const handleInput = () => {
+  //   console.log("Input detected:", editorRef.current.innerHTML);
+  // };
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      document.execCommand("insertHTML", false, "<br><br>"); // Insert a proper line break
     }
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-6  rounded-lg">
-      {/* <h2 className="text-2xl font-bold mb-4">Next.js WYSIWYG Editor</h2> */}
-      <div className="mb-2 flex gap-2 border p-2  text-gray-100 dark:text-100 rounded-md shadow-sm">
+    <div className="max-w-3xl mx-auto p-6 rounded-lg">
+      {/* Toolbar */}
+      <div className="mb-2 flex gap-2 border p-2 text-gray-100 rounded-md shadow-sm">
         <button
-          onClick={(e) => applyStyle("strong", e)}
+          onClick={() => document.execCommand("bold")}
           className="px-2 py-1 border rounded"
         >
           Bold
         </button>
         <button
-          onClick={(e) => applyStyle("em", e)}
+          onClick={() => document.execCommand("italic")}
           className="px-2 py-1 border rounded"
         >
           Italic
         </button>
         <button
-          onClick={(e) => applyStyle("u", e)}
+          onClick={() => document.execCommand("underline")}
           className="px-2 py-1 border rounded"
         >
           Underline
         </button>
       </div>
+
+      {/* Editable Content Area */}
       <div
         contentEditable
         ref={editorRef}
         id={name}
         name={name}
-        onInput={handleInput}
+        //onInput={handleInput}
+        onKeyDown={handleKeyDown}
         className="text-gray-900 dark:text-gray-100 rounded-lg shadow-md p-4 min-h-[200px] border border-gray-300 outline-none"
+        suppressContentEditableWarning={true}
       />
-
-      {/* <div className="mt-6 p-4 border border-gray-300 bg-white dark:bg-ms-blue rounded-md shadow-sm">
-        <h3 className="text-lg font-medium mb-2">Live Preview</h3>
-        <div
-          className="mt-2 prose"
-          dangerouslySetInnerHTML={{ __html: content }}
-        />
-      </div>*/}
     </div>
   );
 }
