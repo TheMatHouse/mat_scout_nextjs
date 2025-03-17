@@ -1,6 +1,6 @@
-import { Schema, model, models } from "mongoose";
+import mongoose from "mongoose";
 
-const scoutingReportSchema = new Schema(
+const scoutingReportSchema = new mongoose.Schema(
   {
     // athlete: {
     //   type: mongoose.Schema.Types.ObjectId,
@@ -8,24 +8,24 @@ const scoutingReportSchema = new Schema(
     // },
     access: [
       {
-        type: Schema.Types.ObjectId,
+        type: mongoose.Schema.Types.ObjectId,
         ref: "User",
       },
     ],
     athletes: [
       {
-        type: Schema.Types.ObjectId,
+        type: mongoose.Schema.Types.ObjectId,
         ref: "User",
       },
     ],
     familyMembers: [
       {
-        type: Schema.Types.ObjectId,
+        type: mongoose.Schema.Types.ObjectId,
         ref: "FamilyMember",
       },
     ],
     team: {
-      type: Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.ObjectId,
       ref: "Team",
     },
     createdByName: {
@@ -33,7 +33,7 @@ const scoutingReportSchema = new Schema(
       required: true,
     },
     createdBy: {
-      type: Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
     matchType: {
@@ -70,5 +70,11 @@ const scoutingReportSchema = new Schema(
   }
 );
 
-export const ScoutingReport =
-  models.ScoutingReport || model("ScoutingReport", scoutingReportSchema);
+// export const ScoutingReport =
+// models.ScoutingReport || model("ScoutingReport", scoutingReportSchema);
+
+const ScoutingReport =
+  mongoose.models.ScoutingReport ||
+  mongoose.model("ScoutingReport", scoutingReportSchema);
+
+export default ScoutingReport;

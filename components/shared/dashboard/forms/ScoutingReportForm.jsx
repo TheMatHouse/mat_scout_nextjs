@@ -17,6 +17,8 @@ import Editor from "../../Editor";
 // Icons
 import { CircleHelp } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "react-toastify";
+import { useRouter } from "next/navigation";
 const ScoutingReportForm = ({
   athlete,
   report,
@@ -25,6 +27,7 @@ const ScoutingReportForm = ({
   type,
   setOpen,
 }) => {
+  const router = useRouter();
   const [add, setAdd] = useState("");
 
   useEffect(() => {
@@ -165,7 +168,7 @@ const ScoutingReportForm = ({
     setVideos(updatedVideos);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     const formData = new FormData(e.currentTarget);
@@ -178,19 +181,96 @@ const ScoutingReportForm = ({
       });
     }
 
-    const matchType = formData.get("matchType");
-    const division = formData.get("division");
-    const weightCategory = formData.get("weightCategory");
-    const athleteFirstName = formData.get("athleteFirstName");
-    const athleteLastName = formData.get("athleteLastName");
-    const athleteNationalRank = formData.get("athleteNationalRank");
-    const athleteWorldRank = formData.get("athleteWorldRank");
-    const athleteClub = formData.get("athleteClub");
-    const athleteRank = formData.get("athleteRank");
-    const athleteGrip = formData.get("athleteGrip");
-    const athleteCountry = formData.get("athleteCountry");
-    const athleteAttacks = formData.get("athleteAttacks");
-    const athleteAttackNotes = formData.get("athleteAttackNotes");
+    const myVideos = [];
+    videos &&
+      videos.map((video) => {
+        myVideos.push({
+          videoTitle: video.title,
+          videoURL: video.url,
+          videoNotes: video.notes,
+        });
+      });
+
+    // const matchType = formData.get("matchType");
+    // const division = formData.get("division");
+    // const weightCategory = formData.get("weightCategory");
+    // const athleteFirstName = formData.get("athleteFirstName");
+    // const athleteLastName = formData.get("athleteLastName");
+    // const athleteNationalRank = formData.get("athleteNationalRank");
+    // const athleteWorldRank = formData.get("athleteWorldRank");
+    // const athleteClub = formData.get("athleteClub");
+    // const athleteRank = formData.get("athleteRank");
+    // const athleteGrip = formData.get("athleteGrip");
+    // const athleteCountry = formData.get("athleteCountry");
+    // const athleteAttacks = formData.get("athleteAttacks");
+    // const athleteAttackNotes = formData.get("athleteAttackNotes");
+
+    const bodyData = {
+      athlete: athlete._id,
+      type,
+      reportForAthleteFirstName: athlete?.firstName,
+      athleteEmail: athlete?.email,
+      createdBy: athlete._id,
+      createdByName: `${athlete.firstName} ${athlete._lastName}`,
+      matchType: formData.get("matchType"),
+      division: formData.get("division"),
+      weightCategory: formData.get("weightCategory"),
+      athleteFirstName: formData.get("athleteFirstName"),
+      athleteLastName: formData.get("athleteLastName"),
+      athleteNationalRank: formData.get("athleteNationalRank"),
+      athleteWorldRank: formData.get("athleteWorldRank"),
+      athleteClub: formData.get("athleteClub"),
+      athleteRank: formData.get("athleteRank"),
+      athleteGrip: formData.get("athleteGrip"),
+      athleteCountry: formData.get("athleteCountry"),
+      athleteAttacks: athAttacks && athAttacks,
+      athleteAttackNotes: athleteAttackNotes && athleteAttackNotes,
+      videos: myVideos,
+      ...(typeof teamId !== "undefined" && teamId ? { teamId } : {}),
+    };
+
+    let domain = "";
+    let method = "";
+    if (report) {
+      method = "PATCH";
+      domain = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${athlete._id}/scoutReports/${report._id}`;
+    } else {
+      method = "POST";
+      domain = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${athlete._id}/scoutingReports`;
+    }
+    const response = await fetch(domain, {
+      method,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Content-type": "application/json; charset=UTF-8",
+      },
+      body: JSON.stringify(bodyData),
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      const timer = setTimeout(() => {
+        router.refresh();
+        toast.success(data.message, {
+          position: "top-right",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: false,
+          pauseOnHover: true,
+          draggable: true,
+          progress: undefined,
+          theme: "light",
+        });
+        setOpen(false);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else {
+      toast.error(data.message);
+      console.log(data.message);
+    }
   };
 
   return (
@@ -542,6 +622,7 @@ const ScoutingReportForm = ({
               ))}
             </div>
             <Button
+              type="button"
               onClick={addVideoFields}
               className="add_video_btn my-3"
             >
