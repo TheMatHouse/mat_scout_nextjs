@@ -29,7 +29,7 @@ const ScoutingReportForm = ({
 }) => {
   const router = useRouter();
   const [add, setAdd] = useState("");
-
+  console.log(athlete);
   useEffect(() => {
     navigator.geolocation.getCurrentPosition((pos) => {
       const { latitude, longitude } = pos.coords;
@@ -180,7 +180,7 @@ const ScoutingReportForm = ({
         athAttacks.push(item.label.toLowerCase());
       });
     }
-
+    console.log(videos);
     const myVideos = [];
     videos &&
       videos.map((video) => {
@@ -191,27 +191,14 @@ const ScoutingReportForm = ({
         });
       });
 
-    // const matchType = formData.get("matchType");
-    // const division = formData.get("division");
-    // const weightCategory = formData.get("weightCategory");
-    // const athleteFirstName = formData.get("athleteFirstName");
-    // const athleteLastName = formData.get("athleteLastName");
-    // const athleteNationalRank = formData.get("athleteNationalRank");
-    // const athleteWorldRank = formData.get("athleteWorldRank");
-    // const athleteClub = formData.get("athleteClub");
-    // const athleteRank = formData.get("athleteRank");
-    // const athleteGrip = formData.get("athleteGrip");
-    // const athleteCountry = formData.get("athleteCountry");
-    // const athleteAttacks = formData.get("athleteAttacks");
-    // const athleteAttackNotes = formData.get("athleteAttackNotes");
-
+    console.log("Athlete attack: ", athleteAttackNotes);
     const bodyData = {
       athlete: athlete._id,
       type,
       reportForAthleteFirstName: athlete?.firstName,
       athleteEmail: athlete?.email,
       createdBy: athlete._id,
-      createdByName: `${athlete.firstName} ${athlete._lastName}`,
+      createdByName: `${athlete.firstName} ${athlete.lastName}`,
       matchType: formData.get("matchType"),
       division: formData.get("division"),
       weightCategory: formData.get("weightCategory"),
@@ -233,7 +220,7 @@ const ScoutingReportForm = ({
     let method = "";
     if (report) {
       method = "PATCH";
-      domain = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${athlete._id}/scoutReports/${report._id}`;
+      domain = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${athlete._id}/scoutingReports/${report._id}`;
     } else {
       method = "POST";
       domain = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${athlete._id}/scoutingReports`;
@@ -553,9 +540,9 @@ const ScoutingReportForm = ({
                 <br />
               </label>
               <Editor
-                name="oppAttackNotes"
+                name="athleteAttackNotes"
                 onChange={setAthleteAttackNotes}
-                attackNotes={athleteAttackNotes}
+                text={athleteAttackNotes}
               />
             </div>
 

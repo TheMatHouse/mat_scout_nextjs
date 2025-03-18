@@ -2,41 +2,50 @@
 
 import { useEffect, useRef } from "react";
 
-export default function Editor({ name, onChange, attackNotes }) {
+export default function Editor({ name, onChange, text }) {
   const editorRef = useRef(null);
 
   useEffect(() => {
-    if (editorRef.current && attackNotes !== undefined) {
-      editorRef.current.innerHTML = attackNotes;
+    if (editorRef.current && text !== undefined) {
+      if (editorRef.current.innerHTML !== text) {
+        const selection = window.getSelection();
+        const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+
+        editorRef.current.innerHTML = text; // Only set if different
+
+        // Restore cursor position after updating content
+        if (range) {
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      }
     }
-  }, [attackNotes]);
+  }, [text]);
 
-  // const handleInput = () => {
-  //   if (onChange) {
-  //     onChange(editorRef.current.innerHTML);
-  //   }
-  // };
+  const handleInput = () => {
+    if (editorRef.current && onChange) {
+      onChange(editorRef.current.innerHTML); // Send updated content to parent
+    }
+  };
 
-  // const handleInput = () => {
-  //   console.log("Input detected:", editorRef.current.innerHTML);
-  // };
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
-      e.preventDefault(); // Prevent the default behavior of inserting a newline
+      e.preventDefault();
       const selection = window.getSelection();
-      const range = selection.getRangeAt(0); // Get the current selection range
-
-      // Create a new <br> element
+      const range = selection.getRangeAt(0);
       const br = document.createElement("br");
-      range.deleteContents(); // Delete any selected content
-      range.insertNode(br); // Insert the <br> element at the current selection
-      range.setStartAfter(br); // Move the cursor after the inserted <br>
+      range.deleteContents();
+      range.insertNode(br);
+      range.setStartAfter(br);
       range.setEndAfter(br);
-
-      // Reapply the selection
       selection.removeAllRanges();
       selection.addRange(range);
     }
+  };
+
+  const applyStyle = (command) => {
+    document.execCommand(command, false, null);
+    handleInput(); // Ensure updated content is sent to parent
   };
 
   return (
@@ -44,33 +53,33 @@ export default function Editor({ name, onChange, attackNotes }) {
       {/* Toolbar */}
       <div className="mb-2 flex gap-2 border p-2 text-gray-100 rounded-md shadow-sm">
         <button
-          onClick={() => document.execCommand("bold")}
+          onClick={() => applyStyle("bold")}
           className="px-2 py-1 border rounded"
         >
           Bold
         </button>
         <button
-          onClick={() => document.execCommand("italic")}
+          onClick={() => applyStyle("italic")}
           className="px-2 py-1 border rounded"
         >
           Italic
         </button>
         <button
-          onClick={() => document.execCommand("underline")}
+          onClick={() => applyStyle("underline")}
           className="px-2 py-1 border rounded"
         >
           Underline
         </button>
       </div>
 
-      {/* Editable Content Area */}
+      {/* Editable Content */}
       <div
         contentEditable
         ref={editorRef}
         id={name}
         name={name}
-        //onInput={handleInput}
-        onKeyDown={handleKeyDown}
+        onInput={handleInput} // Capture text updates
+        onKeyDown={handleKeyDown} // Fix Enter behavior
         className="text-gray-900 dark:text-gray-100 rounded-lg shadow-md p-4 min-h-[200px] border border-gray-300 outline-none"
         suppressContentEditableWarning={true}
       />

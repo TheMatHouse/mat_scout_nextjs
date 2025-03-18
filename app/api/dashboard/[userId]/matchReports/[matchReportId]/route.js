@@ -5,7 +5,6 @@ import User from "@/models/userModel";
 import { Types } from "mongoose";
 import { ObjectId } from "mongodb";
 import { connectDB } from "@/config/mongo";
-import { revalidatePath } from "next/cache";
 
 // Update a match report
 export const PATCH = async (request, { params }) => {

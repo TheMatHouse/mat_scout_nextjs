@@ -607,7 +607,7 @@ const MatchReportForm = ({
               <Editor
                 name="oppAttackNotes"
                 onChange={setOppAttackNotes}
-                attackNotes={oppAttackNotes}
+                text={oppAttackNotes}
               />
               {console.log("line 616 ", oppAttackNotes)}
               {/* <Editor
@@ -678,7 +678,7 @@ const MatchReportForm = ({
               <Editor
                 name="athAttackNotes"
                 onChange={setAthAttackNotes}
-                attackNotes={athAttackNotes}
+                text={athAttackNotes}
               />
               {/* <Editor
                 //theme="snow"

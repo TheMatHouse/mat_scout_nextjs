@@ -149,7 +149,9 @@ export async function POST(request, { params }) {
     }
   } catch (error) {
     return new NextResponse(
-      JSON.stringify({ message: "Error fetching user" + error.message }),
+      JSON.stringify({
+        message: "Error creating scouting report" + error.message,
+      }),
       { status: 500 }
     );
   }
