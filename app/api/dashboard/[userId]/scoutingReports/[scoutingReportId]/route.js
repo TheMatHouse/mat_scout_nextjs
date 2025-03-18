@@ -125,6 +125,8 @@ export const PATCH = async (request, { params }) => {
         weightCategory,
         athleteFirstName,
         athleteLastName,
+        athleteNationalRank,
+        athleteWorldRank,
         athleteClub,
         athleteCountry,
         athleteRank,
@@ -159,6 +161,83 @@ export const PATCH = async (request, { params }) => {
     return new NextResponse(
       JSON.stringify({
         message: "Error updating scouting report: " + error.message,
+      }),
+      { status: 500 }
+    );
+  }
+};
+
+export const DELETE = async (request, { params }) => {
+  try {
+    // connect to DB
+    await connectDB();
+
+    let { userId, scoutingReportId } = await params;
+
+    // Sanitize params
+    userId = mongoSanitize.sanitize(userId);
+    scoutingReportId = mongoSanitize.sanitize(scoutingReportId);
+
+    if (
+      !Types.ObjectId.isValid(userId) ||
+      !Types.ObjectId.isValid(scoutingReportId)
+    ) {
+      return new NextResponse(
+        JSON.stringify({
+          message: "Invalid or missing user or scouting report ID",
+        }),
+        { status: 400 }
+      );
+    }
+
+    // check if user exists
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return new NextResponse(JSON.stringify({ message: "User not found" }), {
+        status: 404,
+      });
+    }
+
+    // check if scouting report exists
+    const scoutingReport = await ScoutingReport.findById(scoutingReportId);
+
+    if (!scoutingReport) {
+      return new NextResponse(
+        JSON.stringify({ message: "Scouting Report nout found." }),
+        { status: 404 }
+      );
+    }
+
+    // check if report exists
+    const reportExists = await ScoutingReport.findOne({
+      _id: scoutingReportId,
+      createdBy: userId,
+    });
+
+    if (!reportExists) {
+      return new NextResponse(
+        JSON.stringify({
+          message: "Scoutting report not found or does not belong to user.",
+        }),
+        {
+          status: 404,
+        }
+      );
+    }
+
+    await ScoutingReport.findByIdAndDelete(scoutingReportId);
+
+    return new NextResponse(
+      JSON.stringify({
+        message: "Scouting report deleted successfully",
+      }),
+      { status: 200 }
+    );
+  } catch (error) {
+    return new NextResponse(
+      JSON.stringify({
+        message: "Error deleting scouting report: " + error.message,
       }),
       { status: 500 }
     );
