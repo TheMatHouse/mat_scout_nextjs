@@ -67,8 +67,9 @@ export async function POST(request, { params }) {
     athleteAttackNotes,
     result,
     score,
-    videoTitle,
-    videoURL,
+    // videoTitle,
+    // videoURL,
+    videos,
     isPublic,
   } = body;
 

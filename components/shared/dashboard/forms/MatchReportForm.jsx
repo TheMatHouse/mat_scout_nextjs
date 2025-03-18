@@ -609,15 +609,6 @@ const MatchReportForm = ({
                 onChange={setOppAttackNotes}
                 text={oppAttackNotes}
               />
-              {console.log("line 616 ", oppAttackNotes)}
-              {/* <Editor
-                //theme="snow"
-                id={opponentAttackNotes}
-                name={opponentAttackNotes}
-                className="quill-editor"
-                onChange={setOpponentAttackNotes}
-                opponentAttackNotes={opponentAttackNotes}
-              /> */}
             </div>
 
             <div className="my-4">
@@ -680,13 +671,6 @@ const MatchReportForm = ({
                 onChange={setAthAttackNotes}
                 text={athAttackNotes}
               />
-              {/* <Editor
-                //theme="snow"
-                id={athleteAttackNotes}
-                name={athleteAttackNotes}
-                className="quill-editor"
-                onChange={setOpponentAttackNotes}
-              /> */}
             </div>
 
             <div className="my-4">

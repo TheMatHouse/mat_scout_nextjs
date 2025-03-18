@@ -20,50 +20,58 @@ const PreviewMatchReportModal = ({ previewOpen, setPreviewOpen, report }) => {
         <DialogHeader>
           <DialogTitle>Full Match Report</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-2 gap-4 pb-4">
-          <div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4">
+          <div className="py-3">
             <div className="flex flex-col">
+              <h3 className="text-xl font-bold text-center">Match Info</h3>
               <div className="py-1">
-                <strong>Oppenent Name: </strong> {report.opponentName}
+                <h4 className="text-xl font-bold">Oppenent Name: </h4>{" "}
+                {report.opponentName}
               </div>
 
               <div className="py-1">
-                <strong>Match Type: </strong> {report.matchType}
+                <h4 className="text-xl font-bold">Match Type: </h4>{" "}
+                {report.matchType}
               </div>
 
               <div className="py-1">
-                <strong>Event Name :</strong> {report.eventName}
+                <h4 className="text-xl font-bold">Event Name :</h4>{" "}
+                {report.eventName}
               </div>
               <div className="py-1">
-                <strong>Event Date: </strong>
+                <h4 className="text-xl font-bold">Event Date: </h4>
                 {moment(report.eventStartDate).format("MMMM-DD-yyyy")}
                 {report.eventEndDate
                   ? `-${moment(report.eventEndDate).format("MMMM-DD-yyyy")}`
                   : ""}
               </div>
               <div className="py-1">
-                <strong>Weight Category: </strong> {report.weightCategory}
+                <h4 className="text-xl font-bold">Weight Category: </h4>{" "}
+                {report.weightCategory}
               </div>
 
               <div className="py-1">
-                <strong>Club: </strong> {report.opponentClub}
+                <h4 className="text-xl font-bold">Club: </h4>{" "}
+                {report.opponentClub}
               </div>
 
               <div className="py-1">
-                <strong>Rank: </strong> {report.opponentRank}
+                <h4 className="text-xl font-bold">Rank: </h4>{" "}
+                {report.opponentRank}
               </div>
 
               <div className="py-1">
-                <strong>Grip: </strong> {report.opponentGrip}
+                <h4 className="text-xl font-bold">Grip: </h4>{" "}
+                {report.opponentGrip}
               </div>
 
               <div className="py-1">
-                <strong>Opponent Country: </strong>&nbsp;{" "}
+                <h4 className="text-xl font-bold">Opponent Country: </h4>&nbsp;{" "}
                 {report.opponentCountry}
               </div>
 
               <div className="py-1">
-                <strong>Attacks: </strong>
+                <h4 className="text-xl font-bold">Attacks: </h4>
                 {report &&
                   report.opponentAttacks.map((attack, i) => (
                     <span key={i}>
@@ -74,7 +82,9 @@ const PreviewMatchReportModal = ({ previewOpen, setPreviewOpen, report }) => {
               </div>
 
               <div className="py-1">
-                <strong>Notes on opponent attacks: </strong>{" "}
+                <h4 className="text-xl font-bold">
+                  Notes on opponent attacks:{" "}
+                </h4>{" "}
                 <div
                   dangerouslySetInnerHTML={{
                     __html: `${report.opponentAttackNotes}`,
@@ -83,7 +93,7 @@ const PreviewMatchReportModal = ({ previewOpen, setPreviewOpen, report }) => {
               </div>
 
               <div className="py-1">
-                <strong>My attacks: </strong>
+                <h4 className="text-xl font-bold">My attacks: </h4>
                 {report &&
                   report.athleteAttacks.map((attack, i) => (
                     <span key={i}>
@@ -94,7 +104,7 @@ const PreviewMatchReportModal = ({ previewOpen, setPreviewOpen, report }) => {
               </div>
 
               <div className="py-1">
-                <strong>Notes on my attacks: </strong>{" "}
+                <h4 className="text-xl font-bold">Notes on my attacks: </h4>{" "}
                 <div
                   dangerouslySetInnerHTML={{
                     __html: `${report.athleteAttackNotes}`,
@@ -103,28 +113,28 @@ const PreviewMatchReportModal = ({ previewOpen, setPreviewOpen, report }) => {
               </div>
 
               <div className="py-1">
-                <strong>Outcome: </strong> {report.result}
+                <h4 className="text-xl font-bold">Outcome: </h4> {report.result}
               </div>
 
               <div className="py-1">
-                <strong>Score: </strong> {report.score}
+                <h4 className="text-xl font-bold">Score: </h4> {report.score}
               </div>
 
               <div className="py-1">
-                <strong>
+                <h4 className="text-xl font-bold">
                   This report is set to{" "}
-                  <strong>
+                  <h4 className="text-xl font-bold">
                     {report.isPublic === true ? "Public" : "Private"}
-                  </strong>
-                </strong>
+                  </h4>
+                </h4>
               </div>
             </div>
           </div>
-          <div>
-            <strong>Video</strong>
+          <div className="py-3">
+            <h3 className="text-xl font-bold text-center">Video</h3>
             {report?.videoTitle ? (
               <>
-                <h3>{report.videoTitle}</h3>
+                <h3 className="py-3">{report.videoTitle}</h3>
                 <iframe
                   width="100%"
                   height="315"

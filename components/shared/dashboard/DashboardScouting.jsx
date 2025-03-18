@@ -21,11 +21,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import PreviewReportModal from "./PreviewReportModal";
 
 export const columns = ({
   setSelectedReport,
   setOpen,
-  setPreviewOptn,
+  setPreviewOpen,
   handleDeleteReport,
   reportType,
 }) => [
@@ -138,7 +139,7 @@ export const columns = ({
                 setPreviewOpen(true);
               }}
             >
-              View Report Details
+              View Full Report
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => {
@@ -168,8 +169,11 @@ export const columns = ({
 const DashboardScouting = ({ user, styles, techniques }) => {
   const router = useRouter();
   const data = user.scoutingReports;
+
   const [open, setOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
+
   return (
     <div>
       <div className="flex items-center">
@@ -212,13 +216,21 @@ const DashboardScouting = ({ user, styles, techniques }) => {
           columns={columns({
             setSelectedReport,
             setOpen,
-            //setPreviewOpen,
+            setPreviewOpen,
             //handleDeleteMatch,
           })}
           data={data}
           setSelectedReport={setSelectedReport}
         />
       </div>
+      {previewOpen && (
+        <PreviewReportModal
+          previewOpen={previewOpen}
+          setPreviewOpen={setPreviewOpen}
+          report={selectedReport}
+          reportType="scouting"
+        />
+      )}
     </div>
   );
 };

@@ -180,7 +180,8 @@ const ScoutingReportForm = ({
         athAttacks.push(item.label.toLowerCase());
       });
     }
-    console.log(videos);
+    
+    
     const myVideos = [];
     videos &&
       videos.map((video) => {
@@ -420,6 +421,34 @@ const ScoutingReportForm = ({
             <div className="my-4">
               <label
                 className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
+                htmlFor="athleteCountry"
+              >
+                Athlete's Country
+              </label>
+              <select
+                id="athleteCountry"
+                name="athleteCountry"
+                value={athleteCountry}
+                onChange={(e) => {
+                  setNewCountry(e.target.value);
+                  setAthleteCountry(e.target.value);
+                }}
+              >
+                <option value="">Select country...</option>
+                {Countries.map((country) => (
+                  <option
+                    key={country.code3}
+                    value={country.code3}
+                  >
+                    {country.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="my-4">
+              <label
+                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
                 htmlFor="athleteClub"
               >
                 Athlete's Club
@@ -500,13 +529,13 @@ const ScoutingReportForm = ({
             <div className="my-4">
               <label
                 className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="opponentRank"
+                htmlFor="athleteAttacks"
               >
-                Opponent's Techniques Used
+                Athlete's Techniques Used
               </label>
               <div className="max-w-md">
                 <Tooltip
-                  alt="Opponent techniques used tooltip"
+                  alt="Athlete techniques used tooltip"
                   text={`Click inside the box below. A list of techniques already
                             in our database will appear. Click on a technique to
                             selected it. The selected techniques will appear above the
@@ -615,34 +644,6 @@ const ScoutingReportForm = ({
             >
               Add {videos.length > 0 ? "another video" : " a video"}
             </Button>
-
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="athleteCountry"
-              >
-                Athlete's Country
-              </label>
-              <select
-                id="athleteCountry"
-                name="athleteCountry"
-                value={athleteCountry}
-                onChange={(e) => {
-                  setNewCountry(e.target.value);
-                  setAthleteCountry(e.target.value);
-                }}
-              >
-                <option value="">Select country...</option>
-                {Countries.map((country) => (
-                  <option
-                    key={country.code3}
-                    value={country.code3}
-                  >
-                    {country.name}
-                  </option>
-                ))}
-              </select>
-            </div>
 
             <Button type="submit">
               {report ? "Update" : "Add"} Scouting Report
