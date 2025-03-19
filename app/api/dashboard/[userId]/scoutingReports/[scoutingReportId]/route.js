@@ -10,15 +10,15 @@ import { connectDB } from "@/config/mongo";
 
 export const PATCH = async (request, { params }) => {
   try {
-    // connect to DB
     await connectDB();
 
-    let { userId, scoutingReportId } = await params;
+    let { userId, scoutingReportId } = params;
 
     // Sanitize params
     userId = mongoSanitize.sanitize(userId);
     scoutingReportId = mongoSanitize.sanitize(scoutingReportId);
 
+    // Validate IDs
     if (
       !Types.ObjectId.isValid(userId) ||
       !Types.ObjectId.isValid(scoutingReportId)
@@ -38,20 +38,16 @@ export const PATCH = async (request, { params }) => {
       );
     }
 
-    const body = await request.json();
+    const sanitizedBody = mongoSanitize.sanitize(await request.json());
+    if (!sanitizedBody) {
+      return new NextResponse(
+        JSON.stringify({ message: "Invalid JSON data" }),
+        { status: 400 }
+      );
+    }
 
-    // Sanitize request body
-    const sanitizedBody = mongoSanitize.sanitize(body);
-
-    // Destructure only after sanitization
     const {
-      athlete,
-      type,
       team,
-      reportForAthleteFirstName,
-      athleteEmail,
-      createdBy,
-      createdByName,
       matchType,
       division,
       weightCategory,
@@ -68,58 +64,19 @@ export const PATCH = async (request, { params }) => {
       videos,
     } = sanitizedBody;
 
-    if (!sanitizedBody) {
-      return new NextResponse(
-        JSON.stringify({ message: "Invalid JSON data" }),
-        { status: 400 }
-      );
-    }
-
-    // check if user exists
-    const user = await User.findById(userId);
-
-    if (!user) {
+    // Check if user exists
+    const userExists = await User.exists({ _id: userId });
+    if (!userExists) {
       return new NextResponse(JSON.stringify({ message: "User not found" }), {
         status: 404,
       });
     }
 
-    // check if scouting report exists
-    const scoutingReport = await ScoutingReport.findById(scoutingReportId);
-
-    if (!scoutingReport) {
-      return new NextResponse(
-        JSON.stringify({ message: "Scouting Report nout found." }),
-        { status: 404 }
-      );
-    }
-
-    // check if report exists
-    const reportExists = await ScoutingReport.findOne({
-      _id: scoutingReportId,
-      createdBy: userId,
-    });
-
-    if (reportExists) {
-      // check if there are athlete attacks
-      // Process athlete attacks (ensuring all exist in the Techniques collection)
-      if (Array.isArray(athleteAttacks) && athleteAttacks.length > 0) {
-        await Promise.all(
-          athleteAttacks.map(async (attack) => {
-            const attackExists = await Technique.findOne({
-              techniqueName: attack,
-            });
-            if (!attackExists) {
-              await Technique.create({ techniqueName: attack });
-            }
-          })
-        );
-      }
-
-      const report = await ScoutingReport.findByIdAndUpdate(scoutingReportId, {
+    // Check if scouting report exists and belongs to user
+    const scoutingReport = await ScoutingReport.findOneAndUpdate(
+      { _id: scoutingReportId, createdBy: userId },
+      {
         team,
-        createdbyName: createdByName,
-        createdBy: createdBy,
         matchType,
         division,
         weightCategory,
@@ -133,34 +90,52 @@ export const PATCH = async (request, { params }) => {
         athleteGrip,
         athleteAttacks,
         athleteAttackNotes,
-      });
+      },
+      { new: true }
+    );
 
-      const updatedReport = await report.save();
-
-      if (Array.isArray(videos) && videos.length > 0) {
-        await Promise.all(
-          videos.map(async (video) => {
-            await Video.create({
-              videoTitle: video.videoTitle,
-              videoURL: video.videoURL,
-              videoNotes: video.videoNotes,
-              report: scoutingReportId,
-            });
-          })
-        );
-      }
-
+    if (!scoutingReport) {
       return new NextResponse(
         JSON.stringify({
-          status: 200,
-          message: "Scouting report updated successfully",
+          message: "Scouting Report not found or unauthorized",
+        }),
+        { status: 404 }
+      );
+    }
+
+    // Process athlete attacks (ensure they exist in Techniques collection)
+    if (Array.isArray(athleteAttacks) && athleteAttacks.length > 0) {
+      await Promise.all(
+        athleteAttacks.map(async (attack) => {
+          const exists = await Technique.exists({ techniqueName: attack });
+          if (!exists) await Technique.create({ techniqueName: attack });
         })
       );
     }
+
+    // Process and save videos if provided
+    if (Array.isArray(videos) && videos.length > 0) {
+      await Video.insertMany(
+        videos.map((video) => ({
+          videoTitle: video.videoTitle,
+          videoURL: video.videoURL,
+          videoNotes: video.videoNotes,
+          report: scoutingReportId,
+        }))
+      );
+    }
+
+    return new NextResponse(
+      JSON.stringify({
+        status: 200,
+        message: "Scouting report updated successfully",
+      }),
+      { status: 200 }
+    );
   } catch (error) {
     return new NextResponse(
       JSON.stringify({
-        message: "Error updating scouting report: " + error.message,
+        message: `Error updating scouting report: ${error.message}`,
       }),
       { status: 500 }
     );
@@ -169,15 +144,15 @@ export const PATCH = async (request, { params }) => {
 
 export const DELETE = async (request, { params }) => {
   try {
-    // connect to DB
     await connectDB();
 
-    let { userId, scoutingReportId } = await params;
+    let { userId, scoutingReportId } = params;
 
     // Sanitize params
     userId = mongoSanitize.sanitize(userId);
     scoutingReportId = mongoSanitize.sanitize(scoutingReportId);
 
+    // Validate IDs
     if (
       !Types.ObjectId.isValid(userId) ||
       !Types.ObjectId.isValid(scoutingReportId)
@@ -190,54 +165,36 @@ export const DELETE = async (request, { params }) => {
       );
     }
 
-    // check if user exists
+    // Check if user exists
     const user = await User.findById(userId);
-
     if (!user) {
       return new NextResponse(JSON.stringify({ message: "User not found" }), {
         status: 404,
       });
     }
 
-    // check if scouting report exists
-    const scoutingReport = await ScoutingReport.findById(scoutingReportId);
-
-    if (!scoutingReport) {
+    // Check if the scouting report exists and belongs to the user
+    const report = await ScoutingReport.findOneAndDelete({
+      _id: scoutingReportId,
+      athlete: userId,
+    });
+    if (!report) {
       return new NextResponse(
-        JSON.stringify({ message: "Scouting Report nout found." }),
+        JSON.stringify({
+          message: "Scouting report not found or does not belong to user.",
+        }),
         { status: 404 }
       );
     }
 
-    // check if report exists
-    const reportExists = await ScoutingReport.findOne({
-      _id: scoutingReportId,
-      createdBy: userId,
-    });
-
-    if (!reportExists) {
-      return new NextResponse(
-        JSON.stringify({
-          message: "Scoutting report not found or does not belong to user.",
-        }),
-        {
-          status: 404,
-        }
-      );
-    }
-
-    await ScoutingReport.findByIdAndDelete(scoutingReportId);
-
     return new NextResponse(
-      JSON.stringify({
-        message: "Scouting report deleted successfully",
-      }),
+      JSON.stringify({ message: "Scouting report deleted successfully" }),
       { status: 200 }
     );
   } catch (error) {
     return new NextResponse(
       JSON.stringify({
-        message: "Error deleting scouting report: " + error.message,
+        message: "Error deleting match report: " + error.message,
       }),
       { status: 500 }
     );

@@ -2,27 +2,35 @@
 import { NextResponse } from "next/server";
 import MatchReport from "@/models/matchReportModel";
 import User from "@/models/userModel";
+import Technique from "@/models/techniquesModel";
 import { Types } from "mongoose";
-import { ObjectId } from "mongodb";
+import mongoSanitize from "express-mongo-sanitize";
 import { connectDB } from "@/config/mongo";
 
 // Update a match report
 export const PATCH = async (request, { params }) => {
   try {
-    const { userId, matchReportId } = await params;
+    // connect to DB
+    await connectDB();
 
-    if (!userId || !Types.ObjectId.isValid(userId)) {
+    let { userId, matchReportId } = await params;
+
+    // Sanitize params
+    userId = mongoSanitize.sanitize(userId);
+    matchReportId = mongoSanitize.sanitize(matchReportId);
+
+    // Validate ObjectIds
+    if (
+      !Types.ObjectId.isValid(userId) ||
+      !Types.ObjectId.isValid(matchReportId)
+    ) {
       return new NextResponse(
-        JSON.stringify({ message: "Invalid or missing user id" })
+        JSON.stringify({ message: "Invalid or missing user or match ID" }),
+        { status: 400 }
       );
     }
 
-    if (!matchReportId || !Types.ObjectId.isValid(matchReportId)) {
-      return new NextResponse(
-        JSON.stringify({ message: "Invalid or missing match report id" })
-      );
-    }
-
+    // Validate request body
     if (!request.body) {
       return new NextResponse(
         JSON.stringify({ message: "Empty request body" }),
@@ -31,36 +39,50 @@ export const PATCH = async (request, { params }) => {
     }
 
     const body = await request.json();
+    const sanitizedBody = mongoSanitize.sanitize(body);
 
-    const matchType = body.matchType;
-    const eventName = body.eventName;
-    const matchDate = body.matchDate;
-    const opponentName = body.opponentName;
-    const division = body.division;
-    const weightCategory = body.weightCategory;
-    const opponentClub = body.opponentClub;
-    const opponentCountry = body.opponentCountry;
-    const opponentRank = body.opponentRank;
-    const opponentGrip = body.opponentGrip;
-    const opponentAttacks = body.opponentAttacks;
-    const opponentAttackNotes = body.opponentAttackNotes;
-    const athleteAttacks = body.athleteAttacks;
-    const athleteAttackNotes = body.athleteAttackNotes;
-    const result = body.result;
-    const score = body.score;
-    const videoTitle = body.videoTitle;
-    const videoURL = body.videoURL;
-    const isPublic = body.isPublic;
-    console.log("video URL ", videoURL);
-    if (!body) {
+    if (!sanitizedBody || Object.keys(sanitizedBody).length === 0) {
       return new NextResponse(
         JSON.stringify({ message: "Invalid JSON data" }),
         { status: 400 }
       );
     }
 
-    connectDB();
-    const user = await User.findById(userId);
+    // Extract fields
+    const {
+      matchType,
+      eventName,
+      matchDate,
+      opponentName,
+      division,
+      weightCategory,
+      opponentClub,
+      opponentCountry,
+      opponentRank,
+      opponentGrip,
+      opponentAttacks,
+      opponentAttackNotes,
+      athleteAttacks,
+      athleteAttackNotes,
+      result,
+      score,
+      videoTitle,
+      videoURL,
+      isPublic,
+    } = sanitizedBody;
+
+    if (!sanitizedBody) {
+      return new NextResponse(
+        JSON.stringify({ message: "Invalid JSON data" }),
+        { status: 400 }
+      );
+    }
+
+    // Find user and match report in parallel
+    const [user, matchReport] = await Promise.all([
+      User.findById(userId),
+      MatchReport.findOne({ _id: matchReportId, athlete: userId }),
+    ]);
 
     if (!user) {
       return new NextResponse(JSON.stringify({ message: "User not found" }), {
@@ -68,116 +90,124 @@ export const PATCH = async (request, { params }) => {
       });
     }
 
-    const matchReport = await MatchReport.findById(matchReportId);
     if (!matchReport) {
       return new NextResponse(
-        JSON.stringify({ message: "Match report not found." }),
+        JSON.stringify({ message: "Match Report not found" }),
         { status: 404 }
       );
     }
 
-    const reportToUpdate = await MatchReport.findOne({
-      _id: matchReportId,
-      athlete: userId,
-    });
-
-    console.log("athlete attack notes ", athleteAttackNotes);
-    if (reportToUpdate) {
-      reportToUpdate.matchType = matchType || reportToUpdate.matchType;
-      reportToUpdate.eventName = eventName || reportToUpdate.eventName;
-      reportToUpdate.matchDate = matchDate || reportToUpdate.matchDate;
-      reportToUpdate.opponentName = opponentName || reportToUpdate.opponentName;
-      reportToUpdate.division = division || reportToUpdate.division;
-      reportToUpdate.weightCategory =
-        weightCategory || reportToUpdate.weightCategory;
-      reportToUpdate.opponentClub = opponentClub || reportToUpdate.opponentClub;
-      reportToUpdate.opponentCountry =
-        opponentCountry || reportToUpdate.opponentCountry;
-      reportToUpdate.opponentRank = opponentRank || reportToUpdate.opponentRank;
-      reportToUpdate.opponentGrip = opponentGrip || reportToUpdate.opponentGrip;
-      reportToUpdate.opponentAttacks =
-        opponentAttacks || reportToUpdate.opponentAttacks;
-      reportToUpdate.opponentAttackNotes =
-        opponentAttackNotes || reportToUpdate.opponentAttackNotes;
-      reportToUpdate.athleteAttacks =
-        athleteAttacks || reportToUpdate.athleteAttacks;
-      reportToUpdate.athleteAttackNotes;
-      athleteAttackNotes || reportToUpdate.athleteAttackNotes;
-      reportToUpdate.result = result || reportToUpdate.result;
-      reportToUpdate.score = score || reportToUpdate.score;
-      reportToUpdate.videoTitle = videoTitle || reportToUpdate.videoTitle;
-      reportToUpdate.videoURL = videoURL || reportToUpdate.videoURL;
-      reportToUpdate.isPublic = isPublic || reportToUpdate.isPublic;
-
-      const updatedMatchReport = await reportToUpdate.save();
-
-      if (updatedMatchReport) {
-        return new NextResponse(
-          JSON.stringify({
-            message: "Match report updated successfully",
-          }),
-          { status: 200 }
+    // Ensure all athlete & opponent attacks exist in the `Technique` collection
+    const processAttacks = async (attacks) => {
+      if (Array.isArray(attacks) && attacks.length > 0) {
+        const existingTechniques = await Technique.find({
+          techniqueName: { $in: attacks },
+        }).distinct("techniqueName");
+        const newTechniques = attacks.filter(
+          (attack) => !existingTechniques.includes(attack)
         );
+        if (newTechniques.length > 0) {
+          await Technique.insertMany(
+            newTechniques.map((name) => ({ techniqueName: name }))
+          );
+        }
       }
-    }
+    };
+
+    await Promise.all([
+      processAttacks(athleteAttacks),
+      processAttacks(opponentAttacks),
+    ]);
+
+    // Update the match report
+    await MatchReport.updateOne(
+      { _id: matchReportId },
+      {
+        $set: {
+          matchType,
+          eventName,
+          matchDate,
+          opponentName,
+          division,
+          weightCategory,
+          opponentClub,
+          opponentCountry,
+          opponentRank,
+          opponentGrip,
+          opponentAttacks,
+          opponentAttackNotes,
+          athleteAttacks,
+          athleteAttackNotes,
+          result,
+          score,
+          videoTitle,
+          videoURL,
+          isPublic,
+        },
+      }
+    );
+
+    return new NextResponse(
+      JSON.stringify({
+        status: 200,
+        message: "Scouting report updated successfully",
+      })
+    );
   } catch (error) {
     return new NextResponse(
       JSON.stringify({
-        message: "Error updating match report: " + error.message,
+        message: `Error updating match report: ${error.message}`,
       }),
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 };
 
 export const DELETE = async (request, { params }) => {
   try {
-    const { userId, matchReportId } = await params;
+    const { userId, matchReportId } = params;
 
-    if (!userId || !Types.ObjectId.isValid(userId)) {
+    // Validate IDs
+    if (
+      !Types.ObjectId.isValid(userId) ||
+      !Types.ObjectId.isValid(matchReportId)
+    ) {
       return new NextResponse(
-        JSON.stringify({ message: "Invalid or missing user id" })
-      );
-    }
-
-    if (!matchReportId || !Types.ObjectId.isValid(matchReportId)) {
-      return new NextResponse(
-        JSON.stringify({ message: "Invalid or missing match report id" })
+        JSON.stringify({
+          message: "Invalid or missing user or match report ID",
+        }),
+        { status: 400 }
       );
     }
 
     await connectDB();
 
+    // Check if user exists
     const user = await User.findById(userId);
-
     if (!user) {
       return new NextResponse(JSON.stringify({ message: "User not found" }), {
         status: 404,
       });
     }
 
-    const match = await MatchReport.findOne({
+    // Check if the match report exists and belongs to the user
+    const match = await MatchReport.findOneAndDelete({
       _id: matchReportId,
       athlete: userId,
     });
-
     if (!match) {
       return new NextResponse(
         JSON.stringify({
-          message: "Match not found or does not belong to user.",
+          message: "Match report not found or does not belong to user.",
         }),
-        {
-          status: 404,
-        }
+        { status: 404 }
       );
     }
 
-    await MatchReport.findByIdAndDelete(matchReportId);
-
     return new NextResponse(
-      JSON.stringify({
-        message: "Match report deleted successfully",
-      }),
+      JSON.stringify({ message: "Match report deleted successfully" }),
       { status: 200 }
     );
   } catch (error) {

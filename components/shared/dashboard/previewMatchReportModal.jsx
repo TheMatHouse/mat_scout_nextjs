@@ -10,7 +10,6 @@ import moment from "moment";
 import React from "react";
 
 const PreviewMatchReportModal = ({ previewOpen, setPreviewOpen, report }) => {
-  console.log(report);
   return (
     <Dialog
       open={previewOpen}

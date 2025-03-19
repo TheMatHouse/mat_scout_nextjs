@@ -22,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import PreviewReportModal from "./PreviewReportModal";
+import { toast } from "react-toastify";
 
 export const columns = ({
   setSelectedReport,
@@ -174,6 +175,45 @@ const DashboardScouting = ({ user, styles, techniques }) => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
 
+  const handleDeleteReport = async (report) => {
+    if (
+      window.confirm(`This report will be permanently deleted!  Are you sure?`)
+    ) {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/scoutingReports/${report._id}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Content-type": "application/json; charset=UTF-8",
+          },
+        }
+      );
+      const data = await response.json();
+
+      if (response.ok) {
+        const timer = setTimeout(() => {
+          router.refresh();
+          toast.success(data.message, {
+            position: "top-right",
+            autoClose: 5000,
+            hideProgressBar: false,
+            closeOnClick: false,
+            pauseOnHover: true,
+            draggable: true,
+            progress: undefined,
+            theme: "light",
+          });
+        }, 1000);
+        return () => clearTimeout(timer);
+      } else {
+        toast.error(data.message);
+        console.log(data.message);
+      }
+    }
+  };
   return (
     <div>
       <div className="flex items-center">
@@ -217,7 +257,7 @@ const DashboardScouting = ({ user, styles, techniques }) => {
             setSelectedReport,
             setOpen,
             setPreviewOpen,
-            //handleDeleteMatch,
+            handleDeleteReport,
           })}
           data={data}
           setSelectedReport={setSelectedReport}

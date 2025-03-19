@@ -29,7 +29,7 @@ const ScoutingReportForm = ({
 }) => {
   const router = useRouter();
   const [add, setAdd] = useState("");
-  console.log(athlete);
+
   useEffect(() => {
     navigator.geolocation.getCurrentPosition((pos) => {
       const { latitude, longitude } = pos.coords;
@@ -61,7 +61,6 @@ const ScoutingReportForm = ({
     setAthleteCountry(newCountry);
   }, [newCountry]);
 
-  console.log(newCountry);
   const [matchType, setMatchType] = useState(
     report?.matchType ? report?.matchType : ""
   );
@@ -153,21 +152,78 @@ const ScoutingReportForm = ({
   const windowSize = useRef([window.innerWidth, window.innerHeight]);
   const tooltipWidth = windowSize.current[0] > 500 ? "50vw" : "90vw";
 
-  const [videos, setVideos] = useState([]); // Manage video fields dynamically
+  const [videos, setVideos] = useState(
+    report.videos?.length > 0
+      ? report.videos.map((video) => ({
+          id: video._id,
+          title: video.videoTitle || "",
+          url: video.videoURL || "",
+          notes: video.videoNotes || "",
+        }))
+      : []
+  );
 
   const addVideoFields = () => {
-    setVideos([
-      ...videos,
-      { id: videos.length + 1, title: "", url: "", notes: "" },
-    ]);
+    setVideos([...videos, { id: Date.now(), title: "", url: "", notes: "" }]);
   };
 
   const updateVideoField = (index, field, value) => {
-    const updatedVideos = [...videos];
-    updatedVideos[index][field] = value;
-    setVideos(updatedVideos);
+    setVideos((prevVideos) =>
+      prevVideos.map((video, i) =>
+        i === index ? { ...video, [field]: value } : video
+      )
+    );
   };
 
+  const removeVideo = (index) => {
+    setVideos((prevVideos) => prevVideos.filter((_, i) => i !== index));
+  };
+
+  const deleteVideoHandler = async (videoTitle, videoId) => {
+    if (
+      window.confirm(
+        `Are you sure you want to delete the video, ${videoTitle}?`
+      )
+    ) {
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${athlete._id}/scoutingReports/${report._id}/videos/${videoId}`,
+          {
+            method: "DELETE",
+            headers: {
+              "Access-Control-Allow-Origin": "*",
+              "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+              "Access-Control-Allow-Headers": "Content-Type, Authorization",
+              "Content-type": "application/json; charset=UTF-8",
+            },
+          }
+        );
+        const data = await response.json();
+
+        if (response.ok) {
+          const timer = setTimeout(() => {
+            router.refresh();
+            toast.success(data.message, {
+              position: "top-right",
+              autoClose: 5000,
+              hideProgressBar: false,
+              closeOnClick: false,
+              pauseOnHover: true,
+              draggable: true,
+              progress: undefined,
+              theme: "light",
+            });
+          }, 1000);
+          return () => clearTimeout(timer);
+        } else {
+          toast.error(data.message);
+          console.log(data.message);
+        }
+      } catch (err) {
+        toast.error(err?.data?.error || err.message);
+      }
+    }
+  };
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -180,8 +236,7 @@ const ScoutingReportForm = ({
         athAttacks.push(item.label.toLowerCase());
       });
     }
-    
-    
+
     const myVideos = [];
     videos &&
       videos.map((video) => {
@@ -192,7 +247,6 @@ const ScoutingReportForm = ({
         });
       });
 
-    console.log("Athlete attack: ", athleteAttackNotes);
     const bodyData = {
       athlete: athlete._id,
       type,
@@ -575,75 +629,64 @@ const ScoutingReportForm = ({
               />
             </div>
 
-            <div id="video-container">
-              {videos.map((video, index) => (
-                <div
-                  key={video.id}
-                  className="p-4 border-b"
-                >
-                  <label className="block text-gray-900 font-bold">
-                    Video Title
-                  </label>
-                  <span className="text-xl text-muted-foreground my-2">
-                    To share a YouTube video, locate your desired video and
-                    click the <strong>&quot;Share&quot;</strong> button beneath
-                    the player. Then click the
-                    <strong>
-                      &quot;Embed&quot; &quot;&#x003C; &#x3e;&quot;
-                    </strong>{" "}
-                    button. When the
-                    <strong>&quot;Embed Video&quot;</strong> window comes up,
-                    click the
-                    <strong>&quot;Copy&quot;</strong> and paste it below.
-                    Remember, the video&quots URL won&quott work - you need the{" "}
-                    <strong>&quot;Share&quot;</strong> and
-                    <strong>&quot;Embed Video&quot;</strong> code..
-                  </span>
-                  <input
-                    type="text"
-                    name={`videoTitle${video.id}`}
-                    placeholder="Enter Video Title"
-                    value={video.title}
-                    onChange={(e) =>
-                      updateVideoField(index, "title", e.target.value)
-                    }
-                    className="w-full p-2 border rounded"
-                  />
+            <div>
+              <div id="video-container">
+                {videos.map((video, index) => (
+                  <div
+                    key={index}
+                    className="p-4 border-b relative"
+                  >
+                    <label className="block text-gray-900 font-bold">
+                      Video Title
+                    </label>
+                    <input
+                      type="text"
+                      name={`videoTitle${video.id}`}
+                      placeholder="Enter Video Title"
+                      value={video.title}
+                      onChange={(e) =>
+                        updateVideoField(index, "title", e.target.value)
+                      }
+                      className="w-full p-2 border rounded"
+                    />
 
-                  <label className="block text-gray-900 font-bold mt-2">
-                    Video URL
-                  </label>
-                  <input
-                    type="text"
-                    name={`videoURL${video.id}`}
-                    placeholder="Enter Video URL"
-                    value={video.url}
-                    onChange={(e) =>
-                      updateVideoField(index, "url", e.target.value)
-                    }
-                    className="w-full p-2 border rounded"
-                  />
+                    <div
+                      className="py-2 w-full"
+                      dangerouslySetInnerHTML={{
+                        __html: `${video.url}`,
+                      }}
+                    />
+                    <label className="block text-gray-900 font-bold mt-2">
+                      Video Notes
+                    </label>
+                    <Editor
+                      name={`videoNotes${video.id}`}
+                      onChange={(value) =>
+                        updateVideoField(index, "notes", value)
+                      }
+                      text={video.notes}
+                    />
 
-                  <label className="block text-gray-900 font-bold mt-2">
-                    Video Notes
-                  </label>
-                  <Editor
-                    name={`videoNotes${video.id}`}
-                    onChange={(value) =>
-                      updateVideoField(index, "notes", value)
-                    }
-                    attackNotes={video.notes} // Assuming Editor uses this prop
-                  />
-                </div>
-              ))}
+                    {/* Remove Button */}
+                    <button
+                      type="button"
+                      onClick={() => deleteVideoHandler(video.title, video.id)}
+                      className="absolute top-2 right-2 bg-ms-dark-red text-white px-2 py-1 rounded"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <Button
+                type="button"
+                onClick={addVideoFields}
+                className="add_video_btn my-3"
+              >
+                Add {videos.length > 0 ? "another video" : "a video"}
+              </Button>
             </div>
-            <Button
-              type="button"
-              onClick={addVideoFields}
-              className="add_video_btn my-3"
-            >
-              Add {videos.length > 0 ? "another video" : " a video"}
-            </Button>
 
             <Button type="submit">
               {report ? "Update" : "Add"} Scouting Report
