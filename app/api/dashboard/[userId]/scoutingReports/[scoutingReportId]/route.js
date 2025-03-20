@@ -1,5 +1,5 @@
 "use server";
-import { NextResponse } from "next/server";
+import { sendResponse } from "@/lib/helpers/responseHelper";
 import ScoutingReport from "@/models/scoutingReportModal";
 import User from "@/models/userModel";
 import Video from "@/models/videoModel";
@@ -8,7 +8,6 @@ import { Types } from "mongoose";
 import mongoSanitize from "express-mongo-sanitize";
 import { getAuth } from "@clerk/nextjs/server";
 import { connectDB } from "@/config/mongo";
-import { sendResponse } from "@/lib/helpers/responseHelper";
 
 export const PATCH = async (request, context) => {
   try {
@@ -17,7 +16,7 @@ export const PATCH = async (request, context) => {
     const { userId, scoutingReportId } = context.params || {};
 
     if (!userId || !scoutingReportId) {
-      return sendResponse(JSON.stringify("Missing required parameters"), 400);
+      return sendResponse("Missing required parameters", 400);
     }
 
     // Authenticate user
@@ -26,7 +25,7 @@ export const PATCH = async (request, context) => {
 
     if (!clerkUserId) {
       return sendResponse(
-        JSON.stringify("Unauthorized. Please sign in to perform this action."),
+        "Unauthorized. Please sign in to perform this action.",
         401
       );
     }
@@ -36,10 +35,7 @@ export const PATCH = async (request, context) => {
       !Types.ObjectId.isValid(userId) ||
       !Types.ObjectId.isValid(scoutingReportId)
     ) {
-      return sendResponse(
-        JSON.stringify("Invalid or missing user or scouting report ID"),
-        400
-      );
+      return sendResponse("Invalid or missing user or scouting report ID", 400);
     }
 
     // Ensure request body exists
@@ -48,18 +44,14 @@ export const PATCH = async (request, context) => {
       requestBody = await request.json();
     } catch (error) {
       console.error("Error parsing request body:", error);
-      return sendResponse(
-        JSON.stringify("Invalid JSON format in request body"),
-        400
-      );
+      return sendResponse("Invalid JSON format in request body", 400);
     }
 
     if (!requestBody || Object.keys(requestBody).length === 0) {
-      return sendResponse(JSON.stringify("Empty request body"), 400);
+      return sendResponse("Empty request body", 400);
     }
 
     const sanitizedBody = mongoSanitize.sanitize(requestBody);
-    console.log("Sanitized body:", sanitizedBody); // Debugging
 
     const {
       team,
@@ -82,7 +74,7 @@ export const PATCH = async (request, context) => {
     // Check if user exists
     const userExists = await User.exists({ _id: userId });
     if (!userExists) {
-      return sendResponse(JSON.stringify("User not found"), 404);
+      return sendResponse("User not found", 404);
     }
 
     // Check if scouting report exists and update it
@@ -108,10 +100,7 @@ export const PATCH = async (request, context) => {
     );
 
     if (!scoutingReport) {
-      return sendResponse(
-        JSON.stringify("Scouting Report not found or unauthorized"),
-        404
-      );
+      return sendResponse("Scouting Report not found or unauthorized", 404);
     }
 
     // Process athlete attacks
@@ -157,10 +146,7 @@ export const PATCH = async (request, context) => {
       }
     }
 
-    return sendResponse(
-      JSON.stringify("Scouting report updated successfully"),
-      200
-    );
+    return sendResponse("Scouting report updated successfully", 200);
   } catch (error) {
     console.error(`Error updating scouting report:`, error);
     return sendResponse(

@@ -1,52 +1,58 @@
 "use server";
-import { NextResponse } from "next/server";
+import { sendResponse } from "@/lib/helpers/responseHelper";
 import MatchReport from "@/models/matchReportModel";
 import User from "@/models/userModel";
 import Technique from "@/models/techniquesModel";
 import { Types } from "mongoose";
 import mongoSanitize from "express-mongo-sanitize";
+import { getAuth } from "@clerk/nextjs/server";
 import { connectDB } from "@/config/mongo";
 
 // Update a match report
-export const PATCH = async (request, { params }) => {
+export const PATCH = async (request, context) => {
   try {
     // connect to DB
     await connectDB();
 
-    let { userId, matchReportId } = await params;
+    const { userId, matchReportId } = context.params || {};
 
-    // Sanitize params
-    userId = mongoSanitize.sanitize(userId);
-    matchReportId = mongoSanitize.sanitize(matchReportId);
+    if (!userId || !matchReportId) {
+      return sendResponse("Missing required parameters", 400);
+    }
 
-    // Validate ObjectIds
+    // Authenticate user
+    const auth = getAuth(request);
+    const clerkUserId = auth?.userId;
+
+    if (!clerkUserId) {
+      return sendResponse(
+        "Unauthorized. Please sign in to perform this action.",
+        401
+      );
+    }
+
+    // Validate IDs
     if (
       !Types.ObjectId.isValid(userId) ||
       !Types.ObjectId.isValid(matchReportId)
     ) {
-      return new NextResponse(
-        JSON.stringify({ message: "Invalid or missing user or match ID" }),
-        { status: 400 }
-      );
+      return sendResponse("Invalid or missing user or match report ID", 400);
     }
 
-    // Validate request body
-    if (!request.body) {
-      return new NextResponse(
-        JSON.stringify({ message: "Empty request body" }),
-        { status: 400 }
-      );
+    // Ensure request body exists
+    let requestBody;
+    try {
+      requestBody = await request.json();
+    } catch (error) {
+      console.error("Error parsing request body:", error);
+      return sendResponse("Invalid JSON format in request body", 400);
     }
 
-    const body = await request.json();
-    const sanitizedBody = mongoSanitize.sanitize(body);
-
-    if (!sanitizedBody || Object.keys(sanitizedBody).length === 0) {
-      return new NextResponse(
-        JSON.stringify({ message: "Invalid JSON data" }),
-        { status: 400 }
-      );
+    if (!requestBody || Object.keys(requestBody).length === 0) {
+      return sendResponse("Empty request body", 400);
     }
+
+    const sanitizedBody = mongoSanitize.sanitize(requestBody);
 
     // Extract fields
     const {
@@ -72,29 +78,29 @@ export const PATCH = async (request, { params }) => {
     } = sanitizedBody;
 
     if (!sanitizedBody) {
-      return new NextResponse(
-        JSON.stringify({ message: "Invalid JSON data" }),
-        { status: 400 }
-      );
+      return sendResponse("Invalid JSON data", 400);
     }
 
     // Find user and match report in parallel
     const [user, matchReport] = await Promise.all([
-      User.findById(userId),
+      User.findOne({ clerkId: clerkUserId }),
       MatchReport.findOne({ _id: matchReportId, athlete: userId }),
     ]);
 
     if (!user) {
-      return new NextResponse(JSON.stringify({ message: "User not found" }), {
-        status: 404,
-      });
+      return sendResponse("User not found", 404);
+    }
+
+    // Ensure the authenticated user is deleting their own report
+    if (user._id.toString() !== userId) {
+      return sendResponse(
+        "You don't have permission to delete this scouting report",
+        403
+      );
     }
 
     if (!matchReport) {
-      return new NextResponse(
-        JSON.stringify({ message: "Match Report not found" }),
-        { status: 404 }
-      );
+      return sendResponse("Match Report not found", 404);
     }
 
     // Ensure all athlete & opponent attacks exist in the `Technique` collection
@@ -147,49 +153,54 @@ export const PATCH = async (request, { params }) => {
       }
     );
 
-    return new NextResponse(
-      JSON.stringify({
-        status: 200,
-        message: "Scouting report updated successfully",
-      })
-    );
+    return sendResponse("Match report updated successfully", 200);
   } catch (error) {
-    return new NextResponse(
-      JSON.stringify({
-        message: `Error updating match report: ${error.message}`,
-      }),
-      {
-        status: 500,
-      }
-    );
+    return sendResponse(`Error updating match report: ${error.message}`, 500);
   }
 };
 
-export const DELETE = async (request, { params }) => {
+export const DELETE = async (request, context) => {
   try {
-    const { userId, matchReportId } = params;
+    await connectDB();
 
-    // Validate IDs
+    const { userId, matchReportId } = context.params || {};
+
+    if (!userId || !matchReportId) {
+      return sendResponse("Missing required parameters", 400);
+    }
+
+    // Authenticate user
+    const auth = getAuth(request);
+    const clerkUserId = auth?.userId;
+
+    if (!clerkUserId) {
+      return sendResponse(
+        "Unauthorized. Please sign in to perform this action.",
+        401
+      );
+    }
+
+    // Validate MongoDB ObjectId format
     if (
       !Types.ObjectId.isValid(userId) ||
       !Types.ObjectId.isValid(matchReportId)
     ) {
-      return new NextResponse(
-        JSON.stringify({
-          message: "Invalid or missing user or match report ID",
-        }),
-        { status: 400 }
-      );
+      return sendResponse("Invalid user or match report ID", 400);
     }
 
-    await connectDB();
-
     // Check if user exists
-    const user = await User.findById(userId);
+    const user = await User.findOne({ clerkId: clerkUserId });
+
     if (!user) {
-      return new NextResponse(JSON.stringify({ message: "User not found" }), {
-        status: 404,
-      });
+      return sendResponse("User not found", 404);
+    }
+
+    // Ensure the authenticated user is deleting their own report
+    if (user._id.toString() !== userId) {
+      return sendResponse(
+        "You don't have permission to delete this scouting report",
+        403
+      );
     }
 
     // Check if the match report exists and belongs to the user
@@ -197,25 +208,16 @@ export const DELETE = async (request, { params }) => {
       _id: matchReportId,
       athlete: userId,
     });
+
     if (!match) {
-      return new NextResponse(
-        JSON.stringify({
-          message: "Match report not found or does not belong to user.",
-        }),
-        { status: 404 }
+      return sendResponse(
+        "Match report not found or does not belong to user.",
+        404
       );
     }
 
-    return new NextResponse(
-      JSON.stringify({ message: "Match report deleted successfully" }),
-      { status: 200 }
-    );
+    return sendResponse("Match report deleted successfully", 200);
   } catch (error) {
-    return new NextResponse(
-      JSON.stringify({
-        message: "Error deleting match report: " + error.message,
-      }),
-      { status: 500 }
-    );
+    return sendResponse("Error deleting match report: " + error.message, 500);
   }
 };
