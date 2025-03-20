@@ -153,7 +153,7 @@ const ScoutingReportForm = ({
   const tooltipWidth = windowSize.current[0] > 500 ? "50vw" : "90vw";
 
   const [videos, setVideos] = useState(
-    report.videos?.length > 0
+    report?.videos?.length > 0
       ? report.videos.map((video) => ({
           id: video._id,
           title: video.videoTitle || "",
@@ -179,12 +179,26 @@ const ScoutingReportForm = ({
     setVideos((prevVideos) => prevVideos.filter((_, i) => i !== index));
   };
 
-  const deleteVideoHandler = async (videoTitle, videoId) => {
+  const deleteVideoHandler = async (videoTitle, videoId, index) => {
     if (
       window.confirm(
         `Are you sure you want to delete the video, ${videoTitle}?`
       )
     ) {
+      // Check if the video exists in the report before attempting to delete
+      const videoExistsInReport = report.videos?.some(
+        (video) => video._id === videoId
+      );
+
+      // Remove the video from the local state first
+      removeVideo(index);
+
+      if (!videoExistsInReport) {
+        // If the video does not exist in the DB, just return success without making a request
+        toast.success(`Video "${videoTitle}" removed locally.`);
+        return;
+      }
+
       try {
         const response = await fetch(
           `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${athlete._id}/scoutingReports/${report._id}/videos/${videoId}`,
@@ -198,6 +212,7 @@ const ScoutingReportForm = ({
             },
           }
         );
+
         const data = await response.json();
 
         if (response.ok) {
@@ -224,6 +239,7 @@ const ScoutingReportForm = ({
       }
     }
   };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -291,7 +307,7 @@ const ScoutingReportForm = ({
       body: JSON.stringify(bodyData),
     });
 
-    const data = await response.json();
+    const data = await response.text();
 
     if (response.ok) {
       const timer = setTimeout(() => {
@@ -348,7 +364,7 @@ const ScoutingReportForm = ({
               >
                 <option value="">Select Match Type...</option>
                 {styles &&
-                  styles.map((style) => (
+                  styles?.map((style) => (
                     <option
                       key={style._id}
                       value={style.styleName}
@@ -629,68 +645,94 @@ const ScoutingReportForm = ({
               />
             </div>
 
-            <div>
-              <div id="video-container">
-                {videos.map((video, index) => (
-                  <div
-                    key={index}
-                    className="p-4 border-b relative"
-                  >
-                    <label className="block text-gray-900 font-bold">
-                      Video Title
-                    </label>
-                    <input
-                      type="text"
-                      name={`videoTitle${video.id}`}
-                      placeholder="Enter Video Title"
-                      value={video.title}
-                      onChange={(e) =>
-                        updateVideoField(index, "title", e.target.value)
-                      }
-                      className="w-full p-2 border rounded"
-                    />
+            <div className="my-4">
+              <h2 className="text-lg font-bold">Videos</h2>
 
+              {/* Video Fields */}
+              {videos.map((video, index) => (
+                <div
+                  key={video.id}
+                  className="mb-6 p-4 border rounded-lg shadow-sm bg-gray-100 dark:bg-gray-800"
+                >
+                  {/* Video Title Input */}
+                  <label className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2">
+                    Video Title
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter video title"
+                    value={video.title}
+                    onChange={(e) =>
+                      updateVideoField(index, "title", e.target.value)
+                    }
+                    className="w-full p-2 border rounded-md text-gray-900 dark:text-gray-100"
+                  />
+
+                  {/* If adding a new video, show the URL input */}
+                  {report?.videos?.length > index ? (
+                    // Show embedded video when editing
                     <div
                       className="py-2 w-full"
-                      dangerouslySetInnerHTML={{
-                        __html: `${video.url}`,
-                      }}
+                      dangerouslySetInnerHTML={{ __html: video.url }}
                     />
-                    <label className="block text-gray-900 font-bold mt-2">
-                      Video Notes
-                    </label>
-                    <Editor
-                      name={`videoNotes${video.id}`}
-                      onChange={(value) =>
-                        updateVideoField(index, "notes", value)
-                      }
-                      text={video.notes}
-                    />
+                  ) : (
+                    // Show video URL input when adding
+                    <>
+                      <label className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2">
+                        Video URL
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Enter video URL"
+                        value={video.url}
+                        onChange={(e) =>
+                          updateVideoField(index, "url", e.target.value)
+                        }
+                        className="w-full p-2 border rounded-md text-gray-900 dark:text-gray-100"
+                      />
+                    </>
+                  )}
 
-                    {/* Remove Button */}
-                    <button
-                      type="button"
-                      onClick={() => deleteVideoHandler(video.title, video.id)}
-                      className="absolute top-2 right-2 bg-ms-dark-red text-white px-2 py-1 rounded"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
+                  {/* Video Notes Editor */}
+                  <label className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2">
+                    Video Notes
+                  </label>
+                  <Editor
+                    name={`videoNotes-${index}`}
+                    text={video.notes}
+                    onChange={(value) =>
+                      updateVideoField(index, "notes", value)
+                    }
+                  />
 
+                  {/* Remove Video Button */}
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      deleteVideoHandler(video.title, video.id, index)
+                    }
+                    className="mt-3 bg-red-500 text-white"
+                  >
+                    Remove Video
+                  </Button>
+                </div>
+              ))}
+
+              {/* Add Video Button */}
               <Button
                 type="button"
                 onClick={addVideoFields}
-                className="add_video_btn my-3"
+                className="my-3"
               >
-                Add {videos.length > 0 ? "another video" : "a video"}
+                {videos.length > 0 ? "Add Another Video" : "Add Video"}
               </Button>
             </div>
 
-            <Button type="submit">
-              {report ? "Update" : "Add"} Scouting Report
-            </Button>
+            <div className="flex justify-center mt-5 pt-5">
+              <Button type="submit">
+                {report ? "Update" : "Add"} Scouting Report
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>

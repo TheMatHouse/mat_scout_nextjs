@@ -4,15 +4,37 @@ import Video from "@/models/videoModel";
 import ScoutingReport from "@/models/scoutingReportModal";
 import User from "@/models/userModel";
 import { Types } from "mongoose";
-import mongoSanitize from "express-mongo-sanitize";
+import { getAuth } from "@clerk/nextjs/server";
 import { connectDB } from "@/config/mongo";
 
-export const DELETE = async (request, { params }) => {
+export const DELETE = async (request, context) => {
   try {
     await connectDB();
 
-    // Destructure params (keep original immutable)
-    const { userId, scoutingReportId, videoId } = params;
+    // Await context.params before using its properties
+
+    const { userId, scoutingReportId, videoId } = context.params || {};
+
+    if (!userId || !scoutingReportId || !videoId) {
+      return NextResponse.json(
+        {
+          message:
+            "Missing required parameters: userId, scoutingReportId, or videoId",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Authenticate user
+    const auth = getAuth(request);
+    const clerkUserId = auth?.userId;
+
+    if (!clerkUserId) {
+      return NextResponse.json(
+        { message: "Unauthorized. Please sign in to perform this action." },
+        { status: 401 }
+      );
+    }
 
     // Validate ObjectId before sanitization
     if (
@@ -20,63 +42,73 @@ export const DELETE = async (request, { params }) => {
       !Types.ObjectId.isValid(scoutingReportId) ||
       !Types.ObjectId.isValid(videoId)
     ) {
-      return new NextResponse(
-        JSON.stringify({
-          message: "Invalid or missing user, scouting report, or video ID",
-        }),
+      return NextResponse.json(
+        { message: "Invalid userId, scoutingReportId, or videoId format." },
         { status: 400 }
       );
     }
 
-    // Sanitize params (use new variables to keep originals unchanged)
-    const sanitizedUserId = mongoSanitize.sanitize(userId);
-    const sanitizedScoutingReportId = mongoSanitize.sanitize(scoutingReportId);
-    const sanitizedVideoId = mongoSanitize.sanitize(videoId);
-
     // Check if user exists
-    const user = await User.findById(sanitizedUserId);
+    const user = await User.findOne({ clerkId: clerkUserId });
     if (!user) {
-      return new NextResponse(JSON.stringify({ message: "User not found" }), {
-        status: 404,
-      });
+      return NextResponse.json(
+        {
+          message: "User not found. Please ensure your account is registered.",
+        },
+        { status: 404 }
+      );
+    }
+
+    // Ensure the authenticated user is deleting their own report
+    if (user._id.toString() !== userId) {
+      return NextResponse.json(
+        {
+          message:
+            "Permission denied. You can only delete your own scouting reports.",
+        },
+        { status: 403 }
+      );
     }
 
     // Check if the scouting report exists and belongs to the user
     const report = await ScoutingReport.findOne({
-      _id: sanitizedScoutingReportId,
-      createdBy: sanitizedUserId,
+      _id: scoutingReportId,
+      createdBy: userId,
     });
     if (!report) {
-      return new NextResponse(
-        JSON.stringify({
-          message: "Scouting report not found or does not belong to user.",
-        }),
+      return NextResponse.json(
+        {
+          message: "Scouting report not found or does not belong to this user.",
+        },
         { status: 404 }
       );
     }
 
     // Check if the video exists and belongs to the scouting report
-    const video = await Video.findOneAndDelete({
-      _id: sanitizedVideoId,
-      report: sanitizedScoutingReportId,
+    const video = await Video.findOne({
+      _id: videoId,
+      report: scoutingReportId,
     });
+
     if (!video) {
-      return new NextResponse(
-        JSON.stringify({
-          message: "Video not found or does not belong to scouting report.",
-        }),
+      return NextResponse.json(
+        {
+          message: "Video not found or does not belong to the scouting report.",
+        },
         { status: 404 }
       );
     }
 
-    return new NextResponse(
-      JSON.stringify({ message: "Video deleted successfully" }),
+    await Video.deleteOne({ _id: videoId });
+
+    return NextResponse.json(
+      { message: "Video deleted successfully." },
       { status: 200 }
     );
   } catch (error) {
     console.error("Error deleting video:", error);
-    return new NextResponse(
-      JSON.stringify({ message: `Error deleting video: ${error.message}` }),
+    return NextResponse.json(
+      { message: `Server error while deleting video: ${error.message}` },
       { status: 500 }
     );
   }

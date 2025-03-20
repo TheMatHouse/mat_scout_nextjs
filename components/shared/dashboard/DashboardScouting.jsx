@@ -8,7 +8,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ScoutingReportForm from "./forms/ScoutingReportForm";
 import { ReportDataTable } from "./data/report-data-table";
 import { ArrowUpDown, MoreHorizontal } from "lucide-react";
@@ -174,6 +174,25 @@ const DashboardScouting = ({ user, styles, techniques }) => {
   const [open, setOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
+  const modalRef = useRef(null);
+
+  const handleDialogClose = (openState) => {
+    setOpen(openState); // Update dialog open state
+    if (!openState) {
+      // Reset the form when the dialog is closed (either by clicking outside or cancel)
+      setSelectedReport(null); // Reset selected report to avoid showing stale data
+    }
+  };
+
+  const openPreviewModal = (newReport) => {
+    setSelectedReport(newReport); // Set new report data when opening modal
+    setPreviewOpen(true);
+  };
+
+  const closePreviewModal = () => {
+    setPreviewOpen(false); // Close the modal
+    setSelectedReport(null); // Reset the report data when modal closes
+  };
 
   const handleDeleteReport = async (report) => {
     if (
@@ -195,6 +214,7 @@ const DashboardScouting = ({ user, styles, techniques }) => {
 
       if (response.ok) {
         const timer = setTimeout(() => {
+          setSelectedReport(null);
           router.refresh();
           toast.success(data.message, {
             position: "top-right",
@@ -214,13 +234,14 @@ const DashboardScouting = ({ user, styles, techniques }) => {
       }
     }
   };
+
   return (
     <div>
       <div className="flex items-center">
         <h1 className="2xl">My Scouting Reports</h1>
         <Dialog
           open={open}
-          onOpenChange={setOpen}
+          onOpenChange={handleDialogClose}
         >
           <DialogTrigger asChild>
             <Button className="bg-gray-900 hover:bg-gray-500  border-gray-500 dark:border-gray-100 border-2 drop-shadow-md text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ml-6">
@@ -266,7 +287,7 @@ const DashboardScouting = ({ user, styles, techniques }) => {
       {previewOpen && (
         <PreviewReportModal
           previewOpen={previewOpen}
-          setPreviewOpen={setPreviewOpen}
+          setPreviewOpen={closePreviewModal}
           report={selectedReport}
           reportType="scouting"
         />

@@ -6,45 +6,60 @@ import Video from "@/models/videoModel";
 import Technique from "@/models/techniquesModel";
 import { Types } from "mongoose";
 import mongoSanitize from "express-mongo-sanitize";
+import { getAuth } from "@clerk/nextjs/server";
 import { connectDB } from "@/config/mongo";
+import { sendResponse } from "@/lib/helpers/responseHelper";
 
-export const PATCH = async (request, { params }) => {
+export const PATCH = async (request, context) => {
   try {
     await connectDB();
 
-    let { userId, scoutingReportId } = params;
+    const { userId, scoutingReportId } = context.params || {};
 
-    // Sanitize params
-    userId = mongoSanitize.sanitize(userId);
-    scoutingReportId = mongoSanitize.sanitize(scoutingReportId);
+    if (!userId || !scoutingReportId) {
+      return sendResponse(JSON.stringify("Missing required parameters"), 400);
+    }
+
+    // Authenticate user
+    const auth = getAuth(request);
+    const clerkUserId = auth?.userId;
+
+    if (!clerkUserId) {
+      return sendResponse(
+        JSON.stringify("Unauthorized. Please sign in to perform this action."),
+        401
+      );
+    }
 
     // Validate IDs
     if (
       !Types.ObjectId.isValid(userId) ||
       !Types.ObjectId.isValid(scoutingReportId)
     ) {
-      return new NextResponse(
-        JSON.stringify({
-          message: "Invalid or missing user or scouting report ID",
-        }),
-        { status: 400 }
+      return sendResponse(
+        JSON.stringify("Invalid or missing user or scouting report ID"),
+        400
       );
     }
 
-    if (!request.body) {
-      return new NextResponse(
-        JSON.stringify({ message: "Empty request body" }),
-        { status: 400 }
+    // Ensure request body exists
+    let requestBody;
+    try {
+      requestBody = await request.json();
+    } catch (error) {
+      console.error("Error parsing request body:", error);
+      return sendResponse(
+        JSON.stringify("Invalid JSON format in request body"),
+        400
       );
     }
 
-    const sanitizedBody = mongoSanitize.sanitize(await request.json());
-    if (!sanitizedBody) {
-      return new NextResponse(
-        JSON.stringify({ message: "Invalid JSON data" }),
-        { status: 400 }
-      );
+    if (!requestBody || Object.keys(requestBody).length === 0) {
+      return sendResponse(JSON.stringify("Empty request body"), 400);
     }
+
+    const sanitizedBody = mongoSanitize.sanitize(requestBody);
+    console.log("Sanitized body:", sanitizedBody); // Debugging
 
     const {
       team,
@@ -67,12 +82,10 @@ export const PATCH = async (request, { params }) => {
     // Check if user exists
     const userExists = await User.exists({ _id: userId });
     if (!userExists) {
-      return new NextResponse(JSON.stringify({ message: "User not found" }), {
-        status: 404,
-      });
+      return sendResponse(JSON.stringify("User not found"), 404);
     }
 
-    // Check if scouting report exists and belongs to user
+    // Check if scouting report exists and update it
     const scoutingReport = await ScoutingReport.findOneAndUpdate(
       { _id: scoutingReportId, createdBy: userId },
       {
@@ -95,108 +108,140 @@ export const PATCH = async (request, { params }) => {
     );
 
     if (!scoutingReport) {
-      return new NextResponse(
-        JSON.stringify({
-          message: "Scouting Report not found or unauthorized",
-        }),
-        { status: 404 }
+      return sendResponse(
+        JSON.stringify("Scouting Report not found or unauthorized"),
+        404
       );
     }
 
-    // Process athlete attacks (ensure they exist in Techniques collection)
+    // Process athlete attacks
     if (Array.isArray(athleteAttacks) && athleteAttacks.length > 0) {
       await Promise.all(
         athleteAttacks.map(async (attack) => {
           const exists = await Technique.exists({ techniqueName: attack });
-          if (!exists) await Technique.create({ techniqueName: attack });
+          if (!exists) {
+            try {
+              await Technique.create({ techniqueName: attack });
+            } catch (error) {
+              console.error(`Failed to create technique: ${attack}`, error);
+            }
+          }
         })
       );
     }
 
-    // Process and save videos if provided
+    // Process and save videos
     if (Array.isArray(videos) && videos.length > 0) {
-      await Video.insertMany(
-        videos.map((video) => ({
-          videoTitle: video.videoTitle,
-          videoURL: video.videoURL,
-          videoNotes: video.videoNotes,
-          report: scoutingReportId,
-        }))
-      );
+      for (const video of videos) {
+        try {
+          const existingVideo = await Video.findOne({
+            videoURL: video.videoURL,
+            report: scoutingReportId,
+          });
+
+          if (existingVideo) {
+            existingVideo.videoTitle = video.videoTitle;
+            existingVideo.videoNotes = video.videoNotes;
+            await existingVideo.save();
+          } else {
+            await Video.create({
+              videoTitle: video.videoTitle,
+              videoURL: video.videoURL,
+              videoNotes: video.videoNotes,
+              report: scoutingReportId,
+            });
+          }
+        } catch (error) {
+          console.error(`Error handling video: ${video.videoURL}`, error);
+        }
+      }
     }
 
-    return new NextResponse(
-      JSON.stringify({
-        status: 200,
-        message: "Scouting report updated successfully",
-      }),
-      { status: 200 }
+    return sendResponse(
+      JSON.stringify("Scouting report updated successfully"),
+      200
     );
   } catch (error) {
-    return new NextResponse(
-      JSON.stringify({
-        message: `Error updating scouting report: ${error.message}`,
-      }),
-      { status: 500 }
+    console.error(`Error updating scouting report:`, error);
+    return sendResponse(
+      `Error updating scouting report: ${error.message}`,
+      500
     );
   }
 };
 
-export const DELETE = async (request, { params }) => {
+export const DELETE = async (request, context) => {
   try {
     await connectDB();
 
-    let { userId, scoutingReportId } = params;
+    const { userId, scoutingReportId } = context.params || {};
 
-    // Sanitize params
-    userId = mongoSanitize.sanitize(userId);
-    scoutingReportId = mongoSanitize.sanitize(scoutingReportId);
+    if (!userId || !scoutingReportId) {
+      return sendResponse("Missing required parameters", 400);
+    }
 
-    // Validate IDs
+    // Authenticate user
+    const auth = getAuth(request);
+    const clerkUserId = auth?.userId;
+
+    if (!clerkUserId) {
+      return sendResponse(
+        "Unauthorized. Please sign in to perform this action.",
+        401
+      );
+    }
+
+    // Validate MongoDB ObjectId format
     if (
       !Types.ObjectId.isValid(userId) ||
       !Types.ObjectId.isValid(scoutingReportId)
     ) {
-      return new NextResponse(
-        JSON.stringify({
-          message: "Invalid or missing user or scouting report ID",
-        }),
-        { status: 400 }
-      );
+      return sendResponse("Invalid user or scouting report ID", 400);
     }
 
-    // Check if user exists
-    const user = await User.findById(userId);
+    // Find the user in the database
+    const user = await User.findOne({ clerkId: clerkUserId });
+
     if (!user) {
-      return new NextResponse(JSON.stringify({ message: "User not found" }), {
-        status: 404,
-      });
+      return sendResponse("User not found", 404);
     }
 
-    // Check if the scouting report exists and belongs to the user
-    const report = await ScoutingReport.findOneAndDelete({
-      _id: scoutingReportId,
-      athlete: userId,
-    });
-    if (!report) {
-      return new NextResponse(
-        JSON.stringify({
-          message: "Scouting report not found or does not belong to user.",
-        }),
-        { status: 404 }
+    // Ensure the authenticated user is deleting their own report
+    if (user._id.toString() !== userId) {
+      return sendResponse(
+        "You don't have permission to delete this scouting report",
+        403
       );
     }
 
-    return new NextResponse(
-      JSON.stringify({ message: "Scouting report deleted successfully" }),
-      { status: 200 }
+    // Delete all videos associated with the scouting report
+    const deletedVideos = await Video.deleteMany({ report: scoutingReportId });
+
+    // Delete the scouting report
+    const deletedReport = await ScoutingReport.findOneAndDelete({
+      _id: scoutingReportId,
+      createdBy: userId,
+    });
+
+    if (!deletedReport) {
+      return sendResponse(
+        "Scouting report not found or does not belong to user",
+        404
+      );
+    }
+
+    return sendResponse(
+      `Scouting report and ${deletedVideos.deletedCount} associated videos deleted successfully`,
+      200
     );
   } catch (error) {
-    return new NextResponse(
-      JSON.stringify({
-        message: "Error deleting match report: " + error.message,
-      }),
-      { status: 500 }
+    console.error(
+      `Error deleting scouting report (userId: ${userId}, scoutingReportId: ${scoutingReportId}):`,
+      error
+    );
+    return sendResponse(
+      `Error deleting scouting report: ${error.message}`,
+      500
     );
   }
 };

@@ -4,7 +4,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import React from "react";
+import React, { useEffect, useRef } from "react";
 
 const PreviewReportModal = ({
   previewOpen,
@@ -12,13 +12,37 @@ const PreviewReportModal = ({
   report,
   reportType,
 }) => {
-  console.log(report);
+  const dialogContentRef = useRef(null);
+
+  // Effect to close the modal if clicked outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        dialogContentRef.current &&
+        !dialogContentRef.current.contains(event.target)
+      ) {
+        setPreviewOpen(false); // Close the modal when clicked outside
+      }
+    };
+
+    if (previewOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [previewOpen, setPreviewOpen]);
+
   return (
     <Dialog
       open={previewOpen}
-      onOpenChange={setPreviewOpen}
+      onOpenChange={setPreviewOpen} // Ensure the modal state is handled here
     >
-      <DialogContent className="overflow-y-scroll max-h-screen min-w-fit sm:w-90 max-w-6xl">
+      <DialogContent
+        ref={dialogContentRef} // Ref to detect click inside the modal
+        className="overflow-y-scroll max-h-screen min-w-fit sm:w-90 max-w-6xl"
+      >
         <DialogHeader>
           <DialogTitle>
             Full {reportType === "match" ? "Match" : "Scouting"} Report
