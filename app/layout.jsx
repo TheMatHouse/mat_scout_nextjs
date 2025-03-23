@@ -45,9 +45,16 @@ export default async function RootLayout({ children }) {
               theme="light"
             />
             <Header />
-            <main className="flex h-1vh w[100%]">
-              {user && <SidebarMenuBar />}
-              {children}
+            <main className="flex h-screen w-full">
+              {/* Sidebar - Hidden on small screens, shown on md+ */}
+              {user && (
+                <div className="hidden md:block">
+                  <SidebarMenuBar />
+                </div>
+              )}
+
+              {/* Main content */}
+              <div className="flex-1">{children}</div>
             </main>
           </ThemeProvider>
         </body>
