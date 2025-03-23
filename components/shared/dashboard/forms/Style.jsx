@@ -79,18 +79,22 @@ const StyleForm = ({ user, style, userType, type, setOpen }) => {
 
     try {
       if (userType === "user") {
+        let method = "";
         let domain = "";
-        if (style._id) {
+        if (style) {
+          method = "PATCH";
           domain = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyles/${style._id}`;
         } else {
+          method = "POST";
           domain = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyles`;
         }
-
+        console.log("Method ", method);
+        console.log("Domain ", domain);
         const response = await fetch(
           domain,
           //`${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyles`,
           {
-            method: `${style?._id ? "PATCH" : "POST"}`,
+            method,
             headers: {
               "Access-Control-Allow-Origin": "*",
               "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -110,7 +114,7 @@ const StyleForm = ({ user, style, userType, type, setOpen }) => {
         );
         const data = await response.json();
 
-        if (data.status === 201 || data.status === 200) {
+        if (response.ok) {
           const timer = setTimeout(() => {
             router.refresh();
             toast.success(data.message, {

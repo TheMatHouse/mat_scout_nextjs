@@ -447,3 +447,62 @@ input[type="checkbox"]:focus {
 .w-90 {
   width: 90%;
 }
+
+/*-----Profile Start-----*/
+
+/*-----Profile End-----*/
+
+/*-----New Profile Image Start-----*/
+.profile_img_wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  margin-bottom: -2.8rem;
+}
+.profile_w_left {
+  display: flex;
+  gap: 1rem;
+  padding: 1px 13px 0, 13px;
+}
+.profile_w_img {
+  position: relative;
+  z-index: 999;
+}
+.profile_personal_card {
+  width: 160px;
+  height: 160px;
+  /* transform: translateY(0.6rem); */
+  border-radius: 50%;
+  background-repeat: no-repeat;
+  border: 2px solid #fff;
+  background: #fff;
+}
+/* .profile_w_bg:hover {
+  filter: brightness(95%);
+  cursor: pointer;
+} */
+/* .profile_circle {
+  position: absolute;
+  bottom: 4.5rem;
+  right: 0.55rem;
+  background: var(--bg-third);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+} */
+
+/* .camera_filled_icon {
+  background-position: 0px -444px;
+  background-size: auto;
+  width: 40px;
+  height: 40px;
+  background-repeat: no-repeat;
+  display: inline-block;
+  z-index: 9999999999;
+} */
+/*-----New Profile Image End-----*/

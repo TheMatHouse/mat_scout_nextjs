@@ -34,8 +34,8 @@ const EditPersonalInfo = ({ user, userType, handleClose }) => {
   );
   const [lastName, setLastName] = useState(user?.lastName ? user.lastName : "");
   const [email, setEmail] = useState(user?.email ? user.email : "");
-  const [city, setCity] = useState(user?.city ? user.city : myCity);
-  const [state, setState] = useState(user?.state ? user.state : myState);
+  const [city, setCity] = useState(user?.city ? user.city : "");
+  const [state, setState] = useState(user?.state ? user.state : "");
   const [country, setCountry] = useState(
     user?.country ? user.country : myCountry_code
   );

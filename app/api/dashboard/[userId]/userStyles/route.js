@@ -4,7 +4,10 @@ import { Types } from "mongoose";
 import UserStyle from "@/models/userStyleModel";
 import { connectDB } from "@/config/mongo";
 import User from "@/models/userModel";
-import { Style } from "@/models/styleModel";
+import Style from "@/models/styleModel";
+import { sendResponse } from "@/lib/helpers/responseHelper";
+import { getAuth } from "@clerk/nextjs/server";
+import mongoSanitize from "express-mongo-sanitize";
 
 export const GET = async (request, { params }) => {
   const { userId } = await params;
@@ -28,44 +31,65 @@ export const GET = async (request, { params }) => {
   }
 };
 
-export const POST = async (request, { params }) => {
-  const { userId } = await params;
-
-  const body = await request.json();
-  const {
-    styleName,
-    rank,
-    promotionDate,
-    division,
-    weightClass,
-    grip,
-    favoriteTechnique,
-  } = body;
-
+export const POST = async (request, context) => {
   try {
-    if (!userId || !Types.ObjectId.isValid(userId)) {
-      return new NextResponse(
-        JSON.stringify({ message: "Invalid or missing user id" })
+    await connectDB();
+    const { userId } = context.params || {};
+
+    if (!userId) {
+      return sendResponse("Missing required parameters", 400);
+    }
+    // Authenticate user
+    const auth = getAuth(request);
+    const clerkUserId = auth?.userId;
+
+    if (!clerkUserId) {
+      return sendResponse(
+        "Unauthorized. Please sign in to perform this action.",
+        401
       );
     }
 
-    await connectDB();
-    // Check to see if the user exists
-    const userExists = await User.findById(userId);
+    // Validate IDs
+    if (!Types.ObjectId.isValid(userId)) {
+      return sendResponse("Invalid or missing user ID", 400);
+    }
 
+    // Ensure request body exists
+    let requestBody;
+    try {
+      requestBody = await request.json();
+    } catch (error) {
+      console.error("Error parsing request body:", error);
+      return sendResponse("Invalid JSON format in request body", 400);
+    }
+
+    if (!requestBody || Object.keys(requestBody).length === 0) {
+      return sendResponse("Empty request body", 400);
+    }
+
+    const sanitizedBody = mongoSanitize.sanitize(requestBody);
+
+    const {
+      styleName,
+      rank,
+      promotionDate,
+      division,
+      weightClass,
+      grip,
+      favoriteTechnique,
+    } = sanitizedBody;
+
+    const userExists = await User.findById(userId);
     if (!userExists) {
-      return new NextResponse(
-        JSON.stringify({ message: "User not found", status: 404 })
-      );
+      return sendResponse("User not found", 404);
     }
 
     // Check to see if the style exists
     const styleExists = await Style.findOne({ styleName });
 
     if (!styleExists) {
-      return new NextResponse(
-        JSON.stringify({ message: "Style not found", status: 404 })
-      );
+      return sendResponse("Style not found", 404);
     }
 
     // Check to make sure this user does not already have this style
@@ -73,13 +97,9 @@ export const POST = async (request, { params }) => {
       userId,
       styleName,
     });
+
     if (userStyleExists) {
-      return new NextResponse(
-        JSON.stringify({
-          status: 400,
-          message: "You already have this style.",
-        })
-      );
+      return sendResponse("You already have this style.", 404);
     }
 
     const newUserStyle = await UserStyle.create({
@@ -93,18 +113,8 @@ export const POST = async (request, { params }) => {
       userId,
     });
 
-    if (newUserStyle) {
-      return new NextResponse(
-        JSON.stringify({
-          status: 201,
-          message: "User style created successfully",
-          //userStyle: newUserStyle,
-        })
-      );
-    }
+    return sendResponse("User style created successfully", 201);
   } catch (error) {
-    return new NextResponse("Error creating user style " + error.message, {
-      status: 500,
-    });
+    return sendResponse(`Error creating user style: ${error.message}`, 500);
   }
 };

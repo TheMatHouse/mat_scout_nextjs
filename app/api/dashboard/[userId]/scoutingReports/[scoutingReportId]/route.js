@@ -52,6 +52,7 @@ export const PATCH = async (request, context) => {
     }
 
     const sanitizedBody = mongoSanitize.sanitize(requestBody);
+    console.log("Sanitized body:", sanitizedBody); // Debugging
 
     const {
       team,
