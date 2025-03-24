@@ -3,7 +3,8 @@
 import PersonalInfo from "@/components/shared/profile/PersonalInfo";
 import StyleCard from "@/components/shared/profile/StyleCard";
 import StyleInfo from "@/components/shared/profile/StyleInfo";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import moment from "moment";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -89,15 +90,19 @@ const ProfilePage = () => {
     });
 
   return (
-    <div className="px-2 pt-4 ">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-        <div className="sm:order-1 md:col-span-1 mx-auto">
-          <PersonalInfo profile={profile} />
+    <div className="px-2 pt-4">
+      <div className="flex flex-col xl:flex-row w-full gap-6 justify-center xl:justify-start items-center xl:items-start">
+        {/* Left Column: Personal Info */}
+        <div className="w-full xl:w-[35%] xl:max-w-[420px] flex-shrink-0">
+          <div className="mx-auto w-full flex sm:justify-center">
+            <PersonalInfo profile={profile} />
+          </div>
         </div>
-        <div className="sm:order-2 md:col-span-3 mx-auto">
+
+        {/* Right Column: Styles */}
+        <div className="w-full">
           <StyleInfo
             styles={myStyles}
-            profile={profile}
             styleResults={styleResults}
           />
         </div>

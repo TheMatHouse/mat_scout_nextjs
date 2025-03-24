@@ -506,3 +506,8 @@ input[type="checkbox"]:focus {
   z-index: 9999999999;
 } */
 /*-----New Profile Image End-----*/
+
+.relative {
+  position: relative;
+  z-index: 1;
+}
