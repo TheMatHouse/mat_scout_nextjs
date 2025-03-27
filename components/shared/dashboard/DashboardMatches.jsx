@@ -21,13 +21,13 @@ import { Button } from "@/components/ui/button";
 import MatchReportForm from "./forms/MatchReportForm";
 import { useState } from "react";
 import { ArrowUpDown } from "lucide-react";
-import moment from "moment";
+import returnmoment from "moment";
 
 // ICONS
 import { MoreHorizontal } from "lucide-react";
 import { toast } from "react-toastify";
 //import PreviewMatchReportModal from "./PreviewMatchReportModal";
-import PreviewMatchReportModal from "@/components/shared/dashboard/PreviewMatchReportModal";
+import PreviewMatchReportModal from "./PreviewMatchReportModal";
 
 export const columns = ({
   setSelectedMatch,
@@ -38,15 +38,13 @@ export const columns = ({
   {
     accessorKey: "matchType",
     header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          <div className="text-center">Type</div>
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
+      <Button
+        variant="ghost"
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+      >
+        <div className="text-center">Type</div>
+        <ArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>;
     },
   },
   {
