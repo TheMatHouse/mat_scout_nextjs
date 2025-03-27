@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import MatchReportForm from "./forms/MatchReportForm";
 import { useState } from "react";
 import { ArrowUpDown } from "lucide-react";
-import returnmoment from "moment";
+import moment from "moment";
 
 // ICONS
 import { MoreHorizontal } from "lucide-react";
