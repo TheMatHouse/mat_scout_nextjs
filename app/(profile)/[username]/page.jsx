@@ -91,21 +91,24 @@ const ProfilePage = () => {
 
   return (
     <div className="px-2 pt-4">
-      <div className="flex flex-col xl:flex-row w-full gap-6 justify-center xl:justify-start items-center xl:items-start">
-        {/* Left Column: Personal Info */}
-        <div className="w-full xl:w-[35%] xl:max-w-[420px] flex-shrink-0">
-          <div className="mx-auto w-full flex sm:justify-center">
-            <PersonalInfo profile={profile} />
+      <div class="grid grid-flow-col grid-rows-4 gap-4">
+        <div className="flex flex-col xl:flex-row w-full gap-6 justify-center xl:justify-start items-center xl:items-start">
+          {/* Left Column: Personal Info */}
+          <div className="w-full xl:w-[35%] xl:max-w-[420px] flex-shrink-0">
+            <div className="mx-auto w-full flex sm:justify-center">
+              <PersonalInfo profile={profile} />
+            </div>
+          </div>
+
+          {/* Right Column: Styles */}
+          <div className="w-full">
+            <StyleInfo
+              styles={myStyles}
+              styleResults={styleResults}
+            />
           </div>
         </div>
-
-        {/* Right Column: Styles */}
-        <div className="w-full">
-          <StyleInfo
-            styles={myStyles}
-            styleResults={styleResults}
-          />
-        </div>
+        <div>Test Row 2</div>
       </div>
     </div>
   );
