@@ -26,7 +26,8 @@ import moment from "moment";
 // ICONS
 import { MoreHorizontal } from "lucide-react";
 import { toast } from "react-toastify";
-import PreviewMatchReportModal from "./PreviewMatchReportModal";
+//import PreviewMatchReportModal from "./PreviewMatchReportModal";
+import PreviewMatchReportModal from "@/components/shared/dashboard/PreviewMatchReportModal";
 
 export const columns = ({
   setSelectedMatch,

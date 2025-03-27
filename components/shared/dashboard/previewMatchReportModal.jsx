@@ -24,7 +24,7 @@ const PreviewMatchReportModal = ({ previewOpen, setPreviewOpen, report }) => {
             <div className="flex flex-col">
               <h3 className="text-xl font-bold text-center">Match Info</h3>
               <div className="py-1">
-                <h4 className="text-xl font-bold">Oppenent Name: </h4>{" "}
+                <h4 className="text-xl font-bold">Oppenent Name: </h4>
                 {report.opponentName}
               </div>
 
@@ -120,12 +120,10 @@ const PreviewMatchReportModal = ({ previewOpen, setPreviewOpen, report }) => {
               </div>
 
               <div className="py-1">
-                <h4 className="text-xl font-bold">
-                  This report is set to{" "}
-                  <h4 className="text-xl font-bold">
-                    {report.isPublic === true ? "Public" : "Private"}
-                  </h4>
-                </h4>
+                <h4 className="text-xl font-bold">This report is set to</h4>
+                <span className="text-xl font-semibold">
+                  {report.isPublic === true ? "Public" : "Private"}
+                </span>
               </div>
             </div>
           </div>
