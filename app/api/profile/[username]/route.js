@@ -9,9 +9,7 @@ export const GET = async (request, context) => {
   try {
     connectDB();
 
-    // Await params if it's a Promise
     const params = await context.params;
-    console.log("Context params (after await):", params); // Debugging
 
     let username = params?.username;
 

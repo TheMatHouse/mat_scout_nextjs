@@ -1,5 +1,6 @@
 import { useRouter } from "next/navigation";
 import { MatchDataTable } from "./data/match-data-table";
+import { ReportDataTable } from "./data/report-data-table";
 import {
   Dialog,
   DialogContent,
@@ -38,13 +39,15 @@ export const columns = ({
   {
     accessorKey: "matchType",
     header: ({ column }) => {
-      <Button
-        variant="ghost"
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-      >
-        <div className="text-center">Type</div>
-        <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>;
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          <div className="text-center">Type</div>
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      );
     },
   },
   {
@@ -269,7 +272,7 @@ const DashboardMatches = ({ user, styles, techniques }) => {
         </Dialog>
       </div>
       <div>
-        <MatchDataTable
+        <ReportDataTable
           columns={columns({
             setSelectedMatch,
             setOpen,
@@ -277,6 +280,7 @@ const DashboardMatches = ({ user, styles, techniques }) => {
             handleDeleteMatch,
           })}
           data={data}
+          user={user}
           setSelectedMatch={setSelectedMatch}
         />
       </div>

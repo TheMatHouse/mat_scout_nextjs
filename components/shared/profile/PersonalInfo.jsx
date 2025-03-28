@@ -3,7 +3,7 @@ import React from "react";
 
 const PersonalInfo = ({ profile }) => {
   return (
-    <Card className="w-[350px]">
+    <Card className="w-[350px] border-gray-400">
       <CardContent>
         <div className="flex flex-col items-center text-center gap-4 mt-2">
           {/* Profile Image */}

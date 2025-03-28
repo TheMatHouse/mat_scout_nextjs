@@ -91,7 +91,7 @@ const ProfilePage = () => {
 
   return (
     <div className="px-2 pt-4">
-      <div class="grid grid-flow-col grid-rows-4 gap-4">
+      <div className="grid grid-flow-col grid-rows-4 gap-4">
         <div className="flex flex-col xl:flex-row w-full gap-6 justify-center xl:justify-start items-center xl:items-start">
           {/* Left Column: Personal Info */}
           <div className="w-full xl:w-[35%] xl:max-w-[420px] flex-shrink-0">
@@ -105,6 +105,7 @@ const ProfilePage = () => {
             <StyleInfo
               styles={myStyles}
               styleResults={styleResults}
+              profile={profile}
             />
           </div>
         </div>

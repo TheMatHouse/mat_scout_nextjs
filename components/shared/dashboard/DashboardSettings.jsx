@@ -2,109 +2,85 @@
 import React, { useState } from "react";
 import { GrEdit } from "react-icons/gr";
 import ModalFrame from "../modalContainer/ModalFrame";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import SettingsForm from "./forms/SettingsForm";
 
 const DashboardSettings = ({ user }) => {
-  // Edit Personal Info Modal State
-  const [showEditPersonalModal, setShowEditPersonalModal] = useState(false);
-  const handleEditPersonalShow = () => setShowEditPersonalModal(true);
-  const handleEditPersonalClose = () => setShowEditPersonalModal(false);
-
-  // Avatar Modal State
-  const [showAvatarModal, setShowAvatarModal] = useState(false);
-  const handleAvatarClose = () => setShowAvatarModal(false);
-  const handleAvatarShow = () => setShowAvatarModal(true);
-
+  const [open, setOpen] = useState(false);
   return (
     <div>
-      <h1 className="text-xl">Settings</h1>
-      <hr className="inline-block w-full border-t-1 border-gray-100" />
-      <div className="grid grid-cols-2 gap-4 font-semibold p-1">
-        <div className="grid font-semibold pt-2">
-          <div className="grid">
-            <div className="flex">
-              <h2 className="text-lg">Personal Information</h2>
+      <div className=" items-center">
+        <h1 className="3xl mb-4">Personal Settings</h1>
+
+        <Dialog
+          open={open}
+          onOpenChange={setOpen}
+        >
+          <DialogTrigger asChild>
+            <div className="flex items-center space-x-2 cursor-pointer">
+              Update your personal settings
               <GrEdit
                 size={22}
                 type="button"
-                onClick={handleEditPersonalShow}
                 alt="Edit Personal Information"
                 className="ps-2 cursor-pointer"
               />
             </div>
-            <p className="text-xl text-muted-foreground my-2">
-              To update your name, email, username or avatar, click on the
-              avatar image in the navbar at the top of this or any page.
-            </p>
-          </div>
-          <div className="flex flex-col pt-2">
-            <div>{`${user.firstName} ${user.lastName}`}</div>
-            <div className="mt-2">{`${user.email}`}</div>
-            <div className="mt-2">
-              <p className="text-xl text-muted-foreground my-2">Location</p>
-              {"city" in user ? user.city + ", " : ""}
-              {"state" in user ? user.state : ""}
-              {"country" in user ? user.country : ""}
+          </DialogTrigger>
+          <DialogContent className="overflow-y-scroll max-h-[90%]">
+            <DialogHeader>
+              <DialogTitle>Personal Settings</DialogTitle>
+              <DialogDescription>Edit Personal settings</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4 min-width-full">
+              <SettingsForm
+                athlete={user}
+                // styles={styles && styles.styles}
+                // techniques={techniques}
+                // type="user"
+                // setOpen={setOpen}
+                // match={selectedMatch}
+              />
             </div>
-            <hr className="h-2 border-gray-900 dark:border-gray-100 my-3" />
-            <p className="text-xl text-muted-foreground my-2">Gender</p>
-
-            <div>
-              <strong>Gender:</strong>&nbsp;{" "}
-              {user?.gender ? user?.gender : "Not listed"}
-            </div>
-
-            <hr className="h-2 border-gray-900 dark:border-gray-100 my-3" />
-            <div className="mt-2">
-              Profile is {user?.allowPublic === true ? " Public" : " Private"}
-            </div>
-          </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+      <div className="mt-4 text-muted-foreground text-xl">
+        To update your name, email, username or avatar, click on the avatar
+        image in the navbar at the top of this or any page.
+      </div>
+      <div className="mt-4">
+        <div className="mt-2">
+          <h3 className="text-xl my-2">Location</h3>
+          {"city" in user ? user.city + ", " : ""}
+          {"state" in user ? user.state : ""}
+          {"country" in user ? " " + user.country : ""}
         </div>
-        <div className="grid p-2">
-          <div className="flex">
-            <h2 className="text-lg">Profile Picture</h2>
-            <GrEdit
-              size={22}
-              type="button"
-              onClick={handleAvatarShow}
-              alt="Edit Personal Information"
-              className="ps-2 cursor-pointer"
-            />
-          </div>
-          <div className="pt-2">
-            <div
-              className="w-[160px] h-[160px] rounded-full bg-no-repeat border-2 border-gray-900 bg-gray-100"
-              style={{
-                backgroundSize: "cover",
-                backgroundImage: `url(${
-                  user?.avatarType === "google"
-                    ? user?.googleAvatar
-                    : user?.avatar
-                })`,
-              }}
-            ></div>
-          </div>
+        <hr className="h-2 border-gray-900 dark:border-gray-100 my-3" />
+
+        {/* <h3 className="text-xl my-2">Gender</h3>
+        <p className="text-muted-foreground text-sm">Gender is only used for</p>
+        <div>
+          <strong>Gender:</strong>&nbsp;{" "}
+          {user?.gender ? user?.gender : "Not listed"}
+        </div> 
+        <hr className="h-2 border-gray-900 dark:border-gray-100 my-3" />
+        */}
+        <div className="mt-2">
+          <h3 className="text-xl my-2">Privacy</h3>
+          Profile is{" "}
+          {!user?.allowPublic || user?.allowPublic === "Private"
+            ? "Private"
+            : "Public"}
         </div>
       </div>
-
-      {showEditPersonalModal && (
-        <ModalFrame
-          show={showEditPersonalModal}
-          handleClose={handleEditPersonalClose}
-          user={user}
-          userType="user"
-          modalType="editPersonalInfo"
-        />
-      )}
-
-      {showAvatarModal && (
-        <ModalFrame
-          show={showAvatarModal}
-          handleClose={handleAvatarClose}
-          user={user}
-          userType="user"
-          modalType="avatar"
-        />
-      )}
     </div>
   );
 };

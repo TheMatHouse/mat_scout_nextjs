@@ -4,7 +4,6 @@ import Link from "next/link";
 import React from "react";
 
 const StyleCard = ({ user, style, type, styleResults }) => {
-  console.log("style ", style);
   return (
     <Card
       key={style._id}
@@ -58,7 +57,11 @@ const StyleCard = ({ user, style, type, styleResults }) => {
             </span>
           </div>
           <div className="mt-3">
-            <span className="ms-4">View match results - coming soon!</span>
+            <span className="ms-4">
+              <Link href={`${user?.username}/matches`}>
+                View my {style.styleName} matches{" "}
+              </Link>
+            </span>
           </div>
         </div>
       </CardContent>
