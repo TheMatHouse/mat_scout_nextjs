@@ -1,32 +1,34 @@
-import "./globals.css";
-// import { ThemeProvider } from "next-themes";
-import "./globals.css";
-import Providers from "@/components/shared/Providers";
-import { customMetaDataGenerator } from "@/lib/CustomMetaDataGenerator";
-import Header from "@/components/shared/Header";
-import "react-toastify/ReactToastify.css";
+// app/layout.jsx
+import "@/app/globals.css";
+import { ClerkProvider } from "@clerk/nextjs";
+import { ThemeProvider } from "next-themes";
 import { ToastContainer } from "react-toastify";
-
-//import { auth } from "@/auth";
-// import SidebarMenuBar from "@/components/shared/sidebar/SidebarMenuBar";
+import Header from "@/components/layout/Header";
+import Footer from "@/components/layout/Footer";
 import AuthenticatedSidebar from "@/components/layout/AuthenticatedSidebar";
-import { ClerkProvider, ClerkLoaded, ClerkLoading } from "@clerk/nextjs";
-import Loader from "@/components/shared/Loader";
-import { redirect } from "next/navigation";
+import { currentUser } from "@clerk/nextjs/server";
 
-export const metadata = customMetaDataGenerator({
-  title: "MatScout.com - Premier Grappling Site for Athlete Scouting",
-});
+export const metadata = {
+  title: "MatScout",
+  description:
+    "Track, scout, and manage grappling athletes across judo, BJJ, and wrestling.",
+};
 
 export default async function RootLayout({ children }) {
+  const user = await currentUser();
+
   return (
     <ClerkProvider>
       <html
         lang="en"
         suppressHydrationWarning
       >
-        <body>
-          <Providers>
+        <body className="font-roboto bg-background text-foreground">
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+          >
             <ToastContainer
               position="top-right"
               autoClose={5000}
@@ -34,14 +36,21 @@ export default async function RootLayout({ children }) {
             <Header />
 
             <div className="flex min-h-screen w-full">
-              {/* Sidebar (always rendered, but shows conditionally inside itself) */}
-              <div className="hidden md:block">
-                <AuthenticatedSidebar />
-              </div>
+              {/* Sidebar */}
+              {user && (
+                <aside className="hidden md:flex w-64 bg-sidebar-background text-sidebar-foreground border-r border-border">
+                  <AuthenticatedSidebar />
+                </aside>
+              )}
 
-              <div className="flex-1">{children}</div>
+              {/* Main Content */}
+              <main className="flex-1 px-4 py-6 md:px-8 md:py-10 bg-background text-foreground">
+                {children}
+              </main>
             </div>
-          </Providers>
+
+            <Footer />
+          </ThemeProvider>
         </body>
       </html>
     </ClerkProvider>
