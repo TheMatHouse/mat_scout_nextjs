@@ -4,7 +4,7 @@ import EditPersonalInfo from "./EditPersonaInfo";
 import UpdateAvatar from "./UpdateAvatar";
 import AddStyle from "./AddStyle";
 import EditStyle from "./EditStyle";
-import StyleForm from "../dashboard/forms/Style";
+import StyleForm from "../../dashboard/forms/Style";
 
 const ModalFrame = ({
   user,

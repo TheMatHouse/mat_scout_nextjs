@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { GrEdit } from "react-icons/gr";
-import ModalFrame from "../modalContainer/ModalFrame";
+import ModalFrame from "../shared/modalContainer/ModalFrame";
 import {
   Dialog,
   DialogContent,

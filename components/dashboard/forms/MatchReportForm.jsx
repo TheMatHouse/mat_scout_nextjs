@@ -11,10 +11,10 @@ import {
 
 import Countries from "@/assets/countries.json";
 
-import Tooltip from "../../Tooltip";
+import Tooltip from "../../shared/Tooltip";
 import { CircleHelp } from "lucide-react";
-import Tags from "../../Tags";
-import Editor from "../../Editor";
+import Tags from "../../shared/Tags";
+import Editor from "../../shared/Editor";
 import { Button } from "@/components/ui/button";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";

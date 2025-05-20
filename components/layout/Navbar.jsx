@@ -1,3 +1,4 @@
+// components/layout/Navbar.jsx
 "use client";
 
 import { useState } from "react";
@@ -13,59 +14,23 @@ import {
   UserButton,
 } from "@clerk/nextjs";
 import ThemeToggle from "../shared/theme-toggle";
+import MobileSidebarDrawer from "./MobileSidebarDrawer";
+import { useUser } from "@clerk/nextjs";
 
 const Navbar = () => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const { user } = useUser();
 
   return (
-    <nav className="max-w-7xl mx-auto px-4 flex items-center justify-between">
-      {/* Desktop nav */}
-      <div className="hidden md:flex items-center gap-6">
-        <ThemeToggle />
-        <SignedIn>
-          <Link
-            href="/dashboard"
-            className="hover:underline"
-          >
-            Dashboard
-          </Link>
-          <UserButton afterSignOutUrl="/" />
-        </SignedIn>
-        <SignedOut>
-          <Link
-            href="/features"
-            className="hover:underline"
-          >
-            Features
-          </Link>
-          <Link
-            href="/about"
-            className="hover:underline"
-          >
-            About
-          </Link>
-          <SignInButton />
-          <SignUpButton />
-        </SignedOut>
-      </div>
-
-      {/* Mobile menu toggle */}
-      <div className="md:hidden flex items-center">
-        <Menu
-          size={24}
-          onClick={() => setIsOpen(!isOpen)}
-          className="cursor-pointer"
-        />
-      </div>
-
-      {/* Mobile menu */}
-      {isOpen && (
-        <div className="absolute top-full left-0 w-full bg-ms-blue text-white z-50 p-4 flex flex-col gap-4 md:hidden">
+    <>
+      <nav className="w-full flex justify-between items-center px-4 py-2">
+        {/* Desktop Nav */}
+        <div className="hidden md:flex items-center gap-6">
           <ThemeToggle />
           <SignedIn>
             <Link
               href="/dashboard"
-              onClick={() => setIsOpen(false)}
+              className="hover:underline"
             >
               Dashboard
             </Link>
@@ -74,13 +39,13 @@ const Navbar = () => {
           <SignedOut>
             <Link
               href="/features"
-              onClick={() => setIsOpen(false)}
+              className="hover:underline"
             >
               Features
             </Link>
             <Link
               href="/about"
-              onClick={() => setIsOpen(false)}
+              className="hover:underline"
             >
               About
             </Link>
@@ -88,8 +53,24 @@ const Navbar = () => {
             <SignUpButton />
           </SignedOut>
         </div>
-      )}
-    </nav>
+
+        {/* Mobile hamburger */}
+        <div className="md:hidden">
+          <Menu
+            size={24}
+            onClick={() => setIsMobileOpen(true)}
+            className="cursor-pointer"
+          />
+        </div>
+      </nav>
+
+      {/* Mobile Sidebar Drawer */}
+      <MobileSidebarDrawer
+        isOpen={isMobileOpen}
+        onClose={() => setIsMobileOpen(false)}
+        username={user?.username || "me"}
+      />
+    </>
   );
 };
 

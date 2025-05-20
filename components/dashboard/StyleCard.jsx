@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import ModalFrame from "../modalContainer/ModalFrame";
+import ModalFrame from "../shared/modalContainer/ModalFrame";
 import moment from "moment";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";

@@ -1,45 +1,77 @@
-// components/layout/Sidebar.jsx
+// components/layout/AuthenticatedSidebar.jsx
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
+import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { UserButton } from "@clerk/nextjs";
+import { useState } from "react";
 
-export default function Sidebar() {
+export default function AuthenticatedSidebar({ username }) {
+  console.log(username);
   const pathname = usePathname();
-  const { user } = useUser();
+  const searchParams = useSearchParams();
+  const dashboardView = searchParams.get("v") || "settings";
+  const [isDashboardOpen, setDashboardOpen] = useState(
+    pathname === "/dashboard"
+  );
 
-  const links = [
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/scout-reports", label: "Scout Reports" },
+  const mainLinks = [
+    { href: "/dashboard", label: "Dashboard", exact: true },
+    { href: `/${username}`, label: "Profile" },
   ];
 
-  // Add profile link if username is available
-  if (user?.username) {
-    links.push({ href: `/${user.username}`, label: "Profile" });
-  }
+  const dashboardSubLinks = [
+    { v: "settings", label: "Settings" },
+    { v: "styles", label: "Styles/Sports" },
+    { v: "matches", label: "Match Reports" },
+    { v: "family", label: "Family" },
+    { v: "scouting", label: "Scouting Reports" },
+  ];
 
   return (
-    <aside className="w-64 h-full bg-[hsl(222.2_47.4%_11.2%)] text-white flex flex-col justify-between py-8 px-6">
+    <aside className="hidden md:flex w-64 h-full bg-[hsl(222.2_47.4%_11.2%)] text-white flex-col justify-between py-8 px-6">
       <nav className="space-y-4">
-        {links.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className={cn(
-              "block text-lg font-medium hover:text-ms-light-red transition",
-              pathname === link.href && "text-ms-light-red"
+        {mainLinks.map((link) => (
+          <div key={link.href}>
+            <Link
+              href={link.href}
+              onClick={() => {
+                if (link.href === "/dashboard")
+                  setDashboardOpen(!isDashboardOpen);
+              }}
+              className={cn(
+                "block text-lg font-medium hover:text-ms-light-red transition",
+                pathname === link.href && "text-ms-light-red"
+              )}
+            >
+              {link.label}
+            </Link>
+            {link.href === "/dashboard" && isDashboardOpen && (
+              <div className="pl-4 mt-2 space-y-2 text-sm text-ms-blue-gray">
+                {dashboardSubLinks.map((sub) => (
+                  <Link
+                    key={sub.v}
+                    href={`/dashboard?v=${sub.v}`}
+                    className={cn(
+                      "block hover:text-ms-light-red",
+                      dashboardView === sub.v &&
+                        "text-ms-light-red font-semibold"
+                    )}
+                  >
+                    {sub.label}
+                  </Link>
+                ))}
+              </div>
             )}
-          >
-            {link.label}
-          </Link>
+          </div>
         ))}
       </nav>
 
       <div className="space-y-2 text-sm text-ms-blue-gray">
         <Link href="/contact">Contact</Link>
         <Link href="/social">Social</Link>
+        <UserButton afterSignOutUrl="/" />
       </div>
     </aside>
   );

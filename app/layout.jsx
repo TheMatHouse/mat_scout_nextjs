@@ -39,7 +39,7 @@ export default async function RootLayout({ children }) {
               {/* Sidebar */}
               {user && (
                 <aside className="hidden md:flex w-64 bg-sidebar-background text-sidebar-foreground border-r border-border">
-                  <AuthenticatedSidebar />
+                  <AuthenticatedSidebar username={user?.username} />
                 </aside>
               )}
 

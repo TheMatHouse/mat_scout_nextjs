@@ -1,36 +1,32 @@
+// app/dashboard/page.jsx
 import { currentUser } from "@clerk/nextjs/server";
-import DashboardTabs from "@/components/shared/dashboard/DashboardTabs";
+import ClientDashboard from "@/components/dashboard/ClientDashboard";
 
 const Dashboard = async () => {
   const user = await currentUser();
-  //console.log("USER ", user);
+
   const res = await fetch(
-    //`${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${clerkData?.data._id}`
     `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user?.publicMetadata.userMongoId}`
   );
-
   const userData = await res?.json();
-
   const profile = userData?.user[0];
 
   const resStyles = await fetch(`${process.env.NEXT_PUBLIC_API_DOMAIN}/styles`);
-  const styles = await resStyles?.json();
+  const stylesData = await resStyles?.json();
+  const styles = stylesData?.styles || [];
 
   const resTechniques = await fetch(
     `${process.env.NEXT_PUBLIC_API_DOMAIN}/techniques`
   );
-  const techniques = await resTechniques?.json();
+  const techniquesData = await resTechniques?.json();
+  const techniques = techniquesData?.techniques || [];
 
   return (
-    <div className="w-full">
-      <div className="relative right-0">
-        <DashboardTabs
-          user={profile && profile}
-          styles={styles}
-          techniques={techniques}
-        />
-      </div>
-    </div>
+    <ClientDashboard
+      user={profile}
+      styles={styles}
+      techniques={techniques}
+    />
   );
 };
 

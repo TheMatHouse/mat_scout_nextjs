@@ -10,9 +10,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import Tooltip from "../../Tooltip";
-import Tags from "../../Tags";
-import Editor from "../../Editor";
+import Tooltip from "../../shared/Tooltip";
+import Tags from "../../shared/Tags";
+import Editor from "../../shared/Editor";
 
 // Icons
 import { CircleHelp } from "lucide-react";

@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import moment from "moment";
-import ModalFrame from "../modalContainer/ModalFrame";
+import ModalFrame from "../shared/modalContainer/ModalFrame";
 import { GrEdit } from "react-icons/gr";
 import StyleCard from "./StyleCard";
 import {

@@ -9,7 +9,7 @@ import Navbar from "@/components/layout/Navbar";
 export default function Header() {
   return (
     <header className="w-full sticky top-0 z-50 bg-ms-blue text-ms-nav-text dark:bg-[hsl(222.2_47.4%_11.2%)] dark:text-white shadow-sm border-b border-border">
-      <div className="flex items-center justify-between px-48 py-4 gap-0">
+      <div className="flex items-center justify-between px-6 md:px-12 lg:px-20 py-4 w-full">
         {/* Logo */}
         <Link
           href="/"
@@ -23,8 +23,13 @@ export default function Header() {
           />
         </Link>
 
-        {/* Navbar aligned to the right with padding */}
-        <div className="pr-24">
+        {/* Navbar aligned to the right on desktop */}
+        <div className="hidden md:block">
+          <Navbar />
+        </div>
+
+        {/* Hamburger menu on mobile */}
+        <div className="block md:hidden">
           <Navbar />
         </div>
       </div>
