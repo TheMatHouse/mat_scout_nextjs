@@ -90,7 +90,6 @@ export default function MobileSidebarDrawer({ username, isOpen, onClose }) {
           >
             Social
           </Link>
-          <UserButton afterSignOutUrl="/" />
         </div>
       </aside>
     </div>

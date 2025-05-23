@@ -27,31 +27,26 @@ const Navbar = () => {
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-6">
           <ThemeToggle />
-          <SignedIn>
-            <Link
-              href="/dashboard"
-              className="hover:underline"
-            >
-              Dashboard
-            </Link>
-            <UserButton afterSignOutUrl="/" />
-          </SignedIn>
-          <SignedOut>
-            <Link
-              href="/features"
-              className="hover:underline"
-            >
-              Features
-            </Link>
-            <Link
-              href="/about"
-              className="hover:underline"
-            >
-              About
-            </Link>
-            <SignInButton />
-            <SignUpButton />
-          </SignedOut>
+
+          <Link
+            href="/dashboard"
+            className="hover:underline"
+          >
+            Dashboard
+          </Link>
+
+          <Link
+            href="/features"
+            className="hover:underline"
+          >
+            Features
+          </Link>
+          <Link
+            href="/about"
+            className="hover:underline"
+          >
+            About
+          </Link>
         </div>
 
         {/* Mobile hamburger */}

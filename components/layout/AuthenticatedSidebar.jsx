@@ -69,7 +69,6 @@ export default function AuthenticatedSidebar({ username }) {
       <div className="space-y-2 text-sm text-ms-blue-gray">
         <Link href="/contact">Contact</Link>
         <Link href="/social">Social</Link>
-        <UserButton afterSignOutUrl="/" />
       </div>
     </aside>
   );
