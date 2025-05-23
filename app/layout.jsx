@@ -5,7 +5,7 @@ import { ThemeProvider } from "next-themes";
 import { ToastContainer } from "react-toastify";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import AuthenticatedSidebar from "@/components/layout/AuthenticatedSidebar";
+// import AuthenticatedSidebar from "@/components/layout/AuthenticatedSidebar";
 
 export const metadata = {
   title: "MatScout",
