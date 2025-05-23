@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { Types, ObjectId } from "mongoose";
-import { auth } from "@clerk/nextjs/server";
 import { connectDB } from "@/config/mongo";
 import User from "@/models/userModel";
 

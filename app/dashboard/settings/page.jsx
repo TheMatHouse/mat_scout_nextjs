@@ -1,5 +1,4 @@
 // app/dashboard/settings/page.jsx
-import { currentUser } from "@clerk/nextjs/server";
 import DashboardSettings from "@/components/dashboard/DashboardSettings";
 
 export default async function SettingsPage() {

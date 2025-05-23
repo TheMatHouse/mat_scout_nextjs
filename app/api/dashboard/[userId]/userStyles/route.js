@@ -6,7 +6,6 @@ import { connectDB } from "@/config/mongo";
 import User from "@/models/userModel";
 import Style from "@/models/styleModel";
 import { sendResponse } from "@/lib/helpers/responseHelper";
-import { getAuth } from "@clerk/nextjs/server";
 import mongoSanitize from "express-mongo-sanitize";
 
 export const GET = async (request, { params }) => {

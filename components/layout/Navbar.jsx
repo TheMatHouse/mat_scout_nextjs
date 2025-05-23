@@ -6,16 +6,9 @@ import Image from "next/image";
 import Link from "next/link";
 import logo from "@/assets/matScout_logo_new.png";
 import { Menu } from "lucide-react";
-import {
-  SignedIn,
-  SignedOut,
-  SignInButton,
-  SignUpButton,
-  UserButton,
-} from "@clerk/nextjs";
+
 import ThemeToggle from "../shared/theme-toggle";
 import MobileSidebarDrawer from "./MobileSidebarDrawer";
-import { useUser } from "@clerk/nextjs";
 
 const Navbar = () => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);

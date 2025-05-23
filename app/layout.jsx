@@ -1,6 +1,5 @@
 // app/layout.jsx
 import "@/app/globals.css";
-import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider } from "next-themes";
 import { ToastContainer } from "react-toastify";
 import Header from "@/components/layout/Header";

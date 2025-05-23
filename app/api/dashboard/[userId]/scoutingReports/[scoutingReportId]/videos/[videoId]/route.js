@@ -4,7 +4,6 @@ import Video from "@/models/videoModel";
 import ScoutingReport from "@/models/scoutingReportModal";
 import User from "@/models/userModel";
 import { Types } from "mongoose";
-import { getAuth } from "@clerk/nextjs/server";
 import { connectDB } from "@/config/mongo";
 
 export const DELETE = async (request, context) => {
