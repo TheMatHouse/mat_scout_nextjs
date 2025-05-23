@@ -1,7 +1,6 @@
 "use client";
-import React, { useState } from "react";
-import { GrEdit } from "react-icons/gr";
-import ModalFrame from "../shared/modalContainer/ModalFrame";
+import { useState } from "react";
+import { Pencil } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -10,79 +9,77 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import SettingsForm from "./forms/SettingsForm";
 
-const DashboardSettings = ({ user }) => {
+export default function DashboardSettings({ user, error }) {
   const [open, setOpen] = useState(false);
-  return (
-    <div>
-      <div className=" items-center">
-        <h1 className="3xl mb-4">Personal Settings</h1>
 
+  if (!user) {
+    return (
+      <section className="max-w-3xl mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold mb-4">Personal Settings</h1>
+        <p className="text-red-500">
+          {error || "Unable to load your profile data. Please try again."}
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="max-w-3xl mx-auto px-4 py-8">
+      <header className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold tracking-tight">Personal Settings</h1>
         <Dialog
           open={open}
           onOpenChange={setOpen}
         >
           <DialogTrigger asChild>
-            <div className="flex items-center space-x-2 cursor-pointer">
-              Update your personal settings
-              <GrEdit
-                size={22}
-                type="button"
-                alt="Edit Personal Information"
-                className="ps-2 cursor-pointer"
-              />
-            </div>
+            <Button
+              variant="outline"
+              size="sm"
+            >
+              Edit Settings <Pencil className="ml-2 h-4 w-4" />
+            </Button>
           </DialogTrigger>
-          <DialogContent className="overflow-y-scroll max-h-[90%]">
+          <DialogContent>
             <DialogHeader>
-              <DialogTitle>Personal Settings</DialogTitle>
-              <DialogDescription>Edit Personal settings</DialogDescription>
+              <DialogTitle>Edit Settings</DialogTitle>
+              <DialogDescription>
+                Update your personal settings below.
+              </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4 min-width-full">
-              <SettingsForm
-                athlete={user}
-                // styles={styles && styles.styles}
-                // techniques={techniques}
-                // type="user"
-                // setOpen={setOpen}
-                // match={selectedMatch}
-              />
-            </div>
+            <SettingsForm
+              user={user}
+              onClose={() => setOpen(false)}
+            />
           </DialogContent>
         </Dialog>
-      </div>
-      <div className="mt-4 text-muted-foreground text-xl">
-        To update your name, email, username or avatar, click on the avatar
-        image in the navbar at the top of this or any page.
-      </div>
-      <div className="mt-4">
-        <div className="mt-2">
-          <h3 className="text-xl my-2">Location</h3>
-          {"city" in user ? user.city + ", " : ""}
-          {"state" in user ? user.state : ""}
-          {"country" in user ? " " + user.country : ""}
-        </div>
-        <hr className="h-2 border-gray-900 dark:border-gray-100 my-3" />
+      </header>
 
-        {/* <h3 className="text-xl my-2">Gender</h3>
-        <p className="text-muted-foreground text-sm">Gender is only used for</p>
-        <div>
-          <strong>Gender:</strong>&nbsp;{" "}
-          {user?.gender ? user?.gender : "Not listed"}
-        </div> 
-        <hr className="h-2 border-gray-900 dark:border-gray-100 my-3" />
-        */}
-        <div className="mt-2">
-          <h3 className="text-xl my-2">Privacy</h3>
-          Profile is{" "}
-          {!user?.allowPublic || user?.allowPublic === "Private"
-            ? "Private"
-            : "Public"}
+      <div className="space-y-4">
+        <div className="rounded-lg border bg-card text-card-foreground p-4">
+          <h2 className="text-lg font-semibold mb-1">Location</h2>
+          {user.city && user.state && user.country ? (
+            <p className="text-sm">
+              {user.city}, {user.state}, {user.country}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No location info provided
+            </p>
+          )}
+        </div>
+        <div className="rounded-lg border bg-card text-card-foreground p-4">
+          <h2 className="text-lg font-semibold mb-1">Privacy Settings</h2>
+          <p className="text-sm">
+            Your profile is currently{" "}
+            <span className="font-semibold">
+              {user.allowPublic === "Public" ? "Public" : "Private"}
+            </span>
+          </p>
         </div>
       </div>
-    </div>
+    </section>
   );
-};
-
-export default DashboardSettings;
+}

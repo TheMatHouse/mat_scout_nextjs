@@ -1,28 +1,26 @@
-"use server";
 import { NextResponse } from "next/server";
-import User from "@/models/userModel";
-import { Types } from "mongoose";
-import { ObjectId } from "mongodb";
+import { Types, ObjectId } from "mongoose";
+import { auth } from "@clerk/nextjs/server";
 import { connectDB } from "@/config/mongo";
-import { revalidatePath } from "next/cache";
+import User from "@/models/userModel";
 
 export async function GET(request, { params }) {
-  const { userId } = await params;
-  //console.log(typeof userId);
+  const { userId } = params;
 
-  const mongoId = ObjectId.createFromHexString(userId);
+  if (!userId || !Types.ObjectId.isValid(userId)) {
+    return new NextResponse(
+      JSON.stringify({ message: "Invalid or missing user id" }),
+      { status: 400 }
+    );
+  }
+
+  const mongoId = new Types.ObjectId(userId);
 
   try {
-    if (!userId || !Types.ObjectId.isValid(userId)) {
-      return new NextResponse(
-        JSON.stringify({ message: "Invalid or missing user id" })
-      );
-    }
-
     await connectDB();
-    //const user = await User.findById({ _id: userId });
+
     const user = await User.aggregate([
-      { $match: { _id: ObjectId.createFromHexString(userId) } },
+      { $match: { _id: mongoId } },
       {
         $lookup: {
           from: "userstyles",
@@ -101,7 +99,6 @@ export async function GET(request, { params }) {
           as: "scoutingReportsSharedWithMe",
         },
       },
-
       {
         $lookup: {
           from: "matchreports",
@@ -147,10 +144,10 @@ export async function GET(request, { params }) {
       {
         $project: {
           tokens: 0,
+          password: 0,
           "userStyle._id": 0,
           "userInfo.email": 0,
           "userInfo.tokens": 0,
-          //athlete: 0,
           "scoutingReportsSharedWithMe.shareFamilyMembers.guardian.password": 0,
           "scoutingReportsSharedWithMe.shareFamilyMembers.guardian.tokens": 0,
           "scoutingReportsSharedWithMe.shareFamilyMembers.guardian.avatar": 0,
@@ -167,21 +164,23 @@ export async function GET(request, { params }) {
           "scoutingReportsSharedWithMe.shareFamilyMembers.guardian.lastLogin": 0,
           "scoutingReportsSharedWithMe.shareFamilyMembers.guardian.gender": 0,
           "scoutingReportsSharedWithMe.shareFamilyMembers.guardian.allowPublic": 0,
-          password: 0,
         },
       },
     ]);
 
-    if (!user) {
+    if (!user || user.length === 0) {
       return new NextResponse(JSON.stringify({ message: "User not found" }), {
         status: 404,
       });
     }
 
-    return new NextResponse(JSON.stringify({ user }));
+    return new NextResponse(JSON.stringify({ user: user[0] }), {
+      status: 200,
+    });
   } catch (error) {
+    console.error("Error fetching user:", error);
     return new NextResponse(
-      JSON.stringify({ message: "Error fetching user" + error.message }),
+      JSON.stringify({ message: "Error fetching user: " + error.message }),
       { status: 500 }
     );
   }
@@ -189,48 +188,74 @@ export async function GET(request, { params }) {
 
 export const PATCH = async (request, { params }) => {
   try {
-    const { userId } = await params;
+    const { userId: mongoId } = params;
 
-    if (!userId || !Types.ObjectId.isValid(userId)) {
+    const auth = getAuth(request);
+    const clerkId = auth?.userId;
+
+    console.log("mongo id ", mongoId);
+    console.log("clerk id ", clerkId);
+
+    if (!clerkId) {
       return new NextResponse(
-        JSON.stringify({ message: "Invalid or missing user id" })
+        JSON.stringify({ message: "Unauthorized – no Clerk ID" }),
+        { status: 401 }
       );
     }
-    const body = await request.json();
-    const {
-      firstName,
-      lastName,
-      email,
-      city,
-      state,
-      country,
-      gender,
-      allowPublic,
-    } = body;
 
     await connectDB();
 
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      { firstName, lastName, email, city, state, country, gender, allowPublic },
-      { new: true }
-    );
+    const mongoUser = await getUserByClerkId(clerkId);
+    if (!mongoUser || mongoUser._id.toString() !== mongoId) {
+      return new NextResponse(
+        JSON.stringify({ message: "Unauthorized – not your account" }),
+        { status: 403 }
+      );
+    }
+
+    let body;
+    try {
+      body = await request.json();
+    } catch (err) {
+      return new NextResponse(
+        JSON.stringify({ message: "Invalid JSON format" }),
+        { status: 400 }
+      );
+    }
+
+    const { city, state, country, gender } = body;
+    const allowPublic =
+      body.allowPublic === "Public" || body.allowPublic === true;
+
+    let updatedUser;
+    try {
+      updatedUser = await User.findByIdAndUpdate(
+        mongoId,
+        { city, state, country, gender, allowPublic },
+        { new: true }
+      );
+    } catch (err) {
+      console.error("MongoDB update error:", err);
+      return new NextResponse(
+        JSON.stringify({ message: "Error updating user profile" }),
+        { status: 500 }
+      );
+    }
+
     if (!updatedUser) {
       return new NextResponse(JSON.stringify({ message: "User not found" }), {
         status: 404,
       });
-    } else {
-      revalidatePath("/");
-      return new NextResponse(
-        JSON.stringify({ message: "User updated successfully", updatedUser }),
-        { status: 200 }
-      );
     }
 
-    return new NextResponse(JSON.stringify({ message: "testing" }));
-  } catch (error) {
     return new NextResponse(
-      JSON.stringify({ message: "Error fetching user" + error.message }),
+      JSON.stringify({ message: "User updated successfully", updatedUser }),
+      { status: 200 }
+    );
+  } catch (err) {
+    console.error("PATCH route error:", err);
+    return new NextResponse(
+      JSON.stringify({ message: "Unexpected server error" }),
       { status: 500 }
     );
   }

@@ -2,11 +2,6 @@ import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
   {
-    clerkId: {
-      type: String,
-      required: true,
-      unique: true,
-    },
     firstName: {
       type: String,
       required: true,
@@ -17,8 +12,8 @@ const userSchema = new mongoose.Schema(
     },
     email: {
       type: String,
-      //required: true,
-      //unique: true,
+      required: true,
+      unique: true,
     },
     username: {
       type: String,
@@ -28,10 +23,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "USER",
     },
-    // password: {
-    //   type: String,
-    //   //required: true,
-    // },
+    password: {
+      type: String,
+      //required: true,
+    },
     city: { type: String },
     state: { type: String },
     country: { type: String },
@@ -62,24 +57,20 @@ const userSchema = new mongoose.Schema(
     },
     avatar: {
       type: String,
-      required: true,
+      default:
+        "https://res.cloudinary.com/matscout/image/upload/v1747956346/default_user_rval6s.jpg",
     },
-    // avatar: {
-    //   type: String,
-    //   default:
-    //     "https://firebasestorage.googleapis.com/v0/b/matscout.appspot.com/o/images%2Fdefault_user.jpg?alt=media&token=314573ee-36df-471e-bb4e-17f47d0750e1",
-    // },
-    // googleAvatar: {
-    //   type: String,
-    // },
-    // avatarType: {
-    //   type: String,
-    //   default: "default",
-    // },
-    // verified: {
-    //   type: Boolean,
-    //   default: false,
-    // },
+    googleAvatar: {
+      type: String,
+    },
+    avatarType: {
+      type: String,
+      default: "default",
+    },
+    verified: {
+      type: Boolean,
+      default: false,
+    },
     // tokens: [String],
     // athlete: {
     //   type: Schema.Types.ObjectId,

@@ -1,177 +1,200 @@
-"user client";
+// components/dashboard/forms/SettingsForm.jsx
+"use client";
 
-import React, { useEffect, useState } from "react";
-import { AlertDialog } from "@/components/ui/alert-dialog";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import React, { useState, useEffect } from "react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import Countries from "@/assets/countries.json";
+import useGeolocationCountry from "@/hooks/useGeolocationCountry";
 
-const SettingsForm = ({ user }) => {
-  console.log(user?.country);
-  // get user's current location
+import { toast } from "react-toastify";
+import { useRouter } from "next/navigation";
+
+export default function SettingsForm({ user, onClose }) {
+  const router = useRouter();
+
+  const getInitialFormData = () => ({
+    city: user.city || "",
+    state: user.state || "",
+    country: user.country || "",
+    allowPublic: user.allowPublic === true || user.allowPublic === "Public",
+  });
+
+  const [formData, setFormData] = useState(getInitialFormData());
+
+  const { countryCode3, loading } = useGeolocationCountry();
 
   useEffect(() => {
-    navigator.geolocation.getCurrentPosition((pos) => {
-      const { latitude, longitude } = pos.coords;
+    if (!user.country && countryCode3) {
+      setFormData((prev) => ({ ...prev, country: countryCode3 }));
+    }
+  }, [user.country, countryCode3]);
 
-      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`;
-      fetch(url)
-        .then((res) => res.json())
-        .then((data) => setAdd(data.address));
-    });
-  }, []);
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+  };
 
-  const [add, setAdd] = useState("");
-  // get the current country to match user's current country
-  const myCountry_code = add?.country_code;
+  const handleToggle = () => {
+    setFormData((prev) => ({
+      ...prev,
+      allowPublic: !prev.allowPublic,
+    }));
+  };
 
-  const myCountry = Countries.filter(
-    (country) => country.code2.toLowerCase() === myCountry_code
-  );
-
-  const Country = myCountry[0]?.code3;
-  const [newCountry, setNewCountry] = useState(
-    user?.country ? user?.country : ""
-  );
-
-  const [city, setCity] = useState(user?.city ? user.city : "");
-  const [state, setState] = useState(user?.state ? user.state : "");
-  const [country, setCountry] = useState(
-    user?.country ? user.country : myCountry_code
-  );
-  const [allowPublic, setAllowPublic] = useState(
-    user?.allowPublic ? user.allowPublic : "Private"
-  );
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const formData = new FormData(e.currentTarget);
-    const allowPublic = formData.get("allowPublic");
+    const payload = {
+      city: formData.city,
+      state: formData.state,
+      country: formData.country,
+      allowPublic: formData.allowPublic ? "Public" : "Private",
+    };
 
     try {
-    } catch (error) {}
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/`,
+        {
+          method: "PATCH", // Make sure you're using PATCH, not POST
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      let data = null;
+      const text = await response.text(); // Get raw response
+      try {
+        data = JSON.parse(text); // Try parsing it
+      } catch {
+        data = { message: text || "Unknown response format" };
+      }
+
+      if (response.ok) {
+        toast.success(data.message || "User updated successfully", {
+          position: "top-right",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: false,
+          pauseOnHover: true,
+          draggable: true,
+          theme: "light",
+        });
+
+        setTimeout(() => {
+          router.refresh();
+          onClose();
+          setFormData(getInitialFormData());
+        }, 1000);
+      } else {
+        toast.error(data.message || "Something went wrong");
+      }
+    } catch (err) {
+      toast.error(err.message || "Unexpected error");
+      console.error(err);
+    }
   };
+
   return (
-    <AlertDialog>
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle>Privacy Settings</CardTitle>
-          <CardDescription>Update your privacy settings</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form
-            onSubmit={handleSubmit}
-            className="rounded px-8 pb-2 mb-4 space-y-4"
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-8 bg-background text-foreground p-6 rounded-lg shadow-lg"
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div>
+          <Label
+            htmlFor="city"
+            className="text-base font-medium"
           >
-            {/* City */}
-            <div className="flex items-center gap-4">
-              <label
-                htmlFor="city"
-                className="w-32 text-right text-lg font-bold text-gray-900 dark:text-gray-100"
+            City
+          </Label>
+          <Input
+            type="text"
+            name="city"
+            id="city"
+            value={formData.city}
+            onChange={handleChange}
+            placeholder="City"
+          />
+        </div>
+        <div>
+          <Label
+            htmlFor="state"
+            className="text-base font-medium"
+          >
+            State
+          </Label>
+          <Input
+            type="text"
+            name="state"
+            id="state"
+            value={formData.state}
+            onChange={handleChange}
+            placeholder="State"
+          />
+        </div>
+        <div>
+          <Label
+            htmlFor="country"
+            className="text-base font-medium"
+          >
+            Country
+          </Label>
+          <select
+            id="country"
+            name="country"
+            value={formData.country}
+            onChange={handleChange}
+            className="w-full rounded-md border px-3 py-2 text-sm bg-white text-foreground dark:bg-gray-900 dark:text-white"
+          >
+            <option value="">Select country...</option>
+            {Countries.map((country) => (
+              <option
+                key={country.code3}
+                value={country.code3}
               >
-                City:
-              </label>
-              <input
-                id="city"
-                name="city"
-                type="text"
-                placeholder="City"
-                defaultValue={city}
-                className="flex-1 shadow appearance-none border rounded py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-              />
-            </div>
+                {country.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
-            {/* State */}
-            <div className="flex items-center gap-4">
-              <label
-                htmlFor="state"
-                className="w-32 text-right text-lg font-bold text-gray-900 dark:text-gray-100"
-              >
-                State:
-              </label>
-              <input
-                id="state"
-                name="state"
-                type="text"
-                placeholder="State"
-                defaultValue={state}
-                className="flex-1 shadow appearance-none border rounded py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-              />
-            </div>
+      <div className="mt-6">
+        <Label
+          htmlFor="allowPublic"
+          className="text-base font-medium"
+        >
+          Make Profile Public
+        </Label>
+        <div className="flex items-center space-x-4 mt-2">
+          <label className="switch">
+            <input
+              type="checkbox"
+              id="allowPublic"
+              name="allowPublic"
+              checked={formData.allowPublic}
+              onChange={handleToggle}
+            />
+            <span className="slider round"></span>
+          </label>
+          <span className="text-sm text-muted-foreground">
+            Your profile can be discovered by others.
+          </span>
+        </div>
+      </div>
 
-            {/* Country */}
-            <div className="flex items-center gap-4">
-              <label
-                htmlFor="country"
-                className="w-32 text-right text-lg font-bold text-gray-900 dark:text-gray-100"
-              >
-                Country:
-              </label>
-              <select
-                id="country"
-                name="country"
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-                className="flex-1 shadow appearance-none border rounded py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-              >
-                <option value="">Select country...</option>
-                {Countries.map((country) => (
-                  <option
-                    key={country.code3}
-                    value={country.code3}
-                  >
-                    {country.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Profile Privacy */}
-            <div className="flex items-start gap-4">
-              <label className="w-32 text-right text-lg font-bold text-gray-900 dark:text-gray-100 pt-1">
-                Profile Privacy:
-              </label>
-              <div className="flex flex-col gap-2">
-                <label className="flex items-center gap-2 text-gray-900 dark:text-gray-100 text-lg font-bold">
-                  <input
-                    type="radio"
-                    id="public"
-                    name="allowPublic"
-                    value="Public"
-                    checked={allowPublic === "Public"}
-                    onChange={(e) => setAllowPublic(e.target.value)}
-                  />
-                  Public
-                </label>
-                <label className="flex items-center gap-2 text-gray-900 dark:text-gray-100 text-lg font-bold">
-                  <input
-                    type="radio"
-                    id="private"
-                    name="allowPublic"
-                    value="Private"
-                    checked={allowPublic === "Private"}
-                    onChange={(e) => setAllowPublic(e.target.value)}
-                  />
-                  Private
-                </label>
-              </div>
-            </div>
-
-            {/* Submit Button */}
-            <div className="flex justify-center pt-4">
-              <Button type="submit">Update Privacy Settings</Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-    </AlertDialog>
+      <div className="pt-4">
+        <Button
+          type="submit"
+          className="bg-ms-blue-gray hover:bg-ms-blue text-white"
+        >
+          Save Changes
+        </Button>
+      </div>
+    </form>
   );
-};
-
-export default SettingsForm;
+}

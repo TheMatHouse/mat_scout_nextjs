@@ -1,20 +1,18 @@
-// components/layout/AuthenticatedSidebar.jsx
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { UserButton } from "@clerk/nextjs";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function AuthenticatedSidebar({ username }) {
-  console.log(username);
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const dashboardView = searchParams.get("v") || "settings";
-  const [isDashboardOpen, setDashboardOpen] = useState(
-    pathname === "/dashboard"
-  );
+  const [isDashboardOpen, setDashboardOpen] = useState(false);
+
+  useEffect(() => {
+    setDashboardOpen(pathname.startsWith("/dashboard"));
+  }, [pathname]);
 
   const mainLinks = [
     { href: "/dashboard", label: "Dashboard", exact: true },
@@ -22,11 +20,11 @@ export default function AuthenticatedSidebar({ username }) {
   ];
 
   const dashboardSubLinks = [
-    { v: "settings", label: "Settings" },
-    { v: "styles", label: "Styles/Sports" },
-    { v: "matches", label: "Match Reports" },
-    { v: "family", label: "Family" },
-    { v: "scouting", label: "Scouting Reports" },
+    { href: "/dashboard/settings", label: "Settings" },
+    { href: "/dashboard/styles", label: "Styles/Sports" },
+    { href: "/dashboard/matches", label: "Match Reports" },
+    { href: "/dashboard/scouting", label: "Scouting Reports" },
+    { href: "/dashboard/family", label: "Family" },
   ];
 
   return (
@@ -37,8 +35,9 @@ export default function AuthenticatedSidebar({ username }) {
             <Link
               href={link.href}
               onClick={() => {
-                if (link.href === "/dashboard")
+                if (link.href === "/dashboard") {
                   setDashboardOpen(!isDashboardOpen);
+                }
               }}
               className={cn(
                 "block text-lg font-medium hover:text-ms-light-red transition",
@@ -51,12 +50,11 @@ export default function AuthenticatedSidebar({ username }) {
               <div className="pl-4 mt-2 space-y-2 text-sm text-ms-blue-gray">
                 {dashboardSubLinks.map((sub) => (
                   <Link
-                    key={sub.v}
-                    href={`/dashboard?v=${sub.v}`}
+                    key={sub.href}
+                    href={sub.href}
                     className={cn(
-                      "block hover:text-ms-light-red",
-                      dashboardView === sub.v &&
-                        "text-ms-light-red font-semibold"
+                      "block hover:text-white transition",
+                      pathname === sub.href && "text-white font-semibold"
                     )}
                   >
                     {sub.label}
