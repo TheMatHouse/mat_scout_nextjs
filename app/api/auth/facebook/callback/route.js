@@ -1,41 +1,78 @@
-import passport from "@/lib/passport";
-import { signToken } from "@/lib/jwt";
+// app/api/facebook/callback/route.js
+import { NextResponse } from "next/server";
+import axios from "axios";
 import { connectDB } from "@/config/mongo";
 import User from "@/models/userModel";
-import { NextResponse } from "next/server";
 
-// Simulate Passport-like auth manually for callback
-export async function GET(req) {
+export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  const code = searchParams.get("code");
+  const state = searchParams.get("state");
+
+  if (!code) {
+    return NextResponse.json(
+      { error: "Missing Facebook code" },
+      { status: 400 }
+    );
+  }
+
   try {
+    // 1. Exchange code for access token
+    const tokenRes = await axios.get(
+      `https://graph.facebook.com/v22.0/oauth/access_token`,
+      {
+        params: {
+          client_id: process.env.FACEBOOK_APP_ID,
+          client_secret: process.env.FACEBOOK_APP_SECRET,
+          redirect_uri: "https://ssm-testing.com/api/auth/facebook/callback",
+          code,
+        },
+      }
+    );
+
+    const accessToken = tokenRes.data.access_token;
+
+    // 2. Get user profile from Facebook
+    const profileRes = await axios.get(`https://graph.facebook.com/me`, {
+      params: {
+        fields: "id,name,email",
+        access_token: accessToken,
+      },
+    });
+
+    const { id, name, email } = profileRes.data;
+
+    // 3. Connect to DB
     await connectDB();
 
-    // Facebook sends access token + profile via query string
-    const { searchParams } = new URL(req.url);
-    const code = searchParams.get("code");
+    // 4. Check if user exists
+    let user = await User.findOne({ email });
 
-    if (!code) {
-      return NextResponse.json(
-        { error: "Missing Facebook code" },
-        { status: 400 }
-      );
+    if (!user) {
+      user = await User.create({
+        name,
+        email,
+        facebookId: id,
+        // Optional: generate username, avatar, etc.
+      });
     }
 
-    // Normally Facebook redirects and Passport handles this
-    // But in App Router we need to do this manually.
-    // Instead of decoding code ourselves (complicated),
-    // the best path is to use `next-auth` or build the flow via frontend (we’ll skip that for now)
-
-    return NextResponse.json(
-      {
-        error:
-          "OAuth callback hit, but Facebook auth flow must be finalized client-side or with server middleware.",
+    // 5. You can now return a JWT, redirect, or start a session
+    return NextResponse.json({
+      message: "Facebook login successful",
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
       },
-      { status: 501 }
+    });
+  } catch (error) {
+    console.error(
+      "Facebook OAuth error:",
+      error?.response?.data || error.message
     );
-  } catch (err) {
-    console.error("OAuth callback error:", err);
     return NextResponse.json(
-      { error: "OAuth callback failed" },
+      { error: "Facebook login failed" },
       { status: 500 }
     );
   }
