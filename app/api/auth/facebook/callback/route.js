@@ -67,10 +67,11 @@ export async function GET(request) {
       },
     });
   } catch (error) {
-    console.error(
-      "Facebook OAuth error:",
-      error?.response?.data || error.message
-    );
+    console.error("Facebook OAuth error:");
+    console.error("Message:", error.message);
+    console.error("Response Data:", error?.response?.data);
+    console.error("Full Error:", error);
+
     return NextResponse.json(
       { error: "Facebook login failed" },
       { status: 500 }
