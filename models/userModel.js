@@ -63,6 +63,9 @@ const userSchema = new mongoose.Schema(
     googleAvatar: {
       type: String,
     },
+    facebookAvatar: {
+      type: String,
+    },
     avatarType: {
       type: String,
       default: "default",
