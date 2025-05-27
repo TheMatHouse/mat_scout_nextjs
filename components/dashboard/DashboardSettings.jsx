@@ -1,6 +1,9 @@
+// components/dashboard/DashboardSettings.jsx
 "use client";
+
 import { useState } from "react";
 import { Pencil } from "lucide-react";
+import { useCurrentUser } from "@/context/UserContext";
 import {
   Dialog,
   DialogContent,
@@ -12,15 +15,19 @@ import {
 import { Button } from "@/components/ui/button";
 import SettingsForm from "./forms/SettingsForm";
 
-export default function DashboardSettings({ user, error }) {
+export default function DashboardSettings() {
   const [open, setOpen] = useState(false);
+  const { user, loading } = useCurrentUser();
+
+  console.log("user  ", user);
+  if (loading) return null;
 
   if (!user) {
     return (
       <section className="max-w-3xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-4">Personal Settings</h1>
         <p className="text-red-500">
-          {error || "Unable to load your profile data. Please try again."}
+          Unable to load your profile data. Please try again.
         </p>
       </section>
     );
@@ -75,7 +82,9 @@ export default function DashboardSettings({ user, error }) {
           <p className="text-sm">
             Your profile is currently{" "}
             <span className="font-semibold">
-              {user.allowPublic === "Public" ? "Public" : "Private"}
+              {user.allowPublic === "Public" || user.allowPublic === true
+                ? "Public"
+                : "Private"}
             </span>
           </p>
         </div>

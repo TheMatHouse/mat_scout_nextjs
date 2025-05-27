@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import { connectDB } from "@/config/mongo";
 import ScoutingReport from "@/models/scoutingReportModal";
-import User from "@/models/userModel";
+import { User } from "@/models/userModel";
 import Technique from "@/models/techniquesModel";
 import Video from "@/models/videoModel";
 

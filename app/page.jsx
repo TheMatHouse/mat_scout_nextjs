@@ -1,8 +1,13 @@
-import ThemeToggle from "@/components/shared/theme-toggle";
-import { Button } from "@/components/ui/button";
-import HomePage from "./home/page";
 import { redirect } from "next/navigation";
+import { verifyTokenFromCookie } from "@/lib/verifyTokenFromCookie";
+import HomePage from "./home/page";
 
 export default async function Home() {
+  const user = await verifyTokenFromCookie();
+
+  if (user) {
+    redirect("/dashboard");
+  }
+
   return <HomePage />;
 }

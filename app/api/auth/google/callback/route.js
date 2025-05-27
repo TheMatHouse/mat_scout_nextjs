@@ -1,19 +1,17 @@
 import { NextResponse } from "next/server";
 import axios from "axios";
 import { connectDB } from "@/config/mongo";
-import User from "@/models/userModel";
+import { User } from "@/models/userModel";
 import { validateUsername } from "@/lib/validateUsername";
+import { signToken } from "@/lib/jwt";
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
 
   console.log("👉 Google callback hit");
-  console.log("👉 Code from URL:", code);
-
-  if (!code) {
+  if (!code)
     return NextResponse.json({ error: "Missing Google code" }, { status: 400 });
-  }
 
   const redirectUri =
     process.env.NODE_ENV === "development"
@@ -21,7 +19,6 @@ export async function GET(request) {
       : "https://ssm-testing.com/api/auth/google/callback";
 
   try {
-    // Exchange code for access token
     const tokenRes = await axios.post(
       "https://oauth2.googleapis.com/token",
       null,
@@ -37,9 +34,7 @@ export async function GET(request) {
     );
 
     const accessToken = tokenRes.data.access_token;
-    console.log("✅ Access token received:", accessToken);
 
-    // Fetch user profile
     const profileRes = await axios.get(
       "https://www.googleapis.com/oauth2/v2/userinfo",
       {
@@ -51,7 +46,6 @@ export async function GET(request) {
 
     const { id, name, given_name, family_name, email, picture } =
       profileRes.data;
-    console.log("✅ Google profile:", profileRes.data);
 
     const firstName = given_name || name?.split(" ")[0] || "User";
     const lastName =
@@ -64,10 +58,8 @@ export async function GET(request) {
 
     const avatar = picture;
     const googleAvatar = picture;
-    const avatarType = "google";
 
     await connectDB();
-
     let user = await User.findOne({ email });
 
     if (!user) {
@@ -80,26 +72,35 @@ export async function GET(request) {
         lastName,
         avatar,
         googleAvatar,
-        avatarType,
+        avatarType: "google",
       });
     }
 
-    console.log("🎉 Google login successful");
-    return NextResponse.json({
-      message: "Google login successful",
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        username: user.username,
-        avatar: user.avatar,
-        avatarType: user.avatarType,
-      },
+    const jwt = signToken({ userId: user._id });
+
+    const response = NextResponse.redirect(new URL("/dashboard", request.url));
+
+    response.cookies.set("token", jwt, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
     });
+
+    return response;
+
+    response.cookies.set("token", jwt, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+
+    return response;
   } catch (error) {
-    console.error("❌ Google OAuth error:");
-    console.error("Message:", error.message);
-    console.error("Response Data:", error?.response?.data);
+    console.error("Google OAuth error:", error.message);
     return NextResponse.json({ error: "Google login failed" }, { status: 500 });
   }
 }

@@ -2,20 +2,25 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
+import { cn } from "@/lib/utils";
+import { useCurrentUser } from "@/context/UserContext";
 
-export default function AuthenticatedSidebar({ username }) {
+export default function AuthenticatedSidebar() {
   const pathname = usePathname();
   const [isDashboardOpen, setDashboardOpen] = useState(false);
+  const { user, loading } = useCurrentUser();
 
+  console.log("user  ", user);
   useEffect(() => {
     setDashboardOpen(pathname.startsWith("/dashboard"));
   }, [pathname]);
 
+  if (loading || !user) return null;
+
   const mainLinks = [
     { href: "/dashboard", label: "Dashboard", exact: true },
-    { href: `/${username}`, label: "Profile" },
+    { href: `/${user.username}`, label: "Profile" },
   ];
 
   const dashboardSubLinks = [
@@ -68,6 +73,12 @@ export default function AuthenticatedSidebar({ username }) {
       <div className="space-y-2 text-sm text-ms-blue-gray">
         <Link href="/contact">Contact</Link>
         <Link href="/social">Social</Link>
+        <Link
+          href="/logout"
+          className="text-red-400 hover:text-white"
+        >
+          Logout
+        </Link>
       </div>
     </aside>
   );

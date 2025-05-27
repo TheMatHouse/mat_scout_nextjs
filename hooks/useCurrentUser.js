@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useState, useEffect } from "react";
 
-// ✅ Define and export the context once
 export const UserContext = createContext();
 
 export function UserProvider({ children }) {
@@ -11,18 +10,11 @@ export function UserProvider({ children }) {
 
   useEffect(() => {
     async function fetchUser() {
-      try {
-        const res = await fetch("/api/auth/me");
-        const data = await res.json();
-        setUser(data?.user || null);
-      } catch (err) {
-        console.error("Error fetching user in UserProvider:", err);
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
+      const res = await fetch("/api/auth/me");
+      const data = await res.json();
+      setUser(data?.user || null);
+      setLoading(false);
     }
-
     fetchUser();
   }, []);
 
@@ -34,9 +26,5 @@ export function UserProvider({ children }) {
 }
 
 export function useCurrentUser() {
-  const context = useContext(UserContext);
-  if (!context) {
-    throw new Error("useCurrentUser must be used within a UserProvider");
-  }
-  return context;
+  return useContext(UserContext);
 }

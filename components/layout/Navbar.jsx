@@ -1,18 +1,16 @@
-// components/layout/Navbar.jsx
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
-import logo from "@/assets/matScout_logo_new.png";
 import { Menu } from "lucide-react";
-
+import { useCurrentUser } from "@/context/UserContext";
+import LogoutButton from "@/components/shared/LogoutButton";
 import ThemeToggle from "../shared/theme-toggle";
 import MobileSidebarDrawer from "./MobileSidebarDrawer";
 
 const Navbar = () => {
+  const { user, loading } = useCurrentUser();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const { user } = useUser();
 
   return (
     <>
@@ -21,25 +19,51 @@ const Navbar = () => {
         <div className="hidden md:flex items-center gap-6">
           <ThemeToggle />
 
-          <Link
-            href="/dashboard"
-            className="hover:underline"
-          >
-            Dashboard
-          </Link>
+          {user ? (
+            <>
+              <Link
+                href={`/dashboard`}
+                className="hover:underline"
+              >
+                Dashboard
+              </Link>
+              <Link
+                href={`/profile/${user.username}`}
+                className="hover:underline"
+              >
+                Profile
+              </Link>
+              <LogoutButton className="text-red-400 hover:text-white" />
+            </>
+          ) : (
+            <>
+              <Link
+                href="/features"
+                className="hover:underline"
+              >
+                Features
+              </Link>
+              <Link
+                href="/about"
+                className="hover:underline"
+              >
+                About
+              </Link>
+              <Link
+                href="/login"
+                className="hover:underline font-semibold text-white bg-ms-red px-4 py-2 rounded"
+              >
+                Log In
+              </Link>
 
-          <Link
-            href="/features"
-            className="hover:underline"
-          >
-            Features
-          </Link>
-          <Link
-            href="/about"
-            className="hover:underline"
-          >
-            About
-          </Link>
+              <Link
+                href="/register"
+                className="hover:underline"
+              >
+                Sign Up
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Mobile hamburger */}

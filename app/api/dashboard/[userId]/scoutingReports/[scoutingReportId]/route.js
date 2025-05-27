@@ -1,7 +1,7 @@
 "use server";
 import { sendResponse } from "@/lib/helpers/responseHelper";
 import ScoutingReport from "@/models/scoutingReportModal";
-import User from "@/models/userModel";
+import { User } from "@/models/userModel";
 import Video from "@/models/videoModel";
 import Technique from "@/models/techniquesModel";
 import { Types } from "mongoose";

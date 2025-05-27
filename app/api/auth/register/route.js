@@ -1,43 +1,73 @@
+// app/api/auth/register/route.js
+
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
+import { cookies } from "next/headers";
 import { connectDB } from "@/config/mongo";
-import User from "@/models/userModel";
+import { User } from "@/models/userModel";
+import bcrypt from "bcryptjs";
 import { signToken } from "@/lib/jwt";
+import { validateUsername } from "@/lib/validateUsername";
 
 export async function POST(req) {
-  await connectDB();
-  const { firstName, lastName, email, username, password } = await req.json();
+  try {
+    await connectDB();
 
-  if (!email || !password || !username || !firstName || !lastName) {
-    return NextResponse.json(
-      { message: "Missing required fields" },
-      { status: 400 }
-    );
+    const { email, password, firstName, lastName } = await req.json();
+
+    if (!email || !password || !firstName || !lastName) {
+      return NextResponse.json(
+        { error: "All fields are required" },
+        { status: 400 }
+      );
+    }
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return NextResponse.json(
+        { error: "Email already in use" },
+        { status: 400 }
+      );
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Auto-generate a unique username
+    const rawUsername = `${firstName}${lastName}`
+      .toLowerCase()
+      .replace(/\s+/g, "");
+    const username = await validateUsername(rawUsername);
+
+    const newUser = await User.create({
+      email,
+      password: hashedPassword,
+      firstName,
+      lastName,
+      username,
+      avatarType: "default",
+      provider: "credentials",
+    });
+
+    const token = signToken({ userId: newUser._id });
+
+    // ✅ Set the token cookie
+    cookies().set("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7, // 1 week
+    });
+
+    return NextResponse.json({
+      message: "Registration successful",
+      user: {
+        _id: newUser._id,
+        email: newUser.email,
+        username: newUser.username,
+      },
+    });
+  } catch (err) {
+    console.error("Registration error:", err);
+    return NextResponse.json({ error: "Registration failed" }, { status: 500 });
   }
-
-  const existingUser = await User.findOne({ email });
-  if (existingUser) {
-    return NextResponse.json(
-      { message: "User already exists" },
-      { status: 409 }
-    );
-  }
-
-  const hashedPassword = await bcrypt.hash(password, 10);
-
-  const user = await User.create({
-    firstName,
-    lastName,
-    email,
-    username,
-    password: hashedPassword,
-    verified: true,
-  });
-
-  const token = signToken({ id: user._id });
-
-  return NextResponse.json({
-    token,
-    user: { id: user._id, username: user.username },
-  });
 }

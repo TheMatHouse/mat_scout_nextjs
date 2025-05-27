@@ -1,28 +1,33 @@
-// components/layout/MobileSidebarDrawer.jsx
 "use client";
 
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useCurrentUser } from "@/context/UserContext";
+import LogoutButton from "@/components/shared/LogoutButton";
 
-export default function MobileSidebarDrawer({ username, isOpen, onClose }) {
+export default function MobileSidebarDrawer({ isOpen, onClose }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { user, loading } = useCurrentUser();
+
   const dashboardView = searchParams.get("v") || "settings";
   const [isDashboardOpen, setDashboardOpen] = useState(true);
 
+  if (loading || !user) return null;
+
   const mainLinks = [
     { href: "/dashboard", label: "Dashboard" },
-    { href: `/${username}`, label: "Profile" },
+    { href: `/${user.username}`, label: "Profile" },
   ];
 
   const dashboardSubLinks = [
     { v: "settings", label: "Settings" },
     { v: "styles", label: "Styles/Sports" },
     { v: "matches", label: "Match Reports" },
-    { v: "family", label: "Family" },
     { v: "scouting", label: "Scouting Reports" },
+    { v: "family", label: "Family" },
   ];
 
   return (
@@ -60,12 +65,11 @@ export default function MobileSidebarDrawer({ username, isOpen, onClose }) {
                     <Link
                       key={sub.v}
                       href={`/dashboard?v=${sub.v}`}
-                      className={cn(
-                        "block hover:text-ms-light-red",
-                        dashboardView === sub.v &&
-                          "text-ms-light-red font-semibold"
-                      )}
                       onClick={onClose}
+                      className={cn(
+                        "block hover:text-white transition",
+                        dashboardView === sub.v && "text-white font-semibold"
+                      )}
                     >
                       {sub.label}
                     </Link>
@@ -89,6 +93,7 @@ export default function MobileSidebarDrawer({ username, isOpen, onClose }) {
           >
             Social
           </Link>
+          <LogoutButton className="text-red-400 hover:text-white" />
         </div>
       </aside>
     </div>

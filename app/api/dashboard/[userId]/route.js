@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
-import { Types, ObjectId } from "mongoose";
+import bcrypt from "bcryptjs";
+import { Types } from "mongoose";
+import { ObjectId } from "mongodb";
 import { connectDB } from "@/config/mongo";
 import User from "@/models/userModel";
+import { verifyTokenFromCookie } from "@/lib/verifyTokenFromCookie";
 
-export async function GET(request, { params }) {
+export async function GET(req, { params }) {
   const { userId } = params;
 
   if (!userId || !Types.ObjectId.isValid(userId)) {
@@ -13,13 +16,13 @@ export async function GET(request, { params }) {
     );
   }
 
-  const mongoId = new Types.ObjectId(userId);
+  // const mongoId = new mongoose.Types.ObjectId(userId);
 
   try {
     await connectDB();
 
     const user = await User.aggregate([
-      { $match: { _id: mongoId } },
+      { $match: { _id: ObjectId.createFromHexString(userId) } },
       {
         $lookup: {
           from: "userstyles",
@@ -187,75 +190,60 @@ export async function GET(request, { params }) {
 
 export const PATCH = async (request, { params }) => {
   try {
-    const { userId: mongoId } = params;
-
-    const auth = getAuth(request);
-    const clerkId = auth?.userId;
-
-    console.log("mongo id ", mongoId);
-    console.log("clerk id ", clerkId);
-
-    if (!clerkId) {
-      return new NextResponse(
-        JSON.stringify({ message: "Unauthorized – no Clerk ID" }),
-        { status: 401 }
-      );
-    }
+    const { userId } = params;
 
     await connectDB();
 
-    const mongoUser = await getUserByClerkId(clerkId);
-    if (!mongoUser || mongoUser._id.toString() !== mongoId) {
-      return new NextResponse(
-        JSON.stringify({ message: "Unauthorized – not your account" }),
-        { status: 403 }
-      );
+    // Authenticate via JWT
+    const decoded = await verifyTokenFromCookie();
+    if (!decoded || decoded.userId !== userId) {
+      return new NextResponse(JSON.stringify({ message: "Unauthorized" }), {
+        status: 401,
+      });
     }
 
-    let body;
-    try {
-      body = await request.json();
-    } catch (err) {
-      return new NextResponse(
-        JSON.stringify({ message: "Invalid JSON format" }),
-        { status: 400 }
-      );
-    }
-
-    const { city, state, country, gender } = body;
-    const allowPublic =
-      body.allowPublic === "Public" || body.allowPublic === true;
-
-    let updatedUser;
-    try {
-      updatedUser = await User.findByIdAndUpdate(
-        mongoId,
-        { city, state, country, gender, allowPublic },
-        { new: true }
-      );
-    } catch (err) {
-      console.error("MongoDB update error:", err);
-      return new NextResponse(
-        JSON.stringify({ message: "Error updating user profile" }),
-        { status: 500 }
-      );
-    }
-
-    if (!updatedUser) {
+    const user = await User.findById(userId);
+    if (!user) {
       return new NextResponse(JSON.stringify({ message: "User not found" }), {
         status: 404,
       });
     }
 
+    const body = await request.json();
+
+    // Update allowed fields
+    user.city = body.city || user.city;
+    user.state = body.state || user.state;
+    user.country = body.country || user.country;
+    user.gender = body.gender || user.gender;
+
+    user.bMonth = body.bMonth || user.bMonth;
+    user.bDay = body.bDay || user.bDay;
+    user.bYear = body.bYear || user.bYear;
+
+    user.allowPublic =
+      body.allowPublic === "Public" || body.allowPublic === true;
+
+    // Optional: allow setting a password if coming from OAuth
+    if (
+      (user.provider === "facebook" || user.provider === "google") &&
+      body.password &&
+      body.password.length >= 6
+    ) {
+      user.password = await bcrypt.hash(body.password, 10);
+      user.provider = "credentials"; // enable future email/password login
+    }
+
+    await user.save();
+
     return new NextResponse(
-      JSON.stringify({ message: "User updated successfully", updatedUser }),
+      JSON.stringify({ message: "User updated successfully", user }),
       { status: 200 }
     );
   } catch (err) {
-    console.error("PATCH route error:", err);
-    return new NextResponse(
-      JSON.stringify({ message: "Unexpected server error" }),
-      { status: 500 }
-    );
+    console.error("PATCH error:", err);
+    return new NextResponse(JSON.stringify({ message: "Server error" }), {
+      status: 500,
+    });
   }
 };

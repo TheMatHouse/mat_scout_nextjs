@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import axios from "axios";
 import { connectDB } from "@/config/mongo";
-import User from "@/models/userModel";
+import { User } from "@/models/userModel";
 import { validateUsername } from "@/lib/validateUsername";
+import { signToken } from "@/lib/jwt";
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -10,16 +11,11 @@ export async function GET(request) {
   const state = searchParams.get("state");
 
   console.log("👉 Facebook callback hit");
-  console.log("👉 Code from URL:", code);
-  console.log("👉 State from URL:", state);
-
-  if (!code) {
-    console.log("❌ No code found in query.");
+  if (!code)
     return NextResponse.json(
       { error: "Missing Facebook code" },
       { status: 400 }
     );
-  }
 
   const redirectUri =
     process.env.NODE_ENV === "development"
@@ -27,8 +23,7 @@ export async function GET(request) {
       : "https://ssm-testing.com/api/auth/facebook/callback";
 
   try {
-    console.log("🌐 Requesting access token from Facebook...");
-
+    // Exchange code for access token
     const tokenRes = await axios.get(
       "https://graph.facebook.com/v22.0/oauth/access_token",
       {
@@ -42,9 +37,8 @@ export async function GET(request) {
     );
 
     const accessToken = tokenRes.data.access_token;
-    console.log("✅ Access token received:", accessToken);
 
-    console.log("🌐 Fetching user profile from Facebook...");
+    // Fetch user profile
     const profileRes = await axios.get("https://graph.facebook.com/me", {
       params: {
         fields: "id,name,email",
@@ -53,9 +47,7 @@ export async function GET(request) {
     });
 
     const { id, name, email } = profileRes.data;
-    console.log("✅ Facebook profile:", { id, name, email });
 
-    // === Name Parsing and Username Logic ===
     const honorifics = [
       "jr",
       "sr",
@@ -69,15 +61,12 @@ export async function GET(request) {
       "esq",
       "mba",
     ];
-
-    const fullName = name || "";
-    const nameParts = fullName.trim().split(/\s+/);
+    const nameParts = name.trim().split(/\s+/);
     const firstName = nameParts[0] || "User";
 
     let lastName = "";
     for (let i = 1; i < nameParts.length; i++) {
-      const part = nameParts[i].toLowerCase();
-      if (!honorifics.includes(part)) {
+      if (!honorifics.includes(nameParts[i].toLowerCase())) {
         lastName = nameParts[i];
         break;
       }
@@ -91,16 +80,12 @@ export async function GET(request) {
 
     const avatar = `https://graph.facebook.com/${id}/picture?type=large`;
 
-    console.log("🔌 Connecting to MongoDB...");
     await connectDB();
-
-    console.log("🔍 Searching for existing user...");
     let user = await User.findOne({ email });
 
     if (!user) {
-      console.log("👤 Creating new user...");
       user = await User.create({
-        name: fullName,
+        name,
         email,
         facebookId: id,
         username,
@@ -110,28 +95,33 @@ export async function GET(request) {
         facebookAvatar: avatar,
         avatarType: "facebook",
       });
-    } else {
-      console.log("✅ Existing user found:", user._id);
     }
 
-    console.log("🎉 Facebook login successful");
-    return NextResponse.json({
-      message: "Facebook login successful",
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        username: user.username,
-        avatar: user.avatar,
-        avatarType: user.avatarType,
-      },
-    });
-  } catch (error) {
-    console.error("❌ Facebook OAuth error:");
-    console.error("Message:", error.message);
-    console.error("Response Data:", error?.response?.data);
-    console.error("Full Error:", error);
+    const jwt = signToken({ userId: user._id });
 
+    const response = NextResponse.redirect(new URL("/dashboard", request.url));
+
+    response.cookies.set("token", jwt, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+
+    return response;
+
+    response.cookies.set("token", jwt, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+
+    return response;
+  } catch (error) {
+    console.error("Facebook OAuth error:", error.message);
     return NextResponse.json(
       { error: "Facebook login failed" },
       { status: 500 }
