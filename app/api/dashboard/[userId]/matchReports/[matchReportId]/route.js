@@ -5,7 +5,7 @@ import User from "@/models/userModel";
 import Technique from "@/models/techniquesModel";
 import { Types } from "mongoose";
 import mongoSanitize from "express-mongo-sanitize";
-import { connectDB } from "@/config/mongo";
+import { connectDB } from "@/lib/mongo";
 
 // Update a match report
 export const PATCH = async (request, context) => {

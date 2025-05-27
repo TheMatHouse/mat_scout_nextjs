@@ -1,4 +1,4 @@
-import { connectDB } from "@/config/mongo";
+import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";

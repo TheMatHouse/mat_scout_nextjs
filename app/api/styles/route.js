@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import Style from "@/models/styleModel";
-import { connectDB } from "@/config/mongo";
+import { connectDB } from "@/lib/mongo";
 
 export const GET = async (request) => {
   try {

@@ -2,7 +2,7 @@
 import { NextRequest } from "next/server";
 import { sendResponse } from "@/lib/helpers/responseHelper";
 import User from "@/models/userModel";
-import { connectDB } from "@/config/mongo";
+import { connectDB } from "@/lib/mongo";
 import mongoSanitize from "express-mongo-sanitize";
 
 export const GET = async (request, context) => {

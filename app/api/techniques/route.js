@@ -1,7 +1,7 @@
 "use server";
 import { NextResponse } from "next/server";
 import Technique from "@/models/techniquesModel";
-import { connectDB } from "@/config/mongo";
+import { connectDB } from "@/lib/mongo";
 
 export const GET = async (request) => {
   try {

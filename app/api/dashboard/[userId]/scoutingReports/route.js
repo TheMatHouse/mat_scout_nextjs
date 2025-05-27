@@ -1,7 +1,7 @@
 "use server";
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
-import { connectDB } from "@/config/mongo";
+import { connectDB } from "@/lib/mongo";
 import ScoutingReport from "@/models/scoutingReportModal";
 import User from "@/models/userModel";
 import Technique from "@/models/techniquesModel";

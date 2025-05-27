@@ -2,8 +2,8 @@
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import User from "@/models/userModel";
-import { connectDB } from "@/config/mongo";
-import cloudinary from "@/config/cloudinary";
+import { connectDB } from "@/lib/mongo";
+import cloudinary from "@/lib/cloudinary";
 
 export const PATCH = async (request, { params }) => {
   try {

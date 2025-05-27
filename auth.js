@@ -3,7 +3,7 @@ import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import User from "@/models/userModel";
 import bcrypt from "bcryptjs";
-import { connectDB } from "@/config/mongo";
+import { connectDB } from "@/lib/mongo";
 import { authConfig } from "./auth.config";
 import { validateUsername } from "./lib/validation";
 

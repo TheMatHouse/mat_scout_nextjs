@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import axios from "axios";
-import { connectDB } from "@/config/mongo";
+import { connectDB } from "@/lib/mongo";
 import { validateUsername } from "@/lib/validateUsername";
 import { signToken } from "@/lib/jwt";
 

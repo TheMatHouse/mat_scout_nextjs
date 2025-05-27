@@ -6,7 +6,7 @@ import Video from "@/models/videoModel";
 import Technique from "@/models/techniquesModel";
 import { Types } from "mongoose";
 import mongoSanitize from "express-mongo-sanitize";
-import { connectDB } from "@/config/mongo";
+import { connectDB } from "@/lib/mongo";
 
 export const PATCH = async (request, context) => {
   try {

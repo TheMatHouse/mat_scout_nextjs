@@ -1,4 +1,4 @@
-import { connectDB } from "@/config/mongo";
+import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
 import bcrypt from "bcryptjs";
 import { signToken } from "@/lib/jwt";

@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import UserStyle from "@/models/userStyleModel";
-import { connectDB } from "@/config/mongo";
+import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
 import { Style } from "@/models/styleModel";
 
