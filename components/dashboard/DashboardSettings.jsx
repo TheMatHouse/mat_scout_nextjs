@@ -34,36 +34,45 @@ export default function DashboardSettings() {
 
   return (
     <section className="max-w-3xl mx-auto px-4 py-8">
-      <header className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">Personal Settings</h1>
-        <Dialog
-          open={open}
-          onOpenChange={setOpen}
-        >
-          <DialogTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-            >
-              Edit Settings <Pencil className="ml-2 h-4 w-4" />
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Edit Settings</DialogTitle>
-              <DialogDescription>
-                Update your personal settings below.
-              </DialogDescription>
-            </DialogHeader>
-            <SettingsForm
-              user={user}
-              onClose={() => setOpen(false)}
-            />
-          </DialogContent>
-        </Dialog>
+      <header className="mb-6">
+        <h1 className="text-3xl font-bold">
+          {user.firstName} {user.lastName}
+        </h1>
+        <div className="flex justify-end">
+          <Dialog
+            open={open}
+            onOpenChange={setOpen}
+          >
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+              >
+                Edit Settings <Pencil className="ml-2 h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Edit Settings</DialogTitle>
+                <DialogDescription>
+                  Update your personal settings below.
+                </DialogDescription>
+              </DialogHeader>
+              <SettingsForm
+                user={user}
+                onClose={() => setOpen(false)}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
       </header>
 
       <div className="space-y-4">
+        <div className="rounded-lg border bg-card text-card-foreground p-4">
+          <h2 className="text-lg font-semibold mb-1">Email</h2>
+          <p className="text-sm">{user.email}</p>
+        </div>
+
         <div className="rounded-lg border bg-card text-card-foreground p-4">
           <h2 className="text-lg font-semibold mb-1">Location</h2>
           {user.city && user.state && user.country ? (
@@ -76,6 +85,14 @@ export default function DashboardSettings() {
             </p>
           )}
         </div>
+
+        <div className="rounded-lg border bg-card text-card-foreground p-4">
+          <h2 className="text-lg font-semibold mb-1">Gender</h2>
+          <p className="text-sm text-muted-foreground">
+            {user.gender || "Not specified"}
+          </p>
+        </div>
+
         <div className="rounded-lg border bg-card text-card-foreground p-4">
           <h2 className="text-lg font-semibold mb-1">Privacy Settings</h2>
           <p className="text-sm">
