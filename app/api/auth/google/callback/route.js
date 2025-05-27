@@ -62,7 +62,7 @@ export async function GET(request) {
     let user = await UserModel.findOne({ email });
 
     if (!user) {
-      user = await User.create({
+      user = await UserModel.create({
         name,
         email,
         googleId: id,
@@ -73,22 +73,13 @@ export async function GET(request) {
         googleAvatar,
         avatarType: "google",
         provider: "google",
+        gender: "not specified", // optional default
       });
     }
 
     const jwt = signToken({ userId: user._id });
 
     const response = NextResponse.redirect(new URL("/dashboard", request.url));
-
-    response.cookies.set("token", jwt, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-    });
-
-    return response;
 
     response.cookies.set("token", jwt, {
       httpOnly: true,
