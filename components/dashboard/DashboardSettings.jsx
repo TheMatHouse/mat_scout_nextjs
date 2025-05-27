@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import SettingsForm from "./forms/SettingsForm";
+import Image from "next/image";
 
 export default function DashboardSettings() {
   const [open, setOpen] = useState(false);
@@ -32,12 +33,30 @@ export default function DashboardSettings() {
     );
   }
 
+  let avatarUrl = user.avatar;
+  if (user.avatarType === "google") avatarUrl = user.googleAvatar;
+  if (user.avatarType === "facebook") avatarUrl = user.facebookAvatar;
+  if (user.avatarType === "uploaded") avatarUrl = user.avatar;
+  if (user.avatarType === "default") avatarUrl = user.avatar;
+
+  console.log("avatar ", avatarUrl);
   return (
     <section className="max-w-3xl mx-auto px-4 py-8">
       <header className="mb-6">
-        <h1 className="text-3xl font-bold">
-          {user.firstName} {user.lastName}
-        </h1>
+        <div className="flex items-center gap-4 mb-4">
+          <Image
+            src={avatarUrl}
+            alt="User Avatar"
+            width={64}
+            height={64}
+            className="rounded-full"
+          />
+          <div>
+            <h1 className="text-3xl font-bold">
+              {user.firstName} {user.lastName}
+            </h1>
+          </div>
+        </div>
         <div className="flex justify-end">
           <Dialog
             open={open}
