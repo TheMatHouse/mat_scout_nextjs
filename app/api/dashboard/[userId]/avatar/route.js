@@ -1,7 +1,7 @@
 "use server";
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
-import { User } from "@/models/userModel";
+import User from "@/models/userModel";
 import { connectDB } from "@/config/mongo";
 import cloudinary from "@/config/cloudinary";
 

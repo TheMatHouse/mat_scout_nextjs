@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
 import axios from "axios";
 import { connectDB } from "@/config/mongo";
-import { User } from "@/models/userModel";
 import { validateUsername } from "@/lib/validateUsername";
 import { signToken } from "@/lib/jwt";
 
 export async function GET(request) {
+  await connectDB();
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
 
-  console.log("👉 Google callback hit");
   if (!code)
     return NextResponse.json({ error: "Missing Google code" }, { status: 400 });
 
@@ -59,8 +58,8 @@ export async function GET(request) {
     const avatar = picture;
     const googleAvatar = picture;
 
-    await connectDB();
-    let user = await User.findOne({ email });
+    const { default: UserModel } = await import("@/models/userModel.js");
+    let user = await UserModel.findOne({ email });
 
     if (!user) {
       user = await User.create({
@@ -73,6 +72,7 @@ export async function GET(request) {
         avatar,
         googleAvatar,
         avatarType: "google",
+        provider: "google",
       });
     }
 

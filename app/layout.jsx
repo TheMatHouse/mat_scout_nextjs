@@ -2,10 +2,10 @@
 import "@/app/globals.css";
 import { ThemeProvider } from "next-themes";
 import { ToastContainer } from "react-toastify";
-import { UserProvider } from "@/context/UserContext"; // ✅ Must be this
-
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import AuthenticatedSidebar from "@/components/layout/AuthenticatedSidebar";
+import { UserProvider } from "@/context/UserContext";
 
 export const metadata = {
   title: "MatScout",
@@ -26,11 +26,19 @@ export default function RootLayout({ children }) {
           enableSystem
         >
           <UserProvider>
-            {" "}
-            {/* ✅ <--- this wraps EVERYTHING */}
-            <ToastContainer />
+            <ToastContainer
+              position="top-right"
+              autoClose={5000}
+            />
             <Header />
-            <main className="min-h-screen">{children}</main>
+            <div className="flex min-h-screen w-full">
+              <aside className="hidden md:flex w-64 bg-sidebar-background text-sidebar-foreground border-r border-border">
+                <AuthenticatedSidebar />
+              </aside>
+              <main className="flex-1 px-4 py-6 md:px-8 md:py-10 bg-background text-foreground">
+                {children}
+              </main>
+            </div>
             <Footer />
           </UserProvider>
         </ThemeProvider>

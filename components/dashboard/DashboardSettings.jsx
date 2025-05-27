@@ -19,7 +19,6 @@ export default function DashboardSettings() {
   const [open, setOpen] = useState(false);
   const { user, loading } = useCurrentUser();
 
-  console.log("user  ", user);
   if (loading) return null;
 
   if (!user) {

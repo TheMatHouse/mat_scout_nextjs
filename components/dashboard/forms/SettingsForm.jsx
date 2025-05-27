@@ -8,9 +8,12 @@ import Countries from "@/assets/countries.json";
 import useGeolocationCountry from "@/hooks/useGeolocationCountry";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";
+import { useCurrentUser } from "@/context/UserContext";
 
 export default function SettingsForm({ user, onClose }) {
   const router = useRouter();
+  const { refreshUser } = useCurrentUser();
+
   const isOAuthUser =
     user.provider === "facebook" || user.provider === "google";
 
@@ -18,6 +21,7 @@ export default function SettingsForm({ user, onClose }) {
     firstName: user.firstName || "",
     lastName: user.lastName || "",
     email: user.email || "",
+    username: user.username || "",
     city: user.city || "",
     state: user.state || "",
     country: user.country || "",
@@ -30,6 +34,7 @@ export default function SettingsForm({ user, onClose }) {
   });
 
   const [formData, setFormData] = useState(getInitialFormData());
+  const [usernameStatus, setUsernameStatus] = useState(null);
   const { countryCode3 } = useGeolocationCountry();
 
   useEffect(() => {
@@ -37,6 +42,23 @@ export default function SettingsForm({ user, onClose }) {
       setFormData((prev) => ({ ...prev, country: countryCode3 }));
     }
   }, [user.country, countryCode3]);
+
+  useEffect(() => {
+    const checkUsername = async () => {
+      if (!formData.username || formData.username === user.username) return;
+      try {
+        const res = await fetch(
+          `/api/check-username?username=${formData.username}`
+        );
+        const { available } = await res.json();
+        setUsernameStatus(available ? "available" : "taken");
+      } catch (err) {
+        console.error("Username check failed", err);
+      }
+    };
+    const timeoutId = setTimeout(checkUsername, 400);
+    return () => clearTimeout(timeoutId);
+  }, [formData.username]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -53,6 +75,7 @@ export default function SettingsForm({ user, onClose }) {
       firstName: formData.firstName,
       lastName: formData.lastName,
       email: formData.email,
+      username: formData.username,
       city: formData.city,
       state: formData.state,
       country: formData.country,
@@ -66,7 +89,7 @@ export default function SettingsForm({ user, onClose }) {
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/`,
+        `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -83,12 +106,11 @@ export default function SettingsForm({ user, onClose }) {
       }
 
       if (response.ok) {
-        toast.success(data.message || "User updated successfully");
-        setTimeout(() => {
-          router.refresh();
-          onClose();
-          setFormData(getInitialFormData());
-        }, 1000);
+        onClose();
+        setTimeout(async () => {
+          await refreshUser();
+          toast.success(data.message || "User updated successfully");
+        }, 300);
       } else {
         toast.error(data.message || "Something went wrong");
       }
@@ -103,7 +125,6 @@ export default function SettingsForm({ user, onClose }) {
       onSubmit={handleSubmit}
       className="space-y-8 bg-background text-foreground p-6 rounded-lg shadow-lg"
     >
-      {/* First & Last Name */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <div>
           <Label htmlFor="firstName">First Name</Label>
@@ -115,6 +136,11 @@ export default function SettingsForm({ user, onClose }) {
             onChange={handleChange}
             disabled={isOAuthUser}
           />
+          {isOAuthUser && (
+            <p className="text-sm text-muted-foreground">
+              This name is managed by {user.provider}
+            </p>
+          )}
         </div>
         <div>
           <Label htmlFor="lastName">Last Name</Label>
@@ -124,11 +150,11 @@ export default function SettingsForm({ user, onClose }) {
             name="lastName"
             value={formData.lastName}
             onChange={handleChange}
+            disabled={isOAuthUser}
           />
         </div>
       </div>
 
-      {/* Email */}
       <div>
         <Label htmlFor="email">Email</Label>
         <Input
@@ -139,92 +165,69 @@ export default function SettingsForm({ user, onClose }) {
           onChange={handleChange}
           disabled={isOAuthUser}
         />
+        {isOAuthUser && (
+          <p className="text-sm text-muted-foreground">
+            This email is managed by {user.provider}
+          </p>
+        )}
       </div>
 
-      {/* Gender */}
       <div>
-        <Label htmlFor="gender">Gender</Label>
-        <select
-          id="gender"
-          name="gender"
-          value={formData.gender}
+        <Label htmlFor="username">Username</Label>
+        <Input
+          type="text"
+          id="username"
+          name="username"
+          value={formData.username}
           onChange={handleChange}
-          className="w-full rounded-md border px-3 py-2 text-sm bg-white text-foreground dark:bg-gray-900 dark:text-white"
-        >
-          <option value="">Select Gender</option>
-          <option value="Male">Male</option>
-          <option value="Female">Female</option>
-        </select>
+        />
+        {usernameStatus === "taken" && (
+          <p className="text-sm text-red-500">Username is already taken</p>
+        )}
+        {usernameStatus === "available" && (
+          <p className="text-sm text-green-500">Username is available</p>
+        )}
       </div>
 
-      {/* Birthdate */}
       <div className="grid grid-cols-3 gap-4">
         <div>
           <Label htmlFor="bMonth">Birth Month</Label>
-          <select
+          <Input
+            type="number"
             id="bMonth"
             name="bMonth"
             value={formData.bMonth}
             onChange={handleChange}
-            className="w-full rounded-md border px-3 py-2"
-          >
-            <option value="">Month</option>
-            {[...Array(12)].map((_, i) => (
-              <option
-                key={i + 1}
-                value={i + 1}
-              >
-                {i + 1}
-              </option>
-            ))}
-          </select>
+            min="1"
+            max="12"
+          />
         </div>
         <div>
           <Label htmlFor="bDay">Birth Day</Label>
-          <select
+          <Input
+            type="number"
             id="bDay"
             name="bDay"
             value={formData.bDay}
             onChange={handleChange}
-            className="w-full rounded-md border px-3 py-2"
-          >
-            <option value="">Day</option>
-            {[...Array(31)].map((_, i) => (
-              <option
-                key={i + 1}
-                value={i + 1}
-              >
-                {i + 1}
-              </option>
-            ))}
-          </select>
+            min="1"
+            max="31"
+          />
         </div>
         <div>
           <Label htmlFor="bYear">Birth Year</Label>
-          <select
+          <Input
+            type="number"
             id="bYear"
             name="bYear"
             value={formData.bYear}
             onChange={handleChange}
-            className="w-full rounded-md border px-3 py-2"
-          >
-            <option value="">Year</option>
-            {Array.from({ length: 80 }, (_, i) => {
-              const year = new Date().getFullYear() - i;
-              return (
-                <option
-                  key={year}
-                  value={year}
-                >
-                  {year}
-                </option>
-              );
-            })}
-          </select>
+            min="1900"
+            max={new Date().getFullYear()}
+          />
         </div>
       </div>
 
-      {/* Location */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         <div>
           <Label htmlFor="city">City</Label>
@@ -253,7 +256,7 @@ export default function SettingsForm({ user, onClose }) {
             name="country"
             value={formData.country}
             onChange={handleChange}
-            className="w-full rounded-md border px-3 py-2 text-sm bg-white text-foreground dark:bg-gray-900 dark:text-white"
+            className="w-full rounded-md border px-3 py-2"
           >
             <option value="">Select country...</option>
             {Countries.map((country) => (
@@ -268,38 +271,45 @@ export default function SettingsForm({ user, onClose }) {
         </div>
       </div>
 
-      {/* Profile Visibility */}
       <div>
-        <Label htmlFor="allowPublic">Make Profile Public</Label>
-        <div className="flex items-center mt-2">
-          <input
-            type="checkbox"
-            id="allowPublic"
-            name="allowPublic"
-            checked={formData.allowPublic}
-            onChange={handleChange}
-            className="mr-2"
-          />
-          <span className="text-sm text-muted-foreground">
-            Your profile can be discovered by others.
-          </span>
-        </div>
+        <Label htmlFor="gender">Gender</Label>
+        <select
+          id="gender"
+          name="gender"
+          value={formData.gender}
+          onChange={handleChange}
+          className="w-full rounded-md border px-3 py-2"
+        >
+          <option value="">Select gender...</option>
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+          <option value="not specified">Not specified</option>
+        </select>
       </div>
 
-      {/* Optional Password */}
-      {isOAuthUser && (
-        <div>
-          <Label htmlFor="newPassword">Set Password (Optional)</Label>
-          <Input
-            type="password"
-            id="newPassword"
-            name="newPassword"
-            value={formData.newPassword}
-            onChange={handleChange}
-            placeholder="Set a login password"
-          />
-        </div>
-      )}
+      <div>
+        <Label htmlFor="newPassword">New Password</Label>
+        <Input
+          type="password"
+          id="newPassword"
+          name="newPassword"
+          value={formData.newPassword}
+          onChange={handleChange}
+          placeholder="Leave blank to keep existing password"
+        />
+      </div>
+
+      <div className="flex items-center">
+        <input
+          type="checkbox"
+          id="allowPublic"
+          name="allowPublic"
+          checked={formData.allowPublic}
+          onChange={handleChange}
+          className="mr-2"
+        />
+        <Label htmlFor="allowPublic">Make Profile Public</Label>
+      </div>
 
       <div className="pt-4">
         <Button

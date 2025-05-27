@@ -11,7 +11,6 @@ export default function AuthenticatedSidebar() {
   const [isDashboardOpen, setDashboardOpen] = useState(false);
   const { user, loading } = useCurrentUser();
 
-  console.log("user  ", user);
   useEffect(() => {
     setDashboardOpen(pathname.startsWith("/dashboard"));
   }, [pathname]);

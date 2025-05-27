@@ -54,8 +54,8 @@ const userSchema = new mongoose.Schema(
     },
     gender: {
       type: String,
-      enum: ["Male", "Female"],
-      default: "",
+      enum: ["male", "female", "not specified"],
+      default: "not specified",
     },
     avatar: {
       type: String,
@@ -71,6 +71,11 @@ const userSchema = new mongoose.Schema(
     avatarType: {
       type: String,
       default: "default",
+    },
+    provider: {
+      type: String,
+      enum: ["local", "google", "facebook"],
+      default: "local",
     },
     verified: {
       type: Boolean,

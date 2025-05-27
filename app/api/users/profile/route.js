@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { connectDB } from "@/config/mongo";
 import { NextResponse } from "next/server";
-import { User } from "@/models/userModel";
+import User from "@/models/userModel";
 
 export const GET = async (request, { params }) => {
   const username = (await params).username;

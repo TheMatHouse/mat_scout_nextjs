@@ -1,7 +1,7 @@
 "use server";
 import { sendResponse } from "@/lib/helpers/responseHelper";
 import MatchReport from "@/models/matchReportModel";
-import { User } from "@/models/userModel";
+import User from "@/models/userModel";
 import Technique from "@/models/techniquesModel";
 import { Types } from "mongoose";
 import mongoSanitize from "express-mongo-sanitize";

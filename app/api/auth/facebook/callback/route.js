@@ -1,21 +1,20 @@
 import { NextResponse } from "next/server";
 import axios from "axios";
 import { connectDB } from "@/config/mongo";
-import { User } from "@/models/userModel";
 import { validateUsername } from "@/lib/validateUsername";
 import { signToken } from "@/lib/jwt";
 
 export async function GET(request) {
+  await connectDB();
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
-  const state = searchParams.get("state");
 
-  console.log("👉 Facebook callback hit");
-  if (!code)
+  if (!code) {
     return NextResponse.json(
       { error: "Missing Facebook code" },
       { status: 400 }
     );
+  }
 
   const redirectUri =
     process.env.NODE_ENV === "development"
@@ -23,7 +22,7 @@ export async function GET(request) {
       : "https://ssm-testing.com/api/auth/facebook/callback";
 
   try {
-    // Exchange code for access token
+    // Get token
     const tokenRes = await axios.get(
       "https://graph.facebook.com/v22.0/oauth/access_token",
       {
@@ -38,7 +37,7 @@ export async function GET(request) {
 
     const accessToken = tokenRes.data.access_token;
 
-    // Fetch user profile
+    // Get user profile
     const profileRes = await axios.get("https://graph.facebook.com/me", {
       params: {
         fields: "id,name,email",
@@ -80,11 +79,13 @@ export async function GET(request) {
 
     const avatar = `https://graph.facebook.com/${id}/picture?type=large`;
 
-    await connectDB();
-    let user = await User.findOne({ email });
+    // ✅ CONNECT + IMPORT HERE
+
+    const { default: UserModel } = await import("@/models/userModel.js");
+    let user = await UserModel.findOne({ email });
 
     if (!user) {
-      user = await User.create({
+      user = await UserModel.create({
         name,
         email,
         facebookId: id,
@@ -94,22 +95,14 @@ export async function GET(request) {
         avatar,
         facebookAvatar: avatar,
         avatarType: "facebook",
+        provider: "facebook",
+        gender: "not specified",
       });
     }
 
     const jwt = signToken({ userId: user._id });
 
     const response = NextResponse.redirect(new URL("/dashboard", request.url));
-
-    response.cookies.set("token", jwt, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-    });
-
-    return response;
 
     response.cookies.set("token", jwt, {
       httpOnly: true,
