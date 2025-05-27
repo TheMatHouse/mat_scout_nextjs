@@ -1,8 +1,8 @@
+// context/UserContext.js
 "use client";
 
 import { createContext, useContext, useState, useEffect } from "react";
 
-// ✅ Define and export the context once
 export const UserContext = createContext();
 
 export function UserProvider({ children }) {
@@ -16,7 +16,7 @@ export function UserProvider({ children }) {
         const data = await res.json();
         setUser(data?.user || null);
       } catch (err) {
-        console.error("Error fetching user in UserProvider:", err);
+        console.error("Failed to fetch user:", err);
         setUser(null);
       } finally {
         setLoading(false);
