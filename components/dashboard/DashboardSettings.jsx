@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil } from "lucide-react";
+import { Pencil, Camera } from "lucide-react";
 import { useCurrentUser } from "@/context/UserContext";
 import {
   Dialog,
@@ -15,10 +15,17 @@ import {
 import { Button } from "@/components/ui/button";
 import SettingsForm from "./forms/SettingsForm";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { toast } from "react-toastify";
+
+import GoogleIcon from "@/components/icons/GoogleIcon";
+import FacebookIcon from "@/components/icons/FacebookIcon";
 
 export default function DashboardSettings() {
   const [open, setOpen] = useState(false);
-  const { user, loading } = useCurrentUser();
+  const [avatarPreview, setAvatarPreview] = useState(null);
+  const { user, loading, refreshUser } = useCurrentUser();
+  const router = useRouter();
 
   if (loading) return null;
 
@@ -37,26 +44,105 @@ export default function DashboardSettings() {
   if (user.avatarType === "google") avatarUrl = user.googleAvatar;
   if (user.avatarType === "facebook") avatarUrl = user.facebookAvatar;
   if (user.avatarType === "uploaded") avatarUrl = user.avatar;
-  if (user.avatarType === "default") avatarUrl = user.avatar;
+  if (!avatarUrl) {
+    avatarUrl =
+      "https://res.cloudinary.com/matscout/image/upload/v1747956346/default_user_rval6s.jpg";
+  }
 
-  console.log("avatar ", avatarUrl);
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAvatarPreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+
+    const formData = new FormData();
+    formData.append("image", file);
+    formData.append("userId", user._id);
+
+    fetch("/api/upload/avatar", {
+      method: "PATCH",
+      body: formData,
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to upload avatar");
+        toast.success("Avatar updated successfully");
+        setAvatarPreview(null);
+        return refreshUser();
+      })
+      .then(() => router.refresh())
+      .catch(() => toast.error("Error updating avatar"));
+  };
+
+  const revertToSocial = async (provider) => {
+    try {
+      const res = await fetch("/api/upload/avatar", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user._id, avatarType: provider }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success(`Reverted to ${provider} avatar`);
+      await refreshUser();
+      router.refresh();
+    } catch (err) {
+      toast.error("Failed to revert avatar");
+    }
+  };
+
   return (
     <section className="max-w-3xl mx-auto px-4 py-8">
       <header className="mb-6">
-        <div className="flex items-center gap-4 mb-4">
+        <div className="flex flex-col items-center gap-4 mb-4">
           <Image
-            src={avatarUrl}
+            src={avatarPreview || avatarUrl}
             alt="User Avatar"
-            width={64}
-            height={64}
-            className="rounded-full"
+            width={96}
+            height={96}
+            className="rounded-full border object-cover w-24 h-24"
           />
-          <div>
-            <h1 className="text-3xl font-bold">
-              {user.firstName} {user.lastName}
-            </h1>
+
+          <div className="flex flex-col items-center gap-2">
+            <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded border text-sm hover:bg-muted transition">
+              <Camera className="h-4 w-4" /> Change Avatar
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            </label>
+
+            <div className="flex gap-2">
+              {user.googleAvatar && user.avatarType !== "google" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => revertToSocial("google")}
+                >
+                  <GoogleIcon className="w-4 h-4 mr-1" /> Use Google Avatar
+                </Button>
+              )}
+              {user.facebookAvatar && user.avatarType !== "facebook" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => revertToSocial("facebook")}
+                >
+                  <FacebookIcon className="w-4 h-4 mr-1" /> Use Facebook Avatar
+                </Button>
+              )}
+            </div>
           </div>
+
+          <h1 className="text-3xl font-bold text-center">
+            {user.firstName} {user.lastName}
+          </h1>
         </div>
+
         <div className="flex justify-end">
           <Dialog
             open={open}
