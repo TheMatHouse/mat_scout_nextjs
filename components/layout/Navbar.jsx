@@ -1,4 +1,6 @@
 "use client";
+import dynamic from "next/dynamic";
+import { Suspense } from "react";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -6,9 +8,13 @@ import { Menu } from "lucide-react";
 import { useCurrentUser } from "@/context/UserContext";
 import LogoutButton from "@/components/shared/LogoutButton";
 import ThemeToggle from "../shared/theme-toggle";
-import MobileSidebarDrawer from "./MobileSidebarDrawer";
+// import MobileSidebarDrawer from "./MobileSidebarDrawer";
 
 const Navbar = () => {
+  const MobileSidebarDrawer = dynamic(
+    () => import("@/components/layout/MobileSidebarDrawer"),
+    { ssr: false }
+  );
   const { user, loading } = useCurrentUser();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
@@ -77,11 +83,13 @@ const Navbar = () => {
       </nav>
 
       {/* Mobile Sidebar Drawer */}
-      <MobileSidebarDrawer
-        isOpen={isMobileOpen}
-        onClose={() => setIsMobileOpen(false)}
-        username={user?.username || "me"}
-      />
+      <Suspense fallback={null}>
+        <MobileSidebarDrawer
+          isOpen={isMobileOpen}
+          onClose={() => setIsMobileOpen(false)}
+          username={user?.username || "me"}
+        />
+      </Suspense>
     </>
   );
 };
