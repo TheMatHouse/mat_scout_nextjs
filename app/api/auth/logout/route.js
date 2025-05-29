@@ -1,7 +1,7 @@
 // app/api/auth/logout/route.js
 import { NextResponse } from "next/server";
 
-export async function POST() {
+export async function GET() {
   const response = NextResponse.redirect("/");
   response.cookies.set("token", "", {
     httpOnly: true,
