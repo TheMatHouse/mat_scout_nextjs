@@ -79,7 +79,12 @@ export async function GET(request) {
 
     const jwt = signToken({ userId: user._id });
 
-    const response = NextResponse.redirect(new URL("/dashboard", request.url));
+    const baseUrl =
+      process.env.NODE_ENV === "development"
+        ? "http://localhost:3000"
+        : "https://ssm-testing.com";
+
+    const response = NextResponse.redirect(`${baseUrl}/dashboard`);
 
     response.cookies.set("token", jwt, {
       httpOnly: true,
