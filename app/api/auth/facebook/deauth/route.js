@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
 
-const APP_SECRET = process.env.FACEBOOK_APP_SECRET;
+const APP_SECRET = process.env.FACEBOOK_CLIENT_SECRET;
 
 function parseSignedRequest(signedRequest) {
   const [encodedSig, payload] = signedRequest.split(".");

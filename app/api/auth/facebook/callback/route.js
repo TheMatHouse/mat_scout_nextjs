@@ -27,8 +27,8 @@ export async function GET(request) {
       "https://graph.facebook.com/v22.0/oauth/access_token",
       {
         params: {
-          client_id: process.env.FACEBOOK_APP_ID,
-          client_secret: process.env.FACEBOOK_APP_SECRET,
+          client_id: process.env.FACEBOOK_CLIENT_ID,
+          client_secret: process.env.FACEBOOK_CLIENT_SECRET,
           redirect_uri: redirectUri,
           code,
         },
