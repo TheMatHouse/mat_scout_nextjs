@@ -23,6 +23,7 @@ export async function PATCH(request, { params }) {
         firstName: data.firstName,
         lastName: data.lastName,
         email: data.email,
+        username: data.username,
         city: data.city,
         state: data.state,
         country: data.country,

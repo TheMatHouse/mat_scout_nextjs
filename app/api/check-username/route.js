@@ -1,0 +1,30 @@
+// app/api/check-username/route.js
+import { NextResponse } from "next/server";
+import { connectDB } from "@/lib/mongo";
+import User from "@/models/userModel";
+
+export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  const username = searchParams.get("username");
+
+  if (!username) {
+    return NextResponse.json(
+      { available: false, message: "Username is required" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    await connectDB();
+
+    const user = await User.findOne({ username: username.toLowerCase() });
+
+    return NextResponse.json({ available: !user });
+  } catch (err) {
+    console.error("Error checking username:", err);
+    return NextResponse.json(
+      { available: false, message: "Server error" },
+      { status: 500 }
+    );
+  }
+}

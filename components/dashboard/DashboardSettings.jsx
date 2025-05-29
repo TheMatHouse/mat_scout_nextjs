@@ -17,6 +17,7 @@ import SettingsForm from "./forms/SettingsForm";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
+import { Copy, Share } from "lucide-react";
 
 import GoogleIcon from "@/components/icons/GoogleIcon";
 import FacebookIcon from "@/components/icons/FacebookIcon";
@@ -156,7 +157,7 @@ export default function DashboardSettings() {
                 Edit Settings <Pencil className="ml-2 h-4 w-4" />
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Edit Settings</DialogTitle>
                 <DialogDescription>
@@ -173,6 +174,49 @@ export default function DashboardSettings() {
       </header>
 
       <div className="space-y-4">
+        <div className="rounded-lg border bg-card text-card-foreground p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="text-sm">
+            <p className="font-semibold mb-1">Your Public Profile</p>
+            <a
+              href={`https://matscout.com/${user.username}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 dark:text-blue-400 underline break-all"
+            >
+              https://matscout.com/{user.username}
+            </a>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                navigator.clipboard.writeText(
+                  `https://matscout.com/${user.username}`
+                );
+                toast.success("Copied profile link");
+              }}
+            >
+              <Copy className="w-4 h-4" />
+            </Button>
+
+            {navigator.share && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() =>
+                  navigator.share({
+                    title: "Check out my MatScout profile",
+                    url: `https://matscout.com/${user.username}`,
+                  })
+                }
+              >
+                <Share className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+
         <div className="rounded-lg border bg-card text-card-foreground p-4">
           <h2 className="text-lg font-semibold mb-1">Email</h2>
           <p className="text-sm">{user.email}</p>
