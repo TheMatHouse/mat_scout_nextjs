@@ -19,7 +19,7 @@ export async function GET(request) {
   const redirectUri =
     process.env.NODE_ENV === "development"
       ? "http://localhost:3000/api/auth/facebook/callback"
-      : "https://matscout.com/api/auth/facebook/callback";
+      : process.env.NEXT_PUBLIC_FACEBOOK_REDIRECT_URI;
 
   try {
     // Get token
