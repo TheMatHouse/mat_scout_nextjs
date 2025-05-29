@@ -6,13 +6,19 @@ export default function LogoutButton({ className }) {
 
   const handleLogout = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "GET" });
+      const res = await fetch("/api/auth/logout", { method: "GET" });
 
-      // Force reload after logout to clear cached data
-      router.push("/");
-      router.refresh();
+      if (res.ok) {
+        // Delay a moment to ensure cookie clears
+        setTimeout(() => {
+          router.push("/");
+          router.refresh(); // ensures all server components revalidate
+        }, 100);
+      } else {
+        console.error("Logout failed: ", await res.json());
+      }
     } catch (err) {
-      console.error("Logout failed:", err);
+      console.error("Logout error:", err);
     }
   };
 
