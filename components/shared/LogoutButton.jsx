@@ -3,7 +3,7 @@
 export default function LogoutButton({ className }) {
   const handleLogout = async () => {
     try {
-      await fetch("/logout", { method: "GET" });
+      await fetch("/api/auth/logout", { method: "GET" });
 
       // ✅ Just reload the current page — this will:
       // - clear the token cookie
