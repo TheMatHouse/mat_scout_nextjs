@@ -1,4 +1,3 @@
-// app/register/page.jsx
 "use client";
 
 import { useState } from "react";
@@ -31,6 +30,14 @@ export default function RegisterPage() {
     setSubmitting(true);
     setError(null);
 
+    if (!form.email || !form.password || !form.firstName || !form.lastName) {
+      setError("Please fill in all required fields.");
+      setSubmitting(false);
+      return;
+    }
+
+    console.log("📤 Submitting form:", form);
+
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
@@ -38,13 +45,14 @@ export default function RegisterPage() {
         body: JSON.stringify(form),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const data = await res.json();
+        console.log("🛑 Registration failed response:", data);
         throw new Error(data.error || "Registration failed");
       }
 
-      router.push("/dashboard");
-      router.refresh();
+      window.location.href = "/dashboard";
     } catch (err) {
       setError(err.message);
     } finally {
@@ -61,6 +69,7 @@ export default function RegisterPage() {
   }/api/auth/google/callback&response_type=code&scope=openid%20email%20profile&access_type=online`;
 
   const facebookURL = `https://www.facebook.com/v22.0/dialog/oauth?client_id=${process.env.NEXT_PUBLIC_FACEBOOK_CLIENT_ID}&redirect_uri=${process.env.NEXT_PUBLIC_FACEBOOK_REDIRECT_URI}&state=login&scope=email,public_profile`;
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm space-y-6 bg-white dark:bg-zinc-900 p-6 rounded-xl shadow-lg">
@@ -111,6 +120,7 @@ export default function RegisterPage() {
             )}
           </Button>
         </form>
+
         <div className="border-t pt-4 text-center space-y-2">
           <Button
             variant="outline"
@@ -130,6 +140,7 @@ export default function RegisterPage() {
             Sign up with Google
           </Button>
         </div>
+
         <p className="text-sm text-center text-muted-foreground">
           Already have an account?{" "}
           <Link

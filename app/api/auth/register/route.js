@@ -12,7 +12,10 @@ export async function POST(req) {
   try {
     await connectDB();
 
-    const { email, password, firstName, lastName } = await req.json();
+    const body = await req.json(); // Read once
+    console.log("📥 Registration body received:", body); // Log after parsing
+
+    const { email, password, firstName, lastName } = body;
 
     if (!email || !password || !firstName || !lastName) {
       return NextResponse.json(
