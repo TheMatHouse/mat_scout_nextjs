@@ -44,7 +44,7 @@ export async function POST(req) {
       lastName,
       username,
       avatarType: "default",
-      provider: "credentials",
+      provider: "local",
     });
 
     const token = signToken({ userId: newUser._id });
