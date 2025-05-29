@@ -4,7 +4,7 @@ import { Types } from "mongoose";
 import UserStyle from "@/models/userStyleModel";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
-import { Style } from "@/models/styleModel";
+import Style from "@/models/styleModel";
 
 export const GET = async (request) => {
   try {
