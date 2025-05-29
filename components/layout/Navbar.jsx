@@ -34,7 +34,7 @@ const Navbar = () => {
                 Dashboard
               </Link>
               <Link
-                href={`/profile/${user.username}`}
+                href={`/${user.username}`}
                 className="hover:underline"
               >
                 Profile
