@@ -15,7 +15,7 @@ export async function GET(request) {
   const redirectUri =
     process.env.NODE_ENV === "development"
       ? "http://localhost:3000/api/auth/google/callback"
-      : "https://ssm-testing.com/api/auth/google/callback";
+      : "https://matscout.com/api/auth/google/callback";
 
   try {
     const tokenRes = await axios.post(
@@ -82,7 +82,7 @@ export async function GET(request) {
     const baseUrl =
       process.env.NODE_ENV === "development"
         ? "http://localhost:3000"
-        : "https://ssm-testing.com";
+        : "https://matscout.com";
 
     const response = NextResponse.redirect(`${baseUrl}/dashboard`);
 

@@ -47,7 +47,7 @@ export default function LoginPage() {
   }&redirect_uri=${
     process.env.NODE_ENV === "development"
       ? "http://localhost:3000"
-      : "https://ssm-testing.com"
+      : "https://matscout.com"
   }/api/auth/google/callback&response_type=code&scope=openid%20email%20profile&access_type=online`;
 
   const facebookURL = `https://www.facebook.com/v22.0/dialog/oauth?client_id=${
@@ -55,7 +55,7 @@ export default function LoginPage() {
   }&redirect_uri=${
     process.env.NODE_ENV === "development"
       ? "http://localhost:3000"
-      : "https://ssm-testing.com"
+      : "https://matscout.com"
   }/api/auth/facebook/callback&state=login&scope=email,public_profile`;
 
   return (
