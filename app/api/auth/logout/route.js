@@ -1,4 +1,3 @@
-// app/api/auth/logout/route.js
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -8,7 +7,7 @@ export async function GET() {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    expires: new Date(0), // expires immediately
+    expires: new Date(0),
   });
   return response;
 }

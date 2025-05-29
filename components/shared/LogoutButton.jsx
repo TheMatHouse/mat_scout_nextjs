@@ -1,5 +1,4 @@
 "use client";
-
 import { useRouter } from "next/navigation";
 
 export default function LogoutButton({ className }) {
@@ -9,9 +8,9 @@ export default function LogoutButton({ className }) {
     try {
       await fetch("/api/auth/logout", { method: "GET" });
 
-      // ✅ Use Next.js router instead of full page reload
+      // Force reload after logout to clear cached data
       router.push("/");
-      router.refresh(); // Important to update server components like NavBar
+      router.refresh();
     } catch (err) {
       console.error("Logout failed:", err);
     }
