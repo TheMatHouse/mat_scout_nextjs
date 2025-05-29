@@ -1,48 +1,79 @@
 import { NextResponse } from "next/server";
-import crypto from "crypto";
+import axios from "axios";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
+import jwt from "jsonwebtoken";
 
-const APP_SECRET = process.env.FACEBOOK_CLIENT_SECRET;
+export async function GET(req) {
+  const { searchParams } = new URL(req.url);
+  const code = searchParams.get("code");
 
-function parseSignedRequest(signedRequest) {
-  const [encodedSig, payload] = signedRequest.split(".");
-  const sig = Buffer.from(encodedSig, "base64");
-  const data = JSON.parse(Buffer.from(payload, "base64").toString("utf-8"));
+  if (!code) {
+    return NextResponse.redirect(
+      "https://matscout.com/login?error=missing_code"
+    );
+  }
 
-  const expectedSig = crypto
-    .createHmac("sha256", APP_SECRET)
-    .update(payload)
-    .digest();
+  const redirectUri = "https://matscout.com/api/auth/facebook/callback";
 
-  const isValid = crypto.timingSafeEqual(sig, expectedSig);
-
-  return isValid ? data : null;
-}
-
-export async function POST(req) {
   try {
-    const body = await req.formData();
-    const signedRequest = body.get("signed_request");
-
-    const data = parseSignedRequest(signedRequest);
-    if (!data) {
-      return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
-    }
-
-    const facebookUserId = data.user_id;
-
-    await connectDB();
-    const user = await User.findOneAndUpdate(
-      { facebookId: facebookUserId },
-      { $set: { isDeauthorized: true } }
+    // Exchange code for access token
+    const tokenRes = await axios.get(
+      `https://graph.facebook.com/v22.0/oauth/access_token`,
+      {
+        params: {
+          client_id: process.env.FACEBOOK_CLIENT_ID,
+          client_secret: process.env.FACEBOOK_CLIENT_SECRET,
+          redirect_uri: redirectUri,
+          code,
+        },
+      }
     );
 
-    console.log("Facebook user deauthorized:", facebookUserId);
+    const accessToken = tokenRes.data.access_token;
 
-    return NextResponse.json({ success: true });
+    // Get user profile
+    const userRes = await axios.get(`https://graph.facebook.com/me`, {
+      params: {
+        fields: "id,name,email,picture",
+        access_token: accessToken,
+      },
+    });
+
+    const { id: facebookId, name, email } = userRes.data;
+
+    await connectDB();
+
+    let user = await User.findOne({ facebookId });
+
+    if (!user) {
+      user = await User.create({
+        facebookId,
+        name,
+        email,
+      });
+    }
+
+    // Create a JWT session
+    const token = jwt.sign(
+      { _id: user._id, email: user.email, name: user.name },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    const response = NextResponse.redirect("https://matscout.com/dashboard");
+    response.cookies.set("token", token, {
+      httpOnly: true,
+      secure: true,
+      path: "/",
+      sameSite: "Lax",
+    });
+
+    return response;
   } catch (err) {
-    console.error("Facebook deauth error:", err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    console.error("Facebook login error:", err.response?.data || err.message);
+    return NextResponse.redirect(
+      "https://matscout.com/login?error=facebook_login_failed"
+    );
   }
 }
