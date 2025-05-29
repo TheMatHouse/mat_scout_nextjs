@@ -102,7 +102,12 @@ export async function GET(request) {
 
     const jwt = signToken({ userId: user._id });
 
-    const response = NextResponse.redirect(new URL("/dashboard", request.url));
+    const baseURL =
+      process.env.NODE_ENV === "development"
+        ? "http://localhost:3000"
+        : "https://matscout.com";
+
+    const response = NextResponse.redirect(`${baseURL}/dashboard`);
 
     response.cookies.set("token", jwt, {
       httpOnly: true,
