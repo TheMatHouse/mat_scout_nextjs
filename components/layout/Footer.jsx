@@ -25,6 +25,12 @@ export default function Footer() {
           >
             Terms of Service
           </Link>
+          <Link
+            href="/data-deletion"
+            className="hover:underline"
+          >
+            Data Deletion
+          </Link>
         </div>
 
         {/* Socials */}
