@@ -1,45 +1,19 @@
-"use client";
-
 import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@/context/UserContext";
 
-export default function LogoutButton({ className }) {
+export default function LogoutButton() {
   const router = useRouter();
-  const { refreshUser, user } = useCurrentUser();
+  const { logout } = useCurrentUser();
 
   const handleLogout = async () => {
-    try {
-      const res = await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      });
-
-      if (!res.ok) {
-        console.error("❌ Logout failed");
-        return;
-      }
-
-      console.log("✅ Logout succeeded, user before refresh:", user);
-
-      await refreshUser();
-
-      console.log("✅ After refreshUser, user is now:", user);
-
-      // Wait briefly for state to update before reload
-      await refreshUser();
-      setTimeout(() => {
-        router.push("/");
-        window.location.reload();
-      }, 200);
-    } catch (err) {
-      console.error("❌ Logout error:", err);
-    }
+    await logout(); // ✅ Clears context and server cookie
+    router.push("/"); // ✅ Redirect to homepage
   };
 
   return (
     <button
       onClick={handleLogout}
-      className={className}
+      className="text-ms-light-red hover:text-ms-dark-red font-semibold px-4 py-2"
     >
       Logout
     </button>

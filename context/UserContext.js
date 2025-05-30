@@ -1,62 +1,48 @@
 // context/UserContext.js
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
-} from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
-export const UserContext = createContext();
+const UserContext = createContext();
 
-export function UserProvider({ children }) {
+export const UserProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchUser = useCallback(async () => {
+  const refreshUser = async () => {
     try {
-      const res = await fetch("/api/auth/me", {
-        method: "GET",
-        credentials: "include",
-      });
-
+      const res = await fetch("/api/auth/me");
+      if (!res.ok) throw new Error();
       const data = await res.json();
-      if (!res.ok || data?.error) {
-        console.warn("🔐 No valid user:", data?.error);
-        setUser(null);
-      } else {
-        setUser(data.user);
-      }
+      setUser(data.user);
     } catch (err) {
-      console.error("Failed to fetch user:", err);
       setUser(null);
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    fetchUser();
-  }, [fetchUser]);
-
-  const refreshUser = async () => {
-    setLoading(true);
-    await fetchUser();
   };
 
+  const logout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setUser(null); // ✅ Clear user from context
+  };
+
+  useEffect(() => {
+    refreshUser();
+  }, []);
+
   return (
-    <UserContext.Provider value={{ user, loading, refreshUser }}>
+    <UserContext.Provider
+      value={{
+        user,
+        loading,
+        refreshUser,
+        logout,
+      }}
+    >
       {children}
     </UserContext.Provider>
   );
-}
+};
 
-export function useCurrentUser() {
-  const context = useContext(UserContext);
-  if (!context) {
-    throw new Error("useCurrentUser must be used within a UserProvider");
-  }
-  return context;
-}
+export const useCurrentUser = () => useContext(UserContext);

@@ -7,13 +7,8 @@ import { Button } from "@/components/ui/button";
 import Countries from "@/assets/countries.json";
 import useGeolocationCountry from "@/hooks/useGeolocationCountry";
 import { toast } from "react-toastify";
-import { useRouter } from "next/navigation";
-import { useCurrentUser } from "@/context/UserContext";
 
-export default function SettingsForm({ user, onClose }) {
-  const router = useRouter();
-  const { refreshUser } = useCurrentUser();
-
+export default function SettingsForm({ user, onClose, refreshUser }) {
   const isOAuthUser =
     user.provider === "facebook" || user.provider === "google";
 

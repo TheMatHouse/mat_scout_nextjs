@@ -3,7 +3,6 @@
 
 import { useState } from "react";
 import { Pencil, Camera } from "lucide-react";
-import { useCurrentUser } from "@/context/UserContext";
 import {
   Dialog,
   DialogContent,
@@ -22,13 +21,10 @@ import { Copy, Share } from "lucide-react";
 import GoogleIcon from "@/components/icons/GoogleIcon";
 import FacebookIcon from "@/components/icons/FacebookIcon";
 
-export default function DashboardSettings() {
+export default function DashboardSettings({ user, refreshUser }) {
   const [open, setOpen] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState(null);
-  const { user, loading, refreshUser } = useCurrentUser();
   const router = useRouter();
-
-  if (loading) return null;
 
   if (!user) {
     return (
@@ -167,6 +163,7 @@ export default function DashboardSettings() {
               <SettingsForm
                 user={user}
                 onClose={() => setOpen(false)}
+                reFreshUser={refreshUser}
               />
             </DialogContent>
           </Dialog>

@@ -40,7 +40,7 @@ const Navbar = () => {
               >
                 Profile
               </Link>
-              <LogoutButton className="text-red-400 hover:text-white" />
+              <LogoutButton />
             </>
           ) : (
             <>
