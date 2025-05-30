@@ -14,7 +14,7 @@ export async function GET(req) {
     );
   }
 
-  const redirectUri = "https://matscout.com/api/auth/facebook/callback";
+  const redirectUri = process.env.NEXT_PUBLIC_FACEBOOK_REDIRECT_URI;
 
   try {
     // Exchange code for access token

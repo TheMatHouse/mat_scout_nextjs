@@ -1,34 +1,28 @@
-import { cookies } from "next/headers";
+// app/api/auth/me/route.js
 import { NextResponse } from "next/server";
-import { verifyToken } from "@/lib/auth";
+import { verifyToken } from "@/lib/jwt";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
 
-export async function GET() {
+export async function GET(request) {
+  await connectDB();
+  const token = request.cookies.get("token")?.value;
+
+  if (!token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
-    const cookieStore = await cookies(); // ✅ FIX: use await
-    const token = cookieStore.get("token")?.value;
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Unauthorized - no token" },
-        { status: 401 }
-      );
-    }
-
-    const decoded = await verifyToken(token);
-
-    await connectDB(); // Ensure DB connection
-
-    const user = await User.findById(decoded._id).select("-password");
+    const decoded = verifyToken(token);
+    const user = await User.findById(decoded.userId).select("-password");
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     return NextResponse.json({ user });
-  } catch (err) {
-    console.error("Error in /api/auth/me:", err);
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    console.error("Auth me route error:", error.message);
+    return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }
 }

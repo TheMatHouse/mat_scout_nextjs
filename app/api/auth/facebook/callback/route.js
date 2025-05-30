@@ -22,7 +22,7 @@ export async function GET(request) {
       : process.env.NEXT_PUBLIC_FACEBOOK_REDIRECT_URI;
 
   try {
-    // Get token
+    // Step 1: Get access token from Facebook
     const tokenRes = await axios.get(
       "https://graph.facebook.com/v22.0/oauth/access_token",
       {
@@ -37,7 +37,7 @@ export async function GET(request) {
 
     const accessToken = tokenRes.data.access_token;
 
-    // Get user profile
+    // Step 2: Get profile info from Facebook
     const profileRes = await axios.get("https://graph.facebook.com/me", {
       params: {
         fields: "id,name,email",
@@ -79,8 +79,7 @@ export async function GET(request) {
 
     const avatar = `https://graph.facebook.com/${id}/picture?type=large`;
 
-    // ✅ CONNECT + IMPORT HERE
-
+    // Step 3: Connect to DB and create/find user
     const { default: UserModel } = await import("@/models/userModel.js");
     let user = await UserModel.findOne({ email });
 
@@ -100,6 +99,7 @@ export async function GET(request) {
       });
     }
 
+    // Step 4: Sign JWT token
     const jwt = signToken({ userId: user._id });
 
     const baseURL =
@@ -107,6 +107,7 @@ export async function GET(request) {
         ? "http://localhost:3000"
         : "https://matscout.com";
 
+    // Step 5: Set cookie and redirect
     const response = NextResponse.redirect(`${baseURL}/dashboard`);
 
     response.cookies.set("token", jwt, {
@@ -114,9 +115,11 @@ export async function GET(request) {
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: 60 * 60 * 24 * 7, // 1 week
     });
 
+    console.log("🔐 Facebook JWT:", jwt);
+    console.log("✅ Setting token cookie and redirecting...");
     return response;
   } catch (error) {
     console.error("Facebook OAuth error:", error.message);
