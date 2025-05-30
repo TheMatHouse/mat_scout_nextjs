@@ -1,4 +1,3 @@
-// app/login/page.jsx
 "use client";
 
 import { useState } from "react";
@@ -18,28 +17,37 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
-  const handleEmailLogin = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
+    console.log("Logging in...");
+
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
         body: JSON.stringify({ email, password }),
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Login failed");
-      }
+      console.log("Login response:", res.status);
+      const data = await res.json();
+      console.log("Login data:", data);
 
-      router.push("/dashboard");
+      if (res.ok) {
+        window.location.href = "/dashboard";
+      } else {
+        setError(data.error || "Login failed");
+      }
     } catch (err) {
-      setError(err.message);
-    } finally {
-      setSubmitting(false);
+      console.error("Login error:", err);
+      setError("Unexpected error");
     }
+
+    setSubmitting(false);
   };
 
   const googleURL = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${
@@ -60,7 +68,7 @@ export default function LoginPage() {
         {error && <p className="text-red-600 text-sm text-center">{error}</p>}
 
         <form
-          onSubmit={handleEmailLogin}
+          onSubmit={handleLogin}
           className="space-y-4"
         >
           <Input

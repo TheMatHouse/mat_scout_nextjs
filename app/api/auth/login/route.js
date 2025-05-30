@@ -1,34 +1,37 @@
-import { connectDB } from "@/lib/mongo";
-import User from "@/models/userModel";
-import bcrypt from "bcryptjs";
-import { signToken } from "@/lib/jwt";
 import { NextResponse } from "next/server";
+import jwt from "jsonwebtoken";
+import User from "@/models/userModel";
+import { connectDB } from "@/lib/mongo";
+import bcrypt from "bcryptjs";
 
 export async function POST(req) {
   await connectDB();
   const { email, password } = await req.json();
 
   const user = await User.findOne({ email });
-  if (!user || !user.password) {
-    return NextResponse.json(
-      { message: "Invalid credentials" },
-      { status: 401 }
-    );
+  if (!user) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) {
-    return NextResponse.json(
-      { message: "Invalid credentials" },
-      { status: 401 }
-    );
+  const isPasswordCorrect = await bcrypt.compare(password, user.password);
+  if (!isPasswordCorrect) {
+    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
   }
 
-  const token = signToken({
-    id: user._id,
-    email: user.email,
-    username: user.username,
+  const token = jwt.sign(
+    { _id: user._id, email: user.email },
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" }
+  );
+
+  const res = NextResponse.json({ message: "Login successful", user });
+
+  res.cookies.set("token", token, {
+    httpOnly: true,
+    path: "/",
+    maxAge: 60 * 60 * 24 * 7,
+    secure: process.env.NODE_ENV === "production",
   });
 
-  return NextResponse.json({ token, user });
+  return res;
 }

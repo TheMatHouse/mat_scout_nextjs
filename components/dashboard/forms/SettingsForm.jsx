@@ -182,10 +182,10 @@ export default function SettingsForm({ user, onClose }) {
           onChange={handleChange}
         />
         {usernameStatus === "taken" && (
-          <p className="text-sm text-red-500 pt-2">Username is already taken</p>
+          <p className="text-sm text-red-500">Username is already taken</p>
         )}
         {usernameStatus === "available" && (
-          <p className="text-sm text-green-500 pt-2">Username is available</p>
+          <p className="text-sm text-green-500">Username is available</p>
         )}
       </div>
 

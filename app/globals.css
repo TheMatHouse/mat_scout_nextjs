@@ -94,6 +94,10 @@ body {
   }
 }
 
+input:-webkit-autofill {
+  transition: background-color 100000s ease-in-out 0s;
+}
+
 .cl-avatarBox {
   width: 2.5rem;
   height: 2.5rem;

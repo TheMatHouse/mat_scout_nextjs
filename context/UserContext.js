@@ -17,9 +17,18 @@ export function UserProvider({ children }) {
 
   const fetchUser = useCallback(async () => {
     try {
-      const res = await fetch("/api/auth/me");
+      const res = await fetch("/api/auth/me", {
+        method: "GET",
+        credentials: "include",
+      });
+
       const data = await res.json();
-      setUser(data?.user || null);
+      if (!res.ok || data?.error) {
+        console.warn("🔐 No valid user:", data?.error);
+        setUser(null);
+      } else {
+        setUser(data.user);
+      }
     } catch (err) {
       console.error("Failed to fetch user:", err);
       setUser(null);

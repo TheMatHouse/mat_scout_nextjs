@@ -1,78 +1,62 @@
-// app/api/auth/register/route.js
-
-import { signToken } from "@/lib/jwt";
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { connectDB } from "@/lib/mongo";
-import User from "@/models/userModel";
 import bcrypt from "bcryptjs";
-import { validateUsername } from "@/lib/validateUsername";
+import jwt from "jsonwebtoken";
+import User from "@/models/userModel";
+import { connectDB } from "@/lib/mongo";
 
 export async function POST(req) {
   try {
     await connectDB();
 
-    const body = await req.json(); // Read once
-    console.log("📥 Registration body received:", body); // Log after parsing
+    const { firstName, lastName, email, password, username } = await req.json();
 
-    const { email, password, firstName, lastName } = body;
-
-    if (!email || !password || !firstName || !lastName) {
+    // Check for missing fields
+    if (!firstName || !lastName || !email || !password || !username) {
       return NextResponse.json(
-        { error: "All fields are required" },
+        { error: "Missing required fields" },
         { status: 400 }
       );
     }
 
-    const existingUser = await User.findOne({ email });
+    // Check if user/email/username already exists
+    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
     if (existingUser) {
       return NextResponse.json(
-        { error: "Email already in use" },
+        { error: "Email or username already in use" },
         { status: 400 }
       );
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Auto-generate a unique username
-    const rawUsername = `${firstName}${lastName}`
-      .toLowerCase()
-      .replace(/\s+/g, "");
-    const username = await validateUsername(rawUsername);
-
+    // Create user
     const newUser = await User.create({
-      email,
-      password: hashedPassword,
       firstName,
       lastName,
+      email,
       username,
-      avatarType: "default",
-      provider: "local",
+      password: hashedPassword,
     });
 
-    const token = signToken({ userId: newUser._id });
-
-    // ✅ Create response and attach the cookie to it
-    const response = NextResponse.json({
-      message: "Registration successful",
-      user: {
-        _id: newUser._id,
-        email: newUser.email,
-        username: newUser.username,
-      },
+    // Generate JWT token
+    const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
     });
 
-    response.cookies.set("token", token, {
+    // ✅ Set token cookie using response object
+    const res = NextResponse.json({ message: "Registration successful" });
+    res.cookies.set("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 60 * 60 * 24 * 7, // 1 week
+      maxAge: 60 * 60 * 24 * 7, // 7 days
     });
 
-    return response;
+    return res;
   } catch (err) {
-    console.error("Registration error:", err);
+    console.error("❌ Registration error:", err);
     return NextResponse.json({ error: "Registration failed" }, { status: 500 });
   }
 }

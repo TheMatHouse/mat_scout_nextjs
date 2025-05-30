@@ -17,12 +17,39 @@ export default function RegisterPage() {
     password: "",
     firstName: "",
     lastName: "",
+    username: "",
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [isUsernameAvailable, setIsUsernameAvailable] = useState(null);
+  const [usernameTimer, setUsernameTimer] = useState(null);
+
+  const checkUsernameAvailability = async (username) => {
+    console.log("🔍 Checking availability for:", username);
+    if (!username || username.length < 3) {
+      setIsUsernameAvailable(null);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/check-username?username=${username}`);
+      const data = await res.json();
+      setIsUsernameAvailable(data.available);
+    } catch (err) {
+      console.error("❌ Username check failed", err);
+      setIsUsernameAvailable(null);
+    }
+  };
 
   const handleChange = (e) => {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+
+    if (name === "username") {
+      setIsUsernameAvailable(null);
+      if (usernameTimer) clearTimeout(usernameTimer);
+      const timer = setTimeout(() => checkUsernameAvailability(value), 500);
+      setUsernameTimer(timer);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -30,8 +57,20 @@ export default function RegisterPage() {
     setSubmitting(true);
     setError(null);
 
-    if (!form.email || !form.password || !form.firstName || !form.lastName) {
+    if (
+      !form.email ||
+      !form.password ||
+      !form.firstName ||
+      !form.lastName ||
+      !form.username
+    ) {
       setError("Please fill in all required fields.");
+      setSubmitting(false);
+      return;
+    }
+
+    if (isUsernameAvailable === false) {
+      setError("Username is not available. Please choose another.");
       setSubmitting(false);
       return;
     }
@@ -84,19 +123,40 @@ export default function RegisterPage() {
           <Input
             name="firstName"
             placeholder="First Name"
+            value={form.firstName}
             onChange={handleChange}
             required
           />
           <Input
             name="lastName"
             placeholder="Last Name"
+            value={form.lastName}
             onChange={handleChange}
             required
           />
           <Input
+            name="username"
+            placeholder="Username"
+            value={form.username}
+            onChange={handleChange}
+            required
+          />
+          {form.username.length > 2 && (
+            <p className="text-sm mt-1">
+              {isUsernameAvailable === null ? (
+                <span className="text-gray-500">Checking...</span>
+              ) : isUsernameAvailable ? (
+                <span className="text-green-600">✅ Available</span>
+              ) : (
+                <span className="text-red-600">❌ Not available</span>
+              )}
+            </p>
+          )}
+          <Input
             type="email"
             name="email"
             placeholder="Email"
+            value={form.email}
             onChange={handleChange}
             required
           />
@@ -104,6 +164,7 @@ export default function RegisterPage() {
             type="password"
             name="password"
             placeholder="Password"
+            value={form.password}
             onChange={handleChange}
             required
           />

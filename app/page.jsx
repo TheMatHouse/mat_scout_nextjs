@@ -1,11 +1,15 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { verifyTokenFromCookie } from "@/lib/verifyTokenFromCookie";
 import HomePage from "./home/page";
+import { parse } from "cookie";
 
 export default async function Home() {
-  const user = await verifyTokenFromCookie();
+  const headerList = await headers();
+  const cookie = headerList.get("cookie") || "";
+  const parsedCookies = parse(cookie);
+  const token = parsedCookies.token;
 
-  if (user) {
+  if (token) {
     redirect("/dashboard");
   }
 

@@ -1,22 +1,23 @@
 "use client";
 import dynamic from "next/dynamic";
-import { Suspense } from "react";
-
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { Menu } from "lucide-react";
 import { useCurrentUser } from "@/context/UserContext";
 import LogoutButton from "@/components/shared/LogoutButton";
 import ThemeToggle from "../shared/theme-toggle";
-// import MobileSidebarDrawer from "./MobileSidebarDrawer";
+
+const MobileSidebarDrawer = dynamic(
+  () => import("@/components/layout/MobileSidebarDrawer"),
+  { ssr: false }
+);
 
 const Navbar = () => {
-  const MobileSidebarDrawer = dynamic(
-    () => import("@/components/layout/MobileSidebarDrawer"),
-    { ssr: false }
-  );
   const { user, loading } = useCurrentUser();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  // ⛔ Prevent hydration mismatch
+  if (loading) return null;
 
   return (
     <>
@@ -28,7 +29,7 @@ const Navbar = () => {
           {user ? (
             <>
               <Link
-                href={`/dashboard`}
+                href="/dashboard"
                 className="hover:underline"
               >
                 Dashboard
@@ -61,7 +62,6 @@ const Navbar = () => {
               >
                 Log In
               </Link>
-
               <Link
                 href="/register"
                 className="hover:underline"
@@ -87,7 +87,7 @@ const Navbar = () => {
         <MobileSidebarDrawer
           isOpen={isMobileOpen}
           onClose={() => setIsMobileOpen(false)}
-          username={user?.username || "me"}
+          username={user?.username || ""}
         />
       </Suspense>
     </>
