@@ -3,7 +3,7 @@ import dynamic from "next/dynamic";
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { Menu } from "lucide-react";
-import { useCurrentUser } from "@/context/UserContext";
+import { useUser } from "@/context/UserContext"; // ✅ Correct hook
 import LogoutButton from "@/components/shared/LogoutButton";
 import ThemeToggle from "../shared/theme-toggle";
 
@@ -13,10 +13,9 @@ const MobileSidebarDrawer = dynamic(
 );
 
 const Navbar = () => {
-  const { user, loading } = useCurrentUser();
+  const { user, loading } = useUser();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  // ⛔ Prevent hydration mismatch
   if (loading) return null;
 
   return (

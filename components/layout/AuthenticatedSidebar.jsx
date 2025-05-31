@@ -4,12 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { useCurrentUser } from "@/context/UserContext";
+import { useUser } from "@/context/UserContext";
 
 export default function AuthenticatedSidebar() {
   const pathname = usePathname();
   const [isDashboardOpen, setDashboardOpen] = useState(false);
-  const { user, loading } = useCurrentUser();
+  const { user, loading } = useUser(); // ✅
 
   useEffect(() => {
     setDashboardOpen(pathname.startsWith("/dashboard"));

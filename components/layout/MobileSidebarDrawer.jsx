@@ -4,13 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { useCurrentUser } from "@/context/UserContext";
+import { useUser } from "@/context/UserContext";
 import LogoutButton from "@/components/shared/LogoutButton";
 
 export default function MobileSidebarDrawer({ isOpen, onClose }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { user, loading } = useCurrentUser();
+  const { user, loading } = useUser();
 
   const dashboardView = searchParams.get("v") || "settings";
   const [isDashboardOpen, setDashboardOpen] = useState(true);

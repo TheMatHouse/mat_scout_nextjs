@@ -77,7 +77,7 @@ export async function GET(request) {
       });
     }
 
-    const jwt = signToken({ userId: user._id });
+    const jwt = signToken({ id: user._id });
 
     const baseUrl =
       process.env.NODE_ENV === "development"

@@ -4,10 +4,10 @@ import Link from "next/link";
 import Image from "next/image";
 import logo from "@/assets/matScout_logo.png";
 import Navbar from "@/components/layout/Navbar";
-import { useCurrentUser } from "@/context/UserContext"; // ✅ Correct import
+import { useUser } from "@/context/UserContext"; // ✅ Corrected hook
 
 export default function Header() {
-  const { user, loading } = useCurrentUser();
+  const { user, loading } = useUser(); // ✅ Correct usage
 
   return (
     <header className="w-full sticky top-0 z-50 bg-ms-blue text-ms-nav-text dark:bg-[hsl(222.2_47.4%_11.2%)] dark:text-white shadow-sm border-b border-border">

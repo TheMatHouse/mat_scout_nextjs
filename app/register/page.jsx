@@ -25,7 +25,6 @@ export default function RegisterPage() {
   const [usernameTimer, setUsernameTimer] = useState(null);
 
   const checkUsernameAvailability = async (username) => {
-    console.log("🔍 Checking availability for:", username);
     if (!username || username.length < 3) {
       setIsUsernameAvailable(null);
       return;
@@ -57,13 +56,9 @@ export default function RegisterPage() {
     setSubmitting(true);
     setError(null);
 
-    if (
-      !form.email ||
-      !form.password ||
-      !form.firstName ||
-      !form.lastName ||
-      !form.username
-    ) {
+    const { email, password, firstName, lastName, username } = form;
+
+    if (!email || !password || !firstName || !lastName || !username) {
       setError("Please fill in all required fields.");
       setSubmitting(false);
       return;
@@ -75,8 +70,6 @@ export default function RegisterPage() {
       return;
     }
 
-    console.log("📤 Submitting form:", form);
-
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
@@ -84,16 +77,28 @@ export default function RegisterPage() {
         body: JSON.stringify(form),
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        console.log("🛑 Registration failed response:", data);
-        throw new Error(data.error || "Registration failed");
+      // ✅ If redirected, follow it manually
+      if (res.redirected) {
+        window.location.href = res.url;
+        return;
       }
 
-      window.location.href = "/dashboard";
+      const contentType = res.headers.get("content-type");
+      if (!res.ok) {
+        if (contentType && contentType.includes("application/json")) {
+          const data = await res.json();
+          setError(data.error || "Registration failed");
+        } else {
+          setError("Registration failed with unknown error");
+        }
+        return;
+      }
+
+      // ✅ Success: navigate to dashboard
+      router.push("/dashboard");
     } catch (err) {
-      setError(err.message);
+      console.error("❌ Registration error:", err);
+      setError("Something went wrong. Please try again.");
     } finally {
       setSubmitting(false);
     }

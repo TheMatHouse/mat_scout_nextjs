@@ -2,20 +2,28 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useCurrentUser } from "@/context/UserContext";
+import { useUser } from "@/context/UserContext";
 import DashboardSettings from "@/components/dashboard/DashboardSettings";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { user, loading, refreshUser } = useCurrentUser();
+  const { user, loading, refreshUser } = useUser();
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push("/");
+    if (!loading) {
+      if (!user) {
+        router.push("/");
+      }
     }
   }, [loading, user]);
 
-  if (loading || !user) return null;
+  if (loading) {
+    return <div>Loading...</div>; // Or your preferred spinner
+  }
+
+  if (!user) {
+    return null; // User is unauthenticated — useEffect will redirect
+  }
 
   return (
     <DashboardSettings

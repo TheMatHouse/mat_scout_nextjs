@@ -1,9 +1,9 @@
 import { useRouter } from "next/navigation";
-import { useCurrentUser } from "@/context/UserContext";
+import { useUser } from "@/context/UserContext";
 
 export default function LogoutButton() {
   const router = useRouter();
-  const { logout } = useCurrentUser();
+  const { logout } = useUser();
 
   const handleLogout = async () => {
     await logout(); // ✅ Clears context and server cookie
