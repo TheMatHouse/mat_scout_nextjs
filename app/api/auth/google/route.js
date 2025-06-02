@@ -5,7 +5,7 @@ import crypto from "crypto";
 export async function GET(request) {
   // 1. Generate a random state value for security (to prevent CSRF)
   const state = crypto.randomBytes(16).toString("hex");
-  const origin = new URL(request.url).origin;
+  const origin = process.env.NEXT_PUBLIC_DOMAIN || new URL(request.url).origin;
   const redirectUri = `${origin}/api/auth/google/callback`;
 
   console.log("🚀 Google OAuth Redirect URI:", redirectUri);
