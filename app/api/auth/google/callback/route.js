@@ -9,7 +9,8 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const code = searchParams.get("code");
     const returnedState = searchParams.get("state");
-    const origin = new URL(request.url).origin;
+    const origin =
+      process.env.NEXT_PUBLIC_DOMAIN || new URL(request.url).origin;
 
     const cookieStore = await cookies();
     const storedState = cookieStore.get("oauth_state_google")?.value;
