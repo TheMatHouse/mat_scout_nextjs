@@ -1,19 +1,19 @@
-import { cookies } from "next/headers";
-import jwt from "jsonwebtoken";
+// app/dashboard/page.jsx
+import { getCurrentUser } from "@/lib/getCurrentUser";
+import { redirect } from "next/navigation";
+
 export default async function DashboardPage() {
-  const cookieStore = cookies(); // ✅ ok here
-  const token = cookieStore.get("token")?.value;
+  const user = await getCurrentUser();
 
-  if (!token) redirect("/login");
+  if (!user) {
+    console.log("User is null, redirecting.");
+    redirect("/login");
+  }
 
-  const decoded = jwt.decode(token);
-  const username = decoded?.username || "User";
   return (
-    <main className="p-6">
-      <h1 className="text-3xl font-bold mb-4">Welcome, {firstName}!</h1>
-      <p className="text-lg">
-        This is your dashboard. You can add settings, stats, or links here.
-      </p>
-    </main>
+    <div>
+      <h1>Welcome, {user.firstName || user.username}</h1>
+      <p>Email: {user.email}</p>
+    </div>
   );
 }
