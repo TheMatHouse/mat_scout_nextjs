@@ -1,221 +1,222 @@
 "use client";
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Loader2 } from "lucide-react";
+import { apiFetch } from "@/lib/apiClient";
 import Link from "next/link";
-
-import FacebookIcon from "@/components/icons/FacebookIcon";
+import { useUser } from "@/context/UserContext";
 import GoogleIcon from "@/components/icons/GoogleIcon";
+import FacebookIcon from "@/components/icons/FacebookIcon";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { refreshUser } = useUser();
+
   const [form, setForm] = useState({
-    email: "",
-    password: "",
     firstName: "",
     lastName: "",
+    email: "",
+    password: "",
     username: "",
   });
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState(null);
-  const [isUsernameAvailable, setIsUsernameAvailable] = useState(null);
-  const [usernameTimer, setUsernameTimer] = useState(null);
 
-  const checkUsernameAvailability = async (username) => {
-    if (!username || username.length < 3) {
-      setIsUsernameAvailable(null);
-      return;
-    }
-    try {
-      const res = await fetch(`/api/check-username?username=${username}`);
-      const data = await res.json();
-      setIsUsernameAvailable(data.available);
-    } catch (err) {
-      console.error("❌ Username check failed", err);
-      setIsUsernameAvailable(null);
-    }
-  };
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState(null);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+
+  useEffect(() => {
+    const checkUsername = async () => {
+      if (!form.username) return setUsernameAvailable(null);
+      setCheckingUsername(true);
+      try {
+        const res = await apiFetch(
+          `/api/auth/check-username?username=${form.username}`
+        );
+        setUsernameAvailable(res.available);
+      } catch {
+        setUsernameAvailable(null);
+      }
+      setCheckingUsername(false);
+    };
+    const debounce = setTimeout(checkUsername, 500);
+    return () => clearTimeout(debounce);
+  }, [form.username]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-
-    if (name === "username") {
-      setIsUsernameAvailable(null);
-      if (usernameTimer) clearTimeout(usernameTimer);
-      const timer = setTimeout(() => checkUsernameAvailability(value), 500);
-      setUsernameTimer(timer);
-    }
+    setForm({ ...form, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
-    setError(null);
+    setError("");
+    setLoading(true);
 
-    const { email, password, firstName, lastName, username } = form;
-
-    if (!email || !password || !firstName || !lastName || !username) {
-      setError("Please fill in all required fields.");
-      setSubmitting(false);
-      return;
-    }
-
-    if (isUsernameAvailable === false) {
-      setError("Username is not available. Please choose another.");
-      setSubmitting(false);
-      return;
-    }
+    const data = {
+      firstName: form.firstName,
+      lastName: form.lastName,
+      username: form.username,
+      email: form.email,
+      password: form.password,
+    };
 
     try {
-      const res = await fetch("/api/auth/register", {
+      const res = await apiFetch("/api/auth/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(data),
+        headers: {
+          "Content-Type": "application/json",
+        },
       });
 
-      // ✅ If redirected, follow it manually
-      if (res.redirected) {
-        window.location.href = res.url;
-        return;
+      if (res.error) {
+        setError(res.error);
+      } else {
+        // 🔄 Refresh context AFTER cookie is stored
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        await refreshUser();
+        router.push("/dashboard");
       }
-
-      const contentType = res.headers.get("content-type");
-      if (!res.ok) {
-        if (contentType && contentType.includes("application/json")) {
-          const data = await res.json();
-          setError(data.error || "Registration failed");
-        } else {
-          setError("Registration failed with unknown error");
-        }
-        return;
-      }
-
-      // ✅ Success: navigate to dashboard
-      router.push("/dashboard");
     } catch (err) {
-      console.error("❌ Registration error:", err);
+      console.error("Registration error:", err);
       setError("Something went wrong. Please try again.");
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
-  const googleURL = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${
-    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-  }&redirect_uri=${
-    process.env.NODE_ENV === "development"
-      ? "http://localhost:3000"
-      : "https://matscout.com"
-  }/api/auth/google/callback&response_type=code&scope=openid%20email%20profile&access_type=online`;
-
-  const facebookURL = `https://www.facebook.com/v22.0/dialog/oauth?client_id=${process.env.NEXT_PUBLIC_FACEBOOK_CLIENT_ID}&redirect_uri=${process.env.NEXT_PUBLIC_FACEBOOK_REDIRECT_URI}&state=login&scope=email,public_profile`;
-
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
-      <div className="w-full max-w-sm space-y-6 bg-white dark:bg-zinc-900 p-6 rounded-xl shadow-lg">
-        <h2 className="text-2xl font-bold text-center">Create Account</h2>
+    <div className="max-w-md mx-auto mt-20 px-6">
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-lg rounded-xl p-8">
+        <h1 className="text-3xl font-bold text-center mb-6 text-[var(--ms-blue)] dark:text-[var(--ms-light-gray)]">
+          Create Account
+        </h1>
 
-        {error && <p className="text-red-600 text-sm text-center">{error}</p>}
+        {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
 
         <form
           onSubmit={handleSubmit}
-          className="space-y-4"
+          className="space-y-6"
         >
-          <Input
-            name="firstName"
-            placeholder="First Name"
-            value={form.firstName}
-            onChange={handleChange}
-            required
-          />
-          <Input
-            name="lastName"
-            placeholder="Last Name"
-            value={form.lastName}
-            onChange={handleChange}
-            required
-          />
-          <Input
-            name="username"
-            placeholder="Username"
-            value={form.username}
-            onChange={handleChange}
-            required
-          />
-          {form.username.length > 2 && (
-            <p className="text-sm mt-1">
-              {isUsernameAvailable === null ? (
-                <span className="text-gray-500">Checking...</span>
-              ) : isUsernameAvailable ? (
-                <span className="text-green-600">✅ Available</span>
-              ) : (
-                <span className="text-red-600">❌ Not available</span>
-              )}
-            </p>
-          )}
-          <Input
-            type="email"
-            name="email"
-            placeholder="Email"
-            value={form.email}
-            onChange={handleChange}
-            required
-          />
-          <Input
-            type="password"
-            name="password"
-            placeholder="Password"
-            value={form.password}
-            onChange={handleChange}
-            required
-          />
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+              First Name
+            </label>
+            <input
+              type="text"
+              name="firstName"
+              value={form.firstName}
+              onChange={handleChange}
+              required
+              className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-[var(--ms-light-gray)] dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[var(--ms-blue)]"
+            />
+          </div>
 
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={submitting}
-          >
-            {submitting ? (
-              <Loader2 className="animate-spin mr-2 h-4 w-4" />
-            ) : (
-              "Register"
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+              Last Name
+            </label>
+            <input
+              type="text"
+              name="lastName"
+              value={form.lastName}
+              onChange={handleChange}
+              required
+              className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-[var(--ms-light-gray)] dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[var(--ms-blue)]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+              Username
+            </label>
+            <input
+              type="text"
+              name="username"
+              value={form.username}
+              onChange={handleChange}
+              className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-[var(--ms-light-gray)] dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[var(--ms-blue)]"
+              required
+            />
+            {form.username && (
+              <p className="text-sm mt-1">
+                {checkingUsername ? (
+                  <span className="text-gray-500">Checking...</span>
+                ) : usernameAvailable ? (
+                  <span className="text-green-500">✓ Available</span>
+                ) : (
+                  <span className="text-red-500">✕ Taken</span>
+                )}
+              </p>
             )}
-          </Button>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+              Email
+            </label>
+            <input
+              type="email"
+              name="email"
+              value={form.email}
+              onChange={handleChange}
+              className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-[var(--ms-light-gray)] dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[var(--ms-blue)]"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+              Password
+            </label>
+            <input
+              type="password"
+              name="password"
+              value={form.password}
+              onChange={handleChange}
+              className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-[var(--ms-light-gray)] dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[var(--ms-blue)]"
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="w-full py-2.5 rounded-lg font-semibold shadow-md text-white bg-[var(--ms-blue)] hover:bg-[var(--ms-blue-gray)] transition"
+          >
+            Sign Up
+          </button>
         </form>
 
-        <div className="border-t pt-4 text-center space-y-2">
-          <Button
-            variant="outline"
-            className="w-full flex items-center justify-center gap-2"
-            onClick={() => (window.location.href = facebookURL)}
-          >
-            <FacebookIcon className="h-5 w-5 text-[#1877F2]" />
-            Sign up with Facebook
-          </Button>
-
-          <Button
-            variant="outline"
-            className="w-full flex items-center justify-center gap-2"
-            onClick={() => (window.location.href = googleURL)}
-          >
-            <GoogleIcon className="h-5 w-5" />
-            Sign up with Google
-          </Button>
+        <div className="my-6 text-center space-y-3">
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            or continue with
+          </div>
+          <div className="flex justify-center gap-4">
+            <a
+              href={`/api/auth/facebook`}
+              className="flex items-center gap-2 px-4 py-2 border rounded bg-white dark:bg-gray-800 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <FacebookIcon className="w-4 h-4" />
+              Facebook
+            </a>
+            <a
+              href={`/api/auth/google`} // or whatever your final route will be
+              className="flex items-center gap-2 px-4 py-2 border rounded bg-white dark:bg-gray-800 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <GoogleIcon className="w-4 h-4" />
+              Google
+            </a>
+          </div>
         </div>
 
-        <p className="text-sm text-center text-muted-foreground">
+        <div className="text-sm text-center mt-6 text-gray-600 dark:text-gray-400">
           Already have an account?{" "}
           <Link
             href="/login"
-            className="text-blue-600 hover:underline"
+            className="text-[var(--ms-blue)] hover:underline"
           >
             Log in
           </Link>
-        </p>
+        </div>
       </div>
     </div>
   );

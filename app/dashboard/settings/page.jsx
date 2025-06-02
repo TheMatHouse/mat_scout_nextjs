@@ -2,8 +2,8 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useUser } from "@/context/UserContext";
 import DashboardSettings from "@/components/dashboard/DashboardSettings";
+import { useUser } from "@/context/UserContext";
 
 export default function SettingsPage() {
   const router = useRouter();

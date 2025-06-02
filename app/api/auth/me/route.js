@@ -1,36 +1,45 @@
-// app/api/auth/me/route.js
 import { cookies } from "next/headers";
+import jwt from "jsonwebtoken";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
-import { verifyToken } from "@/lib/jwt";
+import { NextResponse } from "next/server";
 
 export async function GET() {
-  const token = cookies().get("token");
+  const cookieStore = await cookies();
+  const token =
+    cookieStore.get("token")?.value || cookieStore.get("authToken")?.value;
 
   if (!token) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-    });
+    return NextResponse.json({ error: "No token provided" }, { status: 401 });
   }
 
-  await connectDB();
+  try {
+    await connectDB();
 
-  const decoded = verifyToken(token.value);
-  if (!decoded) {
-    return new Response(JSON.stringify({ error: "Invalid token" }), {
-      status: 401,
-    });
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId || decoded._id).select(
+      "-password"
+    );
+
+    if (!user) {
+      // Clear invalid cookie
+      const res = NextResponse.json(
+        { error: "User not found" },
+        { status: 404 }
+      );
+      res.cookies.set("token", "", { path: "/", maxAge: 0 });
+      return res;
+    }
+
+    return NextResponse.json({ user });
+  } catch (err) {
+    console.error("GET /api/auth/me error:", err.message);
+
+    const res = NextResponse.json(
+      { error: "Invalid or expired token" },
+      { status: 401 }
+    );
+    res.cookies.set("token", "", { path: "/", maxAge: 0 });
+    return res;
   }
-
-  const user = await User.findById(decoded.userId).select("-password");
-  if (!user) {
-    return new Response(JSON.stringify({ error: "User not found" }), {
-      status: 404,
-    });
-  }
-
-  return new Response(JSON.stringify({ user }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
 }

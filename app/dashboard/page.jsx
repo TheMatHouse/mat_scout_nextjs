@@ -1,13 +1,17 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/getCurrentUser";
 
-export default async function DashboardIndex() {
-  const cookieStore = await cookies(); // ✅ Await cookies()
-  const token = cookieStore.get("token");
+export default async function DashboardPage() {
+  const user = await getCurrentUser();
 
-  if (!token) {
-    redirect("/");
-  }
+  if (!user) redirect("/login");
 
-  redirect("/dashboard/settings");
+  return (
+    <main className="p-6">
+      <h1 className="text-3xl font-bold mb-4">Welcome, {user.firstName}!</h1>
+      <p className="text-lg">
+        This is your dashboard. You can add settings, stats, or links here.
+      </p>
+    </main>
+  );
 }

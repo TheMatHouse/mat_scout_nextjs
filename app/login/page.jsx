@@ -1,132 +1,128 @@
 "use client";
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Loader2 } from "lucide-react";
+import { apiFetch } from "@/lib/apiClient";
 import Link from "next/link";
-
+import { useUser } from "@/context/UserContext"; // ✅ added
 import FacebookIcon from "@/components/icons/FacebookIcon";
 import GoogleIcon from "@/components/icons/GoogleIcon";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState(null);
+  const { refreshUser } = useUser(); // ✅ added
+  const [form, setForm] = useState({ email: "", password: "" });
+  const [error, setError] = useState("");
 
-  const handleLogin = async (e) => {
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
-    setError(null);
-    console.log("Logging in...");
+    setError("");
 
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await apiFetch("/api/auth/login", {
         method: "POST",
+        body: JSON.stringify(form),
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "include",
-        body: JSON.stringify({ email, password }),
       });
 
-      console.log("Login response:", res.status);
-      const data = await res.json();
-      console.log("Login data:", data);
-
-      if (res.ok) {
-        window.location.href = "/dashboard";
+      if (res.error) {
+        setError(res.error);
       } else {
-        setError(data.error || "Login failed");
+        await refreshUser(); // ✅ ensures sidebar/nav update
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 500); // short delay ensures cookie sync
       }
-    } catch (err) {
-      console.error("Login error:", err);
-      setError("Unexpected error");
+    } catch {
+      setError("Login failed. Please try again.");
     }
-
-    setSubmitting(false);
   };
-
-  const googleURL = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${
-    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-  }&redirect_uri=${
-    process.env.NODE_ENV === "development"
-      ? "http://localhost:3000"
-      : "https://matscout.com"
-  }/api/auth/google/callback&response_type=code&scope=openid%20email%20profile&access_type=online`;
-
-  const facebookURL = `https://www.facebook.com/v22.0/dialog/oauth?client_id=${process.env.NEXT_PUBLIC_FACEBOOK_CLIENT_ID}&redirect_uri=${process.env.NEXT_PUBLIC_FACEBOOK_REDIRECT_URI}&state=login&scope=email,public_profile`;
-
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
-      <div className="w-full max-w-sm space-y-6 bg-white dark:bg-zinc-900 p-6 rounded-xl shadow-lg">
-        <h2 className="text-2xl font-bold text-center">Log In</h2>
+    <div className="max-w-md mx-auto mt-20 px-6">
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-lg rounded-xl p-8">
+        <h1 className="text-3xl font-bold text-center mb-6 text-[var(--ms-blue)] dark:text-[var(--ms-light-gray)]">
+          Log In
+        </h1>
 
-        {error && <p className="text-red-600 text-sm text-center">{error}</p>}
+        {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
 
         <form
-          onSubmit={handleLogin}
-          className="space-y-4"
+          onSubmit={handleSubmit}
+          className="space-y-6"
         >
-          <Input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <Input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-          <Button
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+              Email
+            </label>
+            <input
+              type="email"
+              name="email"
+              value={form.email}
+              onChange={handleChange}
+              className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-[var(--ms-light-gray)] dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[var(--ms-blue)]"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+              Password
+            </label>
+            <input
+              type="password"
+              name="password"
+              value={form.password}
+              onChange={handleChange}
+              className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-[var(--ms-light-gray)] dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[var(--ms-blue)]"
+              required
+            />
+          </div>
+
+          <button
             type="submit"
-            className="w-full"
-            disabled={submitting}
+            className="w-full py-2.5 rounded-lg font-semibold shadow-md text-white bg-[var(--ms-blue)] hover:bg-[var(--ms-blue-gray)] transition"
           >
-            {submitting ? (
-              <Loader2 className="animate-spin mr-2 h-4 w-4" />
-            ) : (
-              "Login"
-            )}
-          </Button>
+            Log In
+          </button>
         </form>
 
-        <div className="border-t pt-4 text-center space-y-2">
-          <Button
-            variant="outline"
-            className="w-full flex items-center justify-center gap-2"
-            onClick={() => (window.location.href = facebookURL)}
-          >
-            <FacebookIcon className="h-5 w-5 text-[#1877F2]" />
-            Continue with Facebook
-          </Button>
-
-          <Button
-            variant="outline"
-            className="w-full flex items-center justify-center gap-2"
-            onClick={() => (window.location.href = googleURL)}
-          >
-            <GoogleIcon className="h-5 w-5" />
-            Continue with Google
-          </Button>
+        {/* Placeholder for social login */}
+        <div className="my-6 text-center space-y-3">
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            or continue with
+          </div>
+          <div className="flex justify-center gap-4">
+            <a
+              href={`/api/auth/facebook`}
+              className="flex items-center gap-2 px-4 py-2 border rounded bg-white dark:bg-gray-800 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <FacebookIcon className="w-4 h-4" />
+              Facebook
+            </a>
+            <a
+              href={`/api/auth/google`} // or whatever your final route will be
+              className="flex items-center gap-2 px-4 py-2 border rounded bg-white dark:bg-gray-800 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <GoogleIcon className="w-4 h-4" />
+              Google
+            </a>
+          </div>
         </div>
 
-        <p className="text-sm text-center text-muted-foreground mt-4">
+        <div className="text-sm text-center mt-6 text-gray-600 dark:text-gray-400">
           Don’t have an account?{" "}
           <Link
             href="/register"
-            className="text-blue-600 hover:underline"
+            className="text-[var(--ms-blue)] hover:underline"
           >
-            Register here
+            Create one
           </Link>
-        </p>
+        </div>
       </div>
     </div>
   );

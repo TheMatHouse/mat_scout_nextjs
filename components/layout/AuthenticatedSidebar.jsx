@@ -1,21 +1,20 @@
 "use client";
-
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { cn } from "@/lib/utils";
 import { useUser } from "@/context/UserContext";
+import { cn } from "@/lib/utils";
 
 export default function AuthenticatedSidebar() {
+  const { user } = useUser();
   const pathname = usePathname();
   const [isDashboardOpen, setDashboardOpen] = useState(false);
-  const { user, loading } = useUser(); // ✅
 
   useEffect(() => {
     setDashboardOpen(pathname.startsWith("/dashboard"));
   }, [pathname]);
 
-  if (loading || !user) return null;
+  if (!user) return null;
 
   const mainLinks = [
     { href: "/dashboard", label: "Dashboard", exact: true },

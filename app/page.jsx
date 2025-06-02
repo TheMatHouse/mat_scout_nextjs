@@ -1,13 +1,13 @@
-import { cookies } from "next/headers";
+// app/page.jsx
 import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/getCurrentUser";
 import HomePage from "./home/page";
 
 export default async function Home() {
-  const cookieStore = await cookies(); // Use cookies() for consistency
-  const token = cookieStore.get("token");
+  const user = await getCurrentUser();
 
-  if (token) {
-    redirect("/dashboard/settings"); // ✅ Go straight to final destination
+  if (user) {
+    redirect("/dashboard");
   }
 
   return <HomePage />;

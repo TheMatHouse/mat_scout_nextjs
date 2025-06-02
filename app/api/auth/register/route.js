@@ -1,32 +1,71 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongo";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import User from "@/models/userModel";
-import { verifyToken } from "@/lib/jwt";
+import { connectDB } from "@/lib/mongo";
 
-export async function GET() {
-  const token = cookies().get("token");
+const JWT_SECRET = process.env.JWT_SECRET;
 
-  if (!token) {
-    return NextResponse.json({ error: "No token provided" }, { status: 401 });
+function errorResponse(message, status = 400) {
+  return NextResponse.json({ error: message }, { status });
+}
+
+export async function POST(req) {
+  try {
+    await connectDB();
+
+    const { firstName, lastName, username, email, password } = await req.json();
+
+    if (!firstName || !lastName || !username || !email || !password) {
+      return errorResponse("All fields are required", 400);
+    }
+
+    const normalizedUsername = username.toLowerCase();
+    const normalizedEmail = email.toLowerCase();
+
+    // Check username/email uniqueness
+    if (await User.findOne({ username: normalizedUsername })) {
+      return errorResponse("Username is taken", 409);
+    }
+    if (await User.findOne({ email: normalizedEmail })) {
+      return errorResponse("Email is registered", 409);
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = new User({
+      firstName,
+      lastName,
+      username: normalizedUsername,
+      email: normalizedEmail,
+      password: hashedPassword,
+      role: "USER",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await newUser.save();
+
+    // Sign JWT token
+    const token = jwt.sign({ _id: newUser._id }, JWT_SECRET, {
+      expiresIn: "7d",
+    });
+
+    const response = NextResponse.json({ message: "Registration successful" });
+
+    response.cookies.set({
+      name: "token",
+      value: token,
+      httpOnly: true,
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+
+    return response;
+  } catch (err) {
+    console.error("Registration error:", err);
+    return errorResponse("Internal Server Error", 500);
   }
-
-  const payload = verifyToken(token.value);
-
-  if (!payload || !payload.userId) {
-    return NextResponse.json(
-      { error: "Invalid or expired token" },
-      { status: 401 }
-    );
-  }
-
-  await connectDB();
-
-  const user = await User.findById(payload.userId).select("-password");
-
-  if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
-  }
-
-  return NextResponse.json(user);
 }

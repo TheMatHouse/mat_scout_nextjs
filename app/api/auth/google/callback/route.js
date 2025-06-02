@@ -1,102 +1,104 @@
 import { NextResponse } from "next/server";
-import axios from "axios";
+import jwt from "jsonwebtoken";
 import { connectDB } from "@/lib/mongo";
-import { validateUsername } from "@/lib/validateUsername";
-import { signToken } from "@/lib/jwt";
+import User from "@/models/userModel";
+import { cookies } from "next/headers";
 
 export async function GET(request) {
-  await connectDB();
-  const { searchParams } = new URL(request.url);
-  const code = searchParams.get("code");
-
-  if (!code)
-    return NextResponse.json({ error: "Missing Google code" }, { status: 400 });
-
-  const redirectUri =
-    process.env.NODE_ENV === "development"
-      ? "http://localhost:3000/api/auth/google/callback"
-      : "https://matscout.com/api/auth/google/callback";
-
   try {
-    const tokenRes = await axios.post(
-      "https://oauth2.googleapis.com/token",
-      null,
+    const { searchParams } = new URL(request.url);
+    const code = searchParams.get("code");
+    const returnedState = searchParams.get("state");
+    const origin = new URL(request.url).origin;
+
+    const cookieStore = await cookies();
+    const storedState = cookieStore.get("oauth_state_google")?.value;
+
+    if (!code || !returnedState || returnedState !== storedState) {
+      return NextResponse.redirect(`${origin}/login?error=google`);
+    }
+
+    // 1. Exchange code for access token
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        code,
+        grant_type: "authorization_code",
+        redirect_uri: `${origin}/api/auth/google/callback`,
+      }),
+    });
+
+    const tokenData = await tokenRes.json();
+
+    if (!tokenData.access_token) {
+      throw new Error("Failed to get access token");
+    }
+
+    const accessToken = tokenData.access_token;
+
+    // 2. Get user profile from Google
+    const userRes = await fetch(
+      "https://www.googleapis.com/oauth2/v3/userinfo",
       {
-        params: {
-          code,
-          client_id: process.env.GOOGLE_CLIENT_ID,
-          client_secret: process.env.GOOGLE_CLIENT_SECRET,
-          redirect_uri: redirectUri,
-          grant_type: "authorization_code",
-        },
+        headers: { Authorization: `Bearer ${accessToken}` },
       }
     );
 
-    const accessToken = tokenRes.data.access_token;
+    const profile = await userRes.json();
+    const { name, email, picture } = profile;
 
-    const profileRes = await axios.get(
-      "https://www.googleapis.com/oauth2/v2/userinfo",
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
+    if (!email) {
+      return NextResponse.redirect(`${origin}/login?error=google`);
+    }
 
-    const { id, name, given_name, family_name, email, picture } =
-      profileRes.data;
+    await connectDB();
 
-    const firstName = given_name || name?.split(" ")[0] || "User";
-    const lastName =
-      family_name || name?.split(" ").slice(1).join(" ") || "User";
-
-    let tempUsername = (firstName + lastName)
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "");
-    const username = await validateUsername(tempUsername);
-
-    const avatar = picture;
-    const googleAvatar = picture;
-
-    const { default: UserModel } = await import("@/models/userModel.js");
-    let user = await UserModel.findOne({ email });
+    let user = await User.findOne({ email });
 
     if (!user) {
-      user = await UserModel.create({
-        name,
-        email,
-        googleId: id,
-        username,
+      const firstName = name.split(" ")[0] || "";
+      const lastName = name.split(" ")[1] || "";
+      const username = email.split("@")[0];
+
+      user = await User.create({
         firstName,
         lastName,
-        avatar,
-        googleAvatar,
+        username,
+        email,
+        googleAvatar: picture,
+        avatar: picture,
         avatarType: "google",
-        provider: "google",
-        gender: "not specified", // optional default
       });
     }
 
-    const jwt = signToken({ id: user._id });
+    // 6. Set JWT as a secure HttpOnly cookie and redirect to dashboard
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
 
-    const baseUrl =
-      process.env.NODE_ENV === "development"
-        ? "http://localhost:3000"
-        : "https://matscout.com";
+    const response = NextResponse.redirect(`${origin}/dashboard`);
 
-    const response = NextResponse.redirect(`${baseUrl}/dashboard`);
-
-    response.cookies.set("token", jwt, {
+    response.cookies.set("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+    });
+
+    // Clear state cookie
+    response.cookies.set("oauth_state_google", "", {
+      path: "/",
+      maxAge: 0,
     });
 
     return response;
-  } catch (error) {
-    console.error("Google OAuth error:", error.message);
-    return NextResponse.json({ error: "Google login failed" }, { status: 500 });
+  } catch (err) {
+    console.error("Google OAuth callback error:", err);
+    const origin = new URL(request.url).origin;
+    return NextResponse.redirect(`${origin}/login?error=google`);
   }
 }

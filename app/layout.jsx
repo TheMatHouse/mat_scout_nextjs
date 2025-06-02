@@ -1,4 +1,3 @@
-// app/layout.jsx
 import "@/app/globals.css";
 import { ThemeProvider } from "next-themes";
 import { ToastContainer } from "react-toastify";
@@ -25,11 +24,11 @@ export default function RootLayout({ children }) {
           defaultTheme="system"
           enableSystem
         >
+          <ToastContainer
+            position="top-right"
+            autoClose={5000}
+          />
           <UserProvider>
-            <ToastContainer
-              position="top-right"
-              autoClose={5000}
-            />
             <Header />
             <div className="flex min-h-screen w-full">
               <aside className="hidden md:flex w-64 bg-sidebar-background text-sidebar-foreground border-r border-border">

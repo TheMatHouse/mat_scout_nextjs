@@ -5,7 +5,8 @@ import User from "@/models/userModel";
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  const username = searchParams.get("username");
+  let username = searchParams.get("username");
+  console.log("🔍 check-username triggered");
 
   if (!username) {
     return NextResponse.json(
@@ -14,10 +15,14 @@ export async function GET(request) {
     );
   }
 
+  username = username.trim().toLowerCase();
+
   try {
     await connectDB();
 
-    const user = await User.findOne({ username: username.toLowerCase() });
+    // Find with exact match and log what is found
+    const user = await User.findOne({ username });
+    console.log(`Checking username: "${username}", found user:`, user);
 
     return NextResponse.json({ available: !user });
   } catch (err) {

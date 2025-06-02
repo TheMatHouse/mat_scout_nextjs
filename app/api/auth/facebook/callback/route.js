@@ -1,28 +1,31 @@
-import { NextResponse } from "next/server";
 import axios from "axios";
+import jwt from "jsonwebtoken";
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import User from "@/models/userModel";
 import { connectDB } from "@/lib/mongo";
-import { validateUsername } from "@/lib/validateUsername";
-import { signToken } from "@/lib/jwt";
+
+export const runtime = "nodejs"; // Ensure this runs in node runtime
 
 export async function GET(request) {
-  await connectDB();
-  const { searchParams } = new URL(request.url);
-  const code = searchParams.get("code");
-
-  if (!code) {
-    return NextResponse.json(
-      { error: "Missing Facebook code" },
-      { status: 400 }
-    );
-  }
-
-  const redirectUri =
-    process.env.NODE_ENV === "development"
-      ? "http://localhost:3000/api/auth/facebook/callback"
-      : process.env.NEXT_PUBLIC_FACEBOOK_REDIRECT_URI;
-
   try {
-    // Step 1: Get access token from Facebook
+    await connectDB();
+    const { searchParams } = new URL(request.url);
+    const code = searchParams.get("code");
+    const state = searchParams.get("state");
+    const origin = new URL(request.url).origin;
+
+    const cookieStore = await cookies(); // ✅ await
+    const storedState = cookieStore.get("oauth_state_facebook")?.value;
+
+    if (!code || !state || !storedState || state !== storedState) {
+      console.error("Invalid OAuth state");
+      return NextResponse.redirect(`${origin}/login?error=invalid_state`);
+    }
+
+    const redirectUri = process.env.FACEBOOK_REDIRECT_URI;
+
+    // Exchange code for access token
     const tokenRes = await axios.get(
       "https://graph.facebook.com/v22.0/oauth/access_token",
       {
@@ -37,95 +40,57 @@ export async function GET(request) {
 
     const accessToken = tokenRes.data.access_token;
 
-    // Step 2: Get profile info from Facebook
-    const profileRes = await axios.get("https://graph.facebook.com/me", {
-      params: {
-        fields: "id,name,email",
-        access_token: accessToken,
-      },
-    });
-
-    const { id, name, email } = profileRes.data;
-
-    const honorifics = [
-      "jr",
-      "sr",
-      "ii",
-      "iii",
-      "iv",
-      "v",
-      "ply",
-      "phd",
-      "md",
-      "esq",
-      "mba",
-    ];
-    const nameParts = name.trim().split(/\s+/);
-    const firstName = nameParts[0] || "User";
-
-    let lastName = "";
-    for (let i = 1; i < nameParts.length; i++) {
-      if (!honorifics.includes(nameParts[i].toLowerCase())) {
-        lastName = nameParts[i];
-        break;
+    // Get user info
+    const userRes = await axios.get(
+      "https://graph.facebook.com/me?fields=id,name,email,picture",
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
       }
+    );
+
+    const { email, name, id: facebookId } = userRes.data;
+
+    if (!email) {
+      console.error("Missing email from Facebook response");
+      return NextResponse.redirect(`${origin}/login?error=missing_email`);
     }
-    if (!lastName) lastName = "user";
 
-    let tempUsername = (firstName + lastName)
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "");
-    const username = await validateUsername(tempUsername);
-
-    const avatar = `https://graph.facebook.com/${id}/picture?type=large`;
-
-    // Step 3: Connect to DB and create/find user
-    const { default: UserModel } = await import("@/models/userModel.js");
-    let user = await UserModel.findOne({ email });
-
+    let user = await User.findOne({ email });
     if (!user) {
-      user = await UserModel.create({
+      user = await User.create({
         name,
         email,
-        facebookId: id,
-        username,
-        firstName,
-        lastName,
-        avatar,
-        facebookAvatar: avatar,
+        facebookId,
         avatarType: "facebook",
-        provider: "facebook",
-        gender: "not specified",
+        avatar: `https://graph.facebook.com/${facebookId}/picture?type=large`,
       });
     }
 
-    // Step 4: Sign JWT token
-    const jwt = signToken({ id: user._id });
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
 
-    const baseURL =
-      process.env.NODE_ENV === "development"
-        ? "http://localhost:3000"
-        : "https://matscout.com";
-
-    // Step 5: Set cookie and redirect
-    const response = NextResponse.redirect(`${baseURL}/dashboard`);
-
-    response.cookies.set("token", jwt, {
+    const response = NextResponse.redirect(`${origin}/dashboard`);
+    response.cookies.set("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 60 * 60 * 24 * 7, // 1 week
+      maxAge: 60 * 60 * 24 * 7,
     });
 
-    console.log("🔐 Facebook JWT:", jwt);
-    console.log("✅ Setting token cookie and redirecting...");
+    response.cookies.set("oauth_state_facebook", "", {
+      path: "/",
+      maxAge: 0,
+    });
+
     return response;
-  } catch (error) {
-    console.error("Facebook OAuth error:", error.message);
-    return NextResponse.json(
-      { error: "Facebook login failed" },
-      { status: 500 }
+  } catch (err) {
+    console.error("Facebook OAuth callback error:", err?.response?.data || err);
+    return NextResponse.redirect(
+      `${new URL(request.url).origin}/login?error=facebook`
     );
   }
 }

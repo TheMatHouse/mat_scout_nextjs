@@ -1,43 +1,58 @@
+// context/UserContext.js
 "use client";
-import { createContext, useContext, useEffect, useState } from "react";
+
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { apiFetch } from "@/lib/apiClient";
 
 const UserContext = createContext();
 
-export const UserProvider = ({ children }) => {
+export function UserProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        console.log("🔍 Fetching user from /api/auth/me...");
-        const res = await fetch("/api/auth/me");
-
-        if (!res.ok) {
-          const text = await res.text();
-          console.warn("⚠️ User fetch failed:", res.status, text);
-          setUser(null);
-        } else {
-          const data = await res.json();
-          setUser(data);
-          console.log("✅ Logged in user:", data);
-        }
-      } catch (err) {
-        console.error("❌ Error fetching user:", err.message);
+  const fetchUser = async () => {
+    try {
+      const data = await apiFetch("/api/auth/me");
+      if (data?.user) {
+        setUser(data.user);
+      } else {
         setUser(null);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (err) {
+      if (err.message === "No token") {
+        // Not logged in — this is okay
+        setUser(null);
+      } else {
+        console.error("Error fetching user:", err);
+        setUser(null);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchUser();
   }, []);
 
+  const logout = async () => {
+    try {
+      await apiFetch("/api/auth/logout", { method: "POST" });
+      setUser(null);
+    } catch (err) {
+      console.error("Logout failed:", err);
+    }
+  };
+
   return (
-    <UserContext.Provider value={{ user, loading, setUser }}>
+    <UserContext.Provider
+      value={{ user, setUser, logout, loading, refreshUser: fetchUser }}
+    >
       {children}
     </UserContext.Provider>
   );
-};
+}
 
-export const useUser = () => useContext(UserContext);
+export function useUser() {
+  return useContext(UserContext);
+}
