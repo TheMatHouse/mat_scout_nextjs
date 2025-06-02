@@ -8,6 +8,7 @@ export async function GET(request) {
   const origin = new URL(request.url).origin;
   const redirectUri = `${origin}/api/auth/google/callback`;
 
+  console.log("🚀 Google OAuth Redirect URI:", redirectUri);
   // 2. Build the Google OAuth authorization URL with required params
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID,
