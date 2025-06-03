@@ -1,18 +1,12 @@
-"use server";
 import { NextResponse } from "next/server";
-import { Types } from "mongoose";
 import Style from "@/models/styleModel";
 import { connectDB } from "@/lib/mongo";
 
-export const GET = async (request) => {
+export const GET = async () => {
   try {
     await connectDB();
     const styles = await Style.find();
-    if (styles) {
-      return new NextResponse(JSON.stringify({ styles }, { status: 200 }));
-    } else {
-      return new NextResponse("No styles found", { status: 404 });
-    }
+    return NextResponse.json(styles, { status: 200 });
   } catch (error) {
     return new NextResponse("Error fetching styles " + error.message, {
       status: 500,

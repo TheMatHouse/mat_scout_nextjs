@@ -1,13 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import ModalFrame from "../shared/modalContainer/ModalFrame";
 import moment from "moment";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";
-
-// ICONS
 import { GrEdit } from "react-icons/gr";
+
 import {
   Dialog,
   DialogContent,
@@ -16,159 +14,131 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import StyleForm from "./forms/Style";
-import { Button } from "@/components/ui/button";
+import StyleForm from "./forms/StyleForm";
 
-const StyleCard = ({ style, styleResults, user, userType }) => {
+const StyleCard = ({ style: initialStyle, styleResults, user, userType }) => {
   const router = useRouter();
-  // Edit Style Modal State
-  const [showEditStyleModal, setShowEditStyleModal] = useState(false);
-  const handleEditStyleShow = () => setShowEditStyleModal(true);
-  const handleEditStyleClose = () => setShowEditStyleModal(false);
-
+  const [style, setStyle] = useState(initialStyle);
   const [open, setOpen] = useState(false);
-  const handleDelsteStyle = async () => {
-    if (window.confirm(`Are you sure you want to delete ${style.styleName}?`)) {
+
+  const handleDeleteStyle = async () => {
+    if (window.confirm(`Delete ${style.styleName}?`)) {
       try {
         const response = await fetch(
           `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyles/${style._id}`,
-          {
-            method: "DELETE",
-            headers: {
-              "Access-Control-Allow-Origin": "*",
-              "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-              "Access-Control-Allow-Headers": "Content-Type, Authorization",
-              "Content-type": "application/json; charset=UTF-8",
-            },
-          }
+          { method: "DELETE", headers: { "Content-Type": "application/json" } }
         );
-        if (response.status === 200) {
-          const data = await response.json();
-          const timer = setTimeout(() => {
-            router.refresh();
-            toast.success(data.message);
-          }, 1000);
-          return () => clearTimeout(timer);
+        const data = await response.json();
+        if (response.ok) {
+          toast.success(data.message);
+          setTimeout(() => router.refresh(), 500);
+        } else {
+          toast.error(data.message || "Failed to delete style.");
         }
-      } catch (error) {
-        const data = await error.json();
-        // console.log("MESSAGE ", data.message);
-        toast.error("Unable to update this style ", data.message);
+      } catch {
+        toast.error("Server error while deleting style.");
       }
     }
   };
 
   return (
-    <div className="max-w-sm rounded overflow-hidden shadow-lg bg-gray-300 mt-">
-      <div className="font-bold text-2xl mb-2 bg-ms-blue dark:bg-ms-blue-gray text-gray-100">
-        <div className="flex p-2 justify-center">
-          {style.styleName}
-
-          <Dialog
-            open={open}
-            onOpenChange={setOpen}
-            className="min-w-[800px]"
-          >
-            <DialogTrigger asChild>
-              <GrEdit
-                size={32}
-                type="button"
-                alt={`Edit ${style.styleName}`}
-                className="ps-4 cursor-pointer"
-              />
-              {/* <Button className="bg-gray-900 hover:bg-gray-500  border-gray-500 dark:border-gray-100 border-2 drop-shadow-md text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ml-6">
-                Add Style
-              </Button> */}
-            </DialogTrigger>
-            <DialogContent className="overflow-y-scroll max-h-[90%]">
-              <DialogHeader>
-                <DialogTitle>Edit style</DialogTitle>
-                <DialogDescription>
-                  Make changes to your style here. Click save when you're done.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4 min-width-full">
-                <StyleForm
-                  user={user}
-                  style={style}
-                  userType="user"
-                  setOpen={setOpen}
-                />
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
+    <div className="rounded-2xl border border-slate-700 bg-slate-800/80 dark:bg-slate-900/80 text-white shadow-xl backdrop-blur-md ring-1 ring-slate-700 hover:ring-2 hover:ring-[#ef233c] transition-all duration-200 transform hover:scale-[1.02]">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-slate-700 to-slate-800 text-white px-5 py-3 text-xl font-bold tracking-wide rounded-t-2xl flex justify-between items-center">
+        <span>{style.styleName}</span>
+        <Dialog
+          open={open}
+          onOpenChange={setOpen}
+        >
+          <DialogTrigger asChild>
+            <GrEdit
+              className="cursor-pointer hover:scale-110 transition"
+              size={20}
+            />
+          </DialogTrigger>
+          <DialogContent className="overflow-y-scroll max-h-[90%]">
+            <DialogHeader>
+              <DialogTitle>Edit Style</DialogTitle>
+              <DialogDescription>
+                Update details for {style.styleName}.
+              </DialogDescription>
+            </DialogHeader>
+            <StyleForm
+              user={user}
+              style={style}
+              userType={userType}
+              setOpen={setOpen}
+              onSuccess={(updated) => setStyle(updated)}
+            />
+          </DialogContent>
+        </Dialog>
       </div>
-      <div className="flex flex-col justify-start items-start text-black p-2">
-        <div className="pb-2">
-          <strong>Rank: </strong>&nbsp;
+
+      {/* Content */}
+      <div className="p-5 space-y-3 text-sm sm:text-base leading-relaxed">
+        <div>
+          <span className="font-semibold text-slate-300">Rank:</span>{" "}
           {style.rank}
         </div>
-
-        <div className="pb-2">
-          <strong>Promotion Date:</strong>&nbsp;
-          {moment(style.promotionDate).format("MMMM D, YYYY")}
+        <div>
+          <span className="font-semibold text-slate-300">Promotion Date:</span>{" "}
+          {moment.utc(style.promotionDate).format("MMMM D, YYYY")}
         </div>
-
-        <div className="pb-2">
-          <strong>Division:</strong>&nbsp;
+        <div>
+          <span className="font-semibold text-slate-300">Division:</span>{" "}
           {style.division}
         </div>
-
-        <div className="pb-2">
-          <strong>Weight Class:</strong>&nbsp;
+        <div>
+          <span className="font-semibold text-slate-300">Weight Class:</span>{" "}
           {style.weightClass}
         </div>
-
-        <div className="pb-2">
-          <strong>Grip:</strong>&nbsp;
+        <div>
+          <span className="font-semibold text-slate-300">Grip:</span>{" "}
           {style.grip}
         </div>
-
-        <div className="pb-2">
-          <strong>Favorite Technique:</strong>&nbsp;
+        <div>
+          <span className="font-semibold text-slate-300">
+            Favorite Technique:
+          </span>{" "}
           {style.favoriteTechnique}
         </div>
-
-        <div className="pb-2">
-          <strong>My Record in {style.styleName}:</strong>
-          <br />
-          <span className="ms-4">
-            <strong className="">Wins: </strong>
-            {style.styleName === "Brazilian Jiu Jitsu" &&
-              `${styleResults && styleResults[0]?.Wins}`}
-            {style.styleName === "Judo" &&
-              `${styleResults && styleResults[1]?.Wins}`}
-            {style.styleName === "Wrestling" &&
-              `${styleResults && styleResults[2]?.Wins}`}
-            <br />
+        <div>
+          <span className="font-semibold text-slate-300">
+            My Record in {style.styleName}:
           </span>
-          <span className="ms-4">
-            <strong>Losses: </strong>
-            {style.styleName === "Brazilian Jiu Jitsu" &&
-              `${styleResults && styleResults[0]?.Losses}`}
-            {style.styleName === "Judo" &&
-              `${styleResults && styleResults[1]?.Losses}`}
-            {style.styleName === "Wrestling" &&
-              `${styleResults && styleResults[2]?.Losses}`}
-          </span>
-          <div className="mt-2">View my {style.styleName} (coming soon!)</div>
+          <div className="ml-4 space-y-1">
+            <div>
+              <strong>Wins:</strong>{" "}
+              {styleResults?.[
+                style.styleName === "Judo"
+                  ? 1
+                  : style.styleName === "Brazilian Jiu Jitsu"
+                  ? 0
+                  : 2
+              ]?.Wins ?? 0}
+            </div>
+            <div>
+              <strong>Losses:</strong>{" "}
+              {styleResults?.[
+                style.styleName === "Judo"
+                  ? 1
+                  : style.styleName === "Brazilian Jiu Jitsu"
+                  ? 0
+                  : 2
+              ]?.Losses ?? 0}
+            </div>
+          </div>
+        </div>
+        <div className="italic text-xs text-slate-400 pt-1">
+          View my {style.styleName} (coming soon!)
         </div>
       </div>
-      {showEditStyleModal && (
-        <ModalFrame
-          show={showEditStyleModal}
-          handleClose={handleEditStyleClose}
-          user={user}
-          style={style}
-          userType="user"
-          modalType="editStyle"
-        />
-      )}
-      <div className="flex justify-center py-3">
+
+      {/* Footer */}
+      <div className="flex justify-center py-4">
         <button
-          className="btn hover:bg-gray-500  border-gray-500 dark:border-gray-100 border-2 drop-shadow-md text-ms-dark-red font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-          onClick={handleDelsteStyle}
+          onClick={handleDeleteStyle}
+          className="px-5 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white font-semibold shadow-md transition"
         >
           Delete this style
         </button>
