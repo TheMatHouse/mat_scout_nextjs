@@ -80,38 +80,41 @@ export const PATCH = async (request, { params }) => {
 export const DELETE = async (request, { params }) => {
   console.log("DELETING");
   try {
-    const { userId, userStyleId } = await params;
+    const { userId, userStyleId } = params;
 
     if (!userId || !Types.ObjectId.isValid(userId)) {
       return new NextResponse(
-        JSON.stringify({ message: "Invalid or missing user id" })
+        JSON.stringify({ message: "Invalid or missing user id" }),
+        { status: 400 }
       );
     }
 
     if (!userStyleId || !Types.ObjectId.isValid(userStyleId)) {
       return new NextResponse(
-        JSON.stringify({ message: "Invalid or missing user style id" })
+        JSON.stringify({ message: "Invalid or missing user style id" }),
+        { status: 400 }
       );
     }
 
     await connectDB();
-    const user = await User.findById(userId);
 
-    if (!user) {
-      return new NextResponse(JSON.stringify({ message: "User not found" }), {
-        status: 404,
-      });
+    // Import this from your lib or util folder where auth logic lives
+    const { getCurrentUser } = await import("@/lib/getCurrentUser.js");
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser || currentUser._id.toString() !== userId) {
+      return new NextResponse(
+        JSON.stringify({ message: "Unauthorized to delete this style" }),
+        { status: 403 }
+      );
     }
 
     const userStyle = await UserStyle.findOne({ _id: userStyleId, userId });
 
     if (!userStyle) {
-      return new NextResponse(
-        JSON.stringify({
-          message: "Style not found",
-        }),
-        { status: 404 }
-      );
+      return new NextResponse(JSON.stringify({ message: "Style not found" }), {
+        status: 404,
+      });
     }
 
     await UserStyle.findByIdAndDelete(userStyleId);

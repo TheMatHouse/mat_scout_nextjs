@@ -16,7 +16,13 @@ import {
 } from "@/components/ui/dialog";
 import StyleForm from "./forms/StyleForm";
 
-const StyleCard = ({ style: initialStyle, styleResults, user, userType }) => {
+const StyleCard = ({
+  style: initialStyle,
+  styleResults,
+  user,
+  userType,
+  onDelete,
+}) => {
   const router = useRouter();
   const [style, setStyle] = useState(initialStyle);
   const [open, setOpen] = useState(false);
@@ -26,12 +32,18 @@ const StyleCard = ({ style: initialStyle, styleResults, user, userType }) => {
       try {
         const response = await fetch(
           `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyles/${style._id}`,
-          { method: "DELETE", headers: { "Content-Type": "application/json" } }
+          {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+          }
         );
         const data = await response.json();
+
         if (response.ok) {
           toast.success(data.message);
-          setTimeout(() => router.refresh(), 500);
+          if (onDelete) {
+            onDelete(style._id); // Inform parent immediately
+          }
         } else {
           toast.error(data.message || "Failed to delete style.");
         }

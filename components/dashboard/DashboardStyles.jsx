@@ -52,6 +52,12 @@ const DashboardStyles = () => {
     }
   };
 
+  const handleDeleteStyle = (deletedStyleId) => {
+    setMyStyles((prevStyles) =>
+      prevStyles.filter((style) => style._id !== deletedStyleId)
+    );
+  };
+
   const styleResults = [
     { name: "Brazilian Jiu Jitsu", Wins: 0, Losses: 0 },
     { name: "Judo", Wins: 0, Losses: 0 },
@@ -110,6 +116,7 @@ const DashboardStyles = () => {
             user={user}
             userType="user"
             styleResults={styleResults}
+            onDelete={handleDeleteStyle}
           />
         ))}
       </div>
