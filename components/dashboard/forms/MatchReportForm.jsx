@@ -1,24 +1,24 @@
+// MatchReportForm.jsx with full form, video preview, and real-time validation
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { AlertDialog } from "@/components/ui/alert-dialog";
+import { useRouter } from "next/navigation";
+import { toast } from "react-toastify";
+import moment from "moment";
+import { useUser } from "@/context/UserContext";
+
 import {
   Card,
-  CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
+  CardDescription,
+  CardContent,
 } from "@/components/ui/card";
-
-import Countries from "@/assets/countries.json";
-
-import Tooltip from "../../shared/Tooltip";
-import { CircleHelp } from "lucide-react";
-import Tags from "../../shared/Tags";
-import Editor from "../../shared/Editor";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { toast } from "react-toastify";
-import { useRouter } from "next/navigation";
-import moment from "moment";
+import Countries from "@/assets/countries.json";
+import Editor from "../../shared/Editor";
+import Tags from "../../shared/Tags";
 
 const MatchReportForm = ({
   athlete,
@@ -27,789 +27,472 @@ const MatchReportForm = ({
   techniques,
   type,
   setOpen,
+  onSuccess,
 }) => {
   const router = useRouter();
-  const [add, setAdd] = useState("");
+  const { refreshUser } = useUser();
 
-  useEffect(() => {
-    navigator.geolocation.getCurrentPosition((pos) => {
-      const { latitude, longitude } = pos.coords;
-
-      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`;
-      fetch(url)
-        .then((res) => res.json())
-        .then((data) => setAdd(data.address));
-    });
-  }, []);
-
-  const myCountry_code = add?.country_code;
-
-  const myCountry = Countries.find(
-    (country) => country.code2.toLowerCase() === myCountry_code
-  );
-
-  const Country = myCountry?.code3 || ""; // Ensure default is an empty string
-
-  const [newCountry, setNewCountry] = useState(Country);
-
-  // Update newCountry when Country changes
-  useEffect(() => {
-    setNewCountry(Country);
-  }, [Country]);
-
-  // Ensure athleteCountry updates when newCountry changes
-  useEffect(() => {
-    setOpponentCountry(newCountry);
-  }, [newCountry]);
-
-  const [matchType, setMatchType] = useState(
-    match?.matchType ? match?.matchType : ""
-  );
-  const [eventName, setEventName] = useState(
-    match?.eventName ? match?.eventName : ""
-  );
+  const [matchType, setMatchType] = useState(match?.matchType || "");
+  const [eventName, setEventName] = useState(match?.eventName || "");
   const [matchDate, setMatchDate] = useState(
     match?.matchDate ? moment(match.matchDate).format("yyyy-MM-DD") : ""
   );
-  const [division, setDivision] = useState(
-    match?.division ? match?.division : ""
-  );
+  const [division, setDivision] = useState(match?.division || "");
   const [weightCategory, setWeightCategory] = useState(
-    match?.weightCategory ? match?.weightCategory : ""
+    match?.weightCategory || ""
   );
-  const [opponentName, setOpponentName] = useState(
-    match?.opponentName ? match?.opponentName : ""
-  );
-  const [opponentClub, setOpponentClub] = useState(
-    match?.opponentClub ? match?.opponentClub : ""
-  );
-  const [opponentRank, setOpponentRank] = useState(
-    match?.opponentRank ? match?.opponentRank : ""
-  );
-  // const [opponentCountry, setOpponentCountry] = useState(
-  //   match?.opponentCountry
-  //     ? match?.opponentCountry
-  //     : newCountry
-  //     ? newCountry
-  //     : ""
-  //);
+  const [opponentName, setOpponentName] = useState(match?.opponentName || "");
+  const [opponentClub, setOpponentClub] = useState(match?.opponentClub || "");
+  const [opponentRank, setOpponentRank] = useState(match?.opponentRank || "");
+  const [opponentGrip, setOpponentGrip] = useState(match?.opponentGrip || "");
   const [opponentCountry, setOpponentCountry] = useState(
-    match?.athleteCountry || Country || ""
+    match?.opponentCountry || ""
   );
-  const [opponentGrip, setOpponentGrip] = useState(
-    match?.opponentGrip ? match.opponentGrip : ""
-  );
-
-  // const [opponentAttackNotes, setOpponentAttackNotes] = useState(
-  //   match?.opponentAttackNotes ? match.opponentAttackNotes : ""
-  // );
-
   const [oppAttackNotes, setOppAttackNotes] = useState(
-    match?.opponentAttackNotes ? match.opponentAttackNotes : ""
+    match?.opponentAttackNotes || ""
   );
-
   const [athAttackNotes, setAthAttackNotes] = useState(
-    match?.athleteAttackNotes ? match.athleteAttackNotes : ""
+    match?.athleteAttackNotes || ""
   );
+  const [result, setResult] = useState(match?.result || "");
+  const [score, setScore] = useState(match?.score || "");
+  const [videoTitle, setVideoTitle] = useState(match?.videoTitle || "");
+  const [videoURL, setVideoURL] = useState(match?.videoURL || "");
+  const [isPublic, setIsPublic] = useState(match?.isPublic || false);
 
-  const [result, setResult] = useState(match?.result ? match.result : "");
-  const [score, setScore] = useState(match?.score ? match.score : "");
-  const [videoTitle, setVideoTitle] = useState(
-    match?.videoTitle ? match.videoTitle : ""
-  );
-  const [videoURL, setVideoURL] = useState(
-    match?.videoURL ? match.videoURL : ""
-  );
-  const [isPublic, setIsPublic] = useState(
-    match?.isPublic ? match.isPublic : false
-  );
-
-  const techniqueList = [];
-  techniques?.map((technique) => techniqueList.push(technique.techniqueName));
-
-  const suggestions = techniqueList.map((name, index) => ({
-    value: index,
+  const techniqueList = techniques?.map((tech) => tech.techniqueName) || [];
+  const suggestions = techniqueList.map((name, i) => ({
+    value: i,
     label: name,
   }));
 
-  // Opponent Opponent
-  const oppAttacksFromDB = [];
-  if (match) {
-    if (match.opponentAttacks) {
-      match.opponentAttacks.map((item, i) => {
-        oppAttacksFromDB.push({
-          value: i,
-          label: item,
-        });
-      });
-    }
-  }
-
   const [opponentSelected, setOpponentSelected] = useState(
-    oppAttacksFromDB ? oppAttacksFromDB : []
+    match?.opponentAttacks?.map((item, i) => ({ value: i, label: item })) || []
   );
-  const [opponentAttacks, setOpponentAttacks] = useState([]);
+  const [athleteSelected, setAthleteSelected] = useState(
+    match?.athleteAttacks?.map((item, i) => ({ value: i, label: item })) || []
+  );
 
   const onOpponentAdd = useCallback(
-    (newTag) => {
-      setOpponentSelected([...opponentSelected, newTag]);
-    },
-    [opponentSelected]
+    (tag) => setOpponentSelected((prev) => [...prev, tag]),
+    []
   );
-
   const onOpponentDelete = useCallback(
-    (tagIndex) => {
-      setOpponentSelected(opponentSelected.filter((_, i) => i !== tagIndex));
-    },
-    [opponentSelected]
+    (i) => setOpponentSelected((prev) => prev.filter((_, idx) => idx !== i)),
+    []
   );
-
-  // Athlete Attacks
-  const athAttacksFromDB = [];
-  if (match) {
-    if (match.athleteAttacks) {
-      match.athleteAttacks.map((item, i) => {
-        athAttacksFromDB.push({
-          value: i,
-          label: item,
-        });
-      });
-    }
-  }
-  const [athleteSelected, setAthleteSelected] = useState(
-    athAttacksFromDB ? athAttacksFromDB : []
-  );
-
-  const [athleteAttacks, setAthleteAttacks] = useState([]);
-
   const onAthleteAdd = useCallback(
-    (newTag) => {
-      setAthleteSelected([...athleteSelected, newTag]);
-    },
-    [athleteSelected]
+    (tag) => setAthleteSelected((prev) => [...prev, tag]),
+    []
   );
-
   const onAthleteDelete = useCallback(
-    (tagIndex) => {
-      setAthleteSelected(athleteSelected.filter((_, i) => i !== tagIndex));
-    },
-    [athleteSelected]
+    (i) => setAthleteSelected((prev) => prev.filter((_, idx) => idx !== i)),
+    []
   );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     const formData = new FormData(e.currentTarget);
 
-    const oppAttacks = [];
-
-    if (opponentSelected) {
-      opponentSelected.map((item) => {
-        oppAttacks.push(item.label.toLowerCase());
-      });
+    const rawVideoInput = formData.get("videoURL").trim();
+    let embedURL = "";
+    if (rawVideoInput.includes("youtu.be")) {
+      const id = rawVideoInput.split("youtu.be/")[1]?.split("?")[0];
+      embedURL = `https://www.youtube.com/embed/${id}`;
+    } else if (rawVideoInput.includes("watch?v=")) {
+      const id = rawVideoInput.split("watch?v=")[1]?.split("&")[0];
+      embedURL = `https://www.youtube.com/embed/${id}`;
+    } else if (rawVideoInput.includes("embed/")) {
+      embedURL = rawVideoInput;
     }
 
-    const athAttacks = [];
-    if (athleteSelected) {
-      athleteSelected.map((item) => {
-        athAttacks.push(item.label.toLowerCase());
-      });
-    }
+    const payload = {
+      athlete: athlete._id,
+      createdBy: athlete._id,
+      createdByName: `${athlete.firstName} ${athlete.lastName}`,
+      matchType: formData.get("matchType"),
+      eventName: formData.get("eventName"),
+      matchDate: formData.get("matchDate"),
+      division: formData.get("division"),
+      weightCategory: formData.get("weightCategory"),
+      opponentName: formData.get("opponentName"),
+      opponentClub: formData.get("opponentClub"),
+      opponentRank: formData.get("opponentRank"),
+      opponentGrip,
+      opponentCountry,
+      opponentAttacks: opponentSelected.map((item) => item.label.toLowerCase()),
+      opponentAttackNotes: oppAttackNotes,
+      athleteAttacks: athleteSelected.map((item) => item.label.toLowerCase()),
+      athleteAttackNotes: athAttackNotes,
+      result: formData.get("result"),
+      score: formData.get("score"),
+      videoTitle: formData.get("videoTitle"),
+      videoURL: embedURL,
+      isPublic: formData.get("isPublic") === "on",
+    };
 
-    const videoURLTemp = e.target.videoURL.value.split("https://");
-
-    const newVideoURL =
-      videoURLTemp.length > 1 ? "https://" + videoURLTemp[1] : "";
+    const method = match ? "PATCH" : "POST";
+    const url = match
+      ? `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${athlete._id}/matchReports/${match._id}`
+      : `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${athlete._id}/matchReports`;
 
     try {
-      if (type === "user") {
-        let domain = "";
-        let method = "";
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
 
-        if (match) {
-          method = "PATCH";
-          domain = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${athlete._id}/matchReports/${match._id}`;
-        } else {
-          method = "POST";
-          domain = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${athlete._id}/matchReports`;
-        }
-
-        const matchType = formData.get("matchType");
-        const eventName = formData.get("eventName");
-        const matchDate = formData.get("matchDate");
-        const division = formData.get("division");
-        const weightCategory = formData.get("weightCategory");
-        const opponentName = formData.get("opponentName");
-        const opponentClub = formData.get("opponentClub");
-        const opponentRank = formData.get("opponentRank");
-        const opponentGrip = formData.get("opponentGrip");
-        const opponentCountry = newCountry;
-        //const opponentAttacks = oppAttacks && oppAttacks;
-        const opponentAttacks = oppAttacks && oppAttacks;
-        const opponentAttackNotes = oppAttackNotes && oppAttackNotes;
-        const athleteAttacks = athAttacks && athAttacks;
-        const athleteAttackNotes = athAttackNotes && athAttackNotes;
-        const result = formData.get("result");
-        const score = formData.get("score");
-        const videoTitle = formData.get("videoTitle");
-        const videoURL = newVideoURL;
-        const isPublic = formData.get("isPublic") === "on" ? true : false;
-
-        const response = await fetch(domain, {
-          method,
-          headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization",
-            "Content-type": "application/json; charset=UTF-8",
-          },
-          body: JSON.stringify({
-            athlete: athlete._id,
-            createdBy: athlete._id,
-            createdByName: `${athlete.firstName} ${athlete.lastName}`,
-            matchType,
-            eventName,
-            matchDate,
-            division,
-            weightCategory,
-            opponentName,
-            opponentClub,
-            opponentRank,
-            opponentGrip,
-            opponentCountry,
-            opponentAttacks,
-            opponentAttackNotes,
-            athleteAttacks,
-            athleteAttackNotes,
-            result,
-            score,
-            videoTitle,
-            videoURL: videoURL === "https://undefined" ? "" : videoURL,
-            isPublic,
-          }),
-        });
-        const data = await response.json();
-
-        if (response.ok) {
-          const timer = setTimeout(() => {
-            router.refresh();
-            toast.success(data.message, {
-              position: "top-right",
-              autoClose: 5000,
-              hideProgressBar: false,
-              closeOnClick: false,
-              pauseOnHover: true,
-              draggable: true,
-              progress: undefined,
-              theme: "light",
-            });
-            setOpen(false);
-          }, 1000);
-          return () => clearTimeout(timer);
-        } else {
-          toast.error(data.message);
-          console.log(data.message);
-        }
+      if (res.ok) {
+        toast.success(data.message);
+        if (onSuccess) onSuccess(); // ✅ call parent’s refresh
+        refreshUser(); // ✅ update user context (for styles, records, etc)
+        setOpen(false); // ✅ close dialog
+        //setTimeout(() => {
+        //router.refresh();
+        //setOpen(false);
+        //}, 500);
+      } else {
+        toast.error(data.message);
       }
-    } catch (error) {
-      console.log(error.message);
-      toast.error(error.message);
+    } catch (err) {
+      console.error(err);
+      toast.error("An error occurred while saving the match report.");
     }
   };
 
+  const isYouTubeURL =
+    videoURL.includes("youtu.be") ||
+    videoURL.includes("youtube.com/watch?v=") ||
+    videoURL.includes("youtube.com/embed/");
+
+  const userStyles = athlete?.userStyles || [];
+  console.log("user styles ", userStyles);
   return (
-    <AlertDialog>
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle>Match Report</CardTitle>
-          <CardDescription>
-            {match?._id ? "Update this match report" : "Add a new match report"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form
-            onSubmit={handleSubmit}
-            className="rounded px-8 pb-2 mb-4"
-          >
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="matcyType"
-              >
-                Match Type
-              </label>
-              <select
-                id="matchType"
-                name="matchType"
-                aria-label="Match Type"
-                required
-                value={matchType}
-                onChange={(e) => setMatchType(e.target.value)}
-              >
-                <option value="">Select Match Type...</option>
-                {styles &&
-                  styles.map((style) => (
-                    <option
-                      key={style._id}
-                      value={style.styleName}
-                    >
-                      {style.styleName}
-                    </option>
-                  ))}
-              </select>
-            </div>
+    <Card className="p-6 shadow-md">
+      <CardHeader>
+        <CardTitle>
+          {match ? "Update Match Report" : "Add Match Report"}
+        </CardTitle>
+        <CardDescription>
+          {match
+            ? "Edit your match details."
+            : "Fill out the form below to create a new report."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-6"
+        >
+          <div>
+            <Label htmlFor="matchType">Match Type</Label>
+            <select
+              id="matchType"
+              name="matchType"
+              value={matchType}
+              onChange={(e) => setMatchType(e.target.value)}
+              className="w-full rounded-md border px-3 py-2"
+            >
+              <option value="">Select match type...</option>
+              {userStyles?.map((style) => (
+                <option
+                  key={style._id}
+                  value={style.styleName}
+                >
+                  {style.styleName}
+                </option>
+              ))}
+            </select>
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="eventName"
-              >
-                Event Name
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-                type="text"
-                id="eventName"
-                name="eventName"
-                placeholder="Event name"
-                required
-                defaultValue={eventName}
-              />
-            </div>
+          <div>
+            <Label htmlFor="eventName">Event Name</Label>
+            <Input
+              type="text"
+              id="eventName"
+              name="eventName"
+              value={eventName}
+              onChange={(e) => setEventName(e.target.value)}
+              required
+            />
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="matchDate"
-              >
-                Match Date
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-                type="date"
-                id="matchDate"
-                name="matchDate"
-                placeholder="Event name"
-                required
-                defaultValue={matchDate}
-              />
-            </div>
+          <div>
+            <Label htmlFor="matchDate">Match Date</Label>
+            <Input
+              type="date"
+              id="matchDate"
+              name="matchDate"
+              value={matchDate}
+              onChange={(e) => setMatchDate(e.target.value)}
+              required
+            />
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="division"
-              >
-                Division
-                <br />
-                <span className="text-xl text-muted-foreground my-2">
-                  (Jr Boyx, Senior Women, etc)
-                </span>
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-                type="text"
-                id="division"
-                name="division"
-                placeholder="Division"
-                defaultValue={division}
-              />
-            </div>
+          <div>
+            <Label htmlFor="division">Division</Label>
+            <Input
+              type="text"
+              id="division"
+              name="division"
+              value={division}
+              onChange={(e) => setDivision(e.target.value)}
+            />
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="weightCategory"
-              >
-                Weight Category
-                <br />
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-                type="text"
-                id="weightCategory"
-                name="weightCategory"
-                placeholder="Weight Category"
-                defaultValue={weightCategory}
-              />
-            </div>
+          <div>
+            <Label htmlFor="weightCategory">Weight Category</Label>
+            <Input
+              type="text"
+              id="weightCategory"
+              name="weightCategory"
+              value={weightCategory}
+              onChange={(e) => setWeightCategory(e.target.value)}
+            />
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="opponentName"
-              >
-                Opponent's Name
-                <br />
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-                type="text"
-                id="opponentName"
-                name="opponentName"
-                placeholder="Opponent's Name"
-                required
-                defaultValue={opponentName}
-              />
-            </div>
+          <div>
+            <Label htmlFor="opponentName">Opponent's Name</Label>
+            <Input
+              type="text"
+              id="opponentName"
+              name="opponentName"
+              value={opponentName}
+              onChange={(e) => setOpponentName(e.target.value)}
+              required
+            />
+            {opponentName.length > 0 && opponentName.length < 2 && (
+              <p className="text-sm text-red-500 mt-1">
+                Name must be at least 2 characters
+              </p>
+            )}
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="opponentClub"
-              >
-                Opponent's Club
-                <br />
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-                type="text"
-                id="opponentClub"
-                name="opponentClub"
-                placeholder="Opponent's Club"
-                defaultValue={opponentClub}
-              />
-            </div>
+          <div>
+            <Label htmlFor="opponentClub">Opponent's Club</Label>
+            <Input
+              type="text"
+              id="opponentClub"
+              name="opponentClub"
+              value={opponentClub}
+              onChange={(e) => setOpponentClub(e.target.value)}
+            />
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="opponentRank"
-              >
-                Opponent's Rank
-                <br />
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-                type="text"
-                id="opponentRank"
-                name="opponentRank"
-                placeholder="Opponent's Rank"
-                defaultValue={opponentRank}
-              />
-            </div>
+          <div>
+            <Label htmlFor="opponentRank">Opponent's Rank</Label>
+            <Input
+              type="text"
+              id="opponentRank"
+              name="opponentRank"
+              value={opponentRank}
+              onChange={(e) => setOpponentRank(e.target.value)}
+            />
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="opponentCountry"
-              >
-                Opponent's Country
-              </label>
-              <select
-                id="opponentCountry"
-                name="opponentCountry"
-                value={opponentCountry}
-                onChange={(e) => {
-                  setNewCountry(e.target.value);
-                  setOpponentCountry(e.target.value);
-                }}
-              >
-                <option value="">Select country...</option>
-                {Countries.map((country) => (
-                  <option
-                    key={country.code3}
-                    value={country.code3}
-                  >
-                    {country.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <Label htmlFor="opponentCountry">Opponent's Country</Label>
+            <select
+              id="opponentCountry"
+              name="opponentCountry"
+              value={opponentCountry}
+              onChange={(e) => setOpponentCountry(e.target.value)}
+              className="w-full rounded-md border px-3 py-2"
+            >
+              <option value="">Select country...</option>
+              {Countries.map((country) => (
+                <option
+                  key={country.code3}
+                  value={country.code3}
+                >
+                  {country.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="opponentGrip"
-              >
-                Opponent's Grip <br />
-                <span className="text-xl text-muted-foreground my-2">
-                  (Righty or Lefty)
-                </span>
-              </label>
-              <div className="flex items-center">
+          <div>
+            <Label>Opponent's Grip</Label>
+            <div className="flex gap-4 mt-2">
+              <label className="flex items-center gap-2">
                 <input
                   type="radio"
-                  id="opponentGrip"
                   name="opponentGrip"
                   value="Righty"
                   checked={opponentGrip === "Righty"}
                   onChange={(e) => setOpponentGrip(e.target.value)}
-                />
-                <label
-                  htmlFor="righty"
-                  className="block text-gray-900 dark:text-gray-100 text-lg font-bold md:text-left mb-1 md:mb-0 pl-4"
-                >
-                  Righty
-                </label>
-              </div>
-              <div className="flex items-center">
+                />{" "}
+                Righty
+              </label>
+              <label className="flex items-center gap-2">
                 <input
                   type="radio"
-                  id="opponentGrip"
                   name="opponentGrip"
                   value="Lefty"
                   checked={opponentGrip === "Lefty"}
                   onChange={(e) => setOpponentGrip(e.target.value)}
-                />
-                <label
-                  htmlFor="lefty"
-                  className="block text-gray-900 dark:text-gray-100 text-lg font-bold md:text-left mb-1 md:mb-0 pl-4"
-                >
-                  Lefty
-                </label>
-              </div>
-            </div>
-
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="opponentAttacks"
-              >
-                Opponent's Techniques Used
+                />{" "}
+                Lefty
               </label>
-              <div className="max-w-md">
-                <Tooltip
-                  alt="Opponent techniques used tooltip"
-                  text={`Click inside the box below. A list of techniques already
-                            in our database will appear. Click on a technique to
-                            selected it. The selected techniques will appear above the
-                            box.
-                            <br /><br />
-                            If a technique is not in the database, you can add your
-                            technique by typing it in and then clicking on "Add" next
-                            to your technique. If you added a technique by mistake,
-                            you can click on the technique name above the box and it
-                            will removed`}
-                >
-                  <CircleHelp />
-                </Tooltip>
-              </div>
-              <Tags
-                labelText="Select techniques"
-                id={opponentAttacks}
-                name={opponentAttacks}
-                selected={opponentSelected}
-                suggestions={suggestions}
-                onAdd={onOpponentAdd}
-                onDelete={onOpponentDelete}
-              />
             </div>
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="opponentAttackNotes"
-              >
-                Notes on Opponent's Attacks
-                <br />
-              </label>
-              <Editor
-                name="oppAttackNotes"
-                onChange={setOppAttackNotes}
-                text={oppAttackNotes}
-              />
-            </div>
+          <div>
+            <Label>Opponent's Techniques</Label>
+            <Tags
+              labelText="Opponent Attacks"
+              name="opponentAttacks"
+              selected={opponentSelected}
+              suggestions={suggestions}
+              onAdd={onOpponentAdd}
+              onDelete={onOpponentDelete}
+            />
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="athleteAttacks"
-              >
-                {`${
-                  type === "user"
-                    ? "Your"
-                    : type === "familyMember" &&
-                      "Your Athlete's" &&
-                      "Your Athlete's"
-                } Techniques Used`}
-              </label>
-              <div className="max-w-md">
-                <Tooltip
-                  alt="athleteAttacks techniques used tooltip"
-                  text={`Click inside the box below. A list of techniques already
-                            in our database will appear. Click on a technique to
-                            selected it. The selected techniques will appear above the
-                            box.
-                            <br /><br />
-                            If a technique is not in the database, you can add your
-                            technique by typing it in and then clicking on "Add" next
-                            to your technique. If you added a technique by mistake,
-                            you can click on the technique name above the box and it
-                            will removed`}
-                >
-                  <CircleHelp />
-                </Tooltip>
-              </div>
-              <Tags
-                labelText="Select techniques"
-                name={athleteAttacks}
-                selected={athleteSelected}
-                suggestions={suggestions}
-                onAdd={onAthleteAdd}
-                onDelete={onAthleteDelete}
-              />
-            </div>
+          <div>
+            <Label>Opponent Attack Notes</Label>
+            <Editor
+              name="oppAttackNotes"
+              onChange={setOppAttackNotes}
+              text={oppAttackNotes}
+            />
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="opponentAttackNotes"
-              >
-                {`Notes on ${
-                  type === "user"
-                    ? "Your"
-                    : type === "familyMember" &&
-                      "Your Athlete's" &&
-                      "Your Athlete's"
-                } Attacks`}
-                <br />
-              </label>
+          <div>
+            <Label>Your Techniques</Label>
+            <Tags
+              labelText="Your Attacks"
+              name="athleteAttacks"
+              selected={athleteSelected}
+              suggestions={suggestions}
+              onAdd={onAthleteAdd}
+              onDelete={onAthleteDelete}
+            />
+          </div>
 
-              <Editor
-                name="athAttackNotes"
-                onChange={setAthAttackNotes}
-                text={athAttackNotes}
-              />
-            </div>
+          <div>
+            <Label>Your Attack Notes</Label>
+            <Editor
+              name="athAttackNotes"
+              onChange={setAthAttackNotes}
+              text={athAttackNotes}
+            />
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="result"
-              >
-                Match Result
-              </label>
-              <div className="flex items-center">
+          <div>
+            <Label>Match Result</Label>
+            <div className="flex gap-4 mt-2">
+              <label className="flex items-center gap-2">
                 <input
                   type="radio"
-                  id="won"
                   name="result"
                   value="Won"
                   checked={result === "Won"}
                   onChange={(e) => setResult(e.target.value)}
-                />
-                <label
-                  htmlFor="won"
-                  className="block text-gray-900 dark:text-gray-100 text-lg font-bold md:text-left mb-1 md:mb-0 pl-4"
-                >
-                  Won
-                </label>
-              </div>
-              <div className="flex items-center">
+                />{" "}
+                Won
+              </label>
+              <label className="flex items-center gap-2">
                 <input
                   type="radio"
-                  id="lost"
                   name="result"
                   value="Lost"
                   checked={result === "Lost"}
                   onChange={(e) => setResult(e.target.value)}
-                />
-                <label
-                  htmlFor="lost"
-                  className="block text-gray-900 dark:text-gray-100 text-lg font-bold md:text-left mb-1 md:mb-0 pl-4"
-                >
-                  Lost
-                </label>
+                />{" "}
+                Lost
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="score">Match Score</Label>
+            <Input
+              type="text"
+              id="score"
+              name="score"
+              value={score}
+              onChange={(e) => setScore(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="videoTitle">Video Title</Label>
+            <Input
+              type="text"
+              id="videoTitle"
+              name="videoTitle"
+              value={videoTitle}
+              onChange={(e) => setVideoTitle(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="videoURL">YouTube Video URL</Label>
+            <Input
+              type="text"
+              id="videoURL"
+              name="videoURL"
+              value={videoURL}
+              onChange={(e) => setVideoURL(e.target.value)}
+            />
+            {!isYouTubeURL && videoURL && (
+              <p className="text-sm text-red-500 mt-1">
+                This does not appear to be a valid YouTube link
+              </p>
+            )}
+            {isYouTubeURL && (
+              <div className="mt-4">
+                <p className="text-sm font-semibold mb-2">Video Preview:</p>
+                <div className="aspect-video w-full mt-4 rounded-lg shadow overflow-hidden">
+                  <iframe
+                    className="w-full h-full"
+                    src={
+                      videoURL.includes("embed/")
+                        ? videoURL
+                        : videoURL.includes("youtu.be")
+                        ? `https://www.youtube.com/embed/${
+                            videoURL.split("youtu.be/")[1]?.split("?")[0]
+                          }`
+                        : videoURL.includes("watch?v=")
+                        ? `https://www.youtube.com/embed/${
+                            videoURL.split("watch?v=")[1]?.split("&")[0]
+                          }`
+                        : ""
+                    }
+                    title="YouTube Video Preview"
+                    allowFullScreen
+                  />
+                </div>
               </div>
-            </div>
+            )}
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="score"
-              >
-                Match Score
-                <br />
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-                type="text"
-                id="score"
-                name="score"
-                placeholder="Match score"
-                defaultValue={score}
-              />
-            </div>
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="isPublic"
+              name="isPublic"
+              checked={isPublic}
+              onChange={() => setIsPublic((prev) => !prev)}
+              className="mr-2"
+            />
+            <Label htmlFor="isPublic">Make this match report public</Label>
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="videoTitle"
-              >
-                Video Title
-                <br />
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-                type="text"
-                id="videoTitle"
-                name="videoTitle"
-                placeholder="Video Title"
-                defaultValue={videoTitle}
-              />
-            </div>
-
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="videoURL"
-              >
-                Video URL
-              </label>
-              <span className="text-xl text-muted-foreground my-2">
-                To share a YouTube video, locate your desired video and click
-                the <strong>&quot;Share&quot;</strong> button beneath the
-                player. Then click the
-                <strong>
-                  &quot;Embed&quot; &quot;&#x003C; &#x3e;&quot;
-                </strong>{" "}
-                button. When the
-                <strong>&quot;Embed Video&quot;</strong> window comes up, click
-                the
-                <strong>&quot;Copy&quot;</strong> and paste it below. Remember,
-                the video&quots URL won&quott work - you need the{" "}
-                <strong>&quot;Share&quot;</strong> and
-                <strong>&quot;Embed Video&quot;</strong> code..
-              </span>
-
-              <input
-                className="shadow appearance-none border rounded w-full mt-4 py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-                type="text"
-                id="videoURL"
-                name="videoURL"
-                placeholder="Video URL"
-                defaultValue={videoURL}
-              />
-            </div>
-
-            <div className="my-6">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="isPublic"
-                  name="isPublic"
-                  checked={isPublic === true}
-                  onChange={() => setIsPublic((prev) => !prev)}
-                />
-                <label
-                  htmlFor="isPublic"
-                  className="block text-gray-900 dark:text-gray-100 text-lg font-bold md:text-left mb-1 md:mb-0 pl-4"
-                >
-                  Set as public
-                </label>
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-center">
-              <Button type="submit">
-                {match ? "Update" : "Add"} Match Report
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-    </AlertDialog>
+          <div className="pt-4">
+            <Button
+              type="submit"
+              className="bg-ms-blue-gray hover:bg-ms-blue text-white"
+            >
+              {match ? "Update" : "Submit"} Report
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 };
 

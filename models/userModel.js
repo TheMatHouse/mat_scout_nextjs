@@ -93,6 +93,18 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
     },
     lastLogin: { type: Date, default: Date.now },
+    userStyles: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "UserStyle",
+      },
+    ],
+    matchReports: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "MatchReport",
+      },
+    ],
   },
   {
     timestamps: true,

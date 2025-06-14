@@ -79,6 +79,7 @@ export const PATCH = async (request, { params }) => {
 
 export const DELETE = async (request, { params }) => {
   console.log("DELETING");
+
   try {
     const { userId, userStyleId } = params;
 
@@ -98,7 +99,6 @@ export const DELETE = async (request, { params }) => {
 
     await connectDB();
 
-    // Import this from your lib or util folder where auth logic lives
     const { getCurrentUser } = await import("@/lib/getCurrentUser.js");
     const currentUser = await getCurrentUser();
 
@@ -117,7 +117,13 @@ export const DELETE = async (request, { params }) => {
       });
     }
 
+    // ❌ Delete the style
     await UserStyle.findByIdAndDelete(userStyleId);
+
+    // 🔁 Remove reference from user.userStyles
+    await User.findByIdAndUpdate(userId, {
+      $pull: { userStyles: userStyleId },
+    });
 
     return new NextResponse(
       JSON.stringify({ message: "User style deleted successfully" }),

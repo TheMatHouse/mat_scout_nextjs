@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useUser } from "@/context/UserContext";
 import moment from "moment";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";
@@ -26,6 +27,7 @@ const StyleCard = ({
   const router = useRouter();
   const [style, setStyle] = useState(initialStyle);
   const [open, setOpen] = useState(false);
+  const { refreshUser } = useUser();
 
   const handleDeleteStyle = async () => {
     if (window.confirm(`Delete ${style.styleName}?`)) {
@@ -41,6 +43,7 @@ const StyleCard = ({
 
         if (response.ok) {
           toast.success(data.message);
+          refreshUser();
           if (onDelete) {
             onDelete(style._id); // Inform parent immediately
           }

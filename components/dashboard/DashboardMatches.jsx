@@ -1,6 +1,15 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { MatchDataTable } from "./data/match-data-table";
+import moment from "moment";
+import { toast } from "react-toastify";
+
 import { ReportDataTable } from "./data/report-data-table";
+import MatchReportForm from "./forms/MatchReportForm";
+import PreviewMatchReportModal from "./PreviewMatchReportModal";
+import PreviewReportModal from "./PreviewReportModal";
+
 import {
   Dialog,
   DialogContent,
@@ -9,7 +18,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-
+import { Button } from "@/components/ui/button";
+import { MoreHorizontal, ArrowUpDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,222 +28,186 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
-import MatchReportForm from "./forms/MatchReportForm";
-import { useState } from "react";
-import { ArrowUpDown } from "lucide-react";
-import moment from "moment";
 
-// ICONS
-import { MoreHorizontal } from "lucide-react";
-import { toast } from "react-toastify";
-//import PreviewMatchReportModal from "./PreviewMatchReportModal";
-import PreviewMatchReportModal from "./PreviewMatchReportModal";
-
-export const columns = ({
-  setSelectedMatch,
-  setOpen,
-  setPreviewOpen,
-  handleDeleteMatch,
-}) => [
-  {
-    accessorKey: "matchType",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          <div className="text-center">Type</div>
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-  },
-  {
-    accessorKey: "eventName",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          <div className="text-center">Event</div>
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-  },
-  {
-    accessorKey: "matchDate",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          <div className="text-center">Match Date</div>
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-    cell: ({ getValue }) => moment.utc(getValue()).format("MMMM D, YYYY"), // Ensure UTC handling
-  },
-
-  {
-    accessorKey: "division",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          <div className="text-center">Division</div>
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-  },
-  {
-    accessorKey: "opponentName",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          <div className="text-center">Opponent's Name</div>
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-  },
-  {
-    accessorKey: "opponentCountry",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          <div className="text-center">Opponent's Country</div>
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-  },
-  {
-    accessorKey: "result",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          <div className="text-center">Result</div>
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-  },
-  {
-    id: "actions",
-    header: <div className="text-center">Actions</div>,
-    cell: ({ row }) => {
-      const match = row.original;
-
-      return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className="h-8 w-8 p-0"
-            >
-              <span className="sr-only">Open menu</span>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuItem
-              onClick={() => {
-                setSelectedMatch(match);
-                setPreviewOpen(true);
-              }}
-            >
-              View Match Details
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => {
-                setSelectedMatch(match);
-                setOpen(true);
-              }}
-            >
-              Edit Match
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-ms-dark-red"
-              onClick={() => {
-                setSelectedMatch(match);
-                handleDeleteMatch(match);
-              }}
-            >
-              Delete Match
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      );
-    },
-  },
-];
-const DashboardMatches = ({ user, styles, techniques }) => {
+const DashboardMatches = ({ user, refreshUser }) => {
   const router = useRouter();
-  const data = user.matchReports;
-
+  const [matchReports, setMatchReports] = useState([]);
   const [open, setOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState(null);
 
+  useEffect(() => {
+    if (!user?._id) return;
+    fetchMatches();
+  }, [user]);
+
+  const fetchMatches = async () => {
+    try {
+      const res = await fetch(`/api/dashboard/${user._id}/matchReports`);
+      if (!res.ok) throw new Error("Failed to fetch match reports");
+      const data = await res.json();
+      setMatchReports(data);
+    } catch (err) {
+      console.error(err);
+      toast.error("Could not load match reports.");
+    }
+  };
+
   const handleDeleteMatch = async (match) => {
     if (
-      window.confirm(`This report will be permanently deleted!  Are you sure?`)
+      window.confirm(`This report will be permanently deleted! Are you sure?`)
     ) {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/matchReports/${match._id}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization",
-            "Content-type": "application/json; charset=UTF-8",
-          },
+      try {
+        const res = await fetch(
+          `/api/dashboard/${user._id}/matchReports/${match._id}`,
+          {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        const data = await res.json();
+        if (res.ok) {
+          toast.success(data.message);
+          fetchMatches(); // refresh after delete
+        } else {
+          toast.error(data.message);
         }
-      );
-      const data = await response.json();
-
-      if (response.ok) {
-        const timer = setTimeout(() => {
-          router.refresh();
-          toast.success(data.message, {
-            position: "top-right",
-            autoClose: 5000,
-            hideProgressBar: false,
-            closeOnClick: false,
-            pauseOnHover: true,
-            draggable: true,
-            progress: undefined,
-            theme: "light",
-          });
-        }, 1000);
-        return () => clearTimeout(timer);
-      } else {
-        toast.error(data.message);
-        console.log(data.message);
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to delete match report.");
       }
     }
   };
+
+  const columns = [
+    {
+      accessorKey: "matchType",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Type <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      accessorKey: "eventName",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Event <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      accessorKey: "matchDate",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Date <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ getValue }) => moment.utc(getValue()).format("MMMM D, YYYY"),
+    },
+    {
+      accessorKey: "division",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Division <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      accessorKey: "opponentName",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Opponent <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      accessorKey: "opponentCountry",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Country <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      accessorKey: "result",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Result <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      id: "actions",
+      header: "Actions", // ❌ no sort controls here
+      enableSorting: false, // explicitly prevent sorting (optional with custom id)
+      cell: ({ row }) => {
+        const match = row.original;
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className="h-8 w-8 p-0"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuItem
+                onClick={() => {
+                  setSelectedMatch(match);
+                  setPreviewOpen(true);
+                }}
+              >
+                View Match Details
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  setSelectedMatch(match);
+                  setOpen(true);
+                }}
+              >
+                Edit Match
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-ms-dark-red"
+                onClick={() => handleDeleteMatch(match)}
+              >
+                Delete Match
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
+    },
+  ];
+
   return (
     <div>
       <div className="flex items-center">
@@ -243,52 +217,46 @@ const DashboardMatches = ({ user, styles, techniques }) => {
           onOpenChange={setOpen}
         >
           <DialogTrigger asChild>
-            <Button className="bg-gray-900 hover:bg-gray-500  border-gray-500 dark:border-gray-100 border-2 drop-shadow-md text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ml-6">
+            <Button
+              className="ml-6 bg-gray-900 hover:bg-gray-500 text-white border-2 border-gray-500 dark:border-gray-100"
+              onClick={() => {
+                setSelectedMatch(null); // ✅ Clear previous data
+                setOpen(true); // ✅ Open dialog manually
+              }}
+            >
               Add Match Report
             </Button>
           </DialogTrigger>
           <DialogContent className="overflow-y-scroll max-h-[90%]">
             <DialogHeader>
               <DialogTitle>
-                {selectedMatch ? "Edit this " : "Add a "} Match Report
+                {selectedMatch ? "Edit Match Report" : "Add Match Report"}
               </DialogTitle>
               <DialogDescription>
-                {selectedMatch
-                  ? " "
-                  : "Add a new report here. You can edit this report at any time."}
+                Fill out all match details below.
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4 min-width-full">
-              <MatchReportForm
-                athlete={user}
-                styles={styles && styles.styles}
-                techniques={techniques}
-                type="user"
-                setOpen={setOpen}
-                match={selectedMatch}
-              />
-            </div>
+            <MatchReportForm
+              athlete={user}
+              match={selectedMatch}
+              setOpen={setOpen}
+              onSuccess={fetchMatches}
+            />
           </DialogContent>
         </Dialog>
       </div>
-      <div>
-        <ReportDataTable
-          columns={columns({
-            setSelectedMatch,
-            setOpen,
-            setPreviewOpen,
-            handleDeleteMatch,
-          })}
-          data={data}
-          user={user}
-          setSelectedMatch={setSelectedMatch}
-        />
-      </div>
-      {previewOpen && (
-        <PreviewMatchReportModal
+
+      <ReportDataTable
+        columns={columns}
+        data={matchReports}
+      />
+
+      {previewOpen && selectedMatch && (
+        <PreviewReportModal
           previewOpen={previewOpen}
           setPreviewOpen={setPreviewOpen}
           report={selectedMatch}
+          reportType="match"
         />
       )}
     </div>
