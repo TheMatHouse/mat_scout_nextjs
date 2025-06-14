@@ -47,8 +47,11 @@ const matchReportSchema = new mongoose.Schema(
     athleteAttackNotes: { type: String },
     result: { type: String },
     score: { type: String },
-    videoTitle: { type: String },
-    videoURL: { type: String },
+    video: {
+      videoTitle: { type: String },
+      videoNotes: { type: String },
+      videoURL: { type: String },
+    },
     isPublic: {
       type: Boolean,
       default: false,

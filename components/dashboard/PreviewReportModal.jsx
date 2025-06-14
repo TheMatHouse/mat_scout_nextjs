@@ -14,14 +14,13 @@ const PreviewReportModal = ({
 }) => {
   const dialogContentRef = useRef(null);
 
-  // Effect to close the modal if clicked outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
         dialogContentRef.current &&
         !dialogContentRef.current.contains(event.target)
       ) {
-        setPreviewOpen(false); // Close the modal when clicked outside
+        setPreviewOpen(false);
       }
     };
 
@@ -37,124 +36,165 @@ const PreviewReportModal = ({
   return (
     <Dialog
       open={previewOpen}
-      onOpenChange={setPreviewOpen} // Ensure the modal state is handled here
+      onOpenChange={setPreviewOpen}
     >
       <DialogContent
-        ref={dialogContentRef} // Ref to detect click inside the modal
-        className="overflow-y-scroll max-h-screen min-w-fit sm:w-90 max-w-6xl"
+        ref={dialogContentRef}
+        className="overflow-y-auto max-h-screen sm:w-11/12 max-w-6xl"
       >
         <DialogHeader>
-          <DialogTitle>
-            Full {reportType === "match" ? "Match" : "Scouting"} Report
-          </DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-2xl font-bold text-gray-900 dark:text-white">
+              {reportType === "match" ? "Match Report" : "Scouting Report"}
+            </DialogTitle>
+          </div>
         </DialogHeader>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4">
-          <div className="py-3">
-            <div className="flex flex-col">
-              <h3 className="text-xl font-bold text-center">Athlete Info</h3>
-              <div className="py-1">
-                <h4 className="text-xl font-bold">Athlete Name: </h4>
-                {`${report.athleteFirstName} ${report.athleteLastName}`}
-              </div>
 
-              <div className="py-1">
-                <h4 className="text-xl font-bold">Country: </h4>
-                {report.athleteCountry}
-              </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-6 px-2 text-sm sm:text-base">
+          {/* Opponent Info + Attacks */}
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow p-6">
+            <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4 border-b border-gray-300 dark:border-gray-700 pb-2">
+              Opponent Information
+            </h3>
 
-              <div className="py-1">
-                <h4 className="text-xl font-bold">National Rank: </h4>
-                {report.athleteNationalRank}
-              </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Info
+                label="Name"
+                value={report.opponentName}
+              />
+              <Info
+                label="Country"
+                value={report.opponentCountry}
+              />
+              <Info
+                label="National Rank"
+                value={report.opponentNationalRank}
+              />
+              <Info
+                label="World Rank"
+                value={report.opponentWorldRank}
+              />
+              <Info
+                label="Match Type"
+                value={report.matchType}
+              />
+              <Info
+                label="Division"
+                value={report.division}
+              />
+              <Info
+                label="Weight Class"
+                value={report.weightCategory}
+              />
+              <Info
+                label="Rank"
+                value={report.opponentRank}
+              />
+              <Info
+                label="Grip/Stance"
+                value={report.opponentGrip}
+              />
+            </div>
 
-              <div className="py-1">
-                <h4 className="text-xl font-bold">World Ranking: </h4>
-                {report.athleteWorldRank}
-              </div>
-
-              <div className="py-1">
-                <h4 className="text-xl font-bold">Match Type: </h4>
-                {report.matchType}
-              </div>
-
-              <div className="py-1">
-                <h4 className="text-xl font-bold">Division: </h4>
-                {report.division}
-              </div>
-
-              <div className="py-1">
-                <h4 className="text-xl font-bold">Weight Class: </h4>
-                {report.weightCategory}
-              </div>
-
-              <div className="py-1">
-                <h4 className="text-xl font-bold">Rank: </h4>
-                {report.athleteRank}
-              </div>
-
-              <div className="py-1">
-                <h4 className="text-xl font-bold">Grip/Stance: </h4>
-                {report.athleteGrip}
-              </div>
-
-              <div className="py-1">
-                <h4 className="text-xl font-bold">Attacks used: </h4>
-                {report &&
-                  report.athleteAttacks.map((attack, i) => (
-                    <span key={i}>
-                      {attack}
-                      <br />
-                    </span>
+            {report?.opponentAttacks?.length > 0 && (
+              <div className="mt-4">
+                <h4 className="font-semibold text-gray-800 dark:text-gray-200">
+                  Opponent's Attacks Used:
+                </h4>
+                <ul className="list-disc list-inside ml-2 text-sm mt-1">
+                  {report.opponentAttacks.map((a, i) => (
+                    <li key={i}>{a}</li>
                   ))}
+                </ul>
               </div>
-              <div className="py-1 w-full text-wrap">
-                <h4 className="text-xl font-bold">Notes: </h4>
+            )}
+
+            {report.opponentAttackNotes && (
+              <div className="mt-4">
+                <h4 className="font-semibold text-gray-800 dark:text-gray-200">
+                  Opponent Notes:
+                </h4>
                 <div
-                  className="w-90 text-wrap"
+                  className="prose dark:prose-invert max-w-none text-sm"
                   dangerouslySetInnerHTML={{
-                    __html: `${report.athleteAttackNotes}`,
+                    __html: report.opponentAttackNotes,
                   }}
                 />
               </div>
-            </div>
-          </div>
-          <div className="py-3">
-            <div className="flex flex-col">
-              <h3 className="text-xl font-bold text-center">Videos</h3>
+            )}
 
-              {report.videos && report.videos.length > 0 ? (
-                report.videos.map((video) => (
-                  <div
-                    key={video._id}
-                    className="border-b-2 border-ms-blue-gray py-5"
-                  >
-                    <div>
-                      <div className="py-2">
-                        <strong>{video.videoTitle}</strong>
-                        <div
-                          className="w-full py-2 sm:text-wrap"
-                          dangerouslySetInnerHTML={{
-                            __html: `${video.videoNotes}`,
-                          }}
-                        />
-                        <div
-                          className="py-2 w-full"
-                          dangerouslySetInnerHTML={{
-                            __html: `${video.videoURL}`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <h5 className="my-3">No videos for this report</h5>
-              )}
-            </div>
+            {report?.athleteAttacks?.length > 0 && (
+              <div className="mt-6">
+                <h4 className="font-semibold text-gray-800 dark:text-gray-200">
+                  My Attacks Used:
+                </h4>
+                <ul className="list-disc list-inside ml-2 text-sm mt-1">
+                  {report.athleteAttacks.map((a, i) => (
+                    <li key={i}>{a}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {report.athleteAttackNotes && (
+              <div className="mt-4">
+                <h4 className="font-semibold text-gray-800 dark:text-gray-200">
+                  My Notes:
+                </h4>
+                <div
+                  className="prose dark:prose-invert max-w-none text-sm"
+                  dangerouslySetInnerHTML={{
+                    __html: report.athleteAttackNotes,
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Match Video */}
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow p-6">
+            <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4 border-b border-gray-300 dark:border-gray-700 pb-2">
+              Match Video
+            </h3>
+            {report?.video?.videoURL ? (
+              <div className="space-y-4">
+                {report.video.videoTitle && (
+                  <h4 className="font-bold text-lg text-gray-900 dark:text-white">
+                    {report.video.videoTitle}
+                  </h4>
+                )}
+                <div className="aspect-video w-full rounded-lg shadow overflow-hidden">
+                  <iframe
+                    className="w-full h-full"
+                    src={report.video.videoURL}
+                    title={report.video.videoTitle}
+                    allowFullScreen
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className="italic text-gray-500 dark:text-gray-400">
+                No video provided.
+              </p>
+            )}
           </div>
         </div>
       </DialogContent>
     </Dialog>
+  );
+};
+
+const Info = ({ label, value }) => {
+  if (!value) return null;
+  return (
+    <div className="flex justify-between text-sm py-1">
+      <span className="text-gray-700 dark:text-gray-300 font-medium">
+        {label}:
+      </span>
+      <span className="text-gray-900 dark:text-white font-semibold">
+        {value}
+      </span>
+    </div>
   );
 };
 

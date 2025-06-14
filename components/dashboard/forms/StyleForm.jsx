@@ -15,9 +15,11 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useUser } from "@/context/UserContext"; // ✅ Import user context
 
 const StyleForm = ({ user, style, userType, type, setOpen, onSuccess }) => {
   const router = useRouter();
+  const { refreshUser } = useUser(); // ✅ Pull in refreshUser
   const [availableStyles, setAvailableStyles] = useState([]);
 
   const [formData, setFormData] = useState({
@@ -50,17 +52,13 @@ const StyleForm = ({ user, style, userType, type, setOpen, onSuccess }) => {
 
   useEffect(() => {
     if (style) {
-      console.log("Style object received:", style);
-      console.log("Raw promotionDate:", style.promotionDate);
       const formatDate = (dateStr) => {
         if (!dateStr) return "";
         const utcDate = new Date(dateStr);
-        return utcDate.toISOString().split("T")[0]; // Use raw UTC date
+        return utcDate.toISOString().split("T")[0];
       };
 
-      console.log("Raw promotionDate:", style.promotionDate);
       const formattedDate = formatDate(style.promotionDate);
-      console.log("Formatted promotionDate:", formattedDate);
 
       setFormData({
         styleName: style.styleName || "",
@@ -74,15 +72,11 @@ const StyleForm = ({ user, style, userType, type, setOpen, onSuccess }) => {
     }
   }, [style]);
 
-  useEffect(() => {
-    console.log("Final formData state:", formData);
-  }, [formData]);
   const isLoading = false;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Ensure promotionDate is correctly converted to midnight UTC
     const adjustedFormData = {
       ...formData,
       promotionDate: formData.promotionDate
@@ -108,6 +102,7 @@ const StyleForm = ({ user, style, userType, type, setOpen, onSuccess }) => {
 
       if (response.ok) {
         toast.success(data.message || "Style saved!");
+        refreshUser(); // ✅ Refetch user after success
         setTimeout(() => {
           onSuccess?.(data.updatedStyle || data.createdStyle || {});
           setOpen?.(false);

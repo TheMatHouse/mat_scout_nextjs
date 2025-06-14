@@ -1,41 +1,21 @@
 import { NextResponse } from "next/server";
-import { Types } from "mongoose";
 import { connectDB } from "@/lib/mongo";
-import UserStyle from "@/models/userStyleModel";
 import User from "@/models/userModel";
+import UserStyle from "@/models/userStyleModel";
 import Style from "@/models/styleModel";
+import { Types } from "mongoose";
 import mongoSanitize from "express-mongo-sanitize";
-
-export async function GET(request, { params }) {
-  await connectDB();
-  const { userId } = params;
-  const styles = await UserStyle.find({ userId });
-  return new Response(JSON.stringify(styles), { status: 200 });
-}
 
 export async function POST(request, { params }) {
   try {
     await connectDB();
-
     const { userId } = params;
 
     if (!userId || !Types.ObjectId.isValid(userId)) {
-      return NextResponse.json(
-        { message: "Missing or invalid user ID" },
-        { status: 400 }
-      );
+      return NextResponse.json({ message: "Invalid user ID" }, { status: 400 });
     }
 
-    let requestBody;
-    try {
-      requestBody = await request.json();
-    } catch (error) {
-      return NextResponse.json(
-        { message: "Invalid JSON body" },
-        { status: 400 }
-      );
-    }
-
+    const body = await request.json();
     const {
       styleName,
       rank,
@@ -44,32 +24,16 @@ export async function POST(request, { params }) {
       weightClass,
       grip,
       favoriteTechnique,
-    } = mongoSanitize.sanitize(requestBody);
-
-    if (!styleName) {
-      return NextResponse.json(
-        { message: "Style name is required." },
-        { status: 400 }
-      );
-    }
+    } = mongoSanitize.sanitize(body);
 
     const user = await User.findById(userId);
-    if (!user) {
+    if (!user)
       return NextResponse.json({ message: "User not found" }, { status: 404 });
-    }
-
-    const style = await Style.findOne({ styleName });
-    if (!style) {
-      return NextResponse.json({ message: "Style not found" }, { status: 404 });
-    }
 
     const existing = await UserStyle.findOne({ userId, styleName });
     if (existing) {
       return NextResponse.json(
-        {
-          message:
-            "You already have this style. Edit it or delete it before adding again.",
-        },
+        { message: "Style already added" },
         { status: 409 }
       );
     }
@@ -85,13 +49,38 @@ export async function POST(request, { params }) {
       favoriteTechnique,
     });
 
+    // Ensure the field exists before pushing
+    if (!Array.isArray(user.userStyles)) user.userStyles = [];
+    user.userStyles.push(newStyle._id);
+    await user.save();
+
     return NextResponse.json(
       { message: "Style saved", data: newStyle },
       { status: 201 }
     );
-  } catch (error) {
+  } catch (err) {
+    console.error("POST Error:", err);
     return NextResponse.json(
-      { message: "Server error: " + error.message },
+      { message: "Server error: " + err.message },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(request, { params }) {
+  try {
+    await connectDB();
+    const { userId } = params;
+
+    const user = await User.findById(userId).populate("userStyles");
+    if (!user)
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
+
+    return NextResponse.json(user.userStyles, { status: 200 });
+  } catch (err) {
+    console.error("GET Error:", err);
+    return NextResponse.json(
+      { message: "Error fetching styles" },
       { status: 500 }
     );
   }
