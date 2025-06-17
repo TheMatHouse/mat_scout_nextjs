@@ -3,10 +3,13 @@ import { connectDB } from "@/lib/mongo";
 import UserStyle from "@/models/userStyleModel";
 import FamilyMember from "@/models/familyMemberModel";
 import { getCurrentUserFromCookies } from "@/lib/auth";
+import { Types } from "mongoose";
 
 export const GET = async (_req, context) => {
   await connectDB();
   const { userId, memberId } = context.params;
+  console.log("userId ", userId);
+  console.log("memberId ", memberId);
 
   const currentUser = await getCurrentUserFromCookies();
   if (!currentUser || currentUser._id.toString() !== userId) {
@@ -14,7 +17,10 @@ export const GET = async (_req, context) => {
   }
 
   try {
-    const styles = await UserStyle.find({ userId, familyMemberId: memberId });
+    const styles = await UserStyle.find({
+      userId: new Types.ObjectId(userId),
+      familyMemberId: new Types.ObjectId(memberId),
+    }).sort({ createdAt: -1 }); // Optional: newest first
     return NextResponse.json(styles, { status: 200 });
   } catch (err) {
     console.error("Error fetching styles:", err);
@@ -45,14 +51,17 @@ export const POST = async (req, context) => {
 
     await newStyle.save();
 
-    await FamilyMember.findByIdAndUpdate(
-      memberId,
-      { $push: { styles: newStyle._id } },
-      { new: true }
-    );
+    const familyMember = await FamilyMember.findById(memberId);
+    if (familyMember) {
+      if (!Array.isArray(familyMember.userStyles)) {
+        familyMember.userStyles = [];
+      }
+      familyMember.userStyles.push(newStyle._id);
+      await familyMember.save();
+    }
 
     return NextResponse.json(
-      { message: "Style added", style: newStyle },
+      { message: "Style added", createdStyle: newStyle },
       { status: 201 }
     );
   } catch (err) {

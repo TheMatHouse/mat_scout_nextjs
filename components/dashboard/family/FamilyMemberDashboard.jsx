@@ -14,7 +14,6 @@ const TABS = [
 ];
 
 export default function FamilyMemberDashboard({ member }) {
-  console.log("member ", member);
   const [activeTab, setActiveTab] = useState("settings");
   const renderTabContent = () => {
     switch (activeTab) {

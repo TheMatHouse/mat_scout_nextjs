@@ -41,6 +41,12 @@ const familyMemberSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    userStyles: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "UserStyle",
+      },
+    ],
     matchReports: [
       {
         type: mongoose.Schema.Types.ObjectId,

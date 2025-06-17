@@ -15,11 +15,18 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useUser } from "@/context/UserContext"; // ✅ Import user context
+import { useUser } from "@/context/UserContext";
 
-const StyleForm = ({ user, style, userType, type, setOpen, onSuccess }) => {
+const StyleForm = ({
+  user,
+  style,
+  userType = "user",
+  member,
+  setOpen,
+  onSuccess,
+}) => {
   const router = useRouter();
-  const { refreshUser } = useUser(); // ✅ Pull in refreshUser
+  const { refreshUser } = useUser();
   const [availableStyles, setAvailableStyles] = useState([]);
 
   const [formData, setFormData] = useState({
@@ -72,10 +79,13 @@ const StyleForm = ({ user, style, userType, type, setOpen, onSuccess }) => {
     }
   }, [style]);
 
-  const isLoading = false;
-
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (userType === "family" && (!member?._id || !member?.userId)) {
+      toast.error("Missing family member info");
+      return;
+    }
 
     const adjustedFormData = {
       ...formData,
@@ -84,12 +94,23 @@ const StyleForm = ({ user, style, userType, type, setOpen, onSuccess }) => {
         : undefined,
     };
 
-    try {
-      const method = style ? "PATCH" : "POST";
-      const endpoint = style
-        ? `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyles/${style._id}`
-        : `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyles`;
+    let endpoint = "";
+    let method = style ? "PATCH" : "POST";
 
+    if (userType === "user") {
+      adjustedFormData.userId = user._id;
+      endpoint = style
+        ? `/api/dashboard/${user._id}/userStyles/${style._id}`
+        : `/api/dashboard/${user._id}/userStyles`;
+    } else if (userType === "family") {
+      adjustedFormData.userId = member.userId;
+      adjustedFormData.familyMemberId = member._id;
+      endpoint = style
+        ? `/api/dashboard/${member.userId}/family/${member._id}/styles/${style._id}`
+        : `/api/dashboard/${member.userId}/family/${member._id}/styles`;
+    }
+
+    try {
       const response = await fetch(endpoint, {
         method,
         headers: {
@@ -102,7 +123,7 @@ const StyleForm = ({ user, style, userType, type, setOpen, onSuccess }) => {
 
       if (response.ok) {
         toast.success(data.message || "Style saved!");
-        refreshUser(); // ✅ Refetch user after success
+        refreshUser(); // Will only refresh main user, not family member
         setTimeout(() => {
           onSuccess?.(data.updatedStyle || data.createdStyle || {});
           setOpen?.(false);
@@ -124,7 +145,7 @@ const StyleForm = ({ user, style, userType, type, setOpen, onSuccess }) => {
           <CardDescription>
             {style?._id
               ? `Update ${style?.styleName} style information`
-              : "Add a user style. You can edit this later from the dashboard."}
+              : "Add a style or sport. You can edit this later."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -178,10 +199,6 @@ const StyleForm = ({ user, style, userType, type, setOpen, onSuccess }) => {
                   })
                 }
               />
-              {/* Debug line to ensure date is correct */}
-              <p className="text-xs text-gray-500">
-                Current date value: {formData.promotionDate}
-              </p>
             </div>
 
             <div className="space-y-1">
@@ -254,15 +271,8 @@ const StyleForm = ({ user, style, userType, type, setOpen, onSuccess }) => {
             </div>
 
             <div className="flex justify-center">
-              <Button
-                type="submit"
-                disabled={isLoading}
-              >
-                {isLoading
-                  ? "Saving..."
-                  : style?._id
-                  ? "Update Style"
-                  : "Add Style"}
+              <Button type="submit">
+                {style?._id ? "Update Style" : "Add Style"}
               </Button>
             </div>
           </form>

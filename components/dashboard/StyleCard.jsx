@@ -23,6 +23,7 @@ const StyleCard = ({
   user,
   userType,
   onDelete,
+  member,
 }) => {
   const router = useRouter();
   const [style, setStyle] = useState(initialStyle);
@@ -32,13 +33,17 @@ const StyleCard = ({
   const handleDeleteStyle = async () => {
     if (window.confirm(`Delete ${style.styleName}?`)) {
       try {
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/userStyles/${style._id}`,
-          {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-          }
-        );
+        const userId = member?.userId || user?._id;
+
+        const endpoint =
+          userType === "family"
+            ? `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${userId}/family/${member._id}/styles/${style._id}`
+            : `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${userId}/userStyles/${style._id}`;
+
+        const response = await fetch(endpoint, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+        });
         const data = await response.json();
 
         if (response.ok) {
@@ -84,6 +89,7 @@ const StyleCard = ({
               userType={userType}
               setOpen={setOpen}
               onSuccess={(updated) => setStyle(updated)}
+              member={member}
             />
           </DialogContent>
         </Dialog>
