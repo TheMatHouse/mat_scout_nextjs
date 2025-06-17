@@ -65,6 +65,7 @@ export async function GET(request) {
         facebookId,
         avatarType: "facebook",
         avatar: `https://graph.facebook.com/${facebookId}/picture?type=large`,
+        provider: "facebook",
       });
     }
 

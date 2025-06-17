@@ -5,14 +5,11 @@ const matchReportSchema = new mongoose.Schema(
     athlete: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
     },
-
-    // familyMember: {
-    //   type: mongoose.Schema.Types.ObjectId,
-    //   ref: "FamilyMember",
-    //   required: true,
-    // },
+    familyMember: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "FamilyMember",
+    },
     // team: {
     //   type: mongoose.Schema.Types.ObjectId,
     //   ref: "Team",

@@ -28,7 +28,7 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      //required: true,
+      // required: true,
     },
     city: { type: String },
     state: { type: String },
@@ -65,11 +65,16 @@ const userSchema = new mongoose.Schema(
       default:
         "https://res.cloudinary.com/matscout/image/upload/v1747956346/default_user_rval6s.jpg",
     },
+    avatarId: {
+      type: String, // Optional — for deleting uploaded avatars
+    },
     googleAvatar: {
       type: String,
+      select: true,
     },
     facebookAvatar: {
       type: String,
+      select: true,
     },
     avatarType: {
       type: String,
@@ -84,11 +89,6 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    // tokens: [String],
-    // athlete: {
-    //   type: Schema.Types.ObjectId,
-    //   ref: "Athlete",
-    // },
     allowPublic: {
       type: Boolean,
     },
@@ -111,7 +111,6 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-//export const User = models.User || model("User", userSchema);
 const User = mongoose.models.User || mongoose.model("User", userSchema);
 
 export default User;

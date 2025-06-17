@@ -1,11 +1,11 @@
-import { Schema, model, models } from "mongoose";
+import mongoose from "mongoose";
 
-const familyMemberSchema = new Schema(
+const familyMemberSchema = new mongoose.Schema(
   {
     userId: {
-      type: Schema.Types.ObjectId,
-      required: true,
+      type: mongoose.Schema.Types.ObjectId,
       ref: "user",
+      required: true,
     },
     firstName: {
       type: String,
@@ -28,7 +28,10 @@ const familyMemberSchema = new Schema(
     avatar: {
       type: String,
       default:
-        "https://firebasestorage.googleapis.com/v0/b/matscout.appspot.com/o/images%2Fdefault_user.jpg?alt=media&token=314573ee-36df-471e-bb4e-17f47d0750e1",
+        "https://res.cloudinary.com/matscout/image/upload/v1747956346/default_user_rval6s.jpg",
+    },
+    avatarId: {
+      type: String, // Cloudinary public_id
     },
     avatarType: {
       type: String,
@@ -38,11 +41,20 @@ const familyMemberSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    matchReports: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "MatchReport",
+      },
+    ],
   },
   {
     timestamps: true,
   }
 );
 
-export const FamilyMember =
-  models.FamilyMember || model("FamilyMember", familyMemberSchema);
+const FamilyMember =
+  mongoose.models.FamilyMember ||
+  mongoose.model("FamilyMember", familyMemberSchema);
+
+export default FamilyMember;

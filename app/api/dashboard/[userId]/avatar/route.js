@@ -1,97 +1,89 @@
-"use server";
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import User from "@/models/userModel";
 import { connectDB } from "@/lib/mongo";
 import cloudinary from "@/lib/cloudinary";
 
-export const PATCH = async (request, { params }) => {
-  try {
-    const { userId } = await params;
+export const PATCH = async (request, context) => {
+  await connectDB();
 
+  const { userId } = context.params;
+
+  try {
     const body = await request.json();
     const { image, avatarType } = body;
 
     if (!userId || !Types.ObjectId.isValid(userId)) {
       return new NextResponse(
-        JSON.stringify({ message: "Invalid or missing user id" })
+        JSON.stringify({ message: "Invalid or missing user id" }),
+        { status: 400 }
       );
     }
-    await connectDB();
+
     const user = await User.findById(userId);
-    if (user) {
-      if (user.avatarType !== "default" && user.avatarType !== "google") {
-        const currentAvatar = user.avatar;
-        const fileName = currentAvatar.split("avatars/");
-        const public_id = fileName[1].split(".");
-        await cloudinary.uploader.destroy(
-          `avatars/${public_id[0]}`,
-          function (result) {
-            console.log(result);
-          }
-        );
-      }
-
-      if (avatarType === "google") {
-        user.avatarType = "google";
-        user.avatar = "";
-      } else {
-        if (user.avatar) {
-          const currentAvatar = user.avatar;
-          const fileName = currentAvatar.split("avatars/");
-          const public_id = fileName[1].split(".");
-          await cloudinary.uploader.destroy(
-            `avatars/${public_id[0]}`,
-            function (result) {
-              console.log(result);
-            }
-          );
-        }
-        const result = await cloudinary.uploader.upload(image, {
-          folder: "avatars",
-          // width: 300,
-          // crop: "scale"
-        });
-
-        user.avatarType = "uploaded";
-        user.avatar = result.secure_url;
-      }
-      await user.save();
-      return new NextResponse(
-        JSON.stringify({ message: "Avatar updated successfully" }),
-        {
-          status: 200,
-        }
-      );
-    } else {
-      return new NextResponse(
-        JSON.stringify(({ message: "User not found" }, { status: 404 }))
-      );
+    if (!user) {
+      return new NextResponse(JSON.stringify({ message: "User not found" }), {
+        status: 404,
+      });
     }
-    //   if (user) {
-    //     user.avatarType = avatarType;
-    //     if (avatarType === "google") {
-    //       user.avatarType = "google";
-    //       user.avatar = "";
-    //     } else {
-    //       user.avatarType = "uploaded";
-    //       user.avatar = avatarURL;
-    //     }
-    //     const updatedUser = await user.save();
-    //     return new NextResponse(
-    //       JSON.stringify({ message: "Avatar updated successfully" }),
-    //       {
-    //         status: 200,
-    //       }
-    //     );
-    //   } else {
-    //     return new NextResponse(
-    //       JSON.stringify(({ message: "User not found" }, { status: 404 }))
-    //     );
-    //   }
-  } catch (error) {
+
+    const shouldDeleteUploaded =
+      user.avatarType === "uploaded" && user.avatarId;
+
+    // 🔄 Switch to Google or Facebook
+    if (
+      (avatarType === "google" || avatarType === "facebook") &&
+      shouldDeleteUploaded
+    ) {
+      try {
+        await cloudinary.uploader.destroy(user.avatarId);
+        user.avatarId = undefined;
+        console.log("Deleted uploaded Cloudinary avatar:", user.avatarId);
+      } catch (err) {
+        console.warn("Error deleting Cloudinary avatar:", err);
+      }
+    }
+
+    if (avatarType === "google") {
+      user.avatarType = "google";
+      user.avatar = user.googleAvatar || "";
+    } else if (avatarType === "facebook") {
+      user.avatarType = "facebook";
+      user.avatar = user.facebookAvatar || "";
+    } else if (avatarType === "uploaded" && image === "use-existing") {
+      // ✅ Revert to previously uploaded avatar
+      user.avatarType = "uploaded";
+    } else {
+      // ✅ Uploading a new custom avatar
+      if (shouldDeleteUploaded) {
+        try {
+          await cloudinary.uploader.destroy(user.avatarId);
+        } catch (err) {
+          console.warn("Error deleting old uploaded avatar:", err);
+        }
+      }
+
+      const result = await cloudinary.uploader.upload(image, {
+        folder: "avatars",
+        public_id: `user_${user._id}_${Date.now()}`,
+        transformation: [{ width: 300, height: 300, crop: "fill" }],
+      });
+
+      user.avatarType = "uploaded";
+      user.avatar = result.secure_url;
+      user.avatarId = result.public_id;
+    }
+
+    await user.save();
+
     return new NextResponse(
-      JSON.stringify({ message: "Error fetching user" + error.message }),
+      JSON.stringify({ message: "Avatar updated successfully" }),
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error("Error updating avatar:", error);
+    return new NextResponse(
+      JSON.stringify({ message: "Error updating avatar: " + error.message }),
       { status: 500 }
     );
   }

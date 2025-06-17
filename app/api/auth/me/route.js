@@ -16,7 +16,6 @@ export async function GET() {
       "🔍 Cookie keys found:",
       cookieStore.getAll().map((c) => c.name)
     );
-    console.log("🔐 Raw token value:", token);
 
     if (!token) {
       console.warn("⚠️ No token found in cookies.");
@@ -27,10 +26,8 @@ export async function GET() {
 
     // Optional decode for inspection — not used for auth
     const decodedRaw = jwt.decode(token);
-    console.log("🧾 Decoded token (unsafe decode):", decodedRaw);
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log("✅ Verified token:", decoded);
 
     const userId = decoded.userId || decoded._id;
     if (!userId) {
@@ -56,7 +53,6 @@ export async function GET() {
       return res;
     }
 
-    console.log("🎉 Returning populated user:", user._id);
     return NextResponse.json({ user });
   } catch (err) {
     console.error("🔥 GET /api/auth/me error:", err.message);

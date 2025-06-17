@@ -29,14 +29,16 @@ const userStyleSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    familyMemberId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "FamilyMember",
+      default: null,
+    },
   },
   {
     timestamps: true,
   }
 );
-
-// export const UserStyle =
-//   models.UserStyle || model("UserStyle", userStyleSchema);
 
 const UserStyle =
   mongoose.models.UserStyle || mongoose.model("UserStyle", userStyleSchema);

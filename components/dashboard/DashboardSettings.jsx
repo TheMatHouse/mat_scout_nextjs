@@ -51,43 +51,66 @@ export default function DashboardSettings({ user, refreshUser }) {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setAvatarPreview(reader.result);
-    };
-    reader.readAsDataURL(file);
+    reader.onloadend = async () => {
+      const base64Image = reader.result;
+      setAvatarPreview(base64Image);
 
-    const formData = new FormData();
-    formData.append("image", file);
-    formData.append("userId", user._id);
+      try {
+        const res = await fetch(`/api/dashboard/${user._id}/avatar`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            image: base64Image,
+            avatarType: "uploaded",
+          }),
+        });
 
-    fetch("/api/upload/avatar", {
-      method: "PATCH",
-      body: formData,
-    })
-      .then((res) => {
         if (!res.ok) throw new Error("Failed to upload avatar");
+
         toast.success("Avatar updated successfully");
         setAvatarPreview(null);
-        return refreshUser();
-      })
-      .then(() => router.refresh())
-      .catch(() => toast.error("Error updating avatar"));
+        await refreshUser();
+        router.refresh();
+      } catch (err) {
+        console.error("Upload error:", err);
+        toast.error("Error updating avatar");
+      }
+    };
+
+    reader.readAsDataURL(file);
   };
 
   const revertToSocial = async (provider) => {
-    try {
-      const res = await fetch("/api/upload/avatar", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user._id, avatarType: provider }),
-      });
-      if (!res.ok) throw new Error();
-      toast.success(`Reverted to ${provider} avatar`);
-      await refreshUser();
-      router.refresh();
-    } catch (err) {
-      toast.error("Failed to revert avatar");
-    }
+    await fetch(`/api/dashboard/${user._id}/avatar`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ avatarType: provider }),
+    });
+
+    toast.success(`Switched to ${provider} avatar`);
+    await refreshUser();
+    router.refresh();
+  };
+
+  const revertToUploaded = async () => {
+    await fetch(`/api/dashboard/${user._id}/avatar`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        avatarType: "uploaded",
+        image: "use-existing", // 👈 this tells backend not to re-upload
+      }),
+    });
+
+    toast.success("Switched to uploaded avatar");
+    await refreshUser();
+    router.refresh();
   };
 
   return (
@@ -113,7 +136,7 @@ export default function DashboardSettings({ user, refreshUser }) {
               />
             </label>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap justify-center">
               {user.googleAvatar && user.avatarType !== "google" && (
                 <Button
                   variant="outline"
@@ -123,6 +146,7 @@ export default function DashboardSettings({ user, refreshUser }) {
                   <GoogleIcon className="w-4 h-4 mr-1" /> Use Google Avatar
                 </Button>
               )}
+
               {user.facebookAvatar && user.avatarType !== "facebook" && (
                 <Button
                   variant="outline"
@@ -130,6 +154,16 @@ export default function DashboardSettings({ user, refreshUser }) {
                   onClick={() => revertToSocial("facebook")}
                 >
                   <FacebookIcon className="w-4 h-4 mr-1" /> Use Facebook Avatar
+                </Button>
+              )}
+
+              {user.avatarType !== "uploaded" && user.avatarId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={revertToUploaded}
+                >
+                  Use Uploaded Avatar
                 </Button>
               )}
             </div>

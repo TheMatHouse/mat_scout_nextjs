@@ -1,13 +1,13 @@
-"use server";
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import UserStyle from "@/models/userStyleModel";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
 
-export const PATCH = async (request, { params }) => {
+export const PATCH = async (request, context) => {
   try {
-    const { userId, userStyleId } = params;
+    await connectDB();
+    const { userId, userStyleId } = context.params;
 
     const body = await request.json();
     const {
@@ -32,8 +32,6 @@ export const PATCH = async (request, { params }) => {
         { status: 400 }
       );
     }
-
-    await connectDB();
 
     const user = await User.findById(userId);
     if (!user) {
@@ -77,11 +75,10 @@ export const PATCH = async (request, { params }) => {
   }
 };
 
-export const DELETE = async (request, { params }) => {
-  console.log("DELETING");
-
+export const DELETE = async (request, context) => {
   try {
-    const { userId, userStyleId } = params;
+    await connectDB();
+    const { userId, userStyleId } = context.params;
 
     if (!userId || !Types.ObjectId.isValid(userId)) {
       return new NextResponse(
@@ -96,8 +93,6 @@ export const DELETE = async (request, { params }) => {
         { status: 400 }
       );
     }
-
-    await connectDB();
 
     const { getCurrentUser } = await import("@/lib/getCurrentUser.js");
     const currentUser = await getCurrentUser();

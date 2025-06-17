@@ -3,15 +3,15 @@ import User from "@/models/userModel";
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 
-export async function PATCH(request, { params }) {
-  const { userId } = params;
+export async function PATCH(request, context) {
+  await connectDB();
+  const { userId } = context.params;
 
   if (!mongoose.Types.ObjectId.isValid(userId)) {
     return NextResponse.json({ message: "Invalid user ID" }, { status: 400 });
   }
 
   try {
-    await connectDB();
     const data = await request.json();
 
     const allowPublicValue =

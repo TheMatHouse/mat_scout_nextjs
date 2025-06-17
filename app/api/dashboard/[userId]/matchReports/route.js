@@ -7,8 +7,9 @@ import MatchReport from "@/models/matchReportModel";
 import User from "@/models/userModel";
 
 // GET - Return match reports for a specific user
-export async function GET(request, { params }) {
-  const { userId } = params;
+export async function GET(request, context) {
+  await connectDB();
+  const { userId } = context.params;
 
   try {
     if (!userId || !Types.ObjectId.isValid(userId)) {
@@ -17,8 +18,6 @@ export async function GET(request, { params }) {
         { status: 400 }
       );
     }
-
-    await connectDB();
 
     const user = await User.findById(userId);
     if (!user) {
@@ -43,8 +42,9 @@ export async function GET(request, { params }) {
 }
 
 // POST - Create a new match report for a user
-export async function POST(request, { params }) {
-  const { userId } = params;
+export async function POST(request, context) {
+  await connectDB();
+  const { userId } = context.params;
 
   try {
     if (!userId || !Types.ObjectId.isValid(userId)) {
@@ -54,7 +54,6 @@ export async function POST(request, { params }) {
       );
     }
 
-    await connectDB();
     const user = await User.findById(userId);
     if (!user) {
       return new NextResponse(JSON.stringify({ message: "User not found" }), {

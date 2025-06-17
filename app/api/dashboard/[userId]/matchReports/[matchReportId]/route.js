@@ -1,5 +1,3 @@
-"use server";
-
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import { Types } from "mongoose";
@@ -9,10 +7,10 @@ import Technique from "@/models/techniquesModel";
 import mongoSanitize from "express-mongo-sanitize";
 
 // PATCH - Update a match report
-export const PATCH = async (request, { params }) => {
+export const PATCH = async (request, context) => {
   try {
     await connectDB();
-    const { userId, matchReportId } = params;
+    const { userId, matchReportId } = context.params;
 
     if (
       !Types.ObjectId.isValid(userId) ||
@@ -122,10 +120,10 @@ export const PATCH = async (request, { params }) => {
 };
 
 // DELETE - Remove a match report
-export const DELETE = async (request, { params }) => {
+export const DELETE = async (request, context) => {
   try {
     await connectDB();
-    const { userId, matchReportId } = params;
+    const { userId, matchReportId } = context.params;
 
     if (
       !Types.ObjectId.isValid(userId) ||

@@ -72,6 +72,7 @@ export async function GET(request) {
         googleAvatar: picture,
         avatar: picture,
         avatarType: "google",
+        provider: "google",
       });
     }
 

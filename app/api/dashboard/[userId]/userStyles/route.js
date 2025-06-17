@@ -6,10 +6,10 @@ import Style from "@/models/styleModel";
 import { Types } from "mongoose";
 import mongoSanitize from "express-mongo-sanitize";
 
-export async function POST(request, { params }) {
+export async function POST(request, context) {
   try {
     await connectDB();
-    const { userId } = params;
+    const { userId } = context.params;
 
     if (!userId || !Types.ObjectId.isValid(userId)) {
       return NextResponse.json({ message: "Invalid user ID" }, { status: 400 });
@@ -67,10 +67,10 @@ export async function POST(request, { params }) {
   }
 }
 
-export async function GET(request, { params }) {
+export async function GET(request, context) {
   try {
     await connectDB();
-    const { userId } = params;
+    const { userId } = context.params;
 
     const user = await User.findById(userId).populate("userStyles");
     if (!user)
