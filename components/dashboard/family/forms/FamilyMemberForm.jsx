@@ -69,7 +69,6 @@ export default function FamilyMemberForm({ user, onClose, onSuccess }) {
 
       if (res.ok) {
         const data = await res.json();
-        console.log("✅ Parsed JSON:", data);
         toast.success("Family member added successfully");
         onClose();
         onSuccess(data);

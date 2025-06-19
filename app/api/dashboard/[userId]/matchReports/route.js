@@ -26,9 +26,10 @@ export async function GET(request, context) {
       });
     }
 
-    const matchReports = await MatchReport.find({ athlete: userId }).sort({
-      matchDate: -1,
-    }); // Most recent first
+    const matchReports = await MatchReport.find({
+      athleteId: userId,
+      athleteType: "user",
+    }).sort({ matchDate: -1 }); // Most recent first
 
     return new NextResponse(JSON.stringify(matchReports), { status: 200 });
   } catch (error) {
@@ -80,11 +81,14 @@ export async function POST(request, context) {
       result,
       score,
       isPublic,
+      videoTitle,
+      videoURL,
     } = body;
 
     const newMatchReport = await MatchReport.create({
-      athlete: user._id,
-      createdBy: user._id,
+      athleteId: user._id,
+      athleteType: "user",
+      createdById: user._id,
       createdByName: `${user.firstName} ${user.lastName}`,
       matchType,
       eventName,
@@ -103,8 +107,8 @@ export async function POST(request, context) {
       result,
       score,
       video: {
-        videoTitle: body.videoTitle || "",
-        videoURL: normalizeYouTubeUrl(body.videoURL || ""),
+        videoTitle: videoTitle || "",
+        videoURL: normalizeYouTubeUrl(videoURL || ""),
       },
       isPublic,
     });

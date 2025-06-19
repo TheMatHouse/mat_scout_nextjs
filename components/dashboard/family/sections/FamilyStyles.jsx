@@ -35,7 +35,6 @@ const FamilyStyles = ({ member }) => {
     }
   };
 
-  console.log("styles ", styles);
   const handleStylesRefresh = async () => {
     try {
       const res = await fetch(

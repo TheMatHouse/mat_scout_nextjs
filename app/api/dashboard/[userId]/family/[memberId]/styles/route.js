@@ -8,8 +8,6 @@ import { Types } from "mongoose";
 export const GET = async (_req, context) => {
   await connectDB();
   const { userId, memberId } = context.params;
-  console.log("userId ", userId);
-  console.log("memberId ", memberId);
 
   const currentUser = await getCurrentUserFromCookies();
   if (!currentUser || currentUser._id.toString() !== userId) {

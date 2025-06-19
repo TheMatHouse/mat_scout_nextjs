@@ -2,7 +2,6 @@
 import { cookies } from "next/headers";
 
 export async function POST() {
-  console.log("✅ Logout route is loaded");
   cookies().set("token", "", {
     httpOnly: true,
     path: "/",

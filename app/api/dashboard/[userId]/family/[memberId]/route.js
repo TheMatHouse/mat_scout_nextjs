@@ -29,7 +29,9 @@ export async function GET(req, context) {
     const member = await FamilyMember.findOne({
       _id: memberId,
       userId: currentUser._id,
-    });
+    })
+      .populate("userStyles")
+      .lean();
 
     if (!member) {
       return NextResponse.json(

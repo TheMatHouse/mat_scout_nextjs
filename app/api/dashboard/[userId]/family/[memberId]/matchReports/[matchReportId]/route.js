@@ -4,14 +4,14 @@ import MatchReport from "@/models/matchReportModel";
 import { Types } from "mongoose";
 import { getCurrentUserFromCookies } from "@/lib/auth";
 
-// PATCH: Update a user's own match report
+// PATCH: Update a family member's match report
 export async function PATCH(request, context) {
   await connectDB();
 
-  const { userId, matchReportId } = context.params;
-
+  const { userId, memberId, matchReportId } = context.params;
   if (
     !Types.ObjectId.isValid(userId) ||
+    !Types.ObjectId.isValid(memberId) ||
     !Types.ObjectId.isValid(matchReportId)
   ) {
     return NextResponse.json(
@@ -31,9 +31,9 @@ export async function PATCH(request, context) {
     const updated = await MatchReport.findOneAndUpdate(
       {
         _id: matchReportId,
-        athleteId: userId,
-        athleteType: "user",
-        createdById: userId,
+        athleteId: memberId,
+        athleteType: "family",
+        createdById: userId, // ← if you renamed this from createdById
       },
       {
         ...updates,
@@ -65,14 +65,15 @@ export async function PATCH(request, context) {
   }
 }
 
-// DELETE: Delete a user's own match report
+// DELETE: Delete a family member's match report
 export async function DELETE(request, context) {
   await connectDB();
 
-  const { userId, matchReportId } = context.params;
+  const { userId, memberId, matchReportId } = context.params;
 
   if (
     !Types.ObjectId.isValid(userId) ||
+    !Types.ObjectId.isValid(memberId) ||
     !Types.ObjectId.isValid(matchReportId)
   ) {
     return NextResponse.json(
@@ -89,8 +90,8 @@ export async function DELETE(request, context) {
   try {
     const deleted = await MatchReport.findOneAndDelete({
       _id: matchReportId,
-      athleteId: userId,
-      athleteType: "user",
+      athleteId: memberId,
+      athleteType: "family",
       createdById: userId,
     });
 

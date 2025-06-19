@@ -1,4 +1,4 @@
-// MatchReportForm.jsx with full form, video preview, and real-time validation
+// Updated MatchReportForm.jsx to support both user and family member match reports
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -28,6 +28,7 @@ const MatchReportForm = ({
   type,
   setOpen,
   onSuccess,
+  userType,
 }) => {
   const router = useRouter();
   const { refreshUser } = useUser();
@@ -107,9 +108,6 @@ const MatchReportForm = ({
     }
 
     const payload = {
-      athlete: athlete._id,
-      createdBy: athlete._id,
-      createdByName: `${athlete.firstName} ${athlete.lastName}`,
       matchType: formData.get("matchType"),
       eventName: formData.get("eventName"),
       matchDate: formData.get("matchDate"),
@@ -131,10 +129,28 @@ const MatchReportForm = ({
       isPublic: formData.get("isPublic") === "on",
     };
 
+    // Determine IDs
+    const userId = athlete?.userId || athlete._id;
+    const memberId = athlete?._id;
+
+    if (userType === "family") {
+      payload.familyMemberId = memberId;
+    } else {
+      payload.athlete = athlete._id;
+      payload.createdBy = athlete._id;
+      payload.createdByName = `${athlete.firstName} ${athlete.lastName}`;
+    }
+
     const method = match ? "PATCH" : "POST";
-    const url = match
-      ? `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${athlete._id}/matchReports/${match._id}`
-      : `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${athlete._id}/matchReports`;
+    const base = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${userId}`;
+    const url =
+      userType === "family"
+        ? match
+          ? `${base}/family/${memberId}/matchReports/${match._id}` // PATCH
+          : `${base}/family/${memberId}/matchReports` // POST
+        : match
+        ? `${base}/matchReports/${match._id}` // PATCH
+        : `${base}/matchReports`; // POST
 
     try {
       const res = await fetch(url, {
@@ -142,17 +158,14 @@ const MatchReportForm = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+
       const data = await res.json();
 
       if (res.ok) {
         toast.success(data.message);
-        if (onSuccess) onSuccess(); // ✅ call parent’s refresh
-        refreshUser(); // ✅ update user context (for styles, records, etc)
-        setOpen(false); // ✅ close dialog
-        //setTimeout(() => {
-        //router.refresh();
-        //setOpen(false);
-        //}, 500);
+        if (onSuccess) onSuccess();
+        refreshUser();
+        setOpen(false);
       } else {
         toast.error(data.message);
       }
@@ -168,7 +181,6 @@ const MatchReportForm = ({
     videoURL.includes("youtube.com/embed/");
 
   const userStyles = athlete?.userStyles || [];
-  console.log("user styles ", userStyles);
   return (
     <Card className="p-6 shadow-md">
       <CardHeader>

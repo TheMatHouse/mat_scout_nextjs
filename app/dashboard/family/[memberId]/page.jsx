@@ -14,7 +14,6 @@ export default function FamilyMemberPage({ params }) {
   const [member, setMember] = useState(null);
   const [error, setError] = useState(null);
 
-  console.log("memberId ", memberId);
   useEffect(() => {
     const fetchFamilyMember = async () => {
       try {

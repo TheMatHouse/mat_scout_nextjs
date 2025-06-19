@@ -2,25 +2,26 @@ import mongoose from "mongoose";
 
 const matchReportSchema = new mongoose.Schema(
   {
-    athlete: {
+    athleteId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      required: true,
     },
-    familyMember: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "FamilyMember",
+    athleteType: {
+      type: String,
+      enum: ["user", "family"],
+      required: true,
     },
-    // team: {
-    //   type: mongoose.Schema.Types.ObjectId,
-    //   ref: "Team",
-    // },
     createdByName: {
       type: String,
       required: true,
     },
-    createdBy: {
+    createdById: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+    },
+    style: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "UserStyle",
     },
     matchType: {
       type: String,

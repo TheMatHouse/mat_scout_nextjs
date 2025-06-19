@@ -1,65 +1,139 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
-import UserStyle from "@/models/userStyleModel";
+import MatchReport from "@/models/matchReportModel";
 import FamilyMember from "@/models/familyMemberModel";
+import User from "@/models/userModel";
+import { Types } from "mongoose";
 import { getCurrentUserFromCookies } from "@/lib/auth";
 
-export const GET = async (_req, context) => {
-  await connectDB();
+// GET: Return match reports for a family member
+export async function GET(req, context) {
   const { userId, memberId } = context.params;
 
-  const currentUser = await getCurrentUserFromCookies();
-  if (!currentUser || currentUser._id.toString() !== userId) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
-
   try {
-    const styles = await UserStyle.find({ userId, familyMemberId: memberId });
-    return NextResponse.json(styles, { status: 200 });
+    await connectDB();
+
+    if (
+      !userId ||
+      !memberId ||
+      !Types.ObjectId.isValid(userId) ||
+      !Types.ObjectId.isValid(memberId)
+    ) {
+      return NextResponse.json(
+        { message: "Invalid or missing userId/memberId" },
+        { status: 400 }
+      );
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
+    }
+
+    const reports = await MatchReport.find({
+      athleteId: memberId,
+      athleteType: "family",
+    }).sort({ matchDate: -1 });
+
+    return NextResponse.json(reports);
   } catch (err) {
-    console.error("Error fetching styles:", err);
     return NextResponse.json(
-      { message: "Failed to fetch styles" },
+      { message: "Failed to load match reports", error: err.message },
       { status: 500 }
     );
   }
-};
+}
 
-export const POST = async (req, context) => {
+// POST: Create a new match report for a family member
+export async function POST(request, context) {
   await connectDB();
-  const { userId, memberId } = context.params;
 
+  const { memberId } = context.params;
   const currentUser = await getCurrentUserFromCookies();
-  if (!currentUser || currentUser._id.toString() !== userId) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+
+  if (!memberId || !Types.ObjectId.isValid(memberId)) {
+    return NextResponse.json(
+      { message: "Invalid or missing member ID" },
+      { status: 400 }
+    );
   }
 
+  const familyMember = await FamilyMember.findOne({
+    _id: memberId,
+    userId: currentUser._id, // ensure it's their family member
+  });
+
+  if (!familyMember) {
+    return NextResponse.json(
+      { error: "Family member not found or unauthorized" },
+      { status: 404 }
+    );
+  }
+
+  const body = await request.json();
+
+  const {
+    matchType,
+    eventName,
+    matchDate,
+    division,
+    weightCategory,
+    opponentName,
+    opponentClub,
+    opponentRank,
+    opponentCountry,
+    opponentGrip,
+    opponentAttacks,
+    opponentAttackNotes,
+    athleteAttacks,
+    athleteAttackNotes,
+    result,
+    score,
+    isPublic,
+    videoTitle,
+    videoURL,
+  } = body;
+
+  const newReport = await MatchReport.create({
+    athleteId: memberId,
+    athleteType: "family",
+    createdById: currentUser._id,
+    createdByName: `${currentUser.firstName} ${currentUser.lastName}`,
+    matchType,
+    eventName,
+    matchDate: matchDate ? new Date(matchDate) : undefined,
+    division,
+    weightCategory,
+    opponentName,
+    opponentClub,
+    opponentRank,
+    opponentCountry,
+    opponentGrip,
+    opponentAttacks,
+    opponentAttackNotes,
+    athleteAttacks,
+    athleteAttackNotes,
+    result,
+    score,
+    video: {
+      videoTitle: videoTitle || "",
+      videoURL: normalizeYouTubeUrl(videoURL || ""),
+    },
+    isPublic,
+  });
+
+  return NextResponse.json(newReport, { status: 201 });
+}
+
+// Helper to normalize YouTube share URLs
+function normalizeYouTubeUrl(url) {
+  if (!url) return "";
   try {
-    const body = await req.json();
-
-    const newStyle = new UserStyle({
-      ...body,
-      userId,
-      familyMemberId: memberId,
-    });
-
-    await newStyle.save();
-
-    await FamilyMember.findByIdAndUpdate(
-      memberId,
-      { $push: { styles: newStyle._id } },
-      { new: true }
-    );
-
-    return NextResponse.json(
-      { message: "Style added", style: newStyle },
-      { status: 201 }
-    );
-  } catch (err) {
-    console.error("Error creating style:", err);
-    return NextResponse.json(
-      { message: "Failed to create style" },
-      { status: 500 }
-    );
+    const shortMatch = url.match(/youtu\.be\/([\w-]+)/);
+    const normalMatch = url.match(/v=([\w-]+)/);
+    const id = shortMatch?.[1] || normalMatch?.[1];
+    return id ? `https://www.youtube.com/watch?v=${id}` : url;
+  } catch {
+    return url;
   }
-};
+}

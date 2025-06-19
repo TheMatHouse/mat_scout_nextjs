@@ -2,20 +2,20 @@ import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
-import "@/models/userStyleModel"; // Force-load UserStyle model
-import "@/models/matchReportModel"; // Same for matchReports if needed
+import UserStyle from "@/models/userStyleModel";
+import "@/models/matchReportModel";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const cookieStore = cookies(); // ✅ no await
+    const cookieStore = cookies();
     const token =
       cookieStore.get("token")?.value || cookieStore.get("authToken")?.value;
 
-    console.log(
-      "🔍 Cookie keys found:",
-      cookieStore.getAll().map((c) => c.name)
-    );
+    // console.log(
+    //   "🔍 Cookie keys found:",
+    //   cookieStore.getAll().map((c) => c.name)
+    // );
 
     if (!token) {
       console.warn("⚠️ No token found in cookies.");
@@ -24,12 +24,9 @@ export async function GET() {
 
     await connectDB();
 
-    // Optional decode for inspection — not used for auth
-    const decodedRaw = jwt.decode(token);
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
     const userId = decoded.userId || decoded._id;
+
     if (!userId) {
       console.warn("⚠️ Token decoded but missing user ID.");
       return NextResponse.json(
@@ -38,7 +35,7 @@ export async function GET() {
       );
     }
 
-    const user = await User.findById(userId)
+    let user = await User.findById(userId)
       .select("-password")
       .populate("userStyles")
       .populate("matchReports");
@@ -51,6 +48,24 @@ export async function GET() {
       );
       res.cookies.set("token", "", { path: "/", maxAge: 0 });
       return res;
+    }
+
+    // ✅ Manually populate userStyles for each family member
+    if (user.familyMembers?.length) {
+      const familyWithStyles = await Promise.all(
+        user.familyMembers.map(async (member) => {
+          const populatedStyles = await UserStyle.find({
+            _id: { $in: member.userStyles || [] },
+          });
+          return {
+            ...member.toObject(), // Convert from Mongoose doc to plain object
+            userStyles: populatedStyles,
+          };
+        })
+      );
+
+      user = user.toObject(); // Convert main user to plain object too
+      user.familyMembers = familyWithStyles;
     }
 
     return NextResponse.json({ user });

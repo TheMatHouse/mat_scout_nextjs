@@ -36,27 +36,6 @@ const LoginForm = () => {
       } else {
         router.push("/dashboard");
       }
-
-      // const email = formData.get("email");
-      // const password = formData.get("password");
-
-      // const res = await login({ email, password });
-
-      // dispatch(setCredentials({ ...res }));
-      // console.log(setCredentials);
-      // console.log("res ", res);
-
-      // if (!!res.error) {
-      //   setError("Please check your credentials!");
-      // } else {
-      //   setError("");
-      //   router.push(`/${res.data.username}`);
-      // }
-      // if (!!res.error) {
-      //   setError(res.error.message);
-      // } else {
-      //   router.push("/");
-      // }
     } catch (err) {
       console.log(err);
       setError("Please check your credentials!");
