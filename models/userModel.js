@@ -105,6 +105,12 @@ const userSchema = new mongoose.Schema(
         ref: "MatchReport",
       },
     ],
+    scoutingReports: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "MatchReport",
+      },
+    ],
   },
   {
     timestamps: true,

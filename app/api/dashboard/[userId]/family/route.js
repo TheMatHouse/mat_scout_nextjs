@@ -8,7 +8,7 @@ import FamilyMember from "@/models/familyMemberModel";
 // GET all family members for the user
 export async function GET(req, context) {
   await connectDB();
-  const params = context.params; // ✅ await it!
+  const params = await context.params; // ✅ await it!
 
   const currentUser = await getCurrentUserFromCookies();
 

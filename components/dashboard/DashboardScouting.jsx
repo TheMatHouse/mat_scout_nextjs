@@ -1,3 +1,5 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -8,7 +10,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import ScoutingReportForm from "./forms/ScoutingReportForm";
 import { ReportDataTable } from "./data/report-data-table";
 import { ArrowUpDown, MoreHorizontal } from "lucide-react";
@@ -24,216 +26,225 @@ import {
 import PreviewReportModal from "./PreviewReportModal";
 import { toast } from "react-toastify";
 
-export const columns = ({
-  setSelectedReport,
-  setOpen,
-  setPreviewOpen,
-  handleDeleteReport,
-  reportType,
-}) => [
-  {
-    accessorKey: "matchType",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          <div className="text-center">Type</div>
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-  },
-  {
-    accessorKey: "athleteFirstName",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          <div className="text-center">First Name</div>
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-  },
-  {
-    accessorKey: "athleteLastName",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          <div className="text-center">Last Name</div>
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-  },
-  {
-    accessorKey: "division",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          <div className="text-center">Division</div>
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-  },
-  {
-    accessorKey: "weightCategory",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          <div className="text-center">Weight Class</div>
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-  },
-  {
-    accessorKey: "athleteCountry",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          <div className="text-center">Country</div>
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-  },
-  {
-    id: "actions",
-    header: <div className="text-center">Actions</div>,
-    cell: ({ row }) => {
-      const report = row.original;
-
-      return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className="h-8 w-8 p-0"
-            >
-              <span className="sr-only">Open menu</span>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuItem
-              onClick={() => {
-                setSelectedReport(report);
-                setPreviewOpen(true);
-              }}
-            >
-              View Full Report
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => {
-                setSelectedReport(report);
-                setOpen(true);
-              }}
-            >
-              Edit Report
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-ms-dark-red"
-              onClick={() => {
-                setSelectedReport(report);
-                handleDeleteReport(report);
-              }}
-            >
-              Delete Report
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      );
-    },
-  },
-];
-
 const DashboardScouting = ({ user, styles, techniques }) => {
   const router = useRouter();
-  const data = user.scoutingReports;
-
+  const [scoutingReports, setScoutingReports] = useState([]);
   const [open, setOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
-  const modalRef = useRef(null);
 
-  const handleDialogClose = (openState) => {
-    setOpen(openState); // Update dialog open state
-    if (!openState) {
-      // Reset the form when the dialog is closed (either by clicking outside or cancel)
-      setSelectedReport(null); // Reset selected report to avoid showing stale data
+  useEffect(() => {
+    if (!user?._id) return;
+    fetchReports();
+  }, [user]);
+
+  const fetchReports = async () => {
+    try {
+      const res = await fetch(`/api/dashboard/${user._id}/scoutingReports`);
+      if (!res.ok) throw new Error("Failed to fetch match reports");
+      const data = await res.json();
+      setScoutingReports(data);
+    } catch (err) {
+      console.error(err);
+      toast.error("Could not load scouting reports.");
     }
   };
 
-  const openPreviewModal = (newReport) => {
-    setSelectedReport(newReport); // Set new report data when opening modal
-    setPreviewOpen(true);
+  const handleDialogClose = (openState) => {
+    setOpen(openState);
+    if (!openState) {
+      setSelectedReport(null);
+    }
   };
 
   const closePreviewModal = () => {
-    setPreviewOpen(false); // Close the modal
-    setSelectedReport(null); // Reset the report data when modal closes
+    setPreviewOpen(false);
+    setSelectedReport(null);
   };
 
   const handleDeleteReport = async (report) => {
     if (
-      window.confirm(`This report will be permanently deleted!  Are you sure?`)
+      window.confirm(`This report will be permanently deleted! Are you sure?`)
     ) {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/scoutingReports/${report._id}`,
         {
           method: "DELETE",
           headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization",
             "Content-type": "application/json; charset=UTF-8",
           },
+          credentials: "include",
         }
       );
+
       const data = await response.json();
 
       if (response.ok) {
-        const timer = setTimeout(() => {
-          setSelectedReport(null);
-          router.refresh();
-          toast.success(data.message, {
-            position: "top-right",
-            autoClose: 5000,
-            hideProgressBar: false,
-            closeOnClick: false,
-            pauseOnHover: true,
-            draggable: true,
-            progress: undefined,
-            theme: "light",
-          });
-        }, 1000);
-        return () => clearTimeout(timer);
+        toast.success(data.message);
+
+        // Optional: update your table UI immediately
+        setScoutingReports((prev) => prev.filter((r) => r._id !== report._id));
+
+        // Clear selected report if needed
+        setSelectedReport(null);
+
+        // Refresh in case server state matters
+        router.refresh();
       } else {
-        toast.error(data.message);
-        console.log(data.message);
+        toast.error(data.message || "Failed to delete report");
+        console.log("Delete error:", data.message);
       }
     }
   };
+
+  const columns = [
+    {
+      accessorKey: "matchType",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Type <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      accessorKey: "athleteFirstName",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Athlete First Name <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+
+    {
+      accessorKey: "athleteLastName",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Athlete Last Name <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      accessorKey: "athleteNationalRank",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          National Ranking <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      accessorKey: "athleteWorldRank",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          World Ranking <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      accessorKey: "athleteClub",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Club <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      accessorKey: "athleteCountry",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Country <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      accessorKey: "division",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Division <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      accessorKey: "weightCategory",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Weight Class <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const report = row.original;
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className="h-8 w-8 p-0"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuItem
+                onClick={() => {
+                  setSelectedReport(report);
+                  setPreviewOpen(true);
+                }}
+              >
+                View Match Details
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  setSelectedReport(report);
+                  setOpen(true);
+                }}
+              >
+                Edit Match
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-ms-dark-red"
+                onClick={() => handleDeleteReport(report)}
+              >
+                Delete Match
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
+    },
+  ];
 
   return (
     <div>
@@ -244,7 +255,7 @@ const DashboardScouting = ({ user, styles, techniques }) => {
           onOpenChange={handleDialogClose}
         >
           <DialogTrigger asChild>
-            <Button className="bg-gray-900 hover:bg-gray-500  border-gray-500 dark:border-gray-100 border-2 drop-shadow-md text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ml-6">
+            <Button className="ml-6 bg-gray-900 hover:bg-gray-500 border-gray-500 dark:border-gray-100 border-2 drop-shadow-md text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
               Add Scouting Report
             </Button>
           </DialogTrigger>
@@ -261,12 +272,14 @@ const DashboardScouting = ({ user, styles, techniques }) => {
             </DialogHeader>
             <div className="grid gap-4 py-4 min-width-full">
               <ScoutingReportForm
+                key={selectedReport?._id}
                 athlete={user}
-                styles={styles && styles.styles}
+                styles={styles?.styles}
                 techniques={techniques}
-                type="user"
+                userType="user"
                 setOpen={setOpen}
                 report={selectedReport}
+                onSuccess={fetchReports}
               />
             </div>
           </DialogContent>
@@ -274,14 +287,8 @@ const DashboardScouting = ({ user, styles, techniques }) => {
       </div>
       <div>
         <ReportDataTable
-          columns={columns({
-            setSelectedReport,
-            setOpen,
-            setPreviewOpen,
-            handleDeleteReport,
-          })}
-          data={data}
-          setSelectedReport={setSelectedReport}
+          columns={columns}
+          data={scoutingReports}
         />
       </div>
       {previewOpen && (

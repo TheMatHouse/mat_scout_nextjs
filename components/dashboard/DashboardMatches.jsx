@@ -53,6 +53,8 @@ const DashboardMatches = ({ user, refreshUser }) => {
     }
   };
 
+  console.log("matches ", matchReports);
+  console.log("user ", user);
   const handleDeleteMatch = async (match) => {
     if (
       window.confirm(`This report will be permanently deleted! Are you sure?`)

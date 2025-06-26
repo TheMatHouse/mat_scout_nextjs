@@ -4,6 +4,7 @@ import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
 import UserStyle from "@/models/userStyleModel";
 import "@/models/matchReportModel";
+import "@/models/scoutingReportModel";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -38,7 +39,8 @@ export async function GET() {
     let user = await User.findById(userId)
       .select("-password")
       .populate("userStyles")
-      .populate("matchReports");
+      .populate("matchReports")
+      .populate("scoutingReports");
 
     if (!user) {
       console.warn("❌ No user found for ID:", userId);

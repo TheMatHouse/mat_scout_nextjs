@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req, context) {
   await connectDB();
 
-  const { userId, memberId } = context.params;
+  const { userId, memberId } = await context.params;
   const currentUser = await getCurrentUserFromCookies();
 
   if (

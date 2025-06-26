@@ -1,742 +1,545 @@
+// Refactored and styled to match MatchReportForm
 "use client";
-import { useEffect, useState, useCallback, useRef } from "react";
-
-import Countries from "@/assets/countries.json";
-import { AlertDialog } from "@/components/ui/alert-dialog";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "react-toastify";
 import {
   Card,
-  CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
+  CardDescription,
+  CardContent,
 } from "@/components/ui/card";
-import Tooltip from "../../shared/Tooltip";
-import Tags from "../../shared/Tags";
-import Editor from "../../shared/Editor";
-
-// Icons
-import { CircleHelp } from "lucide-react";
+import { useUser } from "@/context/UserContext";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { toast } from "react-toastify";
-import { useRouter } from "next/navigation";
+import Countries from "@/assets/countries.json";
+import Editor from "../../shared/Editor";
+import { Textarea } from "@/components/ui/textarea";
+import TagsAutocomplete from "@/components/shared/TagsAutocomplete";
+
 const ScoutingReportForm = ({
   athlete,
   report,
   styles,
-  techniques,
-  type,
+  userType,
   setOpen,
+  onSuccess,
 }) => {
   const router = useRouter();
-  const [add, setAdd] = useState("");
+  const { user } = useUser();
+  const userId = user?._id;
+  const newVideosRef = useRef([]);
+  const deletedVideoIdsRef = useRef([]);
 
-  useEffect(() => {
-    navigator.geolocation.getCurrentPosition((pos) => {
-      const { latitude, longitude } = pos.coords;
-
-      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`;
-      fetch(url)
-        .then((res) => res.json())
-        .then((data) => setAdd(data.address));
-    });
-  }, []);
-
-  const myCountry_code = add?.country_code;
-
-  const myCountry = Countries.find(
-    (country) => country.code2.toLowerCase() === myCountry_code
-  );
-
-  const Country = myCountry?.code3 || ""; // Ensure default is an empty string
-
-  const [newCountry, setNewCountry] = useState(Country);
-
-  // Update newCountry when Country changes
-  useEffect(() => {
-    setNewCountry(Country);
-  }, [Country]);
-
-  // Ensure athleteCountry updates when newCountry changes
-  useEffect(() => {
-    setAthleteCountry(newCountry);
-  }, [newCountry]);
-
-  const [matchType, setMatchType] = useState(
-    report?.matchType ? report?.matchType : ""
-  );
-  const [division, setDivision] = useState(
-    report?.division ? report?.division : ""
-  );
-  const [weightCategory, setWeightCategory] = useState(
-    report?.weightCategory ? report?.weightCategory : ""
-  );
-  const [athleteNationalRank, setAthleteNationalRank] = useState(
-    report?.athleteNationalRank ? report?.athleteNationalRank : ""
-  );
-  const [athleteWorldRank, setAthleteWorldRank] = useState(
-    report?.athleteWorldRank ? report?.athleteWorldRank : ""
-  );
+  const [matchType, setMatchType] = useState(report?.matchType || "");
   const [athleteFirstName, setAthleteFirstName] = useState(
-    report?.athleteFirstName ? report?.athleteFirstName : ""
+    report?.athleteFirstName || ""
   );
   const [athleteLastName, setAthleteLastName] = useState(
-    report?.athleteLastName ? report?.athleteLastName : ""
+    report?.athleteLastName || ""
   );
-  const [athleteClub, setAthleteClub] = useState(
-    report?.athleteClub ? report?.athleteClub : ""
+  const [athleteNationalRank, setAthleteNationalRank] = useState(
+    report?.athleteNationalRank || ""
   );
-  const [athleteRank, setAthleteRank] = useState(
-    report?.athleteRank ? report?.athleteRank : ""
+  const [athleteWorldRank, setAthleteWorldRank] = useState(
+    report?.athleteWorldRank || ""
   );
+  const [division, setDivision] = useState(report?.division || "");
+  const [weightCategory, setWeightCategory] = useState(
+    report?.weightCategory || ""
+  );
+  const [athleteClub, setAthleteClub] = useState(report?.athleteClub || "");
   const [athleteCountry, setAthleteCountry] = useState(
-    report?.athleteCountry || Country || ""
+    report?.athleteCountry || ""
   );
-  const [athleteGrip, setAthleteGrip] = useState(
-    report?.opponentGrip ? report.opponentGrip : ""
-  );
-
+  const [athleteRank, setAthleteRank] = useState(report?.athleteRank || "");
+  const [athleteGrip, setAthleteGrip] = useState(report?.athleteGrip || "");
   const [athleteAttackNotes, setAthleteAttackNotes] = useState(
-    report?.athleteAttackNotes ? report.athleteAttackNotes : ""
+    report?.athleteAttackNotes || ""
   );
+  const [accessList, setAccessList] = useState(report?.accessList || []);
+  const [loadedTechniques, setLoadedTechniques] = useState([]);
+  const [athleteSelected, setAthleteSelected] = useState(
+    report?.athleteAttacks?.map((item, i) => ({ value: i, label: item })) || []
+  );
+  const [videos, setVideos] = useState(report?.videos || []);
+  const [newVideos, setNewVideos] = useState([]);
 
-  const [videoTitle, setVideoTitle] = useState(
-    report?.videoTitle ? report.videoTitle : ""
-  );
-  const [videoURL, setVideoURL] = useState(
-    report?.videoURL ? report.videoURL : ""
-  );
-  const [isPublic, setIsPublic] = useState(
-    report?.isPublic ? report.isPublic : false
-  );
+  useEffect(() => {
+    const fetchTechniques = async () => {
+      try {
+        const res = await fetch("/api/techniques");
+        const data = await res.json();
+        setLoadedTechniques(data);
+      } catch (err) {
+        console.error("Failed to fetch techniques", err);
+      }
+    };
+    fetchTechniques();
+  }, []);
 
-  const techniqueList = [];
-  techniques?.map((technique) => techniqueList.push(technique.techniqueName));
-
-  const suggestions = techniqueList.map((name, index) => ({
-    value: index,
-    label: name,
+  const suggestions = loadedTechniques.map((t, i) => ({
+    value: i,
+    label: t.techniqueName,
   }));
 
-  // Opponent Opponent
-  const athleteAttacksFromDB = [];
-  if (report) {
-    if (report.athleteAttacks) {
-      report.athleteAttacks.map((item, i) => {
-        athleteAttacksFromDB.push({
-          value: i,
-          label: item,
-        });
-      });
-    }
-  }
-
-  const [athleteSelected, setAthleteSelected] = useState(
-    athleteAttacksFromDB ? athleteAttacksFromDB : []
-  );
-  const [athleteAttacks, setAthleteAttacks] = useState([]);
-
   const onAthleteAdd = useCallback(
-    (newTag) => {
-      setAthleteSelected([...athleteSelected, newTag]);
-    },
-    [athleteSelected]
+    (tag) => setAthleteSelected((prev) => [...prev, tag]),
+    []
   );
-
   const onAthleteDelete = useCallback(
-    (tagIndex) => {
-      setAthleteSelected(athleteSelected.filter((_, i) => i !== tagIndex));
-    },
-    [athleteSelected]
+    (i) => setAthleteSelected((prev) => prev.filter((_, idx) => idx !== i)),
+    []
   );
 
-  const windowSize = useRef([window.innerWidth, window.innerHeight]);
-  const tooltipWidth = windowSize.current[0] > 500 ? "50vw" : "90vw";
-
-  const [videos, setVideos] = useState(
-    report?.videos?.length > 0
-      ? report.videos.map((video) => ({
-          id: video._id,
-          title: video.videoTitle || "",
-          url: video.videoURL || "",
-          notes: video.videoNotes || "",
-        }))
-      : []
-  );
-
-  const addVideoFields = () => {
-    setVideos([...videos, { id: Date.now(), title: "", url: "", notes: "" }]);
-  };
-
-  const updateVideoField = (index, field, value) => {
-    setVideos((prevVideos) =>
-      prevVideos.map((video, i) =>
-        i === index ? { ...video, [field]: value } : video
-      )
-    );
-  };
-
-  const removeVideo = (index) => {
-    setVideos((prevVideos) => prevVideos.filter((_, i) => i !== index));
-  };
-
-  const deleteVideoHandler = async (videoTitle, videoId, index) => {
-    if (
-      window.confirm(
-        `Are you sure you want to delete the video, ${videoTitle}?`
-      )
-    ) {
-      // Check if the video exists in the report before attempting to delete
-      const videoExistsInReport = report.videos?.some(
-        (video) => video._id === videoId
+  const updateVideoField = (index, field, value, isNew = false) => {
+    if (isNew) {
+      setNewVideos((prev) =>
+        prev.map((vid, i) => (i === index ? { ...vid, [field]: value } : vid))
       );
-
-      // Remove the video from the local state first
-      removeVideo(index);
-
-      if (!videoExistsInReport) {
-        // If the video does not exist in the DB, just return success without making a request
-        toast.success(`Video "${videoTitle}" removed locally.`);
-        return;
-      }
-
-      try {
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${athlete._id}/scoutingReports/${report._id}/videos/${videoId}`,
-          {
-            method: "DELETE",
-            headers: {
-              "Access-Control-Allow-Origin": "*",
-              "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-              "Access-Control-Allow-Headers": "Content-Type, Authorization",
-              "Content-type": "application/json; charset=UTF-8",
-            },
-          }
-        );
-
-        const data = await response.json();
-
-        if (response.ok) {
-          const timer = setTimeout(() => {
-            router.refresh();
-            toast.success(data.message, {
-              position: "top-right",
-              autoClose: 5000,
-              hideProgressBar: false,
-              closeOnClick: false,
-              pauseOnHover: true,
-              draggable: true,
-              progress: undefined,
-              theme: "light",
-            });
-          }, 1000);
-          return () => clearTimeout(timer);
-        } else {
-          toast.error(data.message);
-          console.log(data.message);
-        }
-      } catch (err) {
-        toast.error(err?.data?.error || err.message);
-      }
+    } else {
+      setVideos((prev) =>
+        prev.map((vid, i) => (i === index ? { ...vid, [field]: value } : vid))
+      );
     }
   };
 
+  const addNewVideo = () => {
+    const newVideo = { title: "", notes: "", url: "" };
+    setNewVideos((prev) => [...prev, newVideo]);
+    newVideosRef.current.push(newVideo);
+
+    console.log("New video added:", newVideo);
+    console.log("All newVideosRef.current:", newVideosRef.current);
+  };
+
+  const deleteVideo = async (videoId) => {
+    try {
+      let url = "";
+
+      if (userType === "family") {
+        url = `/api/dashboard/${athlete.userId}/family/${athlete._id}/scoutingReports/${report._id}/videos/${videoId}`;
+      } else {
+        url = `/api/dashboard/${athlete.userId}/scoutingReports/${report._id}/videos/${videoId}`;
+      }
+
+      const res = await fetch(url, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to delete video");
+      }
+
+      // ✅ Update local state after deletion
+      setVideos((prev) => prev.filter((vid) => vid._id !== videoId));
+      toast.success("Video deleted successfully");
+    } catch (error) {
+      console.error("Error deleting video:", error);
+      toast.error("Failed to delete video");
+    }
+  };
+
+  const extractYouTubeID = (url) => {
+    if (!url || typeof url !== "string") return null;
+    const match = url.match(/(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/);
+    return match ? match[1] : null;
+  };
+
+  const userStyles = athlete?.userStyles || [];
+
+  console.log("ATHLETE ", athlete);
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const formData = new FormData(e.currentTarget);
-
-    const athAttacks = [];
-
-    if (athleteSelected) {
-      athleteSelected.map((item) => {
-        athAttacks.push(item.label.toLowerCase());
-      });
-    }
-
-    const myVideos = [];
-    videos &&
-      videos.map((video) => {
-        myVideos.push({
-          videoTitle: video.title,
-          videoURL: video.url,
-          videoNotes: video.notes,
-        });
-      });
-
-    const bodyData = {
-      athlete: athlete._id,
-      type,
-      reportForAthleteFirstName: athlete?.firstName,
-      athleteEmail: athlete?.email,
-      createdBy: athlete._id,
+    const payload = {
+      athleteId: athlete._id,
+      athleteType: userType,
+      createdById: athlete._id,
       createdByName: `${athlete.firstName} ${athlete.lastName}`,
-      matchType: formData.get("matchType"),
-      division: formData.get("division"),
-      weightCategory: formData.get("weightCategory"),
-      athleteFirstName: formData.get("athleteFirstName"),
-      athleteLastName: formData.get("athleteLastName"),
-      athleteNationalRank: formData.get("athleteNationalRank"),
-      athleteWorldRank: formData.get("athleteWorldRank"),
-      athleteClub: formData.get("athleteClub"),
-      athleteRank: formData.get("athleteRank"),
-      athleteGrip: formData.get("athleteGrip"),
-      athleteCountry: formData.get("athleteCountry"),
-      athleteAttacks: athAttacks && athAttacks,
-      athleteAttackNotes: athleteAttackNotes && athleteAttackNotes,
-      videos: myVideos,
-      ...(typeof teamId !== "undefined" && teamId ? { teamId } : {}),
+      matchType,
+      athleteFirstName,
+      athleteLastName,
+      athleteNationalRank,
+      athleteWorldRank,
+      division,
+      weightCategory,
+      athleteClub,
+      athleteCountry,
+      athleteRank,
+      athleteGrip,
+      athleteAttacks: athleteSelected.map((item) => item.label.toLowerCase()),
+      athleteAttackNotes,
+      accessList,
+      updatedVideos: videos.filter((v) => v._id),
+      newVideos: newVideosRef.current, // ✅ THIS IS THE FIX
+      deletedVideos: deletedVideoIdsRef.current || [],
     };
 
-    let domain = "";
-    let method = "";
-    if (report) {
-      method = "PATCH";
-      domain = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${athlete._id}/scoutingReports/${report._id}`;
-    } else {
-      method = "POST";
-      domain = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${athlete._id}/scoutingReports`;
-    }
-    const response = await fetch(domain, {
-      method,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Content-type": "application/json; charset=UTF-8",
-      },
-      body: JSON.stringify(bodyData),
-    });
+    const method = report ? "PATCH" : "POST";
+    const base = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard`;
+    const url =
+      userType === "family"
+        ? report
+          ? `${base}/${athlete.userId}/family/${athlete._id}/scoutingReports/${report._id}`
+          : `${base}/${athlete.userId}/family/${athlete._id}/scoutingReports`
+        : report
+        ? `${base}/${userId}/scoutingReports/${report._id}`
+        : `${base}/${userId}/scoutingReports`;
 
-    const data = await response.text();
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    if (response.ok) {
-      const timer = setTimeout(() => {
-        router.refresh();
-        toast.success(data.message, {
-          position: "top-right",
-          autoClose: 5000,
-          hideProgressBar: false,
-          closeOnClick: false,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "light",
-        });
-        setOpen(false);
-      }, 1000);
-      return () => clearTimeout(timer);
-    } else {
-      toast.error(data.message);
-      console.log(data.message);
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.message || "Something went wrong");
+        return;
+      }
+
+      toast.success(data.message);
+      setOpen(false);
+      onSuccess?.();
+      router.refresh();
+    } catch (err) {
+      console.error(err);
+      toast.error("An error occurred while saving the report.");
     }
   };
 
   return (
-    <AlertDialog>
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle>Scouting Report</CardTitle>
-          <CardDescription>
-            {report?._id
-              ? "Update this scouting report"
-              : "Add a new scouting report."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form
-            onSubmit={handleSubmit}
-            className="rounded px-8 pb-2 mb-4"
-          >
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="matcyType"
-              >
-                Match Type
-              </label>
-              <select
-                id="matchType"
-                name="matchType"
-                aria-label="Match Type"
-                required
-                value={matchType}
-                onChange={(e) => setMatchType(e.target.value)}
-              >
-                <option value="">Select Match Type...</option>
-                {styles &&
-                  styles?.map((style) => (
-                    <option
-                      key={style._id}
-                      value={style.styleName}
-                    >
-                      {style.styleName}
-                    </option>
-                  ))}
-              </select>
-            </div>
+    <Card className="p-6 shadow-md">
+      <CardHeader>
+        <CardTitle>
+          {report ? "Update Scouting Report" : "Add Scouting Report"}
+        </CardTitle>
+        <CardDescription>
+          {report
+            ? "Edit your scouting details."
+            : "Fill out the form below to create a new report."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-6"
+        >
+          <div>
+            <Label htmlFor="matchType">Match Type</Label>
+            <select
+              id="matchType"
+              name="matchType"
+              value={matchType}
+              onChange={(e) => setMatchType(e.target.value)}
+              className="w-full rounded-md border px-3 py-2"
+              required
+            >
+              <option value="">Select match type...</option>
+              {userStyles.map((style) => (
+                <option
+                  key={style._id}
+                  value={style.styleName}
+                >
+                  {style.styleName}
+                </option>
+              ))}
+            </select>
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="division"
-              >
-                Division
-                <br />
-                <span className="text-xl text-muted-foreground my-2">
-                  (Jr Boyx, Senior Women, etc)
-                </span>
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-                type="text"
-                id="division"
-                name="division"
-                placeholder="Division"
-                defaultValue={division}
-              />
-            </div>
+          <div>
+            <Label htmlFor="athleteFirstName">Athlete First Name</Label>
+            <Input
+              id="athleteFirstName"
+              value={athleteFirstName}
+              onChange={(e) => setAthleteFirstName(e.target.value)}
+              required
+            />
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="weightCategory"
-              >
-                Weight Category
-                <br />
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-                type="text"
-                id="weightCategory"
-                name="weightCategory"
-                placeholder="Weight Category"
-                defaultValue={weightCategory}
-              />
-            </div>
+          <div>
+            <Label htmlFor="athleteLastName">Athlete Last Name</Label>
+            <Input
+              id="athleteLastName"
+              value={athleteLastName}
+              onChange={(e) => setAthleteLastName(e.target.value)}
+              required
+            />
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="athleteNationalRank"
-              >
-                Athlete's National Rank
-                <br />
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-                type="text"
-                id="athleteNationalRank"
-                name="athleteNationalRank"
-                placeholder="Athlete's National Rank"
-                defaultValue={athleteNationalRank}
-              />
-            </div>
+          <div>
+            <Label htmlFor="division">Division</Label>
+            <Input
+              id="division"
+              value={division}
+              onChange={(e) => setDivision(e.target.value)}
+            />
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="athleteNationalRank"
-              >
-                Athlete's World Rank
-                <br />
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-                type="text"
-                id="athleteWorldRank"
-                name="athleteWorldRank"
-                placeholder="Athlete's World Rank"
-                defaultValue={athleteWorldRank}
-              />
-            </div>
+          <div>
+            <Label htmlFor="weightCategory">Weight Category</Label>
+            <Input
+              id="weightCategory"
+              value={weightCategory}
+              onChange={(e) => setWeightCategory(e.target.value)}
+            />
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="athleteFirstName"
-              >
-                Athlete's First Name
-                <br />
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-                type="text"
-                id="athleteFirstName"
-                name="athleteFirstName"
-                placeholder="Athlete's First Name"
-                required
-                defaultValue={athleteFirstName}
-              />
-            </div>
+          <div>
+            <Label htmlFor="athleteNationalRank">National Rank</Label>
+            <Input
+              id="athleteNationalRank"
+              value={athleteNationalRank}
+              onChange={(e) => setAthleteNationalRank(e.target.value)}
+            />
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="athleteFirstName"
-              >
-                Athlete's Last Name
-                <br />
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-                type="text"
-                id="athleteLastName"
-                name="athleteLastName"
-                placeholder="Athlete's Last Name"
-                required
-                defaultValue={athleteLastName}
-              />
-            </div>
+          <div>
+            <Label htmlFor="athleteWorldRank">World Rank</Label>
+            <Input
+              id="athleteWorldRank"
+              value={athleteWorldRank}
+              onChange={(e) => setAthleteWorldRank(e.target.value)}
+            />
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="athleteCountry"
-              >
-                Athlete's Country
-              </label>
-              <select
-                id="athleteCountry"
-                name="athleteCountry"
-                value={athleteCountry}
-                onChange={(e) => {
-                  setNewCountry(e.target.value);
-                  setAthleteCountry(e.target.value);
-                }}
-              >
-                <option value="">Select country...</option>
-                {Countries.map((country) => (
-                  <option
-                    key={country.code3}
-                    value={country.code3}
-                  >
-                    {country.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <Label htmlFor="athleteClub">Club</Label>
+            <Input
+              id="athleteClub"
+              value={athleteClub}
+              onChange={(e) => setAthleteClub(e.target.value)}
+            />
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="athleteClub"
-              >
-                Athlete's Club
-                <br />
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-                type="text"
-                id="athleteClub"
-                name="athleteClub"
-                placeholder="Athlete's Club"
-                defaultValue={athleteClub}
-              />
-            </div>
+          <div>
+            <Label htmlFor="athleteCountry">Country</Label>
+            <select
+              id="athleteCountry"
+              value={athleteCountry}
+              onChange={(e) => setAthleteCountry(e.target.value)}
+              className="w-full rounded-md border px-3 py-2"
+            >
+              <option value="">Select country...</option>
+              {Countries.map((country) => (
+                <option
+                  key={country.code3}
+                  value={country.code3}
+                >
+                  {country.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="athleteRank"
-              >
-                Athlete's Rank (belt)
-                <br />
-              </label>
-              <input
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-900 dark:text-gray-100 font-bold leading-tight focus:outline-ms-blue focus:shadow-outline"
-                type="text"
-                id="athleteRank"
-                name="athleteRank"
-                placeholder="Athlete's Rank"
-                defaultValue={athleteRank}
-              />
-            </div>
-
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="athleteGrip"
-              >
-                Athlete's Grip <br />
-                <span className="text-xl text-muted-foreground my-2">
-                  (Righty or Lefty)
-                </span>
-              </label>
-              <div className="flex items-center">
+          <div>
+            <Label>Grip</Label>
+            <div className="flex gap-4 mt-2">
+              <label className="flex items-center gap-2">
                 <input
                   type="radio"
-                  id="athleteGrip"
                   name="athleteGrip"
                   value="Righty"
                   checked={athleteGrip === "Righty"}
                   onChange={(e) => setAthleteGrip(e.target.value)}
                 />
-                <label
-                  htmlFor="righty"
-                  className="block text-gray-900 dark:text-gray-100 text-lg font-bold md:text-left mb-1 md:mb-0 pl-4"
-                >
-                  Righty
-                </label>
-              </div>
-              <div className="flex items-center">
+                Righty
+              </label>
+              <label className="flex items-center gap-2">
                 <input
                   type="radio"
-                  id="athleteGrip"
                   name="athleteGrip"
                   value="Lefty"
                   checked={athleteGrip === "Lefty"}
                   onChange={(e) => setAthleteGrip(e.target.value)}
                 />
-                <label
-                  htmlFor="lefty"
-                  className="block text-gray-900 dark:text-gray-100 text-lg font-bold md:text-left mb-1 md:mb-0 pl-4"
-                >
-                  Lefty
-                </label>
-              </div>
-            </div>
-
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="athleteAttacks"
-              >
-                Athlete's Techniques Used
+                Lefty
               </label>
-              <div className="max-w-md">
-                <Tooltip
-                  alt="Athlete techniques used tooltip"
-                  text={`Click inside the box below. A list of techniques already
-                            in our database will appear. Click on a technique to
-                            selected it. The selected techniques will appear above the
-                            box.
-                            <br /><br />
-                            If a technique is not in the database, you can add your
-                            technique by typing it in and then clicking on "Add" next
-                            to your technique. If you added a technique by mistake,
-                            you can click on the technique name above the box and it
-                            will removed`}
-                >
-                  <CircleHelp />
-                </Tooltip>
-              </div>
-              <Tags
-                labelText="Select techniques"
-                name={athleteAttacks}
-                selected={athleteSelected}
-                suggestions={suggestions}
-                onAdd={onAthleteAdd}
-                onDelete={onAthleteDelete}
-              />
             </div>
+          </div>
 
-            <div className="my-4">
-              <label
-                className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2"
-                htmlFor="AthleteAttackNotes"
+          <div>
+            <Label>Your Techniques</Label>
+            <TagsAutocomplete
+              label="Known Attacks"
+              name="athleteAttacks"
+              suggestions={suggestions}
+              tags={athleteSelected}
+              onAdd={onAthleteAdd}
+              onDelete={onAthleteDelete}
+            />
+            {/* <Tags
+              labelText="Athlete Attacks"
+              name="athleteAttacks"
+              selected={athleteSelected}
+              suggestions={suggestions}
+              onAdd={onAthleteAdd}
+              onDelete={onAthleteDelete}
+            /> */}
+          </div>
+
+          <div>
+            <Label>Attack Notes</Label>
+            <Editor
+              name="athleteAttackNotes"
+              text={athleteAttackNotes}
+              onChange={setAthleteAttackNotes}
+            />
+          </div>
+
+          {/* Video Section */}
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold mb-2">Videos</h3>
+
+            {videos.map((vid, index) => (
+              <div
+                key={vid._id || index}
+                className="bg-muted p-4 rounded-lg mb-4"
               >
-                Notes on Athletes's Attacks
-                <br />
-              </label>
-              <Editor
-                name="athleteAttackNotes"
-                onChange={setAthleteAttackNotes}
-                text={athleteAttackNotes}
-              />
-            </div>
+                <Label>Video Title</Label>
+                <Input
+                  type="text"
+                  value={vid.title}
+                  onChange={(e) =>
+                    updateVideoField(index, "title", e.target.value)
+                  }
+                />
 
-            <div className="my-4">
-              <h2 className="text-lg font-bold">Videos</h2>
+                <Label className="mt-2">Video Notes</Label>
+                <Textarea
+                  value={vid.notes}
+                  onChange={(e) =>
+                    updateVideoField(index, "notes", e.target.value)
+                  }
+                />
 
-              {/* Video Fields */}
-              {videos.map((video, index) => (
-                <div
-                  key={video.id}
-                  className="mb-6 p-4 border rounded-lg shadow-sm bg-gray-100 dark:bg-gray-800"
-                >
-                  {/* Video Title Input */}
-                  <label className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2">
-                    Video Title
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Enter video title"
-                    value={video.title}
-                    onChange={(e) =>
-                      updateVideoField(index, "title", e.target.value)
-                    }
-                    className="w-full p-2 border rounded-md text-gray-900 dark:text-gray-100"
-                  />
+                <Label className="mt-2">YouTube URL</Label>
+                <Input
+                  type="url"
+                  value={vid.url}
+                  onChange={(e) =>
+                    updateVideoField(index, "url", e.target.value)
+                  }
+                />
 
-                  {/* If adding a new video, show the URL input */}
-                  {report?.videos?.length > index ? (
-                    // Show embedded video when editing
-                    <div
-                      className="py-2 w-full"
-                      dangerouslySetInnerHTML={{ __html: video.url }}
+                {extractYouTubeID(vid.url) && (
+                  <div className="mt-3">
+                    <iframe
+                      width="100%"
+                      height="200"
+                      src={`https://www.youtube.com/embed/${extractYouTubeID(
+                        vid.url
+                      )}`}
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
                     />
-                  ) : (
-                    // Show video URL input when adding
-                    <>
-                      <label className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2">
-                        Video URL
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Enter video URL"
-                        value={video.url}
-                        onChange={(e) =>
-                          updateVideoField(index, "url", e.target.value)
-                        }
-                        className="w-full p-2 border rounded-md text-gray-900 dark:text-gray-100"
-                      />
-                    </>
-                  )}
+                  </div>
+                )}
 
-                  {/* Video Notes Editor */}
-                  <label className="block text-gray-900 dark:text-gray-100 text-xl font-bold mb-1 md:mb-0 p-2">
-                    Video Notes
-                  </label>
-                  <Editor
-                    name={`videoNotes-${index}`}
-                    text={video.notes}
-                    onChange={(value) =>
-                      updateVideoField(index, "notes", value)
-                    }
-                  />
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => deleteVideo(vid._id)}
+                  className="mt-2"
+                >
+                  Delete
+                </Button>
+              </div>
+            ))}
 
-                  {/* Remove Video Button */}
-                  <Button
-                    type="button"
-                    onClick={() =>
-                      deleteVideoHandler(video.title, video.id, index)
-                    }
-                    className="mt-3 bg-red-500 text-white"
-                  >
-                    Remove Video
-                  </Button>
-                </div>
-              ))}
-
-              {/* Add Video Button */}
-              <Button
-                type="button"
-                onClick={addVideoFields}
-                className="my-3"
+            {newVideos.map((vid, index) => (
+              <div
+                key={index}
+                className="space-y-2 border-t pt-4 mt-4 mb-2"
               >
-                {videos.length > 0 ? "Add Another Video" : "Add Video"}
-              </Button>
-            </div>
+                <div>
+                  <Label htmlFor={`new-video-title-${index}`}>
+                    Video Title
+                  </Label>
+                  <Input
+                    id={`new-video-title-${index}`}
+                    value={vid.title}
+                    onChange={(e) => {
+                      const updatedVideos = [...newVideos];
+                      updatedVideos[index].title = e.target.value;
+                      setNewVideos(updatedVideos);
+                      newVideosRef.current[index].title = e.target.value;
+                    }}
+                  />
+                </div>
 
-            <div className="flex justify-center mt-5 pt-5">
-              <Button type="submit">
-                {report ? "Update" : "Add"} Scouting Report
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-    </AlertDialog>
+                <div>
+                  <Label htmlFor={`new-video-notes-${index}`}>
+                    Video Notes
+                  </Label>
+                  <textarea
+                    id={`new-video-notes-${index}`}
+                    className="w-full rounded-md border px-3 py-2 text-sm shadow-sm dark:bg-gray-800 dark:text-white"
+                    value={vid.notes}
+                    onChange={(e) => {
+                      const updatedVideos = [...newVideos];
+                      updatedVideos[index].notes = e.target.value;
+                      setNewVideos(updatedVideos);
+                      newVideosRef.current[index].notes = e.target.value;
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor={`new-video-url-${index}`}>Video URL</Label>
+                  <Input
+                    id={`new-video-url-${index}`}
+                    value={vid.url}
+                    onChange={(e) => {
+                      const updatedVideos = [...newVideos];
+                      updatedVideos[index].url = e.target.value;
+                      setNewVideos(updatedVideos);
+                      newVideosRef.current[index].url = e.target.value;
+                    }}
+                  />
+                </div>
+
+                {extractYouTubeID(vid.url) && (
+                  <div className="mt-3">
+                    <iframe
+                      width="100%"
+                      height="200"
+                      src={`https://www.youtube.com/embed/${extractYouTubeID(
+                        vid.url
+                      )}`}
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+
+            <Button
+              type="button"
+              onClick={addNewVideo}
+              variant="outline"
+            >
+              ➕ Add {videos.length + newVideos.length ? "Another" : "a"} Video
+            </Button>
+          </div>
+
+          <Button
+            type="submit"
+            className="bg-ms-blue-gray hover:bg-ms-blue text-white mt-4"
+          >
+            {report ? "Update" : "Submit"} Report
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 };
 

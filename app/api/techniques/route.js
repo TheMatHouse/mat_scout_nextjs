@@ -19,3 +19,26 @@ export const GET = async (request) => {
     });
   }
 };
+
+export const POST = async (request) => {
+  try {
+    await connectDB();
+    const body = await request.json();
+    const { techniqueName } = body;
+
+    // Avoid inserting duplicates
+    const existing = await Technique.findOne({ techniqueName });
+    if (existing) {
+      return new NextResponse("Technique already exists", { status: 200 });
+    }
+
+    const newTechnique = new Technique({ techniqueName });
+    await newTechnique.save();
+
+    return new NextResponse(JSON.stringify(newTechnique), { status: 201 });
+  } catch (error) {
+    return new NextResponse("Error adding technique: " + error.message, {
+      status: 500,
+    });
+  }
+};

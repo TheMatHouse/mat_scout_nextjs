@@ -2,26 +2,19 @@ import mongoose from "mongoose";
 
 const videoSchema = new mongoose.Schema(
   {
-    videoTitle: {
-      type: String,
-      required: true,
-    },
-    videoURL: {
-      type: String,
-      required: true,
-    },
-    videoNotes: {
-      type: String,
-    },
+    title: String,
+    notes: String,
+    url: String,
     report: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Report",
-      required: true,
+      ref: "ScoutingReport",
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
     },
   },
-  {
-    timeStamps: true,
-  }
+  { timestamps: true }
 );
 
 const Video = mongoose.models.Video || mongoose.model("Video", videoSchema);
