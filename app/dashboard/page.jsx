@@ -17,20 +17,20 @@ export default function DashboardHome() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <div className="bg-gray-800 p-4 rounded-xl text-center shadow">
-          <p className="text-sm text-gray-400">Matches</p>
+        <div className="rounded-xl p-4 text-center shadow bg-white text-black dark:bg-gray-800 dark:text-white">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Matches</p>
           <p className="text-2xl font-semibold">3</p>
         </div>
-        <div className="bg-gray-800 p-4 rounded-xl text-center shadow">
-          <p className="text-sm text-gray-400">Reports</p>
+        <div className="rounded-xl p-4 text-center shadow bg-white text-black dark:bg-gray-800 dark:text-white">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Reports</p>
           <p className="text-2xl font-semibold">2</p>
         </div>
-        <div className="bg-gray-800 p-4 rounded-xl text-center shadow">
-          <p className="text-sm text-gray-400">Teams</p>
+        <div className="rounded-xl p-4 text-center shadow bg-white text-black dark:bg-gray-800 dark:text-white">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Teams</p>
           <p className="text-2xl font-semibold">1</p>
         </div>
-        <div className="bg-gray-800 p-4 rounded-xl text-center shadow">
-          <p className="text-sm text-gray-400">Sports</p>
+        <div className="rounded-xl p-4 text-center shadow bg-white text-black dark:bg-gray-800 dark:text-white">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Sports</p>
           <p className="text-2xl font-semibold">2</p>
         </div>
       </div>
