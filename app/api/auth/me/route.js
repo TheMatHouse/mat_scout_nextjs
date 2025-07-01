@@ -9,14 +9,9 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token =
       cookieStore.get("token")?.value || cookieStore.get("authToken")?.value;
-
-    // console.log(
-    //   "🔍 Cookie keys found:",
-    //   cookieStore.getAll().map((c) => c.name)
-    // );
 
     if (!token) {
       console.warn("⚠️ No token found in cookies.");

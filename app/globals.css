@@ -47,6 +47,7 @@ body {
     --ms-light-red: #ef233c;
     --ms-dark-red: #d90429;
     --ms-nav-text: #f2f2f2;
+    --ms-nav-text-dark: #2b2d42;
   }
   .dark {
     --background: var(--ms-blue);

@@ -9,15 +9,18 @@ export default function AuthenticatedSidebar() {
   const { user } = useUser();
   const pathname = usePathname();
   const [isDashboardOpen, setDashboardOpen] = useState(false);
+  const [isTeamsOpen, setTeamsOpen] = useState(false);
 
   useEffect(() => {
     setDashboardOpen(pathname.startsWith("/dashboard"));
+    setTeamsOpen(pathname.startsWith("/teams"));
   }, [pathname]);
 
   if (!user) return null;
 
   const mainLinks = [
     { href: "/dashboard", label: "Dashboard", exact: true },
+    { href: "/teams", label: "Teams" },
     { href: `/${user.username}`, label: "Profile" },
   ];
 
@@ -27,6 +30,11 @@ export default function AuthenticatedSidebar() {
     { href: "/dashboard/matches", label: "Match Reports" },
     { href: "/dashboard/scouting", label: "Scouting Reports" },
     { href: "/dashboard/family", label: "Family" },
+  ];
+
+  const teamSubLinks = [
+    { href: "/teams", label: "My Teams" },
+    { href: "/teams/new", label: "Create Team" },
   ];
 
   return (
@@ -40,6 +48,9 @@ export default function AuthenticatedSidebar() {
                 if (link.href === "/dashboard") {
                   setDashboardOpen(!isDashboardOpen);
                 }
+                if (link.href === "/teams") {
+                  setTeamsOpen(!isTeamsOpen);
+                }
               }}
               className={cn(
                 "block text-lg font-medium hover:text-ms-light-red transition",
@@ -48,9 +59,29 @@ export default function AuthenticatedSidebar() {
             >
               {link.label}
             </Link>
+
+            {/* Dashboard submenu */}
             {link.href === "/dashboard" && isDashboardOpen && (
               <div className="pl-4 mt-2 space-y-2 text-sm text-ms-blue-gray">
                 {dashboardSubLinks.map((sub) => (
+                  <Link
+                    key={sub.href}
+                    href={sub.href}
+                    className={cn(
+                      "block hover:text-white transition",
+                      pathname === sub.href && "text-white font-semibold"
+                    )}
+                  >
+                    {sub.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            {/* Teams submenu */}
+            {link.href === "/teams" && isTeamsOpen && (
+              <div className="pl-4 mt-2 space-y-2 text-sm text-ms-blue-gray">
+                {teamSubLinks.map((sub) => (
                   <Link
                     key={sub.href}
                     href={sub.href}
