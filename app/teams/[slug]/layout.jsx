@@ -7,7 +7,7 @@ import TeamTabs from "@/components/teams/TeamTabs";
 
 export default async function TeamLayout({ children, params }) {
   await connectDB();
-  const { slug } = params;
+  const { slug } = await params;
 
   // fetch team and current user membership
   const team = await Team.findOne({ teamSlug: slug });
@@ -17,6 +17,7 @@ export default async function TeamLayout({ children, params }) {
     member = await TeamMember.findOne({
       teamId: team._id,
       userId: currentUser._id,
+      familyMemberId: { $exists: false }, // Exclude family members
     });
   }
 

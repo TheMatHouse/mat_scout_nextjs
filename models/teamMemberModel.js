@@ -7,6 +7,10 @@ const teamMemberSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    familyMemberId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "FamilyMember",
+    },
     teamId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Team",

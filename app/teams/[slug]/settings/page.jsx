@@ -1,12 +1,16 @@
+// app/teams/[slug]/settings/page.jsx
 "use client";
 
-import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRef, useState, useEffect, forwardRef } from "react";
 import { toast } from "react-toastify";
+import { useRouter, useParams } from "next/navigation";
 import { useTeam } from "@/context/TeamContext";
 
 import Editor from "@/components/shared/Editor";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectTrigger,
@@ -14,126 +18,124 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import Countries from "@/assets/countries.json";
 import "react-phone-number-input/style.css";
 import PhoneInput from "react-phone-number-input";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
-import Image from "next/image";
+
+// Stable input component for PhoneInput to avoid remounts
+const PhoneInputField = forwardRef((props, ref) => (
+  <Input
+    ref={ref}
+    {...props}
+    className="!rounded-none !rounded-r-md"
+  />
+));
 
 export default function TeamSettingsPage() {
   const router = useRouter();
+  const params = useParams();
   const { team, setTeam } = useTeam();
-  const teamSlug = team?.teamSlug;
+  const teamSlug = params.slug;
 
-  const parsedPhone = parsePhoneNumberFromString(
-    team?.phone || "",
-    team?.country || "US"
-  );
-  const formattedPhone = parsedPhone?.isValid() ? parsedPhone.number : "";
-
-  const code3To2 = Object.fromEntries(Countries.map((c) => [c.code3, c.code2]));
-
-  const [form, setForm] = useState({
-    info: team?.info || "",
-    email: team?.email || "",
-    phone: formattedPhone,
-    address: team?.address || "",
-    address2: team?.address2 || "",
-    city: team?.city || "",
-    state: team?.state || "",
-    postalCode: team?.postalCode || "",
-    country: team?.country || "US",
-  });
-
+  // form state
+  const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
+  // initialize form when team loads
+  useEffect(() => {
+    if (team) {
+      const parsed = parsePhoneNumberFromString(
+        team.phone || "",
+        team.country || "US"
+      );
+      setForm({
+        info: team.info || "",
+        email: team.email || "",
+        phone: parsed?.isValid() ? parsed.number : "",
+        address: team.address || "",
+        address2: team.address2 || "",
+        city: team.city || "",
+        state: team.state || "",
+        postalCode: team.postalCode || "",
+        country: team.country || "US",
+      });
+    }
+  }, [team]);
 
-  // Logo Upload
-  const [logoFile, setLogoFile] = useState(null);
+  // logo upload
   const [logoPreview, setLogoPreview] = useState(team?.logoURL || null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const fileInputRef = useRef();
 
-  const toBase64 = (file) =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-    });
-
   const handleLogoChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
-    setUploadingLogo(true); // show “Uploading…” indicator
-
-    const formData = new FormData();
-    formData.append("image", file);
-
+    setUploadingLogo(true);
+    const data = new FormData();
+    data.append("image", file);
     try {
-      const res = await fetch(`/api/teams/${team.teamSlug}/upload-logo`, {
+      const res = await fetch(`/api/teams/${teamSlug}/upload-logo`, {
         method: "POST",
-        body: formData,
+        body: data,
       });
       if (!res.ok) throw new Error("Upload failed");
-
-      const data = await res.json();
+      const result = await res.json();
       toast.success("Logo updated");
-
-      // 1) update the preview immediately
-      setLogoPreview(data.url);
-      // 2) update the client context
-      setTeam({ ...team, logoURL: data.url, logoType: "uploaded" });
-      // 3) force Next.js to re-fetch any server-rendered UI that uses team.logoURL
+      setLogoPreview(result.url);
+      setTeam((prev) => ({
+        ...prev,
+        logoURL: result.url,
+        logoType: "uploaded",
+      }));
       router.refresh();
     } catch (err) {
-      console.error("Upload error:", err);
+      console.error(err);
       toast.error("Error uploading logo");
     } finally {
       setUploadingLogo(false);
     }
   };
 
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handlePhoneChange = (value) => {
+    setForm((prev) => ({ ...prev, phone: value }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-
     try {
       const res = await fetch(`/api/teams/${teamSlug}/update`, {
         method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
-        headers: {
-          "Content-Type": "application/json",
-        },
       });
-
       if (!res.ok) throw new Error("Update failed");
-
-      const updatedTeam = await res.json();
-      setTeam(updatedTeam);
+      const updated = await res.json();
+      setTeam((prev) => ({ ...prev, ...updated }));
       toast.success("Team info updated successfully!");
+      router.refresh();
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
+      console.error(err);
       toast.error("Something went wrong.");
     } finally {
       setSaving(false);
     }
   };
 
+  if (!form) return null;
+
   return (
     <div className="max-w-3xl mx-auto space-y-8">
       <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
         Team Settings
       </h2>
-
       <form
         onSubmit={handleSubmit}
         className="space-y-8"
@@ -154,76 +156,61 @@ export default function TeamSettingsPage() {
               ) : (
                 <div className="w-24 h-24 rounded-full border bg-gray-200 dark:bg-gray-700" />
               )}
-
-              <div className="space-y-2">
-                <input
-                  type="file"
-                  accept="image/*"
-                  ref={fileInputRef}
-                  onChange={handleLogoChange}
-                  className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4
-                  file:rounded file:border-0
-                  file:text-sm file:font-semibold
-                  file:bg-ms-blue file:text-white
-                  hover:file:bg-ms-dark-red"
-                />
-                {uploadingLogo && (
-                  <p className="text-sm text-gray-500">Uploading...</p>
-                )}
-              </div>
+              <input
+                type="file"
+                accept="image/*"
+                ref={fileInputRef}
+                onChange={handleLogoChange}
+                className="block text-sm file:py-2 file:px-4 file:rounded file:border-0 file:bg-ms-blue file:text-white hover:file:bg-ms-dark-red"
+              />
+              {uploadingLogo && (
+                <p className="text-sm text-gray-500">Uploading...</p>
+              )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Public Info Section */}
+        {/* Public Info */}
         <Card>
           <CardHeader>
             <CardTitle>Public Info</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <Label htmlFor="info">Team Description</Label>
-              <Editor
-                text={form.info}
-                onChange={(val) => setForm({ ...form, info: val })}
-              />
-            </div>
+            <Label htmlFor="info">Team Description</Label>
+            <Editor
+              text={form.info}
+              onChange={(val) => setForm((prev) => ({ ...prev, info: val }))}
+            />
           </CardContent>
         </Card>
 
-        {/* Contact Info Section */}
+        {/* Contact Details */}
         <Card>
           <CardHeader>
             <CardTitle>Contact Details</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  value={form.email}
-                  onChange={handleChange}
-                />
-              </div>
-              <div>
-                <Label htmlFor="phone">Phone</Label>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                value={form.email}
+                onChange={handleChange}
+              />
+            </div>
+            <div>
+              <Label htmlFor="phone">Phone</Label>
+              <div className="flex">
                 <PhoneInput
                   international
                   defaultCountry="US"
                   value={form.phone}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, phone: value }))
-                  }
-                  className="flex w-full"
-                  inputComponent={(props) => (
-                    <input
-                      {...props}
-                      className="w-full rounded-md border border-gray-600 bg-gray-800 text-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
-                    />
-                  )}
+                  onChange={handlePhoneChange}
+                  containerClassName="flex flex-1"
+                  buttonClassName="flex items-center justify-center rounded-l-md bg-transparent px-3 border border-gray-300 dark:border-zinc-700"
+                  inputComponent={PhoneInputField}
                 />
               </div>
             </div>
@@ -286,20 +273,20 @@ export default function TeamSettingsPage() {
                 <Label htmlFor="country">Country</Label>
                 <Select
                   value={form.country}
-                  onValueChange={(value) =>
-                    setForm((prev) => ({ ...prev, country: value }))
+                  onValueChange={(v) =>
+                    setForm((prev) => ({ ...prev, country: v }))
                   }
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select a country" />
                   </SelectTrigger>
                   <SelectContent>
-                    {Countries.map((country) => (
+                    {Countries.map((c) => (
                       <SelectItem
-                        key={country.code3}
-                        value={country.code3}
+                        key={c.code3}
+                        value={c.code3}
                       >
-                        {country.name}
+                        {c.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
