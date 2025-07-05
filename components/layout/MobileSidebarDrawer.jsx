@@ -10,8 +10,11 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { user, loading } = useUser();
+
   const dashboardView = searchParams.get("v") || "settings";
+
   const [isDashboardOpen, setDashboardOpen] = useState(true);
+  const [isTeamsOpen, setTeamsOpen] = useState(false);
 
   if (loading) return null;
 
@@ -30,19 +33,16 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
         {user ? (
           <>
             <nav className="space-y-4">
-              <Link
-                href="/dashboard"
-                onClick={() => {
-                  setDashboardOpen(!isDashboardOpen);
-                  onClose();
-                }}
+              {/* Dashboard */}
+              <button
+                onClick={() => setDashboardOpen(!isDashboardOpen)}
                 className={cn(
-                  "block text-lg font-medium hover:text-ms-light-red transition",
-                  pathname === "/dashboard" && "text-ms-light-red"
+                  "block w-full text-left text-lg font-medium hover:text-ms-light-red transition",
+                  pathname.startsWith("/dashboard") && "text-ms-light-red"
                 )}
               >
                 Dashboard
-              </Link>
+              </button>
               {isDashboardOpen && (
                 <div className="pl-4 mt-2 space-y-2 text-sm text-ms-blue-gray">
                   {[
@@ -66,13 +66,52 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
                   ))}
                 </div>
               )}
+
+              {/* Teams */}
+              <button
+                onClick={() => setTeamsOpen(!isTeamsOpen)}
+                className={cn(
+                  "block w-full text-left text-lg font-medium hover:text-ms-light-red transition",
+                  pathname.startsWith("/teams") && "text-ms-light-red"
+                )}
+              >
+                Teams
+              </button>
+              {isTeamsOpen && (
+                <div className="pl-4 mt-2 space-y-2 text-sm text-ms-blue-gray">
+                  <Link
+                    href="/teams"
+                    onClick={onClose}
+                    className={cn(
+                      "block hover:text-white transition",
+                      pathname === "/teams" && "text-white font-semibold"
+                    )}
+                  >
+                    My Teams
+                  </Link>
+                  <Link
+                    href="/teams/new"
+                    onClick={onClose}
+                    className={cn(
+                      "block hover:text-white transition",
+                      pathname === "/teams/new" && "text-white font-semibold"
+                    )}
+                  >
+                    Create Team
+                  </Link>
+                </div>
+              )}
+
+              {/* Profile */}
               <Link
                 href={`/${user.username}`}
                 onClick={onClose}
+                className="block text-lg font-medium hover:text-ms-light-red transition"
               >
                 Profile
               </Link>
             </nav>
+
             <div className="mt-8 space-y-2 text-sm text-ms-blue-gray">
               <Link
                 href="/contact"
