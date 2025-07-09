@@ -27,9 +27,9 @@ const TeamScoutingReportForm = ({
   onSuccess,
   setOpen,
 }) => {
+  console.log("team ", team);
   const router = useRouter();
   const { teamSlug } = team;
-
   // Refs
   const newVideosRef = useRef([]);
   const deletedVideoIdsRef = useRef([]);
@@ -582,7 +582,7 @@ const TeamScoutingReportForm = ({
 
             <Button
               type="button"
-              onClick={addNewVideo}
+              onClick={handleAddNewVideo}
               variant="outline"
             >
               ➕ Add {videos.length + newVideos.length ? "Another" : "a"} Video

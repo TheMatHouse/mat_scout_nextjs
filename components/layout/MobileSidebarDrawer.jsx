@@ -1,20 +1,22 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import LogoutButton from "@/components/shared/LogoutButton";
 import { useUser } from "@/context/UserContext";
+import LogoutButton from "@/components/shared/LogoutButton";
 
 export default function MobileSidebarDrawer({ isOpen, onClose }) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const { user, loading } = useUser();
 
-  const dashboardView = searchParams.get("v") || "settings";
-
-  const [isDashboardOpen, setDashboardOpen] = useState(true);
+  const [isDashboardOpen, setDashboardOpen] = useState(false);
   const [isTeamsOpen, setTeamsOpen] = useState(false);
+
+  useEffect(() => {
+    setDashboardOpen(pathname.startsWith("/dashboard"));
+    setTeamsOpen(pathname.startsWith("/teams"));
+  }, [pathname]);
 
   if (loading) return null;
 
@@ -27,7 +29,7 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
       onClick={onClose}
     >
       <aside
-        className="absolute top-0 left-0 w-64 h-full bg-[hsl(222.2_47.4%_11.2%)] text-white shadow-lg p-6"
+        className="absolute top-0 left-0 w-64 h-full bg-[hsl(222.2_47.4%_11.2%)] text-white shadow-lg p-6 overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {user ? (
@@ -46,19 +48,19 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
               {isDashboardOpen && (
                 <div className="pl-4 mt-2 space-y-2 text-sm text-ms-blue-gray">
                   {[
-                    { v: "settings", label: "Settings" },
-                    { v: "styles", label: "Styles/Sports" },
-                    { v: "matches", label: "Match Reports" },
-                    { v: "scouting", label: "Scouting Reports" },
-                    { v: "family", label: "Family" },
+                    { href: "/dashboard/settings", label: "Settings" },
+                    { href: "/dashboard/styles", label: "Styles/Sports" },
+                    { href: "/dashboard/matches", label: "Match Reports" },
+                    { href: "/dashboard/scouting", label: "Scouting Reports" },
+                    { href: "/dashboard/family", label: "Family" },
                   ].map((sub) => (
                     <Link
-                      key={sub.v}
-                      href={`/dashboard?v=${sub.v}`}
+                      key={sub.href}
+                      href={sub.href}
                       onClick={onClose}
                       className={cn(
                         "block hover:text-white transition",
-                        dashboardView === sub.v && "text-white font-semibold"
+                        pathname === sub.href && "text-white font-semibold"
                       )}
                     >
                       {sub.label}
@@ -106,7 +108,10 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
               <Link
                 href={`/${user.username}`}
                 onClick={onClose}
-                className="block text-lg font-medium hover:text-ms-light-red transition"
+                className={cn(
+                  "block text-lg font-medium hover:text-ms-light-red transition",
+                  pathname === `/${user.username}` && "text-ms-light-red"
+                )}
               >
                 Profile
               </Link>
