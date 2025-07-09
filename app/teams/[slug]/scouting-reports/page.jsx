@@ -1,22 +1,17 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { toast } from "react-toastify";
-import { ReportDataTable } from "@/components/dashboard/data/report-data-table";
-import ScoutingReportForm from "@/components/dashboard/forms/ScoutingReportForm";
-import PreviewReportModal from "@/components/dashboard/PreviewReportModal";
-
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { MoreHorizontal, ArrowUpDown } from "lucide-react";
+import { CirclePlus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,39 +20,89 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import PreviewReportModal from "@/components/shared/PreviewReportModal";
+import ScoutingReportForm from "@/components/teams/forms/ScoutingReportForm";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
+import { ReportDataTable } from "@/components/shared/report-data-table";
+import { ArrowUpDown, MoreHorizontal } from "lucide-react";
 
-const FamilyScoutingReports = ({ member }) => {
+export default function TeamScoutingReportsPage() {
+  const params = useParams();
   const router = useRouter();
-  const [scoutingReports, setScoutingReports] = useState([]);
+  const slug = params.slug;
+
+  const [team, setTeam] = useState(null);
+  const [reports, setReports] = useState([]);
+  const [user, setUser] = useState(null);
   const [open, setOpen] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
+  // Fetch team data
   useEffect(() => {
-    if (!member?.userId) return;
-    fetchReports();
-  }, [member]);
+    if (!slug) return;
 
+    const fetchTeam = async () => {
+      try {
+        const res = await fetch(`/api/teams/${slug}`);
+        if (!res.ok) throw new Error("Failed to fetch team");
+        const data = await res.json();
+        setTeam(data.team);
+      } catch (err) {
+        console.error("Error fetching team:", err);
+        toast.error("Error loading team data");
+      }
+    };
+
+    fetchTeam();
+  }, [slug]);
+
+  // Fetch scouting reports
   const fetchReports = async () => {
     try {
       const res = await fetch(
-        `/api/dashboard/${member.userId}/family/${member._id}/scoutingReports`
+        `/api/teams/${slug}/scouting-reports?ts=${Date.now()}`
       );
-      if (!res.ok) throw new Error("Failed to fetch match reports");
+      if (!res.ok) throw new Error("Failed to load scouting reports");
       const data = await res.json();
-      setScoutingReports(data);
-    } catch (err) {
-      console.error(err);
-      toast.error("Could not load scouting reports.");
+      setReports(data.scoutingReports || []);
+    } catch (error) {
+      console.error(error);
+      toast.error("Error loading scouting reports");
+    } finally {
+      setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!slug) return;
+    fetchReports();
+  }, [slug]);
+
+  // Fetch current user
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (!res.ok) throw new Error("Failed to fetch user");
+        const userData = await res.json();
+        setUser(userData);
+      } catch (err) {
+        console.error("Failed to load user:", err);
+      }
+    };
+
+    fetchUser();
+  }, []);
 
   const handleDeleteReport = async (report) => {
     if (
       window.confirm(`This report will be permanently deleted! Are you sure?`)
     ) {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${member.userId}/family/${member._id}/scoutingReports/${report._id}`,
+        `/api/teams/${slug}/scouting-reports/${report._id}`,
         {
           method: "DELETE",
           headers: {
@@ -73,7 +118,7 @@ const FamilyScoutingReports = ({ member }) => {
         toast.success(data.message);
 
         // Optional: update your table UI immediately
-        setScoutingReports((prev) => prev.filter((r) => r._id !== report._id));
+        setReports((prev) => prev.filter((r) => r._id !== report._id));
 
         // Clear selected report if needed
         setSelectedReport(null);
@@ -85,6 +130,39 @@ const FamilyScoutingReports = ({ member }) => {
         console.log("Delete error:", data.message);
       }
     }
+  };
+
+  const exportReportsToExcel = () => {
+    const dataToExport = reports.map((r) => ({
+      FirstName: r.athleteFirstName,
+      LastName: r.athleteLastName,
+      Country: r.athleteCountry,
+      NationalRank: r.athleteNationalRank,
+      WorldRank: r.athleteWorldRank,
+      Club: r.athleteClub,
+      Division: r.division,
+      WeightClass: r.weightCategory,
+      Grip: r.athleteGrip,
+      MatchType: r.matchType,
+      Attacks: (r.athleteAttacks || []).join(", "),
+      Notes: r.athleteAttackNotes || "",
+      VideoLinks: (r.videos || []).map((v) => v.url).join(", "),
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Reports");
+
+    const excelBuffer = XLSX.write(workbook, {
+      bookType: "xlsx",
+      type: "array",
+    });
+
+    const file = new Blob([excelBuffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    saveAs(file, `scouting-reports-${slug}.xlsx`);
   };
 
   const columns = [
@@ -145,17 +223,6 @@ const FamilyScoutingReports = ({ member }) => {
       ),
     },
     {
-      accessorKey: "athleteClub",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Club <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-    },
-    {
       accessorKey: "athleteCountry",
       header: ({ column }) => (
         <Button
@@ -194,7 +261,6 @@ const FamilyScoutingReports = ({ member }) => {
       enableSorting: false,
       cell: ({ row }) => {
         const report = row.original;
-
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -213,7 +279,7 @@ const FamilyScoutingReports = ({ member }) => {
                   setPreviewOpen(true);
                 }}
               >
-                View Match Details
+                View Report Details
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {
@@ -221,14 +287,14 @@ const FamilyScoutingReports = ({ member }) => {
                   setOpen(true);
                 }}
               >
-                Edit Match
+                Edit Report
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-ms-dark-red"
                 onClick={() => handleDeleteReport(report)}
               >
-                Delete Match
+                Delete Report
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -236,64 +302,75 @@ const FamilyScoutingReports = ({ member }) => {
       },
     },
   ];
+
   return (
-    <div>
-      <div className="flex items-center">
-        <h1 className="text-2xl">Family Member Scouting</h1>
+    <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Scouting Reports</h1>
+
         <Dialog
           open={open}
           onOpenChange={setOpen}
         >
-          <DialogTrigger asChild>
+          <DialogHeader>
+            <DialogTrigger asChild>
+              <Button
+                onClick={() => {
+                  setSelectedReport(null); // ✅ clear old report
+                  setOpen(true); // ✅ open dialog manually
+                }}
+              >
+                <CirclePlus className="w-4 h-4 mr-2" />
+                Add New Report
+              </Button>
+            </DialogTrigger>
             <Button
-              className="ml-6 bg-gray-900 hover:bg-gray-500 text-white border-2 border-gray-500 dark:border-gray-100"
-              onClick={() => {
-                setSelectedReport(null);
-                setOpen(true);
-              }}
+              variant="outline"
+              size="sm"
+              onClick={exportReportsToExcel}
             >
-              Add Scouting Report
+              Export to Excel
             </Button>
-          </DialogTrigger>
-          <DialogContent className="overflow-y-scroll max-h-[90%]">
+          </DialogHeader>
+
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>
-                {selectedReport
-                  ? "Edit Scouting Report"
-                  : "Add Scouting Report"}
-              </DialogTitle>
-              <DialogDescription>
-                Fill out all scouting details below.
-              </DialogDescription>
+              <DialogTitle>New Scouting Report</DialogTitle>
             </DialogHeader>
             <ScoutingReportForm
               key={selectedReport?._id}
-              athlete={member}
+              team={team}
+              user={user}
+              userStyles={user?.user.userStyles || []}
               report={selectedReport}
               setOpen={setOpen}
               onSuccess={fetchReports}
-              userType="family"
             />
           </DialogContent>
         </Dialog>
       </div>
 
-      <ReportDataTable
-        columns={columns}
-        data={scoutingReports}
-      />
+      {loading ? (
+        <p>Loading...</p>
+      ) : !Array.isArray(reports) || reports.length === 0 ? (
+        <p>No reports found.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <ReportDataTable
+            columns={columns}
+            data={reports}
+          />
+        </div>
+      )}
 
-      {previewOpen && selectedReport && (
+      {selectedReport && (
         <PreviewReportModal
           previewOpen={previewOpen}
           setPreviewOpen={setPreviewOpen}
           report={selectedReport}
           reportType="scouting"
-          onSuccess={fetchReports}
         />
       )}
     </div>
   );
-};
-
-export default FamilyScoutingReports;
+}

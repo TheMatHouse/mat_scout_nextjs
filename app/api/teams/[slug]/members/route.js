@@ -25,26 +25,30 @@ export async function GET(request, { params }) {
     return NextResponse.json({ members: [] }, { status: 403 });
   }
 
-  // Get all members
+  // Fetch all team members
   const raw = await TeamMember.find({ teamId: team._id });
 
   const members = await Promise.all(
     raw.map(async (m) => {
       if (m.familyMemberId) {
-        // Populate from family member
         const fm = await FamilyMember.findById(m.familyMemberId);
+        if (!fm) return null;
+
         return {
           id: m._id.toString(),
-          userId: m.userId.toString(), // parent
+          familyMemberId: fm._id.toString(),
           name: `${fm.firstName} ${fm.lastName}`,
           role: m.role,
-          avatarUrl: null, // You can add support later if needed
+          avatarUrl: fm.avatar || null,
           isFamilyMember: true,
         };
-      } else {
-        // Populate from user
+      }
+
+      if (m.userId) {
         const u = await User.findById(m.userId);
-        let avatarUrl = u.avatar;
+        if (!u) return null;
+
+        let avatarUrl = u.avatar || null;
         if (u.avatarType === "google") avatarUrl = u.googleAvatar;
         if (u.avatarType === "facebook") avatarUrl = u.facebookAvatar;
 
@@ -57,8 +61,11 @@ export async function GET(request, { params }) {
           isFamilyMember: false,
         };
       }
+
+      return null;
     })
   );
 
-  return NextResponse.json({ members });
+  const filtered = members.filter(Boolean);
+  return NextResponse.json({ members: filtered });
 }

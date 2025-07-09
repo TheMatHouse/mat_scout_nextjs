@@ -9,7 +9,7 @@ export async function PATCH(request, context) {
   await connectDB();
   const { userId, scoutingReportId } = await context.params;
   const currentUser = await getCurrentUserFromCookies();
-  console.log("scoutingReportID: ", scoutingReportId);
+
   if (!Types.ObjectId.isValid(scoutingReportId)) {
     return NextResponse.json({ message: "Invalid report ID" }, { status: 400 });
   }
@@ -21,7 +21,7 @@ export async function PATCH(request, context) {
   try {
     const body = await request.json();
 
-    // ✅ 1. Update existing videos
+    // ✅ Update existing videos
     if (Array.isArray(body.updatedVideos)) {
       for (const video of body.updatedVideos) {
         if (video._id && Types.ObjectId.isValid(video._id)) {
@@ -36,49 +36,42 @@ export async function PATCH(request, context) {
       }
     }
 
-    // ✅ 2. Delete removed videos
+    // ✅ Delete removed videos
     if (Array.isArray(body.deletedVideos)) {
       await Video.deleteMany({ _id: { $in: body.deletedVideos } });
-
       await ScoutingReport.findByIdAndUpdate(scoutingReportId, {
         $pull: { videos: { $in: body.deletedVideos } },
       });
     }
 
-    // ✅ 2. Add new videos
+    // ✅ Add new videos
     if (Array.isArray(body.newVideos) && body.newVideos.length > 0) {
-      const newVideoIds = []; // ✅ DECLARE THIS
+      const newVideoIds = [];
 
-      try {
-        for (const newVid of body.newVideos) {
-          const createdVideo = await Video.create({
-            ...newVid,
-            scoutingReport: scoutingReportId,
-            createdBy: userId,
-          });
+      for (const newVid of body.newVideos) {
+        const createdVideo = await Video.create({
+          ...newVid,
+          scoutingReport: scoutingReportId,
+          createdBy: userId,
+        });
+        newVideoIds.push(createdVideo._id);
+      }
 
-          newVideoIds.push(createdVideo._id);
-        }
-
-        if (newVideoIds.length) {
-          await ScoutingReport.findByIdAndUpdate(scoutingReportId, {
-            $push: { videos: { $each: newVideoIds } },
-          });
-        }
-      } catch (err) {
-        console.error("❌ Error adding new video:", err);
-        return NextResponse.json(
-          { message: "Failed to add new video" },
-          { status: 500 }
-        );
+      if (newVideoIds.length) {
+        await ScoutingReport.findByIdAndUpdate(scoutingReportId, {
+          $push: { videos: { $each: newVideoIds } },
+        });
       }
     }
 
-    // ✅ 4. Update the report’s other fields
-    const fieldsToUpdate = { ...body };
-    delete fieldsToUpdate.updatedVideos;
-    delete fieldsToUpdate.deletedVideos;
-    delete fieldsToUpdate.videos;
+    // ✅ Remove video fields from update payload
+    const {
+      updatedVideos,
+      deletedVideos,
+      newVideos,
+      videos, // just in case
+      ...fieldsToUpdate
+    } = body;
 
     const updatedReport = await ScoutingReport.findOneAndUpdate(
       { _id: scoutingReportId, createdById: userId },
@@ -108,8 +101,7 @@ export async function PATCH(request, context) {
 
 export async function DELETE(request, context) {
   await connectDB();
-
-  const { userId, scoutingReportId } = await context.params; // ✅ YES, await
+  const { userId, scoutingReportId } = await context.params;
 
   if (
     !Types.ObjectId.isValid(userId) ||
@@ -133,7 +125,6 @@ export async function DELETE(request, context) {
     });
 
     if (!report) {
-      console.warn("🚫 Scouting report not found for deletion");
       return NextResponse.json(
         { message: "Scouting report not found" },
         { status: 404 }

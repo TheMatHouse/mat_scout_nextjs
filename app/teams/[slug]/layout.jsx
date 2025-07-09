@@ -22,6 +22,7 @@ export default async function TeamLayout({ children, params }) {
   }
 
   const isManager = member?.role === "manager";
+  const isCoach = member?.role === "coach";
   const isMember = member?.role === "member" || isManager;
 
   // build tab list
@@ -29,6 +30,11 @@ export default async function TeamLayout({ children, params }) {
   if (isMember) tabs.push({ label: "Members", href: `/teams/${slug}/members` });
   if (isManager)
     tabs.push({ label: "Settings", href: `/teams/${slug}/settings` });
+  if (isManager || isCoach)
+    tabs.push({
+      label: "Scouting Reports",
+      href: `/teams/${slug}/scouting-reports`,
+    });
 
   // strip mongoose internals
   const { _id, __v, createdAt, updatedAt, user, ...rest } = team.toObject();
@@ -39,7 +45,7 @@ export default async function TeamLayout({ children, params }) {
 
   return (
     <TeamWrapper team={safeTeam}>
-      <div className="max-w-5xl mx-auto px-4 py-8">
+      <div className="max-w-8xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">

@@ -18,7 +18,7 @@ const teamMemberSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["pending", "member", "manager"],
+      enum: ["pending", "member", "manager", "coach"],
       default: "pending",
     },
   },

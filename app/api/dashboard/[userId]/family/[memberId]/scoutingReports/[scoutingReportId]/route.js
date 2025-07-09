@@ -1,26 +1,28 @@
+// app/api/dashboard/[userId]/family/[memberId]/scoutingReports/[scoutingReportId]/route.js
+
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import ScoutingReport from "@/models/scoutingReportModel";
 import Video from "@/models/videoModel";
+import Technique from "@/models/techniquesModel";
+import User from "@/models/userModel";
 import { Types } from "mongoose";
 import { getCurrentUserFromCookies } from "@/lib/auth";
 
 // PATCH: Update a family member's scouting report
 export async function PATCH(req, context) {
-  console.log("TESTING");
   let body;
+
   try {
     const { userId, memberId, scoutingReportId } = await context.params;
     body = await req.json();
     await connectDB();
 
-    console.log("USERID ", userId);
-    console.log("MEMBERID", memberId);
-    console.log("SCOUTINGREPORT ID ", scoutingReportId);
     const report = await ScoutingReport.findOne({
       _id: scoutingReportId,
       createdById: userId,
       athleteId: memberId,
+      athleteType: "family",
     });
 
     if (!report) {
@@ -30,7 +32,7 @@ export async function PATCH(req, context) {
       );
     }
 
-    // Update basic report fields (excluding videos)
+    // Extract and update fields
     const {
       athleteFirstName,
       athleteLastName,
@@ -38,16 +40,17 @@ export async function PATCH(req, context) {
       athleteClub,
       athleteWorldRank,
       athleteNationalRank,
-      athleteStyle,
-      athleteLevel,
+      athleteRank,
+      athleteGrip,
       matchType,
       weightCategory,
       division,
       athleteAttacks,
-      opponentStrengths,
-      notes,
+      athleteAttackNotes,
+      accessList,
       updatedVideos = [],
       newVideos = [],
+      deletedVideos = [],
     } = body;
 
     Object.assign(report, {
@@ -57,14 +60,14 @@ export async function PATCH(req, context) {
       athleteClub,
       athleteWorldRank,
       athleteNationalRank,
-      athleteStyle,
-      athleteLevel,
+      athleteRank,
+      athleteGrip,
       matchType,
       weightCategory,
       division,
       athleteAttacks,
-      opponentStrengths,
-      notes,
+      athleteAttackNotes,
+      accessList,
     });
 
     // Save new techniques if needed
@@ -93,13 +96,21 @@ export async function PATCH(req, context) {
     for (const video of newVideos) {
       const newVid = await Video.create({
         ...video,
-        report: report._id,
+        scoutingReport: report._id,
         createdBy: userId,
       });
       newVideoIds.push(newVid._id);
     }
 
-    // Merge existing + new video IDs into report
+    // Remove deleted videos
+    if (deletedVideos?.length) {
+      await Video.deleteMany({ _id: { $in: deletedVideos } });
+      report.videos = report.videos.filter(
+        (vidId) => !deletedVideos.includes(String(vidId))
+      );
+    }
+
+    // Merge existing and new videos
     report.videos = [...report.videos, ...newVideoIds];
     await report.save();
 
@@ -115,11 +126,11 @@ export async function PATCH(req, context) {
   }
 }
 
-// DELETE: Delete a family member's scouting report
+// DELETE: Delete all scouting reports + videos for a family member by user
 export async function DELETE(req, context) {
   await connectDB();
 
-  const { userId, memberId } = await context.params;
+  const { userId, memberId } = context.params;
   const currentUser = await getCurrentUserFromCookies();
 
   if (!currentUser || String(currentUser._id) !== String(userId)) {
@@ -131,20 +142,18 @@ export async function DELETE(req, context) {
   }
 
   try {
-    // Find all reports by user for this member
     const reports = await ScoutingReport.find({
       createdById: userId,
       athleteId: memberId,
+      athleteType: "family",
     });
 
     const reportIds = reports.map((r) => r._id);
 
-    // Delete all videos linked to these reports
     const deletedVideos = await Video.deleteMany({
-      report: { $in: reportIds },
+      scoutingReport: { $in: reportIds },
     });
 
-    // Delete the reports themselves
     const deletedReports = await ScoutingReport.deleteMany({
       _id: { $in: reportIds },
     });
@@ -153,7 +162,7 @@ export async function DELETE(req, context) {
       message: `Deleted ${deletedReports.deletedCount} report(s) and ${deletedVideos.deletedCount} video(s).`,
     });
   } catch (err) {
-    console.error("Error deleting family scouting reports/videos:", err);
+    console.error("DELETE family scoutingReports error:", err);
     return NextResponse.json(
       { message: "Server error while deleting reports and videos" },
       { status: 500 }

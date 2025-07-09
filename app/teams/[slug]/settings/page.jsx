@@ -132,7 +132,7 @@ export default function TeamSettingsPage() {
   if (!form) return null;
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8">
+    <div className="max-w-4xl mx-auto space-y-8">
       <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
         Team Settings
       </h2>
@@ -202,14 +202,12 @@ export default function TeamSettingsPage() {
             </div>
             <div>
               <Label htmlFor="phone">Phone</Label>
-              <div className="flex">
+              <div className="flex flex-1">
                 <PhoneInput
                   international
                   defaultCountry="US"
                   value={form.phone}
                   onChange={handlePhoneChange}
-                  containerClassName="flex flex-1"
-                  buttonClassName="flex items-center justify-center rounded-l-md bg-transparent px-3 border border-gray-300 dark:border-zinc-700"
                   inputComponent={PhoneInputField}
                 />
               </div>

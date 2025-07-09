@@ -23,7 +23,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import PreviewReportModal from "./PreviewReportModal";
+import PreviewReportModal from "../shared/PreviewReportModal";
 import { toast } from "react-toastify";
 
 const DashboardScouting = ({ user, styles, techniques }) => {
@@ -294,9 +294,9 @@ const DashboardScouting = ({ user, styles, techniques }) => {
       {previewOpen && (
         <PreviewReportModal
           previewOpen={previewOpen}
-          setPreviewOpen={closePreviewModal}
+          setPreviewOpen={setPreviewOpen}
           report={selectedReport}
-          reportType="scouting"
+          reportType="match"
         />
       )}
     </div>

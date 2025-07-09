@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-const scoutingReportSchema = new mongoose.Schema(
+const reportForSchema = new mongoose.Schema(
   {
     athleteId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -10,6 +10,27 @@ const scoutingReportSchema = new mongoose.Schema(
       type: String,
       enum: ["user", "family"],
       required: true,
+    },
+  },
+  { _id: false } // prevent automatic _id on subdocuments
+);
+
+const scoutingReportSchema = new mongoose.Schema(
+  {
+    reportFor: {
+      type: [reportForSchema],
+      validate: {
+        validator: function (value) {
+          const seen = new Set();
+          for (const entry of value) {
+            const key = `${entry.athleteId.toString()}-${entry.athleteType}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+          }
+          return true;
+        },
+        message: "Duplicate athlete entries are not allowed in reportFor.",
+      },
     },
 
     createdById: {
@@ -22,13 +43,11 @@ const scoutingReportSchema = new mongoose.Schema(
       required: true,
     },
 
-    // Optional: team who created it (if coach is on team)
     teamId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Team",
     },
 
-    // Match-specific scouting info
     matchType: {
       type: String,
       required: true,
@@ -50,13 +69,14 @@ const scoutingReportSchema = new mongoose.Schema(
     athleteGrip: String,
     athleteAttacks: [String],
     athleteAttackNotes: String,
+
     videos: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Video",
       },
     ],
-    // Optional: who can view this (future-proofing)
+
     accessList: [
       {
         type: mongoose.Schema.Types.ObjectId,

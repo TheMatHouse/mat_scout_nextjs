@@ -10,26 +10,34 @@ export async function POST(req, context) {
   let body;
 
   try {
-    const { userId, memberId } = context.params;
+    const { userId, memberId } = await context.params;
     body = await req.json();
     await connectDB();
 
-    // Step 1: Create the report with memberId as the athlete
+    const user = await User.findById(userId);
+    if (!user) {
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
+    }
+
+    // Step 1: Create the scouting report
     const report = new ScoutingReport({
       ...body,
-      videos: [], // placeholder
       createdById: userId,
+      createdByName: `${user.firstName} ${user.lastName}`,
+      reportFor: [{ athleteId: memberId, athleteType: "family" }],
       athleteId: memberId,
+      athleteType: "family",
+      videos: [], // placeholder
     });
 
     await report.save();
 
-    // Optional: store this report under user's scoutingReports array
+    // Optional: link report to user
     await User.findByIdAndUpdate(userId, {
       $push: { scoutingReports: report._id },
     });
 
-    // Step 2: Save techniques if they don't already exist
+    // Step 2: Store new techniques if needed
     if (body.athleteAttacks?.length) {
       for (const name of body.athleteAttacks) {
         const exists = await Technique.findOne({ techniqueName: name });
@@ -39,20 +47,21 @@ export async function POST(req, context) {
       }
     }
 
-    // Step 3: Save videos (support both videos and newVideos keys)
-    const incomingVideos = body.videos || body.newVideos || [];
+    // Step 3: Save videos (from body.newVideos or body.videos)
+    const incomingVideos = body.newVideos || body.videos || [];
     const videoIds = [];
 
-    if (incomingVideos.length) {
-      for (const vid of incomingVideos) {
-        const newVideo = await Video.create({
-          ...vid,
-          report: report._id,
-          createdBy: userId,
-        });
-        videoIds.push(newVideo._id);
-      }
+    for (const vid of incomingVideos) {
+      const newVideo = await Video.create({
+        ...vid,
+        scoutingReport: report._id,
+        createdBy: userId,
+      });
+      videoIds.push(newVideo._id);
+    }
 
+    // Attach videos to report
+    if (videoIds.length) {
       report.videos = videoIds;
       await report.save();
     }
@@ -74,22 +83,31 @@ export async function GET(req, context) {
   try {
     await connectDB();
 
-    const { memberId } = await context.params;
-    console.log("member Id ", memberId);
+    const { memberId } = context.params;
     if (!memberId) {
-      return Response.json({ error: "Missing memberId" }, { status: 400 });
+      return NextResponse.json(
+        { message: "Missing memberId" },
+        { status: 400 }
+      );
     }
 
     const reports = await ScoutingReport.find({
-      athleteId: memberId,
-      athleteType: "family",
+      reportFor: {
+        $elemMatch: {
+          athleteId: memberId,
+          athleteType: "family",
+        },
+      },
     })
       .populate("videos")
       .sort({ createdAt: -1 });
 
-    return Response.json(reports);
+    return NextResponse.json(reports);
   } catch (err) {
-    console.error("Error in GET /scoutingReports:", err);
-    return Response.json({ error: "Failed to load reports" }, { status: 500 });
+    console.error("GET family scoutingReports error:", err);
+    return NextResponse.json(
+      { message: "Failed to load reports" },
+      { status: 500 }
+    );
   }
 }

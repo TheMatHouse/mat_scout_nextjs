@@ -17,8 +17,11 @@ export async function POST(req, context) {
     // Step 1: Create the report without videos
     const report = new ScoutingReport({
       ...body,
-      videos: [], // placeholder for now
       createdById: userId,
+      createdByName: body.createdByName,
+      reportFor: body.reportFor || [],
+      videos: [], // Placeholder
+      accessList: body.accessList || [],
     });
 
     await report.save();
@@ -38,7 +41,7 @@ export async function POST(req, context) {
       }
     }
 
-    // Step 4: Save videos if provided and associate them
+    // Step 4: Save and link videos
     const incomingVideos = body.videos || body.newVideos || [];
     const videoIds = [];
 
@@ -69,14 +72,14 @@ export async function POST(req, context) {
   }
 }
 
-// GET: Get all scouting reports for self
+// GET: Get all scouting reports created by this user
 export async function GET(request, context) {
   try {
-    const { userId } = await await context.params;
+    const { userId } = await context.params;
     await connectDB();
 
     const scoutingReports = await ScoutingReport.find({ createdById: userId })
-      .populate("videos") // if you store ObjectIds in the 'videos' field
+      .populate("videos")
       .sort({ createdAt: -1 });
 
     return new NextResponse(JSON.stringify(scoutingReports), { status: 200 });

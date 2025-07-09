@@ -1,4 +1,3 @@
-// Refactored and styled to match MatchReportForm
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -32,6 +31,9 @@ const ScoutingReportForm = ({
   const userId = user?._id;
   const newVideosRef = useRef([]);
   const deletedVideoIdsRef = useRef([]);
+
+  // Dummy state to force rerender when using refs
+  const [, forceRerender] = useState(0);
 
   const [matchType, setMatchType] = useState(report?.matchType || "");
   const [athleteFirstName, setAthleteFirstName] = useState(
@@ -110,35 +112,25 @@ const ScoutingReportForm = ({
     const newVideo = { title: "", notes: "", url: "" };
     setNewVideos((prev) => [...prev, newVideo]);
     newVideosRef.current.push(newVideo);
-
-    console.log("New video added:", newVideo);
-    console.log("All newVideosRef.current:", newVideosRef.current);
   };
 
   const deleteVideo = async (videoId) => {
-    try {
-      let url = "";
+    deletedVideoIdsRef.current.push(videoId);
+    setVideos((prev) => prev.filter((v) => v._id !== videoId));
+  };
 
-      if (userType === "family") {
-        url = `/api/dashboard/${athlete.userId}/family/${athlete._id}/scoutingReports/${report._id}/videos/${videoId}`;
-      } else {
-        url = `/api/dashboard/${athlete.userId}/scoutingReports/${report._id}/videos/${videoId}`;
-      }
-
-      const res = await fetch(url, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to delete video");
-      }
-
-      // ✅ Update local state after deletion
-      setVideos((prev) => prev.filter((vid) => vid._id !== videoId));
-      toast.success("Video deleted successfully");
-    } catch (error) {
-      console.error("Error deleting video:", error);
-      toast.error("Failed to delete video");
+  const handleVideoChange = (index, field, value, type = "existing") => {
+    if (type === "existing") {
+      const updated = [...videos];
+      if (!updated[index]) return;
+      updated[index][field] = value;
+      setVideos(updated);
+    } else {
+      const updated = [...newVideosRef.current];
+      if (!updated[index]) return;
+      updated[index][field] = value;
+      newVideosRef.current = updated;
+      forceRerender((n) => n + 1); // ✅ force re-render
     }
   };
 
@@ -150,13 +142,11 @@ const ScoutingReportForm = ({
 
   const userStyles = athlete?.userStyles || [];
 
-  console.log("ATHLETE ", athlete);
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     const payload = {
-      athleteId: athlete._id,
-      athleteType: userType,
+      reportFor: [{ athleteId: athlete._id, athleteType: userType }],
       createdById: athlete._id,
       createdByName: `${athlete.firstName} ${athlete.lastName}`,
       matchType,
@@ -174,7 +164,7 @@ const ScoutingReportForm = ({
       athleteAttackNotes,
       accessList,
       updatedVideos: videos.filter((v) => v._id),
-      newVideos: newVideosRef.current, // ✅ THIS IS THE FIX
+      newVideos: newVideosRef.current,
       deletedVideos: deletedVideoIdsRef.current || [],
     };
 
@@ -411,10 +401,12 @@ const ScoutingReportForm = ({
                 />
 
                 <Label className="mt-2">Video Notes</Label>
-                <Textarea
+                <Editor
+                  name="notes"
                   value={vid.notes}
-                  onChange={(e) =>
-                    updateVideoField(index, "notes", e.target.value)
+                  text={vid.notes}
+                  onChange={(val) =>
+                    handleVideoChange(index, "notes", val, "new")
                   }
                 />
 
@@ -478,16 +470,13 @@ const ScoutingReportForm = ({
                   <Label htmlFor={`new-video-notes-${index}`}>
                     Video Notes
                   </Label>
-                  <textarea
-                    id={`new-video-notes-${index}`}
-                    className="w-full rounded-md border px-3 py-2 text-sm shadow-sm dark:bg-gray-800 dark:text-white"
+                  <Editor
+                    name="notes"
                     value={vid.notes}
-                    onChange={(e) => {
-                      const updatedVideos = [...newVideos];
-                      updatedVideos[index].notes = e.target.value;
-                      setNewVideos(updatedVideos);
-                      newVideosRef.current[index].notes = e.target.value;
-                    }}
+                    text={vid.notes}
+                    onChange={(val) =>
+                      handleVideoChange(index, "notes", val, "new")
+                    }
                   />
                 </div>
 
