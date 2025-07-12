@@ -5,13 +5,13 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { getCurrentUser } from "@/lib/authClient"; // ✅ client-safe import
+import { getCurrentUser } from "@/lib/authClient";
 import StyleCard from "@/components/profile/StyleCard";
 
 export default function UserProfilePage() {
   const { username } = useParams();
   const [profileUser, setProfileUser] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(undefined);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -19,17 +19,17 @@ export default function UserProfilePage() {
       try {
         const res = await fetch(`/api/users/${username}`);
         const data = await res.json();
+
         if (!res.ok || !data?.user) {
           setProfileUser(null);
         } else {
           setProfileUser(data.user);
         }
 
-        // ✅ Get current user from client-side
         const viewer = await getCurrentUser();
         setCurrentUser(viewer);
-      } catch (error) {
-        console.error("Failed to fetch profile or current user:", error);
+      } catch (err) {
+        console.error("Error fetching profile:", err);
         setProfileUser(null);
       } finally {
         setLoading(false);
@@ -39,12 +39,10 @@ export default function UserProfilePage() {
     fetchData();
   }, [username]);
 
-  console.log("User ", profileUser && profileUser);
-  if (loading) return <div>Loading...</div>;
+  if (loading || currentUser === undefined) return <div>Loading...</div>;
   if (!profileUser) return notFound();
 
-  const isMyProfile =
-    currentUser && currentUser.username === profileUser.username;
+  const isMyProfile = currentUser?.username === profileUser.username;
 
   if (!profileUser.allowPublic && !isMyProfile) {
     return (
@@ -57,34 +55,25 @@ export default function UserProfilePage() {
     );
   }
 
-  // Build styleResults map
   const styleResults = {};
-
-  if (Array.isArray(profileUser?.userStyles)) {
+  if (Array.isArray(profileUser.userStyles)) {
     profileUser.userStyles.forEach((style) => {
       const styleName = style.styleName?.trim().toLowerCase();
-
       const reports = profileUser.matchReports?.filter(
         (report) => report.matchType?.trim().toLowerCase() === styleName
       );
-
       const wins = reports?.filter((r) => r.result === "Won").length || 0;
       const losses = reports?.filter((r) => r.result === "Lost").length || 0;
-
-      styleResults[style.styleName] = {
-        Wins: wins,
-        Losses: losses,
-      };
+      styleResults[style.styleName] = { Wins: wins, Losses: losses };
     });
   }
 
   return (
     <section className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-4 gap-6">
-      {/* Left: User Info (1 of 4 columns on medium+, can span more if few styles) */}
       <div className="md:col-span-1 bg-white dark:bg-gray-900 rounded-xl shadow border border-border p-6 text-center space-y-4 self-start">
         <Image
-          src={profileUser.avatar}
-          alt={profileUser.firstName}
+          src={profileUser.avatar || "/default-avatar.png"}
+          alt={profileUser.firstName || "User avatar"}
           width={100}
           height={100}
           className="rounded-full mx-auto border border-border"
@@ -95,6 +84,13 @@ export default function UserProfilePage() {
         <p className="text-sm text-black dark:text-white">
           @{profileUser.username}
         </p>
+
+        {isMyProfile && !profileUser.allowPublic && (
+          <p className="text-sm text-yellow-500 mt-2">
+            This is what your profile looks like to others when set to private.
+          </p>
+        )}
+
         {profileUser.gender && (
           <p className="text-sm text-black dark:text-white">
             Gender: {profileUser.gender}
@@ -108,6 +104,7 @@ export default function UserProfilePage() {
               .join(", ")}
           </p>
         )}
+
         {profileUser.teams?.length > 0 && (
           <div className="text-left space-y-2 mt-4">
             <h3 className="text-sm font-semibold text-black dark:text-white">
@@ -169,7 +166,6 @@ export default function UserProfilePage() {
         )}
       </div>
 
-      {/* Right: Styles (auto-wrap responsive) */}
       <div className="md:col-span-3 grid gap-6 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
         {profileUser.userStyles?.length > 0 ? (
           profileUser.userStyles.map((style) => (

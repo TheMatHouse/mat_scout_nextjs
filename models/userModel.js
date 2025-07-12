@@ -91,6 +91,7 @@ const userSchema = new mongoose.Schema(
     },
     allowPublic: {
       type: Boolean,
+      default: false,
     },
     lastLogin: { type: Date, default: Date.now },
     userStyles: [

@@ -1,11 +1,11 @@
-// /app/api/users/[username]/route.js
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
-import FamilyMember from "@/models/familyMemberModel"; // ✅ Import FamilyMember model
+import FamilyMember from "@/models/familyMemberModel";
 import "@/models/matchReportModel";
 import "@/models/userStyleModel";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 export async function GET(request, { params }) {
@@ -19,26 +19,24 @@ export async function GET(request, { params }) {
       .populate("matchReports")
       .lean();
 
-    if (!user || !user.allowPublic) {
-      return NextResponse.json(
-        { error: "User not found or private" },
-        { status: 404 }
-      );
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // ✅ Find team memberships by user._id
+    const cookiesList = await cookies();
+    const currentUserId = cookiesList.get("userId")?.value;
+
+    // Continue even if profile is private — let frontend decide how to display
     const memberships = await TeamMember.find({ userId: user._id })
       .select("teamId role")
       .lean();
 
     const teamIds = memberships.map((m) => m.teamId);
 
-    // ✅ Fetch team info
     const teams = await Team.find({ _id: { $in: teamIds } })
       .select("teamName teamSlug logoURL")
       .lean();
 
-    // ✅ Add role info from TeamMember to each team
     const teamsWithRoles = teams.map((team) => {
       const match = memberships.find(
         (m) => m.teamId.toString() === team._id.toString()
@@ -49,21 +47,21 @@ export async function GET(request, { params }) {
       };
     });
 
-    user.teams = teamsWithRoles;
-
-    // ✅ Fetch family members (select minimal fields)
     const familyMembers = await FamilyMember.find({ userId: user._id })
       .select("firstName lastName avatar")
       .lean();
 
+    // Attach additional data
+    user.teams = teamsWithRoles;
     user.familyMembers = familyMembers;
 
-    // ✅ Remove sensitive info
+    // Sanitize sensitive info
     delete user.password;
     delete user.tempPassword;
     delete user.lastLogin;
     delete user.scoutingReports;
 
+    // ✅ Return user and isMyProfile flag so frontend can decide what to show
     return NextResponse.json({ user });
   } catch (err) {
     console.error("🔥 Error in /api/users/[username]:", err.message);
