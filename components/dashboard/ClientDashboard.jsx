@@ -7,7 +7,12 @@ import DashboardStyles from "./DashboardStyles";
 import DashboardMatches from "./DashboardMatches";
 import DashboardScouting from "./DashboardScouting";
 
-export default function ClientDashboard({ user, styles, techniques }) {
+export default function ClientDashboard({
+  user,
+  refreshUser,
+  styles,
+  techniques,
+}) {
   const searchParams = useSearchParams();
   const view = searchParams.get("v");
 
@@ -30,7 +35,10 @@ export default function ClientDashboard({ user, styles, techniques }) {
       ) : view === "family" ? (
         <div>Family Info (Coming Soon)</div>
       ) : (
-        <DashboardSettings user={user} />
+        <DashboardSettings
+          user={user}
+          refreshUser={refreshUser}
+        />
       )}
     </div>
   );

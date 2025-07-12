@@ -108,7 +108,7 @@ const userSchema = new mongoose.Schema(
     scoutingReports: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "MatchReport",
+        ref: "ScoutingReport",
       },
     ],
   },

@@ -9,7 +9,7 @@ import mongoSanitize from "express-mongo-sanitize";
 export async function POST(request, context) {
   try {
     await connectDB();
-    const { userId } = context.params;
+    const { userId } = await context.params;
 
     if (!userId || !Types.ObjectId.isValid(userId)) {
       return NextResponse.json({ message: "Invalid user ID" }, { status: 400 });
@@ -68,9 +68,10 @@ export async function POST(request, context) {
 }
 
 export async function GET(request, context) {
+  console.log("route hit!!!");
   try {
     await connectDB();
-    const { userId } = context.params;
+    const { userId } = await context.params;
 
     const user = await User.findById(userId).populate("userStyles");
     if (!user)

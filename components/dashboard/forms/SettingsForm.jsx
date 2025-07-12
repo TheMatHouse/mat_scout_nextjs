@@ -6,12 +6,14 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import Countries from "@/assets/countries.json";
 import useGeolocationCountry from "@/hooks/useGeolocationCountry";
+
 import { toast } from "react-toastify";
 
 export default function SettingsForm({ user, onClose, refreshUser }) {
   const isOAuthUser =
     user.provider === "facebook" || user.provider === "google";
 
+  console.log("user ", user);
   const getInitialFormData = () => ({
     firstName: user.firstName || "",
     lastName: user.lastName || "",

@@ -197,7 +197,7 @@ export default function DashboardSettings({ user, refreshUser }) {
               <SettingsForm
                 user={user}
                 onClose={() => setOpen(false)}
-                reFreshUser={refreshUser}
+                refreshUser={refreshUser}
               />
             </DialogContent>
           </Dialog>
