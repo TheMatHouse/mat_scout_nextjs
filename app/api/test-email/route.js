@@ -1,5 +1,5 @@
 // app/api/test-email/route.js
-import { sendEmail } from "@/lib/email";
+import { sendEmail } from "@/lib/email/email";
 
 export async function POST() {
   try {

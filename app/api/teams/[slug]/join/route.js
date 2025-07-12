@@ -1,24 +1,23 @@
-// File: app/api/teams/[slug]/join/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
 import FamilyMember from "@/models/familyMemberModel";
-//import { getCurrentUser } from "@/lib/getCurrentUser";
 import { getCurrentUser } from "@/lib/getCurrentUser";
+import { sendEmail } from "@/lib/email/email";
+import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
+import User from "@/models/userModel";
+import EmailLog from "@/models/emailLog";
 
 export async function POST(req, context) {
   await connectDB();
 
   const { slug } = await context.params;
 
-  // Authenticate user
   let user;
   try {
-    //user = await getCurrentUser();
     user = await getCurrentUser();
-  } catch (err) {
-    console.error("Auth error:", err);
+  } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -26,65 +25,63 @@ export async function POST(req, context) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Find the team
   const team = await Team.findOne({ teamSlug: slug });
   if (!team) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
-  // Parse body for optional familyMemberId
+  const owner = await User.findById(team.user);
+  const ownerEmail = owner?.email;
+
   let familyMemberId = null;
+  let joinerName =
+    `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username;
+  let joinerId = user._id.toString();
+
   try {
     const text = await req.text();
     if (text) {
       const body = JSON.parse(text);
       familyMemberId = body?.familyMemberId || null;
+
+      if (familyMemberId) {
+        const familyMember = await FamilyMember.findOne({
+          _id: familyMemberId,
+          userId: user._id,
+        });
+
+        if (!familyMember) {
+          return NextResponse.json(
+            { error: "Invalid family member" },
+            { status: 400 }
+          );
+        }
+
+        joinerName = `${familyMember.firstName || ""} ${
+          familyMember.lastName || ""
+        }`.trim();
+        joinerId = familyMember._id.toString();
+      }
     }
-  } catch (err) {
-    console.warn("Join body parsing failed:", err);
+  } catch {
+    // silently ignore body parse failure
   }
 
-  // Check for existing membership
-  if (familyMemberId) {
-    // Confirm the family member exists and belongs to user
-    const familyMember = await FamilyMember.findOne({
-      _id: familyMemberId,
-      userId: user._id,
-    });
-    if (!familyMember) {
-      return NextResponse.json(
-        { error: "Invalid family member" },
-        { status: 400 }
-      );
-    }
+  // Check if already a member (user or family)
+  const existing = await TeamMember.findOne({
+    teamId: team._id,
+    ...(familyMemberId
+      ? { familyMemberId }
+      : { userId: user._id, familyMemberId: { $exists: false } }),
+  });
 
-    const existing = await TeamMember.findOne({
-      teamId: team._id,
-      familyMemberId,
-    });
-
-    if (existing) {
-      return NextResponse.json(
-        { error: "Already requested or a member (family)" },
-        { status: 400 }
-      );
-    }
-  } else {
-    const existing = await TeamMember.findOne({
-      teamId: team._id,
-      userId: user._id,
-      familyMemberId: { $exists: false },
-    });
-
-    if (existing) {
-      return NextResponse.json(
-        { error: "Already requested or a member (user)" },
-        { status: 400 }
-      );
-    }
+  if (existing) {
+    return NextResponse.json(
+      { error: "Already requested or a member" },
+      { status: 400 }
+    );
   }
 
-  // Create membership
   try {
     const newMember = await TeamMember.create({
       teamId: team._id,
@@ -93,9 +90,67 @@ export async function POST(req, context) {
       ...(familyMemberId && { familyMemberId }),
     });
 
-    return NextResponse.json({ message: "Request submitted" }, { status: 200 });
+    const response = NextResponse.json(
+      { message: "Request submitted" },
+      { status: 200 }
+    );
+
+    if (ownerEmail) {
+      // Check for prior email log
+      const existingLog = await EmailLog.findOne({
+        to: ownerEmail,
+        type: "team_join_request",
+        relatedUserId: joinerId,
+        teamId: team._id.toString(),
+      });
+
+      if (existingLog) {
+        console.log(
+          "⏸️ Duplicate join email suppressed (already sent recently)"
+        );
+      } else {
+        const subject = `${joinerName} Requests to Join ${team.teamName} at MatScout!`;
+        const message = `
+          <p>Hello ${owner.firstName || owner.username},</p>
+          <p><strong>${joinerName}</strong> has requested to join <strong>${
+          team.teamName
+        }</strong>.</p>
+          <p>Please <a href="https://matscout.com/login" style="color: #1a73e8;">sign in</a> to MatScout to approve or deny this request.</p>
+          <p>
+            <a href="https://matscout.com/login"
+              style="display: inline-block; background-color: #1a73e8; color: white; padding: 10px 16px; border-radius: 4px; text-decoration: none; font-weight: bold;">
+              Login to MatScout
+            </a>
+          </p>
+        `;
+
+        const html = baseEmailTemplate({
+          title: "New Team Join Request",
+          message,
+          logoUrl:
+            "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png",
+        });
+
+        try {
+          await sendEmail({ to: ownerEmail, subject, html });
+
+          await EmailLog.create({
+            to: ownerEmail,
+            type: "team_join_request",
+            relatedUserId: joinerId,
+            teamId: team._id.toString(),
+          });
+
+          console.log(`📧 Join request email sent to ${ownerEmail}`);
+        } catch (emailErr) {
+          console.error("❌ Failed to send join email:", emailErr);
+        }
+      }
+    }
+
+    return response;
   } catch (err) {
-    console.error("Join error:", err);
+    console.error("❌ Error creating team member:", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

@@ -73,6 +73,7 @@ export default function MemberRow({ member, slug, isManager, onRoleChange }) {
           <SelectContent>
             <SelectItem value="pending">Pending</SelectItem>
             <SelectItem value="member">Member</SelectItem>
+            <SelectItem value="coach">Coach</SelectItem>
             <SelectItem value="manager">Manager</SelectItem>
             <SelectItem value="declined">Decline</SelectItem>
           </SelectContent>

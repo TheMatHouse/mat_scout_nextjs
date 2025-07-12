@@ -52,6 +52,7 @@ export default function TeamInfoPage() {
   const handleJoin = async (familyMemberId = null) => {
     try {
       setButtonLoading(true);
+
       const res = await fetch(`/api/teams/${slug}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -60,15 +61,30 @@ export default function TeamInfoPage() {
           : JSON.stringify({}),
       });
 
-      if (!res.ok) throw new Error("Join failed");
+      console.log("📥 Join API response status:", res.status);
+
+      let result = null;
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        result = await res.json();
+        console.log("📥 Join API response body:", result);
+      } else {
+        console.warn("⚠️ No JSON response body.");
+      }
+
+      if (!res.ok) {
+        throw new Error(result?.error || "Join failed");
+      }
 
       toast.success("Join request submitted");
 
+      // Fetch updated membership
       const resM = await fetch(`/api/teams/${slug}/membership`);
       const dataM = await resM.json();
+
       setMemberships(Array.isArray(dataM.memberships) ? dataM.memberships : []);
     } catch (err) {
-      console.error("Join error:", err);
+      console.error("❌ Join error:", err);
       toast.error("Failed to join team.");
     } finally {
       setButtonLoading(false);
