@@ -130,7 +130,7 @@ export async function PATCH(req, context) {
 export async function DELETE(req, context) {
   await connectDB();
 
-  const { userId, memberId } = context.params;
+  const { userId, memberId } = await context.params;
   const currentUser = await getCurrentUserFromCookies();
 
   if (!currentUser || String(currentUser._id) !== String(userId)) {

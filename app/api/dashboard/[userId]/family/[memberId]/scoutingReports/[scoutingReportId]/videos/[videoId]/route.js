@@ -7,7 +7,7 @@ import ScoutingReport from "@/models/scoutingReportModel";
 
 // export async function PATCH(request, context) {
 //   await connectDB();
-//   const { userId, memberId, scoutingReportId, videoId } = context.params;
+//   const { userId, memberId, scoutingReportId, videoId } = await context.params;
 //   const currentUser = await getCurrentUserFromCookies();
 
 //   if (

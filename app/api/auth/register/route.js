@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "@/models/userModel";
 import { connectDB } from "@/lib/mongo";
+import sendVerificationEmail from "@/lib/email/sendVerificationEmail";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -23,15 +24,21 @@ export async function POST(req) {
     const normalizedUsername = username.toLowerCase();
     const normalizedEmail = email.toLowerCase();
 
-    // Check username/email uniqueness
+    // Check for duplicate username or email
     if (await User.findOne({ username: normalizedUsername })) {
       return errorResponse("Username is taken", 409);
     }
+
     if (await User.findOne({ email: normalizedEmail })) {
       return errorResponse("Email is registered", 409);
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Generate verification token
+    const verificationToken = jwt.sign({ email: normalizedEmail }, JWT_SECRET, {
+      expiresIn: "1d",
+    });
 
     const newUser = new User({
       firstName,
@@ -39,6 +46,8 @@ export async function POST(req) {
       username: normalizedUsername,
       email: normalizedEmail,
       password: hashedPassword,
+      verified: false,
+      verificationToken,
       role: "USER",
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -46,7 +55,13 @@ export async function POST(req) {
 
     await newUser.save();
 
-    // Sign JWT token
+    // Send verification email
+    await sendVerificationEmail({
+      to: normalizedEmail,
+      token: verificationToken,
+    });
+
+    // Sign JWT token for login
     const token = jwt.sign({ _id: newUser._id }, JWT_SECRET, {
       expiresIn: "7d",
     });
@@ -58,7 +73,7 @@ export async function POST(req) {
       value: token,
       httpOnly: true,
       path: "/",
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: 60 * 60 * 24 * 7, // 7 days
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
     });

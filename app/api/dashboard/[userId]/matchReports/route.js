@@ -9,7 +9,7 @@ import User from "@/models/userModel";
 // GET - Return match reports for a specific user
 export async function GET(request, context) {
   await connectDB();
-  const { userId } = context.params;
+  const { userId } = await context.params;
 
   try {
     if (!userId || !Types.ObjectId.isValid(userId)) {
@@ -45,7 +45,7 @@ export async function GET(request, context) {
 // POST - Create a new match report for a user
 export async function POST(request, context) {
   await connectDB();
-  const { userId } = context.params;
+  const { userId } = await context.params;
 
   try {
     if (!userId || !Types.ObjectId.isValid(userId)) {

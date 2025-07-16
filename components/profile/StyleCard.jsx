@@ -1,21 +1,29 @@
+"use client";
+
 import Link from "next/link";
-//import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { styleSlugMap } from "@/lib/styleSlugMap";
+import { useSearchParams } from "next/navigation";
 
-export default function StyleCard({ style, styleResults = {}, username }) {
-  const {
-    styleName,
-    division,
-    weightClass,
-    rank,
-    promotionDate,
-    grip,
-    favoriteTechnique,
-  } = style;
+const StyleCard = ({ style, styleResults = {}, username, isFamily }) => {
+  const styleName = style?.styleName || "Unknown";
+  const rank = style?.rank;
+  const promotionDate = style?.promotionDate;
+  const weightClass = style?.weightClass;
+  const division = style?.division;
+  const grip = style?.grip;
+  const favoriteTechnique = style?.favoriteTechnique;
 
-  const wins = styleResults.Wins || 0;
-  const losses = styleResults.Losses || 0;
+  const wins = styleResults?.wins || 0;
+  const losses = styleResults?.losses || 0;
   const total = wins + losses;
+
+  const styleSlug = styleSlugMap[styleName] || encodeURIComponent(styleName);
+
+  const matchLink =
+    isFamily && username
+      ? `/family/${username}/match-reports?style=${styleSlug}`
+      : `/${username}/match-reports?style=${styleSlug}`;
 
   return (
     <div className="bg-[#0b0f1a] text-white dark:text-white rounded-2xl shadow-md overflow-hidden border border-border relative mb-6">
@@ -77,8 +85,8 @@ export default function StyleCard({ style, styleResults = {}, username }) {
         {/* Right Column */}
         <div className="flex items-end">
           <Link
-            href={`/matches/${styleName.toLowerCase()}`}
-            className="text-primary hover:underline text-right"
+            href={matchLink}
+            className="text-blue-600 dark:text-blue-400 hover:underline text-sm font-medium"
           >
             View Matches →
           </Link>
@@ -86,4 +94,6 @@ export default function StyleCard({ style, styleResults = {}, username }) {
       </div>
     </div>
   );
-}
+};
+
+export default StyleCard;

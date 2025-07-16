@@ -12,7 +12,10 @@ export async function GET(req, context) {
 
   const currentUser = await getCurrentUserFromCookies();
 
-  if (!currentUser || currentUser._id.toString() !== context.params.userId) {
+  if (
+    !currentUser ||
+    currentUser._id.toString() !== (await context.params.userId)
+  ) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -27,11 +30,14 @@ export async function GET(req, context) {
 // POST a new family member
 export async function POST(req, context) {
   await connectDB();
-  const params = context.params;
+  const params = await context.params;
 
   const currentUser = await getCurrentUserFromCookies();
 
-  if (!currentUser || currentUser._id.toString() !== context.params.userId) {
+  if (
+    !currentUser ||
+    currentUser._id.toString() !== (await context.params.userId)
+  ) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

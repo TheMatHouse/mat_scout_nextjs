@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
 import { cookies } from "next/headers";
+import { sendWelcomeEmail } from "@/lib/email/sendWelcomeEmail";
 
 export async function GET(request) {
   try {
@@ -73,7 +74,11 @@ export async function GET(request) {
         avatar: picture,
         avatarType: "google",
         provider: "google",
+        verified: true,
       });
+
+      // Send welcome email (non-verification)
+      await sendWelcomeEmail({ to: email });
     }
 
     // 6. Set JWT as a secure HttpOnly cookie and redirect to dashboard

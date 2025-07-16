@@ -8,7 +8,7 @@ import { getCurrentUserFromCookies } from "@/lib/auth";
 
 // GET: Return match reports for a family member
 export async function GET(req, context) {
-  const { userId, memberId } = context.params;
+  const { userId, memberId } = await context.params;
 
   try {
     await connectDB();
@@ -48,7 +48,7 @@ export async function GET(req, context) {
 export async function POST(request, context) {
   await connectDB();
 
-  const { memberId } = context.params;
+  const { memberId } = await context.params;
   const currentUser = await getCurrentUserFromCookies();
 
   if (!memberId || !Types.ObjectId.isValid(memberId)) {

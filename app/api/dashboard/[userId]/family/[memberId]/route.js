@@ -53,7 +53,7 @@ export async function GET(req, context) {
 export async function PATCH(req, context) {
   await connectDB();
 
-  const { userId, memberId } = context.params;
+  const { userId, memberId } = await context.params;
   const currentUser = await getCurrentUserFromCookies();
 
   if (

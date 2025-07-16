@@ -62,7 +62,7 @@ export async function PATCH(request, context) {
 export async function DELETE(request, context) {
   await connectDB();
 
-  const { scoutingReportId, videoId } = context.params;
+  const { scoutingReportId, videoId } = await context.params;
   const currentUser = await getCurrentUserFromCookies();
 
   if (!currentUser) {

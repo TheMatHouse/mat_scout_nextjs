@@ -7,7 +7,7 @@ import cloudinary from "@/lib/cloudinary";
 export const PATCH = async (request, context) => {
   await connectDB();
 
-  const { userId } = context.params;
+  const { userId } = await context.params;
 
   try {
     const body = await request.json();

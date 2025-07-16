@@ -5,7 +5,7 @@ import mongoose from "mongoose";
 
 export async function PATCH(request, context) {
   await connectDB();
-  const { userId } = context.params;
+  const { userId } = await context.params;
 
   if (!mongoose.Types.ObjectId.isValid(userId)) {
     return NextResponse.json({ message: "Invalid user ID" }, { status: 400 });

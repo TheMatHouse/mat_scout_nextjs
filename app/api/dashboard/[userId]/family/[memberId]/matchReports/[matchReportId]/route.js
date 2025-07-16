@@ -8,7 +8,7 @@ import { getCurrentUserFromCookies } from "@/lib/auth";
 export async function PATCH(request, context) {
   await connectDB();
 
-  const { userId, memberId, matchReportId } = context.params;
+  const { userId, memberId, matchReportId } = await context.params;
   if (
     !Types.ObjectId.isValid(userId) ||
     !Types.ObjectId.isValid(memberId) ||
@@ -69,7 +69,7 @@ export async function PATCH(request, context) {
 export async function DELETE(request, context) {
   await connectDB();
 
-  const { userId, memberId, matchReportId } = context.params;
+  const { userId, memberId, matchReportId } = await context.params;
 
   if (
     !Types.ObjectId.isValid(userId) ||

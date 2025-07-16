@@ -1,6 +1,6 @@
 export async function POST(request, context) {
   await connectDB();
-  const { userId, memberId, scoutingReportId } = context.params;
+  const { userId, memberId, scoutingReportId } = await context.params;
   const currentUser = await getCurrentUserFromCookies();
 
   if (
@@ -43,7 +43,7 @@ export async function POST(request, context) {
 
 export async function GET(request, context) {
   await connectDB();
-  const { userId, memberId, scoutingReportId } = context.params;
+  const { userId, memberId, scoutingReportId } = await context.params;
   const currentUser = await getCurrentUserFromCookies();
 
   if (

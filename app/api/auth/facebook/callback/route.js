@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import User from "@/models/userModel";
 import { connectDB } from "@/lib/mongo";
+import { sendWelcomeEmail } from "@/lib/email/sendWelcomeEmail";
 
 export const runtime = "nodejs"; // Ensure this runs in node runtime
 
@@ -15,7 +16,7 @@ export async function GET(request) {
     const state = searchParams.get("state");
     const origin = new URL(request.url).origin;
 
-    const cookieStore = await cookies(); // ✅ await
+    const cookieStore = await cookies();
     const storedState = cookieStore.get("oauth_state_facebook")?.value;
 
     if (!code || !state || !storedState || state !== storedState) {
@@ -58,6 +59,7 @@ export async function GET(request) {
     }
 
     let user = await User.findOne({ email });
+
     if (!user) {
       user = await User.create({
         name,
@@ -66,7 +68,11 @@ export async function GET(request) {
         avatarType: "facebook",
         avatar: `https://graph.facebook.com/${facebookId}/picture?type=large`,
         provider: "facebook",
+        verified: true,
       });
+
+      // Send welcome email (non-verification)
+      await sendWelcomeEmail({ to: email });
     }
 
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {

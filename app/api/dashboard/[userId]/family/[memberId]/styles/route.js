@@ -7,7 +7,7 @@ import { Types } from "mongoose";
 
 export const GET = async (_req, context) => {
   await connectDB();
-  const { userId, memberId } = context.params;
+  const { userId, memberId } = await context.params;
 
   const currentUser = await getCurrentUserFromCookies();
   if (!currentUser || currentUser._id.toString() !== userId) {
@@ -31,7 +31,7 @@ export const GET = async (_req, context) => {
 
 export const POST = async (req, context) => {
   await connectDB();
-  const { userId, memberId } = context.params;
+  const { userId, memberId } = await context.params;
 
   const currentUser = await getCurrentUserFromCookies();
   if (!currentUser || currentUser._id.toString() !== userId) {

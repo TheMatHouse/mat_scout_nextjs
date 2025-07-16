@@ -1,6 +1,9 @@
+"use client";
+
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -12,6 +15,7 @@ const PreviewReportModal = ({
   report,
   reportType,
 }) => {
+  if (!report) return null;
   const dialogContentRef = useRef(null);
 
   useEffect(() => {
@@ -48,6 +52,10 @@ const PreviewReportModal = ({
               {reportType === "match" ? "Match Report" : "Scouting Report"}
             </DialogTitle>
           </div>
+          <DialogDescription>
+            View detailed match report including opponent details, attacks, and
+            video.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-6 px-2 text-sm sm:text-base">

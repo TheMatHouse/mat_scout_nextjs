@@ -7,7 +7,7 @@ import { Types } from "mongoose";
 
 export const PATCH = async (req, context) => {
   await connectDB();
-  const { userId, memberId, styleId } = context.params;
+  const { userId, memberId, styleId } = await context.params;
 
   const currentUser = await getCurrentUserFromCookies();
   if (!currentUser || currentUser._id.toString() !== userId) {
@@ -45,7 +45,7 @@ export const PATCH = async (req, context) => {
 
 export const DELETE = async (_req, context) => {
   await connectDB();
-  const { userId, memberId, styleId } = context.params;
+  const { userId, memberId, styleId } = await context.params;
 
   if (!userId || !Types.ObjectId.isValid(userId)) {
     return NextResponse.json({ message: "Invalid userId" }, { status: 400 });

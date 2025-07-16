@@ -89,6 +89,10 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    verificationToken: {
+      type: String,
+      default: null,
+    },
     allowPublic: {
       type: Boolean,
       default: false,

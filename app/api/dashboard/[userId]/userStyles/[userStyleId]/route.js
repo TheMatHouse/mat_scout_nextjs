@@ -7,7 +7,7 @@ import User from "@/models/userModel";
 export const PATCH = async (request, context) => {
   try {
     await connectDB();
-    const { userId, userStyleId } = context.params;
+    const { userId, userStyleId } = await context.params;
 
     const body = await request.json();
     const {
@@ -78,7 +78,7 @@ export const PATCH = async (request, context) => {
 export const DELETE = async (request, context) => {
   try {
     await connectDB();
-    const { userId, userStyleId } = context.params;
+    const { userId, userStyleId } = await context.params;
 
     if (!userId || !Types.ObjectId.isValid(userId)) {
       return new NextResponse(

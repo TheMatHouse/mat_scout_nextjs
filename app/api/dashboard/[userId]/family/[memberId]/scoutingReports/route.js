@@ -83,7 +83,7 @@ export async function GET(req, context) {
   try {
     await connectDB();
 
-    const { memberId } = context.params;
+    const { memberId } = await context.params;
     if (!memberId) {
       return NextResponse.json(
         { message: "Missing memberId" },

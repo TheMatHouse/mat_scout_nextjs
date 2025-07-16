@@ -8,7 +8,7 @@ import { Types } from "mongoose";
 export const PATCH = async (req, context) => {
   await connectDB();
 
-  const { userId, memberId } = context.params;
+  const { userId, memberId } = await context.params;
 
   try {
     const currentUser = await getCurrentUserFromCookies();

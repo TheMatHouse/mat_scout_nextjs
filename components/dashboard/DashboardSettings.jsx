@@ -104,7 +104,7 @@ export default function DashboardSettings({ user, refreshUser }) {
       },
       body: JSON.stringify({
         avatarType: "uploaded",
-        image: "use-existing", // 👈 this tells backend not to re-upload
+        image: "use-existing",
       }),
     });
 
@@ -113,8 +113,41 @@ export default function DashboardSettings({ user, refreshUser }) {
     router.refresh();
   };
 
+  // 🔔 Resend Verification Logic
+  const handleResendVerification = async () => {
+    try {
+      const res = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (data.message) {
+        toast.success(data.message);
+      } else {
+        throw new Error(data.error || "Unknown error");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to resend verification email.");
+    }
+  };
+
   return (
     <section className="max-w-3xl mx-auto px-4 py-8">
+      {/* 🔔 Email verification reminder */}
+      {user && !user.verified && (
+        <div className="bg-yellow-800 text-yellow-100 px-4 py-3 rounded text-center">
+          Please verify your email address to unlock full features.{" "}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleResendVerification}
+            className="ml-2 inline-block"
+          >
+            Resend verification email
+          </Button>
+        </div>
+      )}
+
       <header className="mb-6">
         <div className="flex flex-col items-center gap-4 mb-4">
           <Image
