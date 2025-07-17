@@ -1,39 +1,24 @@
 // context/UserContext.js
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
-import { apiFetch } from "@/lib/apiClient";
+import { createContext, useState, useContext, useEffect } from "react";
+import { apiFetch } from "@/lib/apiClient"; // Make sure this import exists
 
+// Create the context
 const UserContext = createContext();
 
-export function UserProvider({ children }) {
+// Provider component
+export const UserProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
 
-  const fetchUser = async () => {
+  const refreshUser = async () => {
     try {
-      const data = await apiFetch("/api/auth/me");
-      if (data?.user) {
-        setUser(data.user);
-      } else {
-        setUser(null);
-      }
+      const res = await apiFetch("/api/auth/me", {}, false);
+      setUser(res?.user || null);
     } catch (err) {
-      if (err.message === "No token") {
-        // Not logged in — this is okay
-        setUser(null);
-      } else {
-        console.error("Error fetching user:", err);
-        setUser(null);
-      }
-    } finally {
-      setLoading(false);
+      setUser(null);
     }
   };
-
-  useEffect(() => {
-    fetchUser();
-  }, []);
 
   const logout = async () => {
     try {
@@ -44,15 +29,16 @@ export function UserProvider({ children }) {
     }
   };
 
+  useEffect(() => {
+    refreshUser();
+  }, []);
+
   return (
-    <UserContext.Provider
-      value={{ user, setUser, logout, loading, refreshUser: fetchUser }}
-    >
+    <UserContext.Provider value={{ user, refreshUser, logout }}>
       {children}
     </UserContext.Provider>
   );
-}
+};
 
-export function useUser() {
-  return useContext(UserContext);
-}
+// Custom hook to use the user context
+export const useUser = () => useContext(UserContext);

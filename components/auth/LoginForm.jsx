@@ -22,6 +22,24 @@ export default function LoginForm() {
     setError("");
 
     try {
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify(form),
+          headers: { "Content-Type": "application/json" },
+        });
+
+        const data = await res.json();
+        console.log("Login response:", data);
+        if (res.ok) {
+          await refreshUser();
+          router.push("/dashboard");
+        } else {
+          setError(data.error || "Login failed.");
+        }
+      } catch (err) {
+        setError("Login failed. Please try again.");
+      }
       const res = await apiFetch("/api/auth/login", {
         method: "POST",
         body: JSON.stringify(form),
@@ -84,6 +102,15 @@ export default function LoginForm() {
           >
             Log In
           </button>
+
+          <div className="text-right mt-2">
+            <Link
+              href="/forgot-password"
+              className="text-sm text-[var(--ms-blue)] hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
         </form>
 
         <div className="my-6 text-center space-y-3">
