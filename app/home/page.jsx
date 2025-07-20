@@ -1,89 +1,178 @@
+// import Link from "next/link";
+// import Image from "next/image";
+// // IMAGES
+// import homeTeamImage from "@/assets/images/home/home_team.png";
+// import homeAthleteImage from "@/assets/images/home/home_athlete.png";
+// import homeCompetitorImage from "@/assets/images/home/home_competitor.png";
+
+// const HomePage = () => {
+//   return (
+//     <div className="items-center justify-items-start min-h-screen p-1 pb-20 gap-16 sm:p-10">
+//       <div className="flex flex-col gap-8 row-start-2 items-start sm:items-start text-center">
+//         <h1 className="w-full text-3xl text-center font-bold">
+//           MatScout: Your Ultimate Grappling Hub
+//         </h1>
+//         <p className="text-center w-full text-2xl">
+//           Discover the premier platform for athletes and coaches alike. Whether
+//           you’re an international-level competitor or a local athlete, MatScout
+//           empowers you and your coach to track performance, connect with fellow
+//           grapplers, and elevate your game—all in one place
+//         </p>
+
+//         <div className="grid grid-cols-3 gap-10">
+//           <div>
+//             <Link href="/">
+//               <Image
+//                 src={homeTeamImage}
+//                 alt="Team Image"
+//                 className="homeImage"
+//               />
+//               <div className="mt-2">
+//                 <h2 className="text-start w-full text-2xl font-bold">
+//                   Coaches
+//                 </h2>
+//                 <p className="text-start w-full text-xl">
+//                   Manage multiple teams effortlessly. Access all your athletes
+//                   in one centralized location. Stay organized and elevate your
+//                   coaching game with MatScout’s intuitive team management
+//                   features.
+//                 </p>
+//               </div>
+//             </Link>
+//           </div>
+//           <div className="home-jump flex align-items-start home-desc">
+//             <Link href="/">
+//               <Image
+//                 src={homeAthleteImage}
+//                 alt="Athletes Image"
+//                 className="homeImage"
+//               />
+//               <div className="mt-2">
+//                 <h2 className="text-start w-full text-2xl font-bold">
+//                   Athletes
+//                 </h2>
+//                 <p className="text-start w-full text-xl">
+//                   Keep a comprehensive record of all your matches in one
+//                   convenient location. Dive into performance analysis to
+//                   identify strengths and areas for improvement. Elevate your
+//                   grappling game with MatScout!
+//                 </p>
+//               </div>
+//             </Link>
+//           </div>
+//           <div className="home-jump flex align-items-start home_desc">
+//             <Link href="/">
+//               <Image
+//                 src={homeCompetitorImage}
+//                 alt="Competitors Image"
+//                 className="homeImage"
+//               />
+//               <div className="mt-2">
+//                 <h2 className="text-start w-full text-2xl font-bold">
+//                   Everyone
+//                 </h2>
+//                 <p className="text-start w-full text-xl">
+//                   Engage with our vibrant community, enjoy a secure and private
+//                   experience, and explore our user-friendly platform. Whether
+//                   you’re a seasoned enthusiast or new to the sport, MatScout has
+//                   something for everyone!
+//                 </p>
+//               </div>
+//             </Link>
+//           </div>
+//         </div>
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default HomePage;
+
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
-// IMAGES
 import homeTeamImage from "@/assets/images/home/home_team.png";
 import homeAthleteImage from "@/assets/images/home/home_athlete.png";
 import homeCompetitorImage from "@/assets/images/home/home_competitor.png";
 
-const HomePage = () => {
+export default function HomePage() {
   return (
-    <div className="items-center justify-items-start min-h-screen p-1 pb-20 gap-16 sm:p-10">
-      <div className="flex flex-col gap-8 row-start-2 items-start sm:items-start text-center">
-        <h1 className="w-full text-3xl text-center font-bold">
+    <div className="min-h-screen pb-20">
+      {/* Hero Section */}
+      <section className="bg-gradient-to-br from-[var(--ms-blue)] to-[var(--ms-blue-gray)] text-white py-20 px-6 text-center rounded-xl shadow-lg">
+        <h1 className="text-4xl sm:text-5xl font-extrabold mb-4">
           MatScout: Your Ultimate Grappling Hub
         </h1>
-        <p className="text-center w-full text-2xl">
-          Discover the premier platform for athletes and coaches alike. Whether
-          you’re an international-level competitor or a local athlete, MatScout
-          empowers you and your coach to track performance, connect with fellow
-          grapplers, and elevate your game—all in one place
+        <p className="text-lg sm:text-xl max-w-3xl mx-auto mb-6">
+          Built for coaches and athletes. Analyze matches, manage teams, and
+          grow together.
         </p>
+        <Link
+          href="/register"
+          className="inline-block bg-[var(--ms-light-red)] hover:bg-[var(--ms-dark-red)] text-white font-semibold py-3 px-6 rounded-lg shadow-md transition"
+        >
+          Get Started
+        </Link>
+      </section>
 
-        <div className="grid grid-cols-3 gap-10">
-          <div>
-            <Link href="/">
+      {/* Card Section */}
+      <section className="max-w-7xl mx-auto mt-16 px-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+        {[
+          {
+            href: "/features#coaches",
+            image: homeTeamImage,
+            title: "Coaches",
+            desc: "Manage multiple teams effortlessly. Access all your athletes in one centralized location. Stay organized and elevate your coaching game with MatScout’s intuitive team management features.",
+          },
+          {
+            href: "/reatures#athletes",
+            image: homeAthleteImage,
+            title: "Athletes",
+            desc: "Keep a comprehensive record of all your matches in one convenient location. Dive into performance analysis to identify strengths and areas for improvement. Elevate your grappling game with MatScout!",
+          },
+          {
+            href: "/features#everyone",
+            image: homeCompetitorImage,
+            title: "Everyone",
+            desc: "Engage with our vibrant community, enjoy a secure and private experience, and explore our user-friendly platform. Whether you’re a seasoned enthusiast or new to the sport, MatScout has something for everyone!",
+          },
+        ].map(({ href, image, title, desc }, idx) => (
+          <Link
+            key={idx}
+            href={href}
+            className="bg-white dark:bg-zinc-900 rounded-lg shadow-lg p-4 hover:shadow-xl transition transform hover:-translate-y-1"
+          >
+            <div className="relative">
+              <div className="absolute top-0 left-0 w-full h-2 bg-[var(--ms-light-red)] rounded-t-md" />
               <Image
-                src={homeTeamImage}
-                alt="Team Image"
-                className="homeImage"
+                src={image}
+                alt={`${title} Image`}
+                className="w-full object-cover rounded-t-md mb-4"
               />
-              <div className="mt-2">
-                <h2 className="text-start w-full text-2xl font-bold">
-                  Coaches
-                </h2>
-                <p className="text-start w-full text-xl">
-                  Manage multiple teams effortlessly. Access all your athletes
-                  in one centralized location. Stay organized and elevate your
-                  coaching game with MatScout’s intuitive team management
-                  features.
-                </p>
-              </div>
-            </Link>
-          </div>
-          <div className="home-jump flex align-items-start home-desc">
-            <Link href="/">
-              <Image
-                src={homeAthleteImage}
-                alt="Athletes Image"
-                className="homeImage"
-              />
-              <div className="mt-2">
-                <h2 className="text-start w-full text-2xl font-bold">
-                  Athletes
-                </h2>
-                <p className="text-start w-full text-xl">
-                  Keep a comprehensive record of all your matches in one
-                  convenient location. Dive into performance analysis to
-                  identify strengths and areas for improvement. Elevate your
-                  grappling game with MatScout!
-                </p>
-              </div>
-            </Link>
-          </div>
-          <div className="home-jump flex align-items-start home_desc">
-            <Link href="/">
-              <Image
-                src={homeCompetitorImage}
-                alt="Competitors Image"
-                className="homeImage"
-              />
-              <div className="mt-2">
-                <h2 className="text-start w-full text-2xl font-bold">
-                  Everyone
-                </h2>
-                <p className="text-start w-full text-xl">
-                  Engage with our vibrant community, enjoy a secure and private
-                  experience, and explore our user-friendly platform. Whether
-                  you’re a seasoned enthusiast or new to the sport, MatScout has
-                  something for everyone!
-                </p>
-              </div>
-            </Link>
-          </div>
-        </div>
-      </div>
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2 group-hover:underline transition">
+              {title}
+            </h2>
+            <p className="text-gray-700 dark:text-gray-300 text-base leading-relaxed">
+              {desc}
+            </p>
+          </Link>
+        ))}
+      </section>
+
+      {/* CTA Footer */}
+      <section className="mt-20 text-center px-6">
+        <h3 className="text-2xl sm:text-3xl font-bold mb-4 text-[var(--ms-blue)] dark:text-[var(--ms-light-gray)]">
+          Ready to elevate your grappling journey?
+        </h3>
+        <Link
+          href="/register"
+          className="inline-block bg-[var(--ms-blue)] hover:bg-[var(--ms-blue-gray)] text-white py-3 px-6 rounded-lg font-semibold shadow"
+        >
+          Join MatScout Now
+        </Link>
+      </section>
     </div>
   );
-};
-
-export default HomePage;
+}

@@ -8,14 +8,11 @@ import FamilyMember from "@/models/familyMemberModel";
 // GET all family members for the user
 export async function GET(req, context) {
   await connectDB();
-  const params = await context.params; // ✅ await it!
+  const { userId } = await context.params; // ✅ await
 
   const currentUser = await getCurrentUserFromCookies();
 
-  if (
-    !currentUser ||
-    currentUser._id.toString() !== (await context.params.userId)
-  ) {
+  if (!currentUser || currentUser._id.toString() !== userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -30,21 +27,20 @@ export async function GET(req, context) {
 // POST a new family member
 export async function POST(req, context) {
   await connectDB();
-  const params = await context.params;
+  const { userId } = await context.params; // ✅ await
 
   const currentUser = await getCurrentUserFromCookies();
 
-  if (
-    !currentUser ||
-    currentUser._id.toString() !== (await context.params.userId)
-  ) {
+  console.log("✅ currentUser:", currentUser);
+  console.log("✅ currentUser._id:", currentUser?._id?.toString());
+  console.log("✅ userId from params:", userId);
+
+  if (!currentUser || currentUser._id.toString() !== userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
     const body = await req.json();
-
-    // Destructure only allowed fields from the body
     const { firstName, lastName, username, gender, allowPublic } = body;
 
     const newFamilyMember = new FamilyMember({
@@ -57,11 +53,13 @@ export async function POST(req, context) {
     });
 
     await newFamilyMember.save();
+
     return NextResponse.json(newFamilyMember, { status: 201 });
   } catch (err) {
-    return NextResponse.json(
-      { error: err.message || "Failed to add family member" },
-      { status: 500 }
-    );
+    console.error("❌ POST /family error:", err);
+    const message =
+      err?.message || (typeof err === "string" ? err : "Unknown server error");
+
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

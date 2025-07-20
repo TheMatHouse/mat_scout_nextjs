@@ -15,9 +15,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import Countries from "@/assets/countries.json";
-import TagsAutocomplete from "@/components/shared/TagsAutocomplete";
 import Editor from "@/components/shared/Editor";
 import Select from "react-select";
+import TechniqueTagInput from "@/components/shared/TechniqueTagInput";
 
 const TeamScoutingReportForm = ({
   team,
@@ -429,11 +429,10 @@ const TeamScoutingReportForm = ({
 
           <div>
             <Label>Techniques Used</Label>
-            <TagsAutocomplete
-              label="Known Attacks"
+            <TechniqueTagInput
               name="athleteAttacks"
               suggestions={suggestions}
-              tags={athleteSelected}
+              selected={athleteSelected}
               onAdd={onAthleteAdd}
               onDelete={onAthleteDelete}
             />

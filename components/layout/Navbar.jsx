@@ -34,7 +34,7 @@ const Navbar = () => {
           ) : (
             <>
               <Link
-                href="/#features"
+                href="/features"
                 className="hover:underline"
               >
                 Features

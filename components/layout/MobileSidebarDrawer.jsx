@@ -136,26 +136,37 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
         ) : (
           <nav className="space-y-4 text-sm text-ms-blue-gray">
             <Link
-              href="/#features"
+              href="/"
               onClick={onClose}
+              className="block hover:text-white transition"
+            >
+              Home
+            </Link>
+            <Link
+              href="/features"
+              onClick={onClose}
+              className="block hover:text-white transition"
             >
               Features
             </Link>
             <Link
               href="/about"
               onClick={onClose}
+              className="block hover:text-white transition"
             >
               About
             </Link>
             <Link
               href="/login"
               onClick={onClose}
+              className="block hover:text-white transition"
             >
               Login
             </Link>
             <Link
               href="/register"
               onClick={onClose}
+              className="block hover:text-white transition"
             >
               Sign Up
             </Link>

@@ -1,0 +1,16 @@
+{
+  "aliases": {
+    "@": "./"
+  },
+  "ignorePatterns": [
+    "app/**/page.jsx",
+    "app/**/layout.jsx",
+    "app/**/route.js",
+    "components/**",
+    "lib/**",
+    "models/**",
+    "public/**",
+    "styles/**",
+    "context/**"
+  ]
+}

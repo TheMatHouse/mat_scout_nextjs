@@ -72,14 +72,20 @@ const FamilyDashboard = () => {
       <hr className="inline-block w-full border-t-1 border-gray-100 my-6" />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {familyMembers.map((member) => (
-          <FamilyCard
-            key={member._id}
-            member={member}
-            userId={user._id}
-            onDelete={handleDelete}
-          />
-        ))}
+        {Array.isArray(familyMembers) && familyMembers.length > 0 ? (
+          familyMembers.map((member) => (
+            <FamilyCard
+              key={member._id}
+              member={member}
+              userId={user._id}
+              onDelete={handleDelete}
+            />
+          ))
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No family members found.
+          </p>
+        )}
       </div>
     </div>
   );

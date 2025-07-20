@@ -106,7 +106,7 @@ export default function LoginForm() {
           <div className="text-right mt-2">
             <Link
               href="/forgot-password"
-              className="text-sm text-[var(--ms-blue)] hover:underline"
+              className="text-sm text-[var(--ms-blue)] hover:underline dark:text-[var(--ms-light-gray)]"
             >
               Forgot password?
             </Link>
@@ -135,13 +135,13 @@ export default function LoginForm() {
           </div>
         </div>
 
-        <div className="text-sm text-center mt-6 text-gray-600 dark:text-gray-400">
+        <div className="text-sm text-center mt-6 text-gray-600 dark:text-[var(--ms-light-gray)]">
           Don’t have an account?{" "}
           <Link
             href="/register"
-            className="text-[var(--ms-blue)] hover:underline"
+            className="text-sm text-[var(--ms-blue)] hover:underline dark:text-[var(--ms-light-gray)]"
           >
-            Create one
+            <u>Create one</u>
           </Link>
         </div>
       </div>

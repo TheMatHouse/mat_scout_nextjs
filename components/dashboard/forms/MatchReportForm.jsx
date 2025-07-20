@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import Countries from "@/assets/countries.json";
 import Editor from "../../shared/Editor";
-import Tags from "../../shared/Tags";
+import TechniqueTagInput from "../../shared/TechniqueTagInput";
 
 const MatchReportForm = ({
   athlete,
@@ -32,7 +32,6 @@ const MatchReportForm = ({
 }) => {
   const router = useRouter();
   const { refreshUser } = useUser();
-
   const [matchType, setMatchType] = useState(match?.matchType || "");
   const [eventName, setEventName] = useState(match?.eventName || "");
   const [matchDate, setMatchDate] = useState(
@@ -60,8 +59,26 @@ const MatchReportForm = ({
   const [videoTitle, setVideoTitle] = useState(match?.videoTitle || "");
   const [videoURL, setVideoURL] = useState(match?.videoURL || "");
   const [isPublic, setIsPublic] = useState(match?.isPublic || false);
+  const [loadedTechniques, setLoadedTechniques] = useState([]);
 
-  const techniqueList = techniques?.map((tech) => tech.techniqueName) || [];
+  useEffect(() => {
+    const fetchTechniques = async () => {
+      try {
+        const res = await fetch("/api/techniques");
+        const data = await res.json();
+        setLoadedTechniques(data);
+      } catch (err) {
+        console.error("Failed to fetch techniques", err);
+      }
+    };
+    fetchTechniques();
+  }, []);
+
+  const techniqueList = loadedTechniques.map((tech, i) => ({
+    label: tech.techniqueName,
+    value: i,
+  }));
+
   const suggestions = techniqueList.map((name, i) => ({
     value: i,
     label: name,
@@ -353,13 +370,13 @@ const MatchReportForm = ({
 
           <div>
             <Label>Opponent's Techniques</Label>
-            <Tags
-              labelText="Opponent Attacks"
+            <TechniqueTagInput
+              label="Opponent's Techniques"
               name="opponentAttacks"
               selected={opponentSelected}
-              suggestions={suggestions}
-              onAdd={onOpponentAdd}
-              onDelete={onOpponentDelete}
+              suggestions={techniqueList}
+              onAdd={onOpponentAdd} // ✅ FIXED
+              onDelete={onOpponentDelete} // ✅ FIXED
             />
           </div>
 
@@ -374,11 +391,11 @@ const MatchReportForm = ({
 
           <div>
             <Label>Your Techniques</Label>
-            <Tags
-              labelText="Your Attacks"
+            <TechniqueTagInput
+              label="Your Techniques"
               name="athleteAttacks"
               selected={athleteSelected}
-              suggestions={suggestions}
+              suggestions={techniqueList}
               onAdd={onAthleteAdd}
               onDelete={onAthleteDelete}
             />

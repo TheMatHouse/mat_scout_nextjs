@@ -15,8 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import Countries from "@/assets/countries.json";
 import Editor from "../../shared/Editor";
-import { Textarea } from "@/components/ui/textarea";
-import TagsAutocomplete from "@/components/shared/TagsAutocomplete";
+import TechniqueTagInput from "@/components/shared/TechniqueTagInput";
 
 const ScoutingReportForm = ({
   athlete,
@@ -355,22 +354,14 @@ const ScoutingReportForm = ({
 
           <div>
             <Label>Your Techniques</Label>
-            <TagsAutocomplete
+            <TechniqueTagInput
               label="Known Attacks"
               name="athleteAttacks"
               suggestions={suggestions}
-              tags={athleteSelected}
+              selected={athleteSelected}
               onAdd={onAthleteAdd}
               onDelete={onAthleteDelete}
             />
-            {/* <Tags
-              labelText="Athlete Attacks"
-              name="athleteAttacks"
-              selected={athleteSelected}
-              suggestions={suggestions}
-              onAdd={onAthleteAdd}
-              onDelete={onAthleteDelete}
-            /> */}
           </div>
 
           <div>

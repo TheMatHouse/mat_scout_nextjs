@@ -11,19 +11,26 @@ export default function Header() {
     <header className="w-full sticky top-0 z-50 bg-ms-blue text-ms-nav-text dark:bg-[hsl(222.2_47.4%_11.2%)] dark:text-white shadow-sm border-b border-border">
       <div className="flex items-center justify-between px-6 md:px-12 lg:px-20 py-4 w-full">
         {/* Mobile Logo */}
-        <Image
-          src={logoMobile}
-          alt="MatScout Logo"
-          className="h-28 w-auto block md:hidden"
-          priority
-        />
+        <Link
+          href="/"
+          className="block md:hidden"
+        >
+          <Image
+            src={logoMobile}
+            alt="MatScout Logo"
+            className="h-28 w-auto block md:hidden"
+            priority
+          />
+        </Link>
         {/* Desktop Logo */}
-        <Image
-          src={logoDesktop}
-          alt="MatScout Logo"
-          className="h-28 w-auto hidden md:block"
-          priority
-        />
+        <Link href="/">
+          <Image
+            src={logoDesktop}
+            alt="MatScout Logo"
+            className="h-28 w-auto hidden md:block"
+            priority
+          />
+        </Link>
 
         {/* Navigation */}
         <div className="hidden md:block">
