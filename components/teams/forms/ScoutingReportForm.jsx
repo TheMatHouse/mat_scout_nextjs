@@ -100,17 +100,25 @@ const TeamScoutingReportForm = ({
       try {
         const res = await fetch("/api/techniques");
         const data = await res.json();
-        setLoadedTechniques(data);
-      } catch (err) {
-        console.error("Failed to fetch techniques", err);
+
+        if (Array.isArray(data)) {
+          setLoadedTechniques(data);
+        } else {
+          console.warn("Expected array but got:", data);
+          setLoadedTechniques([]); // fallback to empty array
+        }
+      } catch (error) {
+        console.error("Error fetching techniques:", error);
+        setLoadedTechniques([]); // fallback
       }
     };
+
     fetchTechniques();
   }, []);
 
   const suggestions = loadedTechniques.map((t, i) => ({
     value: i,
-    label: t.techniqueName,
+    label: t.name,
   }));
 
   const onAthleteAdd = useCallback(

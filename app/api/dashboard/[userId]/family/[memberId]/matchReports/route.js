@@ -5,6 +5,7 @@ import FamilyMember from "@/models/familyMemberModel";
 import User from "@/models/userModel";
 import { Types } from "mongoose";
 import { getCurrentUserFromCookies } from "@/lib/auth";
+import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 // GET: Return match reports for a family member
 export async function GET(req, context) {
@@ -93,6 +94,12 @@ export async function POST(request, context) {
     videoTitle,
     videoURL,
   } = body;
+
+  // ✅ Save any new techniques to DB
+  await saveUnknownTechniques([
+    ...(Array.isArray(athleteAttacks) ? athleteAttacks : []),
+    ...(Array.isArray(opponentAttacks) ? opponentAttacks : []),
+  ]);
 
   const newReport = await MatchReport.create({
     athleteId: memberId,

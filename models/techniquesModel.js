@@ -1,9 +1,15 @@
 import mongoose from "mongoose";
 
 const techniqueSchema = new mongoose.Schema({
-  techniqueName: {
+  name: {
     type: String,
     required: true,
+    unique: true,
+    trim: true,
+  },
+  approved: {
+    type: Boolean,
+    default: false,
   },
 });
 

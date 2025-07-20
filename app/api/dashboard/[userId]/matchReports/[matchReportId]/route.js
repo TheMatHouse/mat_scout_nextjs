@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/mongo";
 import MatchReport from "@/models/matchReportModel";
 import { Types } from "mongoose";
 import { getCurrentUserFromCookies } from "@/lib/auth";
+import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 // PATCH: Update a user's own match report
 export async function PATCH(request, context) {
@@ -27,6 +28,14 @@ export async function PATCH(request, context) {
 
   try {
     const updates = await request.json();
+
+    // Save any new techniques that aren't already in the DB
+    if (Array.isArray(updates.athleteAttacks)) {
+      await saveUnknownTechniques(updates.athleteAttacks);
+    }
+    if (Array.isArray(updates.opponentAttacks)) {
+      await saveUnknownTechniques(updates.opponentAttacks);
+    }
 
     const updated = await MatchReport.findOneAndUpdate(
       {

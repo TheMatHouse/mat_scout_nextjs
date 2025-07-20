@@ -1,10 +1,10 @@
-// app/api/dashboard/[userId]/family/[memberId]/scoutingReports/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import ScoutingReport from "@/models/scoutingReportModel";
 import Video from "@/models/videoModel";
 import Technique from "@/models/techniquesModel";
 import User from "@/models/userModel";
+import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 export async function POST(req, context) {
   let body;
@@ -27,7 +27,7 @@ export async function POST(req, context) {
       reportFor: [{ athleteId: memberId, athleteType: "family" }],
       athleteId: memberId,
       athleteType: "family",
-      videos: [], // placeholder
+      videos: [],
     });
 
     await report.save();
@@ -37,15 +37,10 @@ export async function POST(req, context) {
       $push: { scoutingReports: report._id },
     });
 
-    // Step 2: Store new techniques if needed
-    if (body.athleteAttacks?.length) {
-      for (const name of body.athleteAttacks) {
-        const exists = await Technique.findOne({ techniqueName: name });
-        if (!exists) {
-          await Technique.create({ techniqueName: name });
-        }
-      }
-    }
+    // ✅ Step 2: Store new techniques via utility
+    await saveUnknownTechniques(
+      Array.isArray(body.athleteAttacks) ? body.athleteAttacks : []
+    );
 
     // Step 3: Save videos (from body.newVideos or body.videos)
     const incomingVideos = body.newVideos || body.videos || [];
@@ -60,7 +55,6 @@ export async function POST(req, context) {
       videoIds.push(newVideo._id);
     }
 
-    // Attach videos to report
     if (videoIds.length) {
       report.videos = videoIds;
       await report.save();

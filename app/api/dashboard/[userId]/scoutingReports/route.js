@@ -1,10 +1,9 @@
-// app/api/dashboard/[userId]/scoutingReports/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import ScoutingReport from "@/models/scoutingReportModel";
 import Video from "@/models/videoModel";
 import User from "@/models/userModel";
-import Technique from "@/models/techniquesModel";
+import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 export async function POST(req, context) {
   let body;
@@ -31,14 +30,9 @@ export async function POST(req, context) {
       $push: { scoutingReports: report._id },
     });
 
-    // Step 3: Save new techniques if they don't already exist
-    if (body.athleteAttacks?.length) {
-      for (const name of body.athleteAttacks) {
-        const exists = await Technique.findOne({ techniqueName: name });
-        if (!exists) {
-          await Technique.create({ techniqueName: name });
-        }
-      }
+    // Step 3: Save new techniques with approved: false
+    if (Array.isArray(body.athleteAttacks)) {
+      await saveUnknownTechniques(body.athleteAttacks);
     }
 
     // Step 4: Save and link videos

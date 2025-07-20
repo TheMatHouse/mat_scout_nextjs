@@ -1,10 +1,12 @@
+// app/api/teams/[slug]/scoutingReports/[reportId]/route.js
 import { NextResponse } from "next/server";
 import mongoose, { Types } from "mongoose";
 import { connectDB } from "@/lib/mongo";
+import { getCurrentUserFromCookies } from "@/lib/auth";
+import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 import Team from "@/models/teamModel";
 import ScoutingReport from "@/models/scoutingReportModel";
 import Video from "@/models/videoModel";
-import { getCurrentUserFromCookies } from "@/lib/auth";
 
 export async function PATCH(req, context) {
   try {
@@ -52,6 +54,11 @@ export async function PATCH(req, context) {
         report[field] = body[field];
       }
     });
+
+    // ✅ Save any new techniques that don't exist yet
+    await saveUnknownTechniques(
+      Array.isArray(body.athleteAttacks) ? body.athleteAttacks : []
+    );
 
     // Handle new videos
     if (body.newVideos && Array.isArray(body.newVideos)) {

@@ -3,12 +3,14 @@ import { connectDB } from "@/lib/mongo";
 import MatchReport from "@/models/matchReportModel";
 import { Types } from "mongoose";
 import { getCurrentUserFromCookies } from "@/lib/auth";
+import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 // PATCH: Update a family member's match report
 export async function PATCH(request, context) {
   await connectDB();
 
   const { userId, memberId, matchReportId } = await context.params;
+
   if (
     !Types.ObjectId.isValid(userId) ||
     !Types.ObjectId.isValid(memberId) ||
@@ -28,12 +30,20 @@ export async function PATCH(request, context) {
   try {
     const updates = await request.json();
 
+    // ✅ Save new techniques, if any
+    await saveUnknownTechniques([
+      ...(Array.isArray(updates.athleteAttacks) ? updates.athleteAttacks : []),
+      ...(Array.isArray(updates.opponentAttacks)
+        ? updates.opponentAttacks
+        : []),
+    ]);
+
     const updated = await MatchReport.findOneAndUpdate(
       {
         _id: matchReportId,
         athleteId: memberId,
         athleteType: "family",
-        createdById: userId, // ← if you renamed this from createdById
+        createdById: userId,
       },
       {
         ...updates,

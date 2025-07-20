@@ -4,10 +4,10 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import ScoutingReport from "@/models/scoutingReportModel";
 import Video from "@/models/videoModel";
-import Technique from "@/models/techniquesModel";
 import User from "@/models/userModel";
 import { Types } from "mongoose";
 import { getCurrentUserFromCookies } from "@/lib/auth";
+import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 // PATCH: Update a family member's scouting report
 export async function PATCH(req, context) {
@@ -70,15 +70,10 @@ export async function PATCH(req, context) {
       accessList,
     });
 
-    // Save new techniques if needed
-    if (athleteAttacks?.length) {
-      for (const name of athleteAttacks) {
-        const exists = await Technique.findOne({ techniqueName: name });
-        if (!exists) {
-          await Technique.create({ techniqueName: name });
-        }
-      }
-    }
+    // ✅ Use centralized saveUnknownTechniques
+    await saveUnknownTechniques(
+      Array.isArray(athleteAttacks) ? athleteAttacks : []
+    );
 
     // Update existing videos
     for (const video of updatedVideos) {
@@ -110,7 +105,7 @@ export async function PATCH(req, context) {
       );
     }
 
-    // Merge existing and new videos
+    // Merge videos
     report.videos = [...report.videos, ...newVideoIds];
     await report.save();
 

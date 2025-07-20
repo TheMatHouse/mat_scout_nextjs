@@ -4,6 +4,7 @@ import { Types } from "mongoose";
 import ScoutingReport from "@/models/scoutingReportModel";
 import Video from "@/models/videoModel";
 import { getCurrentUserFromCookies } from "@/lib/auth";
+import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 export async function PATCH(request, context) {
   await connectDB();
@@ -20,6 +21,11 @@ export async function PATCH(request, context) {
 
   try {
     const body = await request.json();
+
+    // ✅ Save any new techniques to DB
+    if (Array.isArray(body.athleteAttacks)) {
+      await saveUnknownTechniques(body.athleteAttacks);
+    }
 
     // ✅ Update existing videos
     if (Array.isArray(body.updatedVideos)) {
@@ -69,7 +75,7 @@ export async function PATCH(request, context) {
       updatedVideos,
       deletedVideos,
       newVideos,
-      videos, // just in case
+      videos,
       ...fieldsToUpdate
     } = body;
 

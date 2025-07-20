@@ -5,6 +5,7 @@ import { Types } from "mongoose";
 import { connectDB } from "@/lib/mongo";
 import MatchReport from "@/models/matchReportModel";
 import User from "@/models/userModel";
+import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 // GET - Return match reports for a specific user
 export async function GET(request, context) {
@@ -29,7 +30,7 @@ export async function GET(request, context) {
     const matchReports = await MatchReport.find({
       athleteId: userId,
       athleteType: "user",
-    }).sort({ matchDate: -1 }); // Most recent first
+    }).sort({ matchDate: -1 });
 
     return new NextResponse(JSON.stringify(matchReports), { status: 200 });
   } catch (error) {
@@ -84,6 +85,10 @@ export async function POST(request, context) {
       videoTitle,
       videoURL,
     } = body;
+
+    // Save any unknown techniques
+    await saveUnknownTechniques(opponentAttacks);
+    await saveUnknownTechniques(athleteAttacks);
 
     const newMatchReport = await MatchReport.create({
       athleteId: user._id,

@@ -1,11 +1,11 @@
+// app/api/teams/[slug]/scoutingReports/route.js
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { connectDB } from "@/lib/mongo";
+import { getCurrentUserFromCookies } from "@/lib/auth";
+import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 import Team from "@/models/teamModel";
 import ScoutingReport from "@/models/scoutingReportModel";
 import Video from "@/models/videoModel";
-import Technique from "@/models/techniquesModel";
-import { getCurrentUserFromCookies } from "@/lib/auth";
 
 export async function POST(req, context) {
   try {
@@ -50,15 +50,10 @@ export async function POST(req, context) {
       createdByName: `${currentUser.firstName} ${currentUser.lastName}`,
     });
 
-    // Save techniques if missing
-    if (body.athleteAttacks?.length) {
-      for (const name of body.athleteAttacks) {
-        const exists = await Technique.findOne({ techniqueName: name });
-        if (!exists) {
-          await Technique.create({ techniqueName: name });
-        }
-      }
-    }
+    // ✅ Use shared utility to save any new techniques
+    await saveUnknownTechniques(
+      Array.isArray(body.athleteAttacks) ? body.athleteAttacks : []
+    );
 
     // Save new videos and link to report
     const incomingVideos = body.videos || body.newVideos || [];
