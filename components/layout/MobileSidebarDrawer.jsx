@@ -119,12 +119,6 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
 
             <div className="mt-8 space-y-2 text-sm text-ms-blue-gray">
               <Link
-                href="/contact"
-                onClick={onClose}
-              >
-                Contact
-              </Link>
-              <Link
                 href="/social"
                 onClick={onClose}
               >
@@ -155,6 +149,13 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
               className="block hover:text-white transition"
             >
               About
+            </Link>
+            <Link
+              href="/contact"
+              onClick={onClose}
+              className="block hover:text-white transition"
+            >
+              Contact Us
             </Link>
             <Link
               href="/login"
