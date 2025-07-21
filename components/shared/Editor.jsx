@@ -51,7 +51,7 @@ export default function Editor({ name, onChange, text }) {
   return (
     <div className="max-w-3xl mx-auto p-6 rounded-lg">
       {/* Toolbar */}
-      <div className="mb-2 flex gap-2 border p-2 text-gray-100 rounded-md shadow-sm">
+      <div className="mb-2 flex gap-2 border p-2 text-foreground bg-muted rounded-md shadow-sm">
         <button
           onClick={() => applyStyle("bold")}
           className="px-2 py-1 border rounded"

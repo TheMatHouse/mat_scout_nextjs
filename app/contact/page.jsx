@@ -53,122 +53,124 @@ export default function ContactPage() {
   }[type];
 
   return (
-    <div className="min-h-screen py-16 px-6 sm:px-8 lg:px-20 bg-background text-foreground">
-      <div className="max-w-4xl mx-auto rounded-xl shadow-md bg-card p-8 md:p-12 border border-border">
-        <h1 className="text-4xl font-bold mb-4 text-center">Contact Us</h1>
-        <p className="text-muted-foreground text-center mb-6">
-          Have a question, suggestion, or issue? We’d love to hear from you!
-        </p>
+    <div className="w-full px-4 sm:px-8 md:px-12 lg:px-24 py-16 flex justify-center">
+      <div className="w-full max-w-screen-xl bg-background text-foreground">
+        <div className="w-full max-w-4xl mx-auto rounded-xl shadow-md bg-card p-8 md:p-12 border border-border">
+          <h1 className="text-4xl font-bold mb-4 text-center">Contact Us</h1>
+          <p className="text-muted-foreground text-center mb-6">
+            Have a question, suggestion, or issue? We’d love to hear from you!
+          </p>
 
-        {formSubmitted ? (
-          <div className="text-center space-y-4">
-            <h2 className="text-2xl font-semibold">
-              Thank you for {thankYouLabel || "your message"}!
-            </h2>
-            <p className="text-muted-foreground">
-              We appreciate your input. A member of our team will be in touch
-              shortly.
-            </p>
-          </div>
-        ) : (
-          <form
-            onSubmit={handleSubmit}
-            className="space-y-6"
-          >
-            {/* Subject */}
-            <div>
-              <Label htmlFor="subject">Subject</Label>
-              <select
-                id="subject"
-                name="subject"
-                required
-                value={type}
-                onChange={(e) => setType(e.target.value)}
-                className="mt-1 w-full rounded-md border border-input bg-background p-2 text-foreground"
-              >
-                <option value="">Select type...</option>
-                <option value="question">Ask a question</option>
-                <option value="feedback">Feedback</option>
-                <option value="suggestion">Suggestion</option>
-                <option value="newStyle">Request new Style/Sport</option>
-                <option value="problem">Report a problem</option>
-              </select>
+          {formSubmitted ? (
+            <div className="text-center space-y-4">
+              <h2 className="text-2xl font-semibold">
+                Thank you for {thankYouLabel || "your message"}!
+              </h2>
+              <p className="text-muted-foreground">
+                We appreciate your input. A member of our team will be in touch
+                shortly.
+              </p>
             </div>
-
-            {/* Name */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          ) : (
+            <form
+              onSubmit={handleSubmit}
+              className="space-y-6"
+            >
+              {/* Subject */}
               <div>
-                <Label htmlFor="firstName">First Name</Label>
-                <Input
-                  id="firstName"
-                  name="firstName"
-                  type="text"
-                  placeholder="Enter your first name"
+                <Label htmlFor="subject">Subject</Label>
+                <select
+                  id="subject"
+                  name="subject"
                   required
-                />
+                  value={type}
+                  onChange={(e) => setType(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-input bg-background p-2 text-foreground"
+                >
+                  <option value="">Select type...</option>
+                  <option value="question">Ask a question</option>
+                  <option value="feedback">Feedback</option>
+                  <option value="suggestion">Suggestion</option>
+                  <option value="newStyle">Request new Style/Sport</option>
+                  <option value="problem">Report a problem</option>
+                </select>
               </div>
-              <div>
-                <Label htmlFor="lastName">Last Name</Label>
-                <Input
-                  id="lastName"
-                  name="lastName"
-                  type="text"
-                  placeholder="Enter your last name"
-                  required
-                />
-              </div>
-            </div>
 
-            {/* Email & Phone */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {/* Name */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                  <Label htmlFor="firstName">First Name</Label>
+                  <Input
+                    id="firstName"
+                    name="firstName"
+                    type="text"
+                    placeholder="Enter your first name"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="lastName">Last Name</Label>
+                  <Input
+                    id="lastName"
+                    name="lastName"
+                    type="text"
+                    placeholder="Enter your last name"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Email & Phone */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    placeholder="you@example.com"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="phone">Phone</Label>
+                  <Input
+                    id="phone"
+                    name="phone"
+                    type="tel"
+                    placeholder="(555) 555-5555"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Comments (Editor) */}
               <div>
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  required
+                <Label
+                  htmlFor="comments"
+                  className="mb-1 block"
+                >
+                  Message
+                </Label>
+                <Editor
+                  name="comments"
+                  text={comments}
+                  onChange={setComments}
                 />
               </div>
-              <div>
-                <Label htmlFor="phone">Phone</Label>
-                <Input
-                  id="phone"
-                  name="phone"
-                  type="tel"
-                  placeholder="(555) 555-5555"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
+
+              <div className="pt-4 text-center">
+                <Button
+                  type="submit"
+                  size="lg"
+                >
+                  Submit Form
+                </Button>
               </div>
-            </div>
-
-            {/* Comments (Editor) */}
-            <div>
-              <Label
-                htmlFor="comments"
-                className="mb-1 block"
-              >
-                Message
-              </Label>
-              <Editor
-                name="comments"
-                text={comments}
-                onChange={setComments}
-              />
-            </div>
-
-            <div className="pt-4 text-center">
-              <Button
-                type="submit"
-                size="lg"
-              >
-                Submit Form
-              </Button>
-            </div>
-          </form>
-        )}
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );
