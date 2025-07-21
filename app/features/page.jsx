@@ -124,10 +124,24 @@ import MatchRed from "@/assets/images/icons/match-red.png";
 import TeamRed from "@/assets/images/icons/team-red.png";
 import TrophyRed from "@/assets/images/icons/trophy-red.png";
 import DataRed from "@/assets/images/icons/data-red.png";
+import { useEffect } from "react";
 
 export default function FeaturesPage() {
+  useEffect(() => {
+    if (window.location.hash) {
+      const id = window.location.hash.replace("#", "");
+      const el = document.getElementById(id);
+      if (el) {
+        window.scrollTo({
+          top: el.offsetTop - 120, // Offset for sticky header
+          behavior: "smooth",
+        });
+      }
+    }
+  }, []);
+
   return (
-    <div className="px-4 sm:px-8 md:px-12 lg:px-24 py-12 max-w-screen-xl mx-auto text-white">
+    <div className="px-4 sm:px-8 md:px-12 lg:px-24 py-12 max-w-screen-xl mx-auto text-gray-900 dark:text-white">
       <h1 className="text-4xl font-bold text-center mb-4">Features</h1>
       <p className="text-center text-muted-foreground mb-12">
         Explore what MatScout has to offer for athletes, coaches, and the entire
@@ -161,7 +175,7 @@ export default function FeaturesPage() {
         </div>
       </section>
 
-      <hr className="my-16 border-t border-white/10" />
+      <hr className="my-16 border-t border-border dark:border-white/10" />
 
       {/* FOR COACHES */}
       <section
@@ -190,7 +204,7 @@ export default function FeaturesPage() {
         </div>
       </section>
 
-      <hr className="my-16 border-t border-white/10" />
+      <hr className="my-16 border-t border-border dark:border-white/10" />
 
       {/* FOR EVERYONE */}
       <section
@@ -219,7 +233,7 @@ export default function FeaturesPage() {
         </div>
       </section>
 
-      <p className="text-center text-lg font-medium mt-10 text-white/90">
+      <p className="text-center text-lg font-medium mt-10 text-gray-800 dark:text-white/90">
         Join us at MatScout and take your grappling journey to the next level!
       </p>
     </div>

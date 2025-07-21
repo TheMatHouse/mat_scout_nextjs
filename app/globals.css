@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   font-family: Arial, Helvetica, sans-serif;
 }
@@ -102,6 +106,10 @@ input:-webkit-autofill {
 .cl-avatarBox {
   width: 2.5rem;
   height: 2.5rem;
+}
+
+.anchor-offset {
+  scroll-margin-top: 6rem; /* or try 7rem or 8rem depending on navbar height */
 }
 
 /* -----Form START-----*/
