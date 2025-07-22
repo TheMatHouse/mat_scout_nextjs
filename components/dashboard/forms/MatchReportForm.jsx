@@ -30,7 +30,6 @@ const MatchReportForm = ({
   onSuccess,
   userType,
 }) => {
-  console.log("athlete ", athlete);
   const router = useRouter();
   const { refreshUser } = useUser();
   const [matchType, setMatchType] = useState(match?.matchType || "");

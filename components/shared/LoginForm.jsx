@@ -37,7 +37,6 @@ const LoginForm = () => {
         router.push("/dashboard");
       }
     } catch (err) {
-      console.log(err);
       setError("Please check your credentials!");
     }
   };

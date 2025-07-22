@@ -20,7 +20,6 @@ export async function PATCH(req, context) {
     }
 
     const body = await req.json();
-    console.log("PATCH request body:", body);
 
     const report = await ScoutingReport.findById(reportId);
     if (!report) {
@@ -111,15 +110,9 @@ export async function DELETE(request, context) {
   await connectDB();
   const { slug, reportId } = await context.params;
 
-  console.log("DELETE request received");
-  console.log("Slug:", slug);
-  console.log("Report ID:", reportId);
-
   const currentUser = await getCurrentUserFromCookies();
-  console.log("Current User:", currentUser);
 
   if (!Types.ObjectId.isValid(reportId)) {
-    console.warn("Invalid report ID");
     return new NextResponse(JSON.stringify({ message: "Invalid report ID" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
@@ -136,7 +129,6 @@ export async function DELETE(request, context) {
 
   try {
     const team = await Team.findOne({ teamSlug: slug });
-    console.log("Matched Team:", team);
 
     if (!team) {
       return new NextResponse(JSON.stringify({ message: "Team not found" }), {
@@ -149,8 +141,6 @@ export async function DELETE(request, context) {
       _id: reportId,
       teamId: team._id,
     });
-
-    console.log("Matched Report:", report);
 
     if (!report) {
       return new NextResponse(
@@ -165,12 +155,10 @@ export async function DELETE(request, context) {
     // Delete associated videos if any
     if (report.videos && report.videos.length > 0) {
       await Video.deleteMany({ _id: { $in: report.videos } });
-      console.log("Associated videos deleted");
     }
 
     // Delete the report
     await ScoutingReport.findByIdAndDelete(reportId);
-    console.log("Scouting report deleted");
 
     return new NextResponse(
       JSON.stringify({

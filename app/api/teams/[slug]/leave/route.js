@@ -26,7 +26,6 @@ export async function POST(req, context) {
   if (!team)
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
 
-  console.log("membershipID ", membershipId);
   const membership = await TeamMember.findById(membershipId);
   if (!membership)
     return NextResponse.json(

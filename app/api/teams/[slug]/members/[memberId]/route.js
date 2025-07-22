@@ -72,9 +72,7 @@ export async function PATCH(request, { params }) {
     teamId: team._id.toString(),
   });
 
-  if (existingLog) {
-    console.log("⏸️ Suppressed duplicate approval/denial email");
-  } else {
+  if (!existingLog) {
     const statusText = isDeclined ? "denied" : "approved";
     const message = `
       <p>Hi ${recipientName},</p>
@@ -110,7 +108,6 @@ export async function PATCH(request, { params }) {
         relatedUserId,
         teamId: team._id.toString(),
       });
-      console.log(`📧 ${statusText} email sent to ${recipientEmail}`);
     } catch (err) {
       console.error("❌ Failed to send approval/denial email:", err);
     }

@@ -31,10 +31,6 @@ export async function POST(req, context) {
 
   const currentUser = await getCurrentUserFromCookies();
 
-  console.log("✅ currentUser:", currentUser);
-  console.log("✅ currentUser._id:", currentUser?._id?.toString());
-  console.log("✅ userId from params:", userId);
-
   if (!currentUser || currentUser._id.toString() !== userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

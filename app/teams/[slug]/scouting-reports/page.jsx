@@ -127,7 +127,6 @@ export default function TeamScoutingReportsPage() {
         router.refresh();
       } else {
         toast.error(data.message || "Failed to delete report");
-        console.log("Delete error:", data.message);
       }
     }
   };

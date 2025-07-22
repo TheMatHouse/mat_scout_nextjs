@@ -92,7 +92,6 @@ const DashboardScouting = ({ user, styles, techniques }) => {
         router.refresh();
       } else {
         toast.error(data.message || "Failed to delete report");
-        console.log("Delete error:", data.message);
       }
     }
   };

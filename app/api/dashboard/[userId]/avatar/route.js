@@ -38,7 +38,6 @@ export const PATCH = async (request, context) => {
       try {
         await cloudinary.uploader.destroy(user.avatarId);
         user.avatarId = undefined;
-        console.log("Deleted uploaded Cloudinary avatar:", user.avatarId);
       } catch (err) {
         console.warn("Error deleting Cloudinary avatar:", err);
       }

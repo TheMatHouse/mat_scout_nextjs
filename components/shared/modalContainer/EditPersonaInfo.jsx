@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Countries from "@/assets/countries.json";
 import { useRouter } from "next/navigation";
+import { toast } from "react-toastify";
 
 const EditPersonalInfo = ({ user, userType, handleClose }) => {
   const router = useRouter();
@@ -86,7 +87,7 @@ const EditPersonalInfo = ({ user, userType, handleClose }) => {
       router.refresh();
       handleClose();
     } catch (error) {
-      console.log(error);
+      toast.error("Something went wrong. Please try again.");
     }
   };
   return (

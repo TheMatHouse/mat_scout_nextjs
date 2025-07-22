@@ -27,7 +27,6 @@ const TeamScoutingReportForm = ({
   onSuccess,
   setOpen,
 }) => {
-  console.log("team ", team);
   const router = useRouter();
   const { teamSlug } = team;
   // Refs
@@ -207,8 +206,6 @@ const TeamScoutingReportForm = ({
       newVideos: newVideosRef.current,
       deletedVideos: deletedVideoIdsRef.current || [],
     };
-
-    console.log("PAYLOAD ", payload);
 
     const method = report ? "PATCH" : "POST";
     const url = report

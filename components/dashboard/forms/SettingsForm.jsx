@@ -13,7 +13,6 @@ export default function SettingsForm({ user, onClose, refreshUser }) {
   const isOAuthUser =
     user.provider === "facebook" || user.provider === "google";
 
-  console.log("user ", user);
   const getInitialFormData = () => ({
     firstName: user.firstName || "",
     lastName: user.lastName || "",

@@ -53,14 +53,9 @@ import ScoutingReport from "@/models/scoutingReportModel";
 
 export async function DELETE(request, context) {
   await connectDB();
-  console.log("hit the video id route");
   const { userId, memberId, scoutingReportId, videoId } = await context.params;
   const currentUser = await getCurrentUserFromCookies();
 
-  console.log("userId ", userId);
-  console.log("memberId ", memberId);
-  console.log("scoutingReportId ", scoutingReportId);
-  console.log("videoId ", videoId);
   // ✅ Validate all IDs
   if (
     !Types.ObjectId.isValid(userId) ||

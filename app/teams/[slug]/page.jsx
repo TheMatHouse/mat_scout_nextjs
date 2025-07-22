@@ -61,13 +61,10 @@ export default function TeamInfoPage() {
           : JSON.stringify({}),
       });
 
-      console.log("📥 Join API response status:", res.status);
-
       let result = null;
       const contentType = res.headers.get("content-type");
       if (contentType && contentType.includes("application/json")) {
         result = await res.json();
-        console.log("📥 Join API response body:", result);
       } else {
         console.warn("⚠️ No JSON response body.");
       }

@@ -30,7 +30,6 @@ export default function LoginForm() {
         });
 
         const data = await res.json();
-        console.log("Login response:", data);
         if (res.ok) {
           await refreshUser();
           router.push("/dashboard");

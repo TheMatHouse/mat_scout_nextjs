@@ -32,7 +32,6 @@ export async function POST(req, { params }) {
     if (team.logoType === "uploaded" && team.logoId) {
       try {
         await cloudinary.uploader.destroy(team.logoId);
-        console.log("Deleted old uploaded logo:", team.logoId);
       } catch (err) {
         console.warn("Error deleting previous team logo:", err);
       }

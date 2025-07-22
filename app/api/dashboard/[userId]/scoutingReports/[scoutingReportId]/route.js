@@ -141,7 +141,6 @@ export async function DELETE(request, context) {
 
     if (videoIds.length > 0) {
       const deleted = await Video.deleteMany({ _id: { $in: videoIds } });
-      console.log(`✅ Deleted ${deleted.deletedCount} associated videos`);
     }
 
     await report.deleteOne();

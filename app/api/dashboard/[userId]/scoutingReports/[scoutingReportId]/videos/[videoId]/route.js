@@ -78,20 +78,11 @@ export async function DELETE(request, context) {
   }
 
   try {
-    console.log("Attempting to delete video:", {
-      scoutingReportId,
-      videoId,
-      userId: currentUser._id,
-    });
-
     const video = await Video.findById(videoId);
 
     if (!video) {
       return NextResponse.json({ message: "Video not found" }, { status: 404 });
     }
-
-    // Optionally, log the video for debugging
-    // console.log("Video fetched:", video);
 
     await Video.deleteOne({ _id: videoId });
 

@@ -116,7 +116,6 @@ export async function DELETE(request, context) {
     if (member.avatarId) {
       try {
         await cloudinary.uploader.destroy(member.avatarId);
-        console.log(`Deleted Cloudinary image: ${member.avatarId}`);
       } catch (cloudErr) {
         console.warn("Cloudinary delete failed:", cloudErr);
       }

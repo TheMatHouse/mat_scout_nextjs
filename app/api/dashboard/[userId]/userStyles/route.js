@@ -68,7 +68,6 @@ export async function POST(request, context) {
 }
 
 export async function GET(request, context) {
-  console.log("route hit!!!");
   try {
     await connectDB();
     const { userId } = await context.params;

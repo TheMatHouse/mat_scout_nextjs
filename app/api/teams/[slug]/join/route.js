@@ -104,25 +104,21 @@ export async function POST(req, context) {
         teamId: team._id.toString(),
       });
 
-      if (existingLog) {
-        console.log(
-          "⏸️ Duplicate join email suppressed (already sent recently)"
-        );
-      } else {
+      if (!existingLog) {
         const subject = `${joinerName} Requests to Join ${team.teamName} at MatScout!`;
         const message = `
-          <p>Hello ${owner.firstName || owner.username},</p>
-          <p><strong>${joinerName}</strong> has requested to join <strong>${
+    <p>Hello ${owner.firstName || owner.username},</p>
+    <p><strong>${joinerName}</strong> has requested to join <strong>${
           team.teamName
         }</strong>.</p>
-          <p>Please <a href="https://matscout.com/login" style="color: #1a73e8;">sign in</a> to MatScout to approve or deny this request.</p>
-          <p>
-            <a href="https://matscout.com/login"
-              style="display: inline-block; background-color: #1a73e8; color: white; padding: 10px 16px; border-radius: 4px; text-decoration: none; font-weight: bold;">
-              Login to MatScout
-            </a>
-          </p>
-        `;
+    <p>Please <a href="https://matscout.com/login" style="color: #1a73e8;">sign in</a> to MatScout to approve or deny this request.</p>
+    <p>
+      <a href="https://matscout.com/login"
+        style="display: inline-block; background-color: #1a73e8; color: white; padding: 10px 16px; border-radius: 4px; text-decoration: none; font-weight: bold;">
+        Login to MatScout
+      </a>
+    </p>
+  `;
 
         const html = baseEmailTemplate({
           title: "New Team Join Request",
@@ -140,8 +136,6 @@ export async function POST(req, context) {
             relatedUserId: joinerId,
             teamId: team._id.toString(),
           });
-
-          console.log(`📧 Join request email sent to ${ownerEmail}`);
         } catch (emailErr) {
           console.error("❌ Failed to send join email:", emailErr);
         }
