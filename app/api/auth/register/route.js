@@ -38,9 +38,11 @@ export async function POST(req) {
       username,
       email: email.toLowerCase(),
       password: hashedPassword,
+      verified: false, // ✅ Add verified flag
     });
 
-    const token = jwt.sign({ _id: newUser._id }, JWT_SECRET, {
+    // ✅ Use consistent token payload
+    const token = jwt.sign({ userId: newUser._id }, JWT_SECRET, {
       expiresIn: "7d",
     });
 
@@ -56,6 +58,7 @@ export async function POST(req) {
       },
     });
 
+    // ✅ Set auth cookie
     response.cookies.set({
       name: "token",
       value: token,

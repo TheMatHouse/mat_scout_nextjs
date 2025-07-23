@@ -1,4 +1,3 @@
-// app/api/auth/login/route.js
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -35,7 +34,10 @@ export async function POST(req) {
       );
     }
 
-    const token = jwt.sign({ _id: user._id }, JWT_SECRET, { expiresIn: "7d" });
+    // ✅ Use `userId` consistently
+    const token = jwt.sign({ userId: user._id }, JWT_SECRET, {
+      expiresIn: "7d",
+    });
 
     const response = NextResponse.json({
       message: "Login successful",
@@ -49,12 +51,11 @@ export async function POST(req) {
       },
     });
 
-    response.cookies.set({
-      name: "token",
-      value: token,
+    // ✅ Set cookie
+    response.cookies.set("token", token, {
       httpOnly: true,
       path: "/",
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: 60 * 60 * 24 * 7, // 7 days
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
     });

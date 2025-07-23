@@ -12,6 +12,7 @@ export async function POST() {
     await connectDB();
 
     const user = await getCurrentUserFromCookies();
+    console.log("🔍 Resend verification user:", user);
 
     if (!user || !user.email || user.verified) {
       return NextResponse.json(

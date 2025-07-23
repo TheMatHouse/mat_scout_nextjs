@@ -5,6 +5,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import AuthenticatedSidebar from "@/components/layout/AuthenticatedSidebar";
 import { UserProvider } from "@/context/UserContext";
+import MetaMaskErrorFilter from "@/components/MetaMaskErrorFilter";
 
 export const metadata = {
   title: "MatScout",
@@ -40,6 +41,7 @@ export default function RootLayout({ children }) {
             </div>
             <Footer />
           </UserProvider>
+          <MetaMaskErrorFilter /> {/* ✅ Runs client-side */}
         </ThemeProvider>
       </body>
     </html>
