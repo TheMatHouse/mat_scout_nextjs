@@ -5,14 +5,13 @@ import User from "@/models/userModel";
 import sendVerificationEmail from "@/lib/email/sendVerificationEmail";
 import { getCurrentUserFromCookies } from "@/lib/auth";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-default-dev-secret";
+const JWT_SECRET = process.env.JWT_SECRET;
 
 export async function POST() {
   try {
     await connectDB();
 
     const user = await getCurrentUserFromCookies();
-    console.log("🔍 Resend verification user:", user);
 
     if (!user || !user.email || user.verified) {
       return NextResponse.json(
@@ -21,10 +20,12 @@ export async function POST() {
       );
     }
 
+    // ✅ Create verification token (1 day expiry)
     const verificationToken = jwt.sign({ email: user.email }, JWT_SECRET, {
       expiresIn: "1d",
     });
 
+    // ✅ Send verification email
     await sendVerificationEmail({
       to: user.email,
       token: verificationToken,
@@ -32,7 +33,7 @@ export async function POST() {
 
     return NextResponse.json({ message: "Verification email sent" });
   } catch (error) {
-    console.error("Resend verification error:", error);
+    console.error("❌ Resend verification error:", error.message);
     return NextResponse.json(
       { message: "Internal Server Error" },
       { status: 500 }
