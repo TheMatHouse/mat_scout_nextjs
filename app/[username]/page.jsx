@@ -49,10 +49,12 @@ export default async function UserProfilePage({ params }) {
   await connectDB();
   const user = await User.findOne({ username: params.username });
 
+  export default async function UserProfilePage({ params }) {
+  const { username } = await params; // ✅ unwrap promise
+
   return (
     <UserProfileClient
-      username={params.username}
-      initialData={user ? JSON.parse(JSON.stringify(user)) : null}
+      username={username}
     />
   );
 }
