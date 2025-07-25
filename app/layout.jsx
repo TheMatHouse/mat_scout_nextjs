@@ -5,12 +5,45 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import AuthenticatedSidebar from "@/components/layout/AuthenticatedSidebar";
 import { UserProvider } from "@/context/UserContext";
-import MetaMaskErrorFilter from "@/components/MetaMaskErrorFilter";
+// import MetaMaskErrorFilter from "@/components/MetaMaskErrorFilter";
 
 export const metadata = {
-  title: "MatScout",
+  title: {
+    default: "MatScout",
+    template: "%s | MatScout", // Pages can override this
+  },
   description:
-    "Track, scout, and manage grappling athletes across judo, BJJ, and wrestling.",
+    "Track, scout, and manage grappling athletes across Judo, BJJ, and Wrestling with MatScout.",
+  alternates: {
+    canonical: process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com",
+  },
+  openGraph: {
+    title: "MatScout",
+    description:
+      "Track, scout, and manage grappling athletes across Judo, BJJ, and Wrestling.",
+    url: process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com",
+    siteName: "MatScout",
+    images: [
+      {
+        url:
+          (process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com") +
+          "/default-og.png",
+        width: 1200,
+        height: 630,
+        alt: "MatScout Logo",
+      },
+    ],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "MatScout",
+    description: "Track, scout, and manage grappling athletes.",
+    images: [
+      (process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com") +
+        "/default-og.png",
+    ],
+  },
 };
 
 export default function RootLayout({ children }) {
@@ -41,7 +74,7 @@ export default function RootLayout({ children }) {
             </div>
             <Footer />
           </UserProvider>
-          <MetaMaskErrorFilter /> {/* ✅ Runs client-side */}
+          {/* <MetaMaskErrorFilter /> ✅ Runs client-side */}
         </ThemeProvider>
       </body>
     </html>

@@ -1,165 +1,51 @@
-"use client";
+import { connectDB } from "@/lib/mongo";
+import User from "@/models/userModel";
+import FamilyProfileClient from "@/components/profile/FamilyProfileClient";
 
-import { notFound } from "next/navigation";
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import Image from "next/image";
-import Link from "next/link";
-import { getCurrentUser } from "@/lib/authClient";
-import StyleCard from "@/components/profile/StyleCard";
+export async function generateMetadata({ params }) {
+  await connectDB();
+  const member = await User.findOne({ username: params.username });
 
-export default function FamilyMemberProfilePage() {
-  const { username } = useParams();
-  const [member, setMember] = useState(null);
-  const [currentUser, setCurrentUser] = useState(undefined);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const res = await fetch(`/api/family/${username}`);
-        const data = await res.json();
-
-        if (data?.member) {
-          setMember(data.member);
-        } else if (data?.error === "Family member not found or private") {
-          setMember({ allowPublic: false, username });
-        } else {
-          setMember(null);
-        }
-
-        const viewer = await getCurrentUser();
-        setCurrentUser(viewer);
-      } catch (error) {
-        console.error("Failed to fetch family member or current user:", error);
-        setMember(null);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchData();
-  }, [username]);
-
-  if (loading || currentUser === undefined) return <div>Loading...</div>;
-  if (!member) return notFound();
-
-  const isParent = currentUser && member.parentId === currentUser._id;
-
-  if (!member.allowPublic && !isParent) {
-    return (
-      <div className="max-w-2xl mx-auto text-center mt-20">
-        <h1 className="text-2xl font-semibold mb-4">This profile is private</h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          The owner of this profile has chosen to keep it private.
-        </p>
-      </div>
-    );
+  if (!member) {
+    return {
+      title: "Family Member Not Found | MatScout",
+      description: "This family member profile does not exist.",
+    };
   }
 
-  const styleResults = {};
-  if (Array.isArray(member?.userStyles)) {
-    member.userStyles.forEach((style) => {
-      const styleName = style.styleName?.trim().toLowerCase();
-      const reports = member.matchReports?.filter(
-        (report) => report.matchType?.trim().toLowerCase() === styleName
-      );
-      const wins = reports?.filter((r) => r.result === "Won").length || 0;
-      const losses = reports?.filter((r) => r.result === "Lost").length || 0;
-      styleResults[style.styleName] = { Wins: wins, Losses: losses };
-    });
-  }
+  const title = `${member.firstName} ${member.lastName} (Family) | MatScout`;
+  const description = `View ${member.firstName}'s family profile on MatScout. See teams, stats, and more.`;
+  const image = member.avatar || "/default-avatar.png";
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: `${process.env.NEXT_PUBLIC_DOMAIN}/family/${params.username}`,
+    },
+    openGraph: {
+      title,
+      description,
+      url: `${process.env.NEXT_PUBLIC_DOMAIN}/family/${params.username}`,
+      images: [{ url: image }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [image],
+    },
+  };
+}
+
+export default async function FamilyProfilePage({ params }) {
+  await connectDB();
+  const member = await User.findOne({ username: params.username });
 
   return (
-    <section className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-4 gap-6">
-      <div className="md:col-span-1 bg-white dark:bg-gray-900 rounded-xl shadow border border-border p-6 text-center space-y-4 self-start">
-        <Image
-          src={member.avatar || "/default-avatar.png"}
-          alt={member.firstName}
-          width={100}
-          height={100}
-          className="rounded-full mx-auto border border-border"
-        />
-        <h1 className="text-xl font-bold mt-4">
-          {member.firstName} {member.lastName}
-        </h1>
-        <p className="text-sm text-black dark:text-white">@{member.username}</p>
-
-        {isParent && !member.allowPublic && (
-          <p className="text-sm text-yellow-500 mt-2">
-            This is what the public would see if this profile were public.
-          </p>
-        )}
-
-        {member.gender && (
-          <p className="text-sm text-black dark:text-white">
-            Gender: {member.gender}
-          </p>
-        )}
-        {(member.city || member.state || member.country) && (
-          <p className="text-sm text-black dark:text-white">
-            Location:{" "}
-            {[member.city, member.state, member.country]
-              .filter(Boolean)
-              .join(", ")}
-          </p>
-        )}
-
-        {member.teams?.length > 0 && (
-          <div className="text-left space-y-2 mt-4">
-            <h3 className="text-sm font-semibold text-black dark:text-white">
-              Teams
-            </h3>
-            <ul className="space-y-1">
-              {member.teams.map((team) => (
-                <li
-                  key={team._id}
-                  className="flex items-center gap-2"
-                >
-                  <Image
-                    src={team.logoURL || "/default-team.png"}
-                    alt={team.teamName}
-                    width={28}
-                    height={28}
-                    className="rounded-full border border-border"
-                  />
-                  <Link
-                    href={`/teams/${team.teamSlug}`}
-                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    {team.teamName}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <Link
-          href={`/family/${member.username}/scouting-reports`}
-          className="block mt-6 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-        >
-          View Match Reports
-        </Link>
-      </div>
-
-      <div className="md:col-span-3 grid gap-6 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
-        {member.userStyles?.length > 0 ? (
-          member.userStyles.map((style) => (
-            <StyleCard
-              key={style._id}
-              style={style}
-              styleResults={styleResults[style.styleName] || {}}
-              username={member.username}
-              isFamily
-            />
-          ))
-        ) : (
-          <p className="text-sm text-muted-foreground col-span-full">
-            No styles added yet.
-          </p>
-        )}
-      </div>
-    </section>
+    <FamilyProfileClient
+      username={params.username}
+      initialData={member ? JSON.parse(JSON.stringify(member)) : null}
+    />
   );
 }

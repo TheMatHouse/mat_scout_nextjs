@@ -1,258 +1,89 @@
-// "use client";
+import FeaturesClient from "./FeaturesClient";
 
-// import Image from "next/image";
-// import PerformanceRed from "@/assets/images/icons/performance-red.png";
-// import AthleteRed from "@/assets/images/icons/athlete-red.png";
-// import MatchRed from "@/assets/images/icons/match-red.png";
-// import TeamRed from "@/assets/images/icons/team-red.png";
-// import TrophyRed from "@/assets/images/icons/trophy-red.png";
-// import DataRed from "@/assets/images/icons/data-red.png";
-
-// export default function FeaturesPage() {
-//   return (
-//     <div className="px-4 sm:px-8 md:px-12 lg:px-24 py-12 max-w-7xl mx-auto text-white">
-//       <h1 className="text-4xl font-bold text-center mb-12">Features</h1>
-
-//       {/* FOR ATHLETES */}
-//       <section
-//         id="athletes"
-//         className="mb-16"
-//       >
-//         <h2 className="text-3xl font-semibold text-center mb-10">
-//           For Athletes
-//         </h2>
-//         <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-//           <FeatureCard
-//             imgSrc={PerformanceRed}
-//             title="Competitor Analysis"
-//             description="Compare your stats with other grapplers. Understand your strengths and identify areas for improvement."
-//           />
-//           <FeatureCard
-//             imgSrc={AthleteRed}
-//             title="Performance Tracking"
-//             description="Keep track of your match outcomes, techniques used, and progression in one place. Record your stats after each match and monitor your growth over time."
-//           />
-//           <FeatureCard
-//             imgSrc={MatchRed}
-//             title="Team Collaboration"
-//             description="Join a team, share your stats, and collaborate with teammates. Together, you can strategize and improve as a cohesive unit."
-//           />
-//         </div>
-//       </section>
-
-//       {/* FOR COACHES */}
-//       <section
-//         id="coaches"
-//         className="mb-16"
-//       >
-//         <h2 className="text-3xl font-semibold text-center mb-10">
-//           For Coaches
-//         </h2>
-//         <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-//           <FeatureCard
-//             imgSrc={TeamRed}
-//             title="Team Management"
-//             description="Manage your team on a single platform. Add or remove athletes, scout other athletes, set goals, and monitor progress."
-//           />
-//           <FeatureCard
-//             imgSrc={TrophyRed}
-//             title="Athlete Monitoring"
-//             description="Keep an eye on each athlete's performance. Identify trends, celebrate improvements, and address declines."
-//           />
-//           <FeatureCard
-//             imgSrc={DataRed}
-//             title="Data-Driven Decisions"
-//             description="Make informed decisions based on data. Use our analytics tools to understand your athlete or team's performance and plan your next steps."
-//           />
-//         </div>
-//       </section>
-
-//       {/* FOR EVERYONE */}
-//       <section
-//         id="everyone"
-//         className="mb-16"
-//       >
-//         <h2 className="text-3xl font-semibold text-center mb-10">
-//           For Everyone
-//         </h2>
-//         <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-//           <FeatureCard
-//             imgSrc={PerformanceRed}
-//             title="User-Friendly Interface"
-//             description="Our platform is easy to use, with a clean and intuitive interface."
-//           />
-//           <FeatureCard
-//             imgSrc={AthleteRed}
-//             title="Secure and Private"
-//             description="We prioritize your privacy and security. Your data is safe with us."
-//           />
-//           <FeatureCard
-//             imgSrc={MatchRed}
-//             title="Community"
-//             description="Join a community of grapplers, coaches, and sports enthusiasts. Share your journey, learn from others, and make new friends."
-//           />
-//         </div>
-//       </section>
-
-//       <p className="text-center text-lg font-medium mt-10">
-//         Join us at MatScout and take your grappling journey to the next level!
-//       </p>
-//     </div>
-//   );
-// }
-
-// function FeatureCard({ imgSrc, title, description }) {
-//   return (
-//     <div className="bg-[#1c1c27] rounded-xl shadow p-6 text-center h-full">
-//       <Image
-//         src={imgSrc}
-//         alt={title}
-//         className="mx-auto h-20 w-20 mb-4"
-//       />
-//       <h3 className="text-xl font-bold text-white mb-2">{title}</h3>
-//       <p className="text-sm text-gray-300">{description}</p>
-//     </div>
-//   );
-// }
-
-"use client";
-
-import Image from "next/image";
-import PerformanceRed from "@/assets/images/icons/performance-red.png";
-import AthleteRed from "@/assets/images/icons/athlete-red.png";
-import MatchRed from "@/assets/images/icons/match-red.png";
-import TeamRed from "@/assets/images/icons/team-red.png";
-import TrophyRed from "@/assets/images/icons/trophy-red.png";
-import DataRed from "@/assets/images/icons/data-red.png";
-import { useEffect } from "react";
+export const metadata = {
+  title: "Features – MatScout | Grappling Analytics for Coaches & Athletes",
+  description:
+    "Explore the powerful features of MatScout: team management, performance tracking, match analysis, and more for grapplers and coaches.",
+  alternates: {
+    canonical: `${
+      process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com"
+    }/features`,
+  },
+  openGraph: {
+    title: "Features – MatScout",
+    description:
+      "See what MatScout offers for grapplers: team management, match analysis, performance tracking, and more.",
+    url: `${process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com"}/features`,
+    images: [
+      {
+        url: `${
+          process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com"
+        }/default-og.png`,
+        width: 1200,
+        height: 630,
+        alt: "MatScout Features",
+      },
+    ],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Features – MatScout",
+    description:
+      "Features for grapplers and coaches: match tracking, analytics, and team management.",
+    images: [
+      `${
+        process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com"
+      }/default-og.png`,
+    ],
+  },
+};
 
 export default function FeaturesPage() {
-  useEffect(() => {
-    if (window.location.hash) {
-      const id = window.location.hash.replace("#", "");
-      const el = document.getElementById(id);
-      if (el) {
-        window.scrollTo({
-          top: el.offsetTop - 120, // Offset for sticky header
-          behavior: "smooth",
-        });
-      }
-    }
-  }, []);
+  const domain = process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com";
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "MatScout",
+    operatingSystem: "Web",
+    applicationCategory: "Sports Analytics",
+    url: `${domain}`,
+    description:
+      "MatScout is a grappling performance tracking and analytics platform for athletes and coaches. Track matches, analyze performance, and manage teams.",
+    image: `${domain}/default-og.png`,
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "USD",
+      description: "Free plan available with premium upgrades.",
+    },
+    featureList: [
+      "Performance Tracking",
+      "Team Management",
+      "Match Analysis",
+      "Data-Driven Insights",
+      "Secure and Private Platform",
+    ],
+    aggregateRating: {
+      "@type": "AggregateRating",
+      ratingValue: "4.9",
+      ratingCount: "45",
+    },
+    author: {
+      "@type": "Organization",
+      name: "MatScout",
+      url: `${domain}`,
+    },
+  };
 
   return (
-    <div className="flex justify-center w-full px-4 sm:px-8 md:px-12 lg:px-24 py-12">
-      <div className="w-full max-w-screen-xl text-gray-900 dark:text-white">
-        <h1 className="text-4xl font-bold text-center mb-4">Features</h1>
-        <p className="text-center text-muted-foreground mb-12">
-          Explore what MatScout has to offer for athletes, coaches, and the
-          entire community.
-        </p>
-
-        {/* FOR ATHLETES */}
-        <section
-          id="athletes"
-          className="mb-16"
-        >
-          <h2 className="text-3xl font-semibold text-center mb-10">
-            For Athletes
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-            <FeatureCard
-              imgSrc={PerformanceRed}
-              title="Competitor Analysis"
-              description="Compare your stats with other grapplers. Understand your strengths and identify areas for improvement."
-            />
-            <FeatureCard
-              imgSrc={AthleteRed}
-              title="Performance Tracking"
-              description="Track your match outcomes, techniques used, and progression in one place. Monitor your growth over time."
-            />
-            <FeatureCard
-              imgSrc={MatchRed}
-              title="Team Collaboration"
-              description="Join a team, share stats, and strategize with teammates to improve together."
-            />
-          </div>
-        </section>
-
-        <hr className="my-16 border-t border-border dark:border-white/10" />
-
-        {/* FOR COACHES */}
-        <section
-          id="coaches"
-          className="mb-16"
-        >
-          <h2 className="text-3xl font-semibold text-center mb-10">
-            For Coaches
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-            <FeatureCard
-              imgSrc={TeamRed}
-              title="Team Management"
-              description="Manage your athletes, scout others, set goals, and track team progress all in one place."
-            />
-            <FeatureCard
-              imgSrc={TrophyRed}
-              title="Athlete Monitoring"
-              description="Track individual progress, celebrate wins, and step in when performance dips."
-            />
-            <FeatureCard
-              imgSrc={DataRed}
-              title="Data-Driven Decisions"
-              description="Use real stats and insights to make smarter coaching choices and plan your team's growth."
-            />
-          </div>
-        </section>
-
-        <hr className="my-16 border-t border-border dark:border-white/10" />
-
-        {/* FOR EVERYONE */}
-        <section
-          id="everyone"
-          className="mb-16"
-        >
-          <h2 className="text-3xl font-semibold text-center mb-10">
-            For Everyone
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-            <FeatureCard
-              imgSrc={PerformanceRed}
-              title="User-Friendly Interface"
-              description="Enjoy a clean and intuitive experience across all devices."
-            />
-            <FeatureCard
-              imgSrc={AthleteRed}
-              title="Secure and Private"
-              description="Your data is protected with industry-leading privacy and security practices."
-            />
-            <FeatureCard
-              imgSrc={MatchRed}
-              title="Community"
-              description="Join grapplers, coaches, and fans to share your journey and support each other."
-            />
-          </div>
-        </section>
-
-        <p className="text-center text-lg font-medium mt-10 text-gray-800 dark:text-white/90">
-          Join us at MatScout and take your grappling journey to the next level!
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function FeatureCard({ imgSrc, title, description }) {
-  return (
-    <div className="relative bg-[#1c1c27] rounded-xl shadow p-6 text-center h-full overflow-hidden hover:shadow-lg transition-shadow duration-300">
-      <div className="absolute top-0 left-0 w-full h-1 bg-[#ef233c] rounded-t-xl" />
-      <Image
-        src={imgSrc}
-        alt={title}
-        className="mx-auto h-20 w-20 mb-4"
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <h3 className="text-lg font-semibold text-white mb-2">{title}</h3>
-      <p className="text-sm text-white/70">{description}</p>
-    </div>
+      <FeaturesClient />
+    </>
   );
 }
