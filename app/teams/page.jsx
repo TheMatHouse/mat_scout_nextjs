@@ -148,7 +148,8 @@ export default function TeamsPage() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="flex justify-center items-center gap-4 mt-6">
+                  <div className="flex justify-center items-center gap-3 mt-6">
+                    {/* Prev Button */}
                     <button
                       onClick={() => handlePageChange(page - 1)}
                       disabled={page === 1}
@@ -156,9 +157,25 @@ export default function TeamsPage() {
                     >
                       Prev
                     </button>
-                    <span className="text-gray-700 dark:text-gray-300">
-                      Page {page} of {totalPages}
-                    </span>
+
+                    {/* Page Numbers */}
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                      (pageNum) => (
+                        <button
+                          key={pageNum}
+                          onClick={() => handlePageChange(pageNum)}
+                          className={`px-3 py-2 rounded ${
+                            page === pageNum
+                              ? "bg-[var(--ms-blue)] text-white"
+                              : "bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      )
+                    )}
+
+                    {/* Next Button */}
                     <button
                       onClick={() => handlePageChange(page + 1)}
                       disabled={page === totalPages}
