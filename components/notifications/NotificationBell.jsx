@@ -16,7 +16,8 @@ export default function NotificationBell() {
   const fetchNotifications = async () => {
     try {
       const res = await fetch("/api/notifications", {
-        credentials: "include", // ✅ Important for JWT cookies
+        method: "GET",
+        credentials: "include", // ✅ This sends cookies with request
       });
 
       if (res.ok) {
@@ -25,7 +26,9 @@ export default function NotificationBell() {
         const unread = data.filter((n) => !n.viewed).length;
         setUnreadCount(unread);
       } else if (res.status === 401) {
-        console.warn("Unauthorized: Token expired or missing");
+        // ✅ If unauthorized, clear notifications & unread count
+        setNotifications([]);
+        setUnreadCount(0);
       }
     } catch (err) {
       console.error("Failed to fetch notifications:", err);
