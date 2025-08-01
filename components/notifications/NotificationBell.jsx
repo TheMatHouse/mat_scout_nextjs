@@ -4,20 +4,23 @@ import { useState, useEffect, useRef } from "react";
 import { Bell } from "lucide-react";
 import NotificationDropdown from "./NotificationDropdown";
 import { motion, AnimatePresence } from "framer-motion";
+import { useUser } from "@/context/UserContext";
 
 export default function NotificationBell() {
+  const { user, loading } = useUser();
   const [isOpen, setIsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const bellRef = useRef(null);
   const dropdownRef = useRef(null);
 
-  // ✅ Fetch notifications
+  // ✅ Fetch notifications only if user is logged in
   const fetchNotifications = async () => {
+    if (!user || loading) return; // ✅ Wait until user context is ready
     try {
       const res = await fetch("/api/notifications", {
         method: "GET",
-        credentials: "include", // ✅ This sends cookies with request
+        credentials: "include", // ✅ Send cookies
       });
 
       if (res.ok) {
@@ -25,26 +28,27 @@ export default function NotificationBell() {
         setNotifications(data);
         const unread = data.filter((n) => !n.viewed).length;
         setUnreadCount(unread);
-      } else if (res.status === 401) {
-        // ✅ If unauthorized, clear notifications & unread count
-        setNotifications([]);
-        setUnreadCount(0);
+      } else {
+        console.error("Notifications fetch error:", res.status);
       }
     } catch (err) {
       console.error("Failed to fetch notifications:", err);
     }
   };
 
-  // ✅ Initial fetch
+  // ✅ Fetch when user becomes available
   useEffect(() => {
-    fetchNotifications();
-  }, []);
+    if (user && !loading) {
+      fetchNotifications();
+    }
+  }, [user, loading]);
 
-  // ✅ Poll every 30 seconds
+  // ✅ Poll every 30 seconds if logged in
   useEffect(() => {
+    if (!user || loading) return;
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [user, loading]);
 
   // ✅ Close dropdown on outside click
   useEffect(() => {
@@ -60,34 +64,35 @@ export default function NotificationBell() {
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
 
   const toggleDropdown = async () => {
-    if (!isOpen) {
+    if (!isOpen && user && !loading) {
       await fetchNotifications();
     }
     setIsOpen((prev) => !prev);
   };
 
   const handleMarkAsRead = async (id, isDelete = false) => {
-    if (isDelete) {
-      // Call DELETE API
-      await fetch(`/api/notifications/${id}`, { method: "DELETE" });
-      setNotifications((prev) => prev.filter((n) => n._id !== id));
-    } else {
-      await fetch(`/api/notifications/mark-read`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notificationIds: [id] }),
-      });
-      setNotifications((prev) =>
-        prev.map((n) => (n._id === id ? { ...n, viewed: true } : n))
-      );
+    try {
+      if (isDelete) {
+        await fetch(`/api/notifications/${id}`, { method: "DELETE" });
+        setNotifications((prev) => prev.filter((n) => n._id !== id));
+      } else {
+        await fetch(`/api/notifications/mark-read`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ notificationIds: [id] }),
+        });
+        setNotifications((prev) =>
+          prev.map((n) => (n._id === id ? { ...n, viewed: true } : n))
+        );
+      }
+      setUnreadCount((count) => Math.max(0, count - 1));
+    } catch (err) {
+      console.error("Failed to mark notification:", err);
     }
-    setUnreadCount((count) => Math.max(0, count - 1));
   };
 
   return (
@@ -102,7 +107,7 @@ export default function NotificationBell() {
         <Bell className="h-6 w-6 text-gray-800 dark:text-gray-100" />
         {unreadCount > 0 && (
           <motion.span
-            key={unreadCount} // triggers animation on change
+            key={unreadCount}
             initial={{ scale: 0.8 }}
             animate={{ scale: 1 }}
             transition={{ type: "spring", stiffness: 300, damping: 15 }}
