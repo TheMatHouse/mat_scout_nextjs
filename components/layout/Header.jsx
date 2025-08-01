@@ -2,9 +2,10 @@
 import Link from "next/link";
 import Image from "next/image";
 import logoDesktop from "@/assets/matScout_logo.png";
-import logoMobile from "@/assets/matScout_logo_mobile.png"; // Add this new file to /assets if it's not already
+import logoMobile from "@/assets/matScout_logo_mobile.png";
 
 import Navbar from "@/components/layout/Navbar";
+import NotificationBell from "@/components/notifications/NotificationBell"; // ✅ Import the bell
 
 export default function Header() {
   return (
@@ -22,22 +23,34 @@ export default function Header() {
             priority
           />
         </Link>
+
         {/* Desktop Logo */}
-        <Link href="/">
+        <Link
+          href="/"
+          className="hidden md:block"
+        >
           <Image
             src={logoDesktop}
             alt="MatScout Logo"
-            className="h-28 w-auto hidden md:block"
+            className="h-28 w-auto"
             priority
           />
         </Link>
 
-        {/* Navigation */}
-        <div className="hidden md:block">
-          <Navbar />
-        </div>
-        <div className="block md:hidden">
-          <Navbar />
+        {/* Navigation + Bell */}
+        <div className="flex items-center space-x-6">
+          {/* Desktop Navbar */}
+          <div className="hidden md:block">
+            <Navbar />
+          </div>
+
+          {/* Notification Bell */}
+          <NotificationBell />
+
+          {/* Mobile Navbar */}
+          <div className="block md:hidden">
+            <Navbar />
+          </div>
         </div>
       </div>
     </header>

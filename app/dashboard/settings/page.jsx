@@ -3,12 +3,14 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import DashboardSettings from "@/components/dashboard/DashboardSettings";
+import NotificationSettings from "@/components/dashboard/NotificationSettings";
+import DeleteAccountSection from "@/components/dashboard/DeleteAccount";
 import { useUser } from "@/context/UserContext";
+import DeleteAccount from "@/components/dashboard/DeleteAccount";
 
 export default function SettingsPage() {
   const router = useRouter();
   const { user, loading, refreshUser } = useUser();
-
   const hasRefreshed = useRef(false);
 
   useEffect(() => {
@@ -27,9 +29,21 @@ export default function SettingsPage() {
   }
 
   return (
-    <DashboardSettings
-      user={user}
-      refreshUser={refreshUser}
-    />
+    <div className="max-w-3xl mx-auto space-y-8 p-6">
+      {/* Account Settings */}
+      <DashboardSettings
+        user={user}
+        refreshUser={refreshUser}
+      />
+
+      {/* Notification Settings */}
+      <NotificationSettings
+        user={user}
+        refreshUser={refreshUser}
+      />
+
+      {/* Delete Account */}
+      <DeleteAccount user={user} />
+    </div>
   );
 }

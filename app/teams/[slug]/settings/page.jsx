@@ -1,4 +1,3 @@
-// app/teams/[slug]/settings/page.jsx
 "use client";
 
 import { useRef, useState, useEffect, forwardRef } from "react";
@@ -22,6 +21,9 @@ import Countries from "@/assets/countries.json";
 import "react-phone-number-input/style.css";
 import PhoneInput from "react-phone-number-input";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
+
+// ✅ Import Delete Section
+import DeleteTeamSection from "@/components/teams/DeleteTeamSection";
 
 // Stable input component for PhoneInput to avoid remounts
 const PhoneInputField = forwardRef((props, ref) => (
@@ -306,6 +308,14 @@ export default function TeamSettingsPage() {
           </Button>
         </div>
       </form>
+
+      {/* ✅ Danger Zone - Delete Team */}
+      {team && (
+        <DeleteTeamSection
+          teamSlug={team.teamSlug}
+          teamName={team.teamName}
+        />
+      )}
     </div>
   );
 }

@@ -1,0 +1,128 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { Bell } from "lucide-react";
+import NotificationDropdown from "./NotificationDropdown";
+import { motion, AnimatePresence } from "framer-motion";
+
+export default function NotificationBell() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifications, setNotifications] = useState([]);
+  const bellRef = useRef(null);
+  const dropdownRef = useRef(null);
+
+  // ✅ Fetch notifications
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetch("/api/notifications");
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data);
+        const unread = data.filter((n) => !n.viewed).length;
+        setUnreadCount(unread);
+      }
+    } catch (err) {
+      console.error("Failed to fetch notifications:", err);
+    }
+  };
+
+  // ✅ Initial fetch
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  // ✅ Poll every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // ✅ Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        isOpen &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target) &&
+        bellRef.current &&
+        !bellRef.current.contains(event.target)
+      ) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const toggleDropdown = async () => {
+    if (!isOpen) {
+      await fetchNotifications();
+    }
+    setIsOpen((prev) => !prev);
+  };
+
+  const handleMarkAsRead = async (id, isDelete = false) => {
+    if (isDelete) {
+      // Call DELETE API
+      await fetch(`/api/notifications/${id}`, { method: "DELETE" });
+      setNotifications((prev) => prev.filter((n) => n._id !== id));
+    } else {
+      await fetch(`/api/notifications/mark-read`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notificationIds: [id] }),
+      });
+      setNotifications((prev) =>
+        prev.map((n) => (n._id === id ? { ...n, viewed: true } : n))
+      );
+    }
+    setUnreadCount((count) => Math.max(0, count - 1));
+  };
+
+  return (
+    <div
+      className="relative"
+      ref={bellRef}
+    >
+      <button
+        onClick={toggleDropdown}
+        className="relative p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+      >
+        <Bell className="h-6 w-6 text-gray-800 dark:text-gray-100" />
+        {unreadCount > 0 && (
+          <motion.span
+            key={unreadCount} // triggers animation on change
+            initial={{ scale: 0.8 }}
+            animate={{ scale: 1 }}
+            transition={{ type: "spring", stiffness: 300, damping: 15 }}
+            className="absolute top-1 right-1 inline-flex items-center justify-center w-4 h-4 text-xs font-bold text-white bg-red-500 rounded-full"
+          >
+            {unreadCount}
+          </motion.span>
+        )}
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            ref={dropdownRef}
+            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -10 }}
+            transition={{ duration: 0.2, ease: "easeInOut" }}
+            className="absolute right-0"
+          >
+            <NotificationDropdown
+              notifications={notifications}
+              onClose={() => setIsOpen(false)}
+              onMarkAsRead={handleMarkAsRead}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

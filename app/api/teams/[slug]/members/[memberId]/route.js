@@ -8,6 +8,7 @@ import FamilyMember from "@/models/familyMemberModel";
 import EmailLog from "@/models/emailLog";
 import { sendEmail } from "@/lib/email/email";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
+import { createNotification } from "@/lib/createNotification"; // ✅ Added notification helper
 
 export async function PATCH(request, { params }) {
   await connectDB();
@@ -22,7 +23,7 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
-  // ensure current user is manager
+  // ✅ Ensure current user is a manager
   const membership = await TeamMember.findOne({
     teamId: team._id,
     userId: user._id,
@@ -44,7 +45,7 @@ export async function PATCH(request, { params }) {
 
   const isDeclined = role === "declined";
 
-  // Get user info
+  // ✅ Get user info for email + notification
   const requester = await User.findById(teamMember.userId);
   if (!requester) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -54,7 +55,7 @@ export async function PATCH(request, { params }) {
   let recipientEmail = requester.email;
   let relatedUserId = requester._id.toString();
 
-  // Handle family member
+  // ✅ Handle family member
   if (teamMember.familyMemberId) {
     const family = await FamilyMember.findById(teamMember.familyMemberId);
     if (family) {
@@ -63,8 +64,25 @@ export async function PATCH(request, { params }) {
     }
   }
 
-  const type = "team_join_status";
+  // ✅ Notification text
+  const notifBody = isDeclined
+    ? `Your request to join ${team.teamName} was denied`
+    : `Your role in ${team.teamName} was updated to ${role}`;
 
+  // ✅ Create notification for the user
+  try {
+    await createNotification({
+      userId: requester._id,
+      type: "Role Update",
+      body: notifBody,
+      link: `/teams/${slug}`,
+    });
+  } catch (notifErr) {
+    console.error("❌ Failed to create role update notification:", notifErr);
+  }
+
+  // ✅ Email logic (unchanged)
+  const type = "team_join_status";
   const existingLog = await EmailLog.findOne({
     to: recipientEmail,
     type,
@@ -113,7 +131,7 @@ export async function PATCH(request, { params }) {
     }
   }
 
-  // Final DB action
+  // ✅ Update DB or remove member
   if (isDeclined) {
     await TeamMember.deleteOne({ _id: memberId });
     return NextResponse.json({ success: true });

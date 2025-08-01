@@ -8,6 +8,7 @@ import { sendEmail } from "@/lib/email/email";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 import User from "@/models/userModel";
 import EmailLog from "@/models/emailLog";
+import { createNotification } from "@/lib/createNotification"; // ✅ Added for notifications
 
 export async function POST(req, context) {
   await connectDB();
@@ -67,7 +68,7 @@ export async function POST(req, context) {
     // silently ignore body parse failure
   }
 
-  // Check if already a member (user or family)
+  // ✅ Check if already a member (user or family)
   const existing = await TeamMember.findOne({
     teamId: team._id,
     ...(familyMemberId
@@ -90,13 +91,25 @@ export async function POST(req, context) {
       ...(familyMemberId && { familyMemberId }),
     });
 
+    // ✅ Create notification for team owner
+    try {
+      await createNotification({
+        userId: team.user, // Team owner
+        type: "Join Request",
+        body: `${joinerName} requested to join ${team.teamName}`,
+        link: `/teams/${slug}`,
+      });
+    } catch (notifErr) {
+      console.error("❌ Failed to create join request notification:", notifErr);
+    }
+
     const response = NextResponse.json(
       { message: "Request submitted" },
       { status: 200 }
     );
 
+    // ✅ Email logic for join request
     if (ownerEmail) {
-      // Check for prior email log
       const existingLog = await EmailLog.findOne({
         to: ownerEmail,
         type: "team_join_request",
@@ -107,18 +120,18 @@ export async function POST(req, context) {
       if (!existingLog) {
         const subject = `${joinerName} Requests to Join ${team.teamName} at MatScout!`;
         const message = `
-    <p>Hello ${owner.firstName || owner.username},</p>
-    <p><strong>${joinerName}</strong> has requested to join <strong>${
+          <p>Hello ${owner.firstName || owner.username},</p>
+          <p><strong>${joinerName}</strong> has requested to join <strong>${
           team.teamName
         }</strong>.</p>
-    <p>Please <a href="https://matscout.com/login" style="color: #1a73e8;">sign in</a> to MatScout to approve or deny this request.</p>
-    <p>
-      <a href="https://matscout.com/login"
-        style="display: inline-block; background-color: #1a73e8; color: white; padding: 10px 16px; border-radius: 4px; text-decoration: none; font-weight: bold;">
-        Login to MatScout
-      </a>
-    </p>
-  `;
+          <p>Please <a href="https://matscout.com/login" style="color: #1a73e8;">sign in</a> to MatScout to approve or deny this request.</p>
+          <p>
+            <a href="https://matscout.com/login"
+              style="display: inline-block; background-color: #1a73e8; color: white; padding: 10px 16px; border-radius: 4px; text-decoration: none; font-weight: bold;">
+              Login to MatScout
+            </a>
+          </p>
+        `;
 
         const html = baseEmailTemplate({
           title: "New Team Join Request",

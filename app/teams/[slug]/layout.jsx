@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { connectDB } from "@/lib/mongo";
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
@@ -9,11 +10,43 @@ export default async function TeamLayout({ children, params }) {
   await connectDB();
   const { slug } = await params;
 
-  // fetch team and current user membership
+  // ✅ Fetch team and current user
   const team = await Team.findOne({ teamSlug: slug });
   const currentUser = await getCurrentUser();
+
+  // ✅ If team does not exist, render custom "Team Not Found" page
+  if (!team) {
+    return (
+      <div className="max-w-2xl mx-auto text-center py-20">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          Team Not Found
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400 mt-4">
+          The team you're looking for does not exist. It may have been deleted.
+        </p>
+        <p className="mt-4">
+          If you are the team owner or a coach, you can{" "}
+          <Link
+            href="/teams/new"
+            className="text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            create a new team
+          </Link>
+          .
+        </p>
+        <Link
+          href="/teams"
+          className="inline-block mt-6 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        >
+          Go to Teams
+        </Link>
+      </div>
+    );
+  }
+
+  // ✅ Fetch current user's membership if team exists
   let member = null;
-  if (currentUser && team) {
+  if (currentUser) {
     member = await TeamMember.findOne({
       teamId: team._id,
       userId: currentUser._id,
@@ -25,7 +58,7 @@ export default async function TeamLayout({ children, params }) {
   const isCoach = member?.role === "coach";
   const isMember = member?.role === "member" || isManager;
 
-  // build tab list
+  // ✅ Build tabs dynamically
   const tabs = [{ label: "Info", href: `/teams/${slug}` }];
   if (isMember) tabs.push({ label: "Members", href: `/teams/${slug}/members` });
   if (isManager)
@@ -36,7 +69,7 @@ export default async function TeamLayout({ children, params }) {
       href: `/teams/${slug}/scouting-reports`,
     });
 
-  // strip mongoose internals
+  // ✅ Remove Mongoose internals
   const { _id, __v, createdAt, updatedAt, user, ...rest } = team.toObject();
   const safeTeam = {
     ...rest,

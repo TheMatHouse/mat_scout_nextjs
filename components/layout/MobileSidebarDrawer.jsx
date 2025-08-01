@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/context/UserContext";
 import LogoutButton from "@/components/shared/LogoutButton";
+import ThemeToggle from "../shared/theme-toggle";
 
 export default function MobileSidebarDrawer({ isOpen, onClose }) {
   const pathname = usePathname();
@@ -117,7 +118,7 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
               </Link>
             </nav>
 
-            <div className="mt-8 space-y-2 text-sm text-ms-blue-gray">
+            <div className="mt-8 space-y-4 text-sm text-ms-blue-gray">
               <Link
                 href="/social"
                 onClick={onClose}
@@ -125,6 +126,11 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
                 Social
               </Link>
               <LogoutButton className="text-red-400 hover:text-white" />
+
+              {/* ✅ Dark/Light Mode Toggle */}
+              <div className="pt-4 border-t border-gray-700">
+                <ThemeToggle />
+              </div>
             </div>
           </>
         ) : (
@@ -171,6 +177,11 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
             >
               Sign Up
             </Link>
+
+            {/* ✅ Dark/Light Mode Toggle for non-authenticated users */}
+            <div className="pt-4 border-t border-gray-700">
+              <ThemeToggle />
+            </div>
           </nav>
         )}
       </aside>

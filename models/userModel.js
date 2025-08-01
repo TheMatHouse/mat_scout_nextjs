@@ -118,6 +118,20 @@ const userSchema = new mongoose.Schema(
         ref: "ScoutingReport",
       },
     ],
+    notificationSettings: {
+      joinRequests: {
+        inApp: { type: Boolean, default: true },
+        email: { type: Boolean, default: true },
+      },
+      teamUpdates: {
+        inApp: { type: Boolean, default: true },
+        email: { type: Boolean, default: false },
+      },
+      scoutingReports: {
+        inApp: { type: Boolean, default: true },
+        email: { type: Boolean, default: true },
+      },
+    },
   },
   {
     timestamps: true,

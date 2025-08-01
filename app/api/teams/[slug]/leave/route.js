@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { getCurrentUserFromCookies } from "@/lib/auth";
 import { connectDB } from "@/lib/mongo";
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
 import { getCurrentUser } from "@/lib/getCurrentUser";
+import User from "@/models/userModel";
+import FamilyMember from "@/models/familyMemberModel";
+import { createNotification } from "@/lib/createNotification"; // ✅ Added
 
 export async function POST(req, context) {
   await connectDB();
@@ -33,9 +35,7 @@ export async function POST(req, context) {
       { status: 404 }
     );
 
-  const isFamily = !!membership.familyMemberId;
   const isOwnedByUser = membership.userId?.toString() === user._id.toString();
-
   if (!isOwnedByUser) {
     return NextResponse.json(
       { error: "You don't have permission to remove this member." },
@@ -50,6 +50,37 @@ export async function POST(req, context) {
     );
   }
 
+  // ✅ Determine member name (user or family member)
+  let leavingName = `${user.firstName || ""} ${user.lastName || ""}`.trim();
+  if (membership.familyMemberId) {
+    const family = await FamilyMember.findById(membership.familyMemberId);
+    if (family) {
+      leavingName = `${family.firstName} ${family.lastName}`;
+    }
+  }
+
+  // ✅ Delete membership
   await TeamMember.findByIdAndDelete(membershipId);
+
+  // ✅ Fetch all managers
+  const managers = await TeamMember.find({
+    teamId: team._id,
+    role: "manager",
+  });
+
+  // ✅ Notify all managers (except the leaving user)
+  await Promise.all(
+    managers
+      .filter((m) => m.userId.toString() !== user._id.toString())
+      .map((manager) =>
+        createNotification({
+          userId: manager.userId,
+          type: "Team Update",
+          body: `${leavingName} left ${team.teamName}`,
+          link: `/teams/${slug}`,
+        })
+      )
+  );
+
   return NextResponse.json({ success: true });
 }

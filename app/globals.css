@@ -434,3 +434,35 @@ input[type="checkbox"]:focus {
     display: none !important;
   }
 }
+
+/* === SWITCH STYLES FOR DARK MODE === */
+
+/* OFF State */
+/* Scoped to Switch component only */
+.switch[data-state="unchecked"] {
+  background-color: #374151 !important; /* gray-700 for the track */
+}
+.switch[data-state="unchecked"] > span {
+  background-color: #d1d5db !important; /* gray-300 for the thumb */
+}
+
+.switch[data-state="checked"] {
+  background-color: #ffffff !important; /* White track */
+}
+.switch[data-state="checked"] > span {
+  background-color: #2b2d42 !important; /* ms-blue for thumb */
+}
+
+/* Light Mode Scoped */
+.switch[data-state="unchecked"] {
+  background-color: #e5e7eb !important; /* gray-200 */
+}
+.switch[data-state="unchecked"] > span {
+  background-color: #6b7280 !important; /* gray-500 */
+}
+.switch[data-state="checked"] {
+  background-color: #ffffff !important;
+}
+.switch[data-state="checked"] > span {
+  background-color: #2b2d42 !important;
+}

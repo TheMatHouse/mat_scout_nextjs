@@ -3,8 +3,9 @@ import Team from "@/models/teamModel";
 import TeamPageClient from "@/components/teams/TeamPageClient";
 
 export async function generateMetadata({ params }) {
+  const { slug } = await params; // ✅ Await params
   await connectDB();
-  const team = await Team.findOne({ teamSlug: params.slug });
+  const team = await Team.findOne({ teamSlug: slug });
 
   if (!team) {
     return {
@@ -26,12 +27,12 @@ export async function generateMetadata({ params }) {
     title,
     description,
     alternates: {
-      canonical: `${process.env.NEXT_PUBLIC_DOMAIN}/teams/${params.slug}`,
+      canonical: `${process.env.NEXT_PUBLIC_DOMAIN}/teams/${slug}`,
     },
     openGraph: {
       title,
       description,
-      url: `${process.env.NEXT_PUBLIC_DOMAIN}/teams/${params.slug}`,
+      url: `${process.env.NEXT_PUBLIC_DOMAIN}/teams/${slug}`,
       images: [ogImage],
     },
     twitter: {
@@ -44,12 +45,13 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function TeamPage({ params }) {
+  const { slug } = await params; // ✅ Await params
   await connectDB();
-  const team = await Team.findOne({ teamSlug: params.slug });
+  const team = await Team.findOne({ teamSlug: slug });
 
   return (
     <TeamPageClient
-      slug={params.slug}
+      slug={slug}
       initialData={team ? JSON.parse(JSON.stringify(team)) : null}
     />
   );
