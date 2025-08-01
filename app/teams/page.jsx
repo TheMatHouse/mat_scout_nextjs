@@ -16,6 +16,7 @@ export default function TeamsPage() {
   const [state, setState] = useState("");
   const [country, setCountry] = useState("");
 
+  // ✅ Fetch teams
   const fetchTeams = async (pageNumber = 1) => {
     setLoading(true);
     try {
@@ -35,6 +36,8 @@ export default function TeamsPage() {
       setMyTeams(data.myTeams || []);
       setPage(data.page || 1);
       setTotalPages(data.totalPages || 1);
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
       console.error("Error fetching teams:", error);
     } finally {
@@ -43,7 +46,7 @@ export default function TeamsPage() {
   };
 
   useEffect(() => {
-    fetchTeams();
+    fetchTeams(1);
   }, [name, city, state, country]);
 
   const clearFilters = () => {
@@ -55,15 +58,38 @@ export default function TeamsPage() {
   };
 
   const handlePageChange = (newPage) => {
-    fetchTeams(newPage);
+    if (newPage > 0 && newPage <= totalPages) {
+      fetchTeams(newPage);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") fetchTeams(1);
+  };
+
+  // ✅ Build pagination range with ellipsis
+  const renderPagination = () => {
+    const pages = [];
+    const maxVisible = 5;
+
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (page > 3) pages.push(1, "...");
+      const start = Math.max(2, page - 1);
+      const end = Math.min(totalPages - 1, page + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (page < totalPages - 2) pages.push("...", totalPages);
+    }
+
+    return pages;
   };
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* MAIN COLUMN */}
+        {/* MAIN */}
         <div className="lg:col-span-3 space-y-6">
-          {/* Header */}
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">
               Teams
@@ -89,6 +115,7 @@ export default function TeamsPage() {
                 placeholder="Team Name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                onKeyDown={handleKeyDown}
                 className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
               />
               <input
@@ -96,6 +123,7 @@ export default function TeamsPage() {
                 placeholder="City"
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
+                onKeyDown={handleKeyDown}
                 className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
               />
               <input
@@ -103,6 +131,7 @@ export default function TeamsPage() {
                 placeholder="State"
                 value={state}
                 onChange={(e) => setState(e.target.value)}
+                onKeyDown={handleKeyDown}
                 className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
               />
               <input
@@ -110,6 +139,7 @@ export default function TeamsPage() {
                 placeholder="Country"
                 value={country}
                 onChange={(e) => setCountry(e.target.value)}
+                onKeyDown={handleKeyDown}
                 className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
               />
             </div>
@@ -148,8 +178,7 @@ export default function TeamsPage() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="flex justify-center items-center gap-3 mt-6">
-                    {/* Prev Button */}
+                  <div className="flex justify-center items-center gap-2 mt-6 flex-wrap">
                     <button
                       onClick={() => handlePageChange(page - 1)}
                       disabled={page === 1}
@@ -158,24 +187,29 @@ export default function TeamsPage() {
                       Prev
                     </button>
 
-                    {/* Page Numbers */}
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                      (pageNum) => (
+                    {renderPagination().map((p, i) =>
+                      p === "..." ? (
+                        <span
+                          key={i}
+                          className="px-2 text-gray-500 dark:text-gray-400"
+                        >
+                          ...
+                        </span>
+                      ) : (
                         <button
-                          key={pageNum}
-                          onClick={() => handlePageChange(pageNum)}
+                          key={p}
+                          onClick={() => handlePageChange(p)}
                           className={`px-3 py-2 rounded ${
-                            page === pageNum
+                            page === p
                               ? "bg-[var(--ms-blue)] text-white"
-                              : "bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
+                              : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
                           }`}
                         >
-                          {pageNum}
+                          {p}
                         </button>
                       )
                     )}
 
-                    {/* Next Button */}
                     <button
                       onClick={() => handlePageChange(page + 1)}
                       disabled={page === totalPages}
