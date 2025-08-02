@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 
 export async function GET(request, { params }) {
   const { username } = await params;
-
+  console.log("HIT ME");
   try {
     await connectDB();
 
@@ -19,6 +19,7 @@ export async function GET(request, { params }) {
       .populate("matchReports")
       .lean();
 
+    console.log("user ", user);
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }

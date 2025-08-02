@@ -12,12 +12,14 @@ export default function UserProfileClient({ username, initialData }) {
   const [currentUser, setCurrentUser] = useState(undefined);
   const [loading, setLoading] = useState(!initialData);
 
+  console.log("initialData ", initialData);
   useEffect(() => {
     async function fetchData() {
       if (!initialData) {
         try {
           const res = await fetch(`/api/users/${username}`);
           const data = await res.json();
+          console.log(data);
           setProfileUser(data?.user || null);
         } catch (err) {
           console.error("Error fetching profile:", err);
@@ -115,7 +117,7 @@ export default function UserProfileClient({ username, initialData }) {
         {profileUser.userStyles?.length > 0 ? (
           profileUser.userStyles.map((style) => (
             <StyleCard
-              key={style._id}
+              key={style}
               style={style}
               styleResults={styleResults[style.styleName] || {}}
               username={profileUser.username}

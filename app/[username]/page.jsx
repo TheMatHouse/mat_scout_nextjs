@@ -1,69 +1,63 @@
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
 import UserProfileClient from "@/components/profile/UserProfileClient";
+import { cookies } from "next/headers";
+import { notFound } from "next/navigation";
 
-// ✅ Generate dynamic metadata for SEO
 export async function generateMetadata({ params }) {
-  const { username } = await params; // Ensure params is awaited
+  const { username } = await params;
 
   await connectDB();
-  const member = await User.findOne({ username });
+  const member = await User.findOne({ username }).lean();
 
-  if (!member || !member.allowPublic) {
+  if (!member) {
     return {
       title: "Profile Not Found | MatScout",
-      description:
-        "The profile you are looking for does not exist or is private.",
+      description: "The profile you are looking for does not exist.",
     };
   }
 
   const title = `${member.firstName} ${member.lastName} | MatScout`;
-  const description = `View ${member.firstName}'s grappling profile on MatScout. Explore stats, teams, and more.`;
-
-  const ogImage = `${
-    process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com"
-  }/api/og?type=user&name=${encodeURIComponent(
-    `${member.firstName} ${member.lastName}`
-  )}&username=${encodeURIComponent(
-    member.username
-  )}&avatar=${encodeURIComponent(member.avatar || "/default-avatar.png")}`;
+  const description = `View ${member.firstName}'s grappling profile on MatScout.`;
 
   return {
     title,
     description,
-    alternates: {
-      canonical: `${
-        process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com"
-      }/${username}`,
-    },
-    openGraph: {
-      title,
-      description,
-      url: `${
-        process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com"
-      }/${username}`,
-      images: [ogImage],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title,
-      description,
-      images: [ogImage],
-    },
   };
 }
 
-// ✅ Render user profile page
 export default async function UserProfilePage({ params }) {
-  const { username } = await params; // Fix async params issue
+  const { username } = await params;
 
   await connectDB();
-  const user = await User.findOne({ username });
 
-  if (!user || !user.allowPublic) {
+  const user = await User.findOne({ username })
+    .populate("userStyles")
+    .populate("matchReports")
+    .lean();
+
+  if (!user) {
+    notFound(); // ✅ Real 404 if user not found
+  }
+
+  // ✅ Determine logged-in user
+  const token = (await cookies()).get("token")?.value;
+  let isMyProfile = false;
+  if (token) {
+    const payload = JSON.parse(
+      Buffer.from(token.split(".")[1], "base64").toString()
+    );
+    if (payload?.userId === user._id.toString()) {
+      isMyProfile = true;
+    }
+  }
+
+  if (!isMyProfile && !user.allowPublic) {
     return (
       <div className="w-full flex justify-center py-20">
-        <h1 className="text-3xl font-bold text-red-500">Profile Not Found</h1>
+        <h1 className="text-2xl font-bold text-gray-700 dark:text-gray-200">
+          This profile is private.
+        </h1>
       </div>
     );
   }
