@@ -14,8 +14,8 @@ const StyleCard = ({ style, styleResults = {}, username, isFamily }) => {
   const grip = style?.grip;
   const favoriteTechnique = style?.favoriteTechnique;
 
-  const wins = styleResults?.wins || 0;
-  const losses = styleResults?.losses || 0;
+  const wins = styleResults?.Wins || 0;
+  const losses = styleResults?.Losses || 0;
   const total = wins + losses;
 
   const styleSlug = styleSlugMap[styleName] || encodeURIComponent(styleName);

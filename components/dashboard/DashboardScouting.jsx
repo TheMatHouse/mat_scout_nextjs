@@ -12,17 +12,9 @@ import {
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import ScoutingReportForm from "./forms/ScoutingReportForm";
-import { ReportDataTable } from "./data/report-data-table";
-import { ArrowUpDown, MoreHorizontal } from "lucide-react";
+import { ReportDataTable } from "../shared/report-data-table";
+import { ArrowUpDown, Eye, Edit, Trash } from "lucide-react";
 import moment from "moment";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import PreviewReportModal from "../shared/PreviewReportModal";
 import { toast } from "react-toastify";
 
@@ -41,7 +33,7 @@ const DashboardScouting = ({ user, styles, techniques }) => {
   const fetchReports = async () => {
     try {
       const res = await fetch(`/api/dashboard/${user._id}/scoutingReports`);
-      if (!res.ok) throw new Error("Failed to fetch match reports");
+      if (!res.ok) throw new Error("Failed to fetch scouting reports");
       const data = await res.json();
       setScoutingReports(data);
     } catch (err) {
@@ -50,48 +42,34 @@ const DashboardScouting = ({ user, styles, techniques }) => {
     }
   };
 
-  const handleDialogClose = (openState) => {
-    setOpen(openState);
-    if (!openState) {
-      setSelectedReport(null);
-    }
-  };
-
-  const closePreviewModal = () => {
-    setPreviewOpen(false);
-    setSelectedReport(null);
-  };
-
   const handleDeleteReport = async (report) => {
     if (
       window.confirm(`This report will be permanently deleted! Are you sure?`)
     ) {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}/scoutingReports/${report._id}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-type": "application/json; charset=UTF-8",
-          },
-          credentials: "include",
+      try {
+        const response = await fetch(
+          `/api/dashboard/${user._id}/scoutingReports/${report._id}`,
+          {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+
+        const data = await response.json();
+
+        if (response.ok) {
+          toast.success(data.message);
+          setScoutingReports((prev) =>
+            prev.filter((r) => r._id !== report._id)
+          );
+          setSelectedReport(null);
+          router.refresh();
+        } else {
+          toast.error(data.message || "Failed to delete report");
         }
-      );
-
-      const data = await response.json();
-
-      if (response.ok) {
-        toast.success(data.message);
-
-        // Optional: update your table UI immediately
-        setScoutingReports((prev) => prev.filter((r) => r._id !== report._id));
-
-        // Clear selected report if needed
-        setSelectedReport(null);
-
-        // Refresh in case server state matters
-        router.refresh();
-      } else {
-        toast.error(data.message || "Failed to delete report");
+      } catch (err) {
+        console.error(err);
+        toast.error("Error deleting report");
       }
     }
   };
@@ -110,92 +88,38 @@ const DashboardScouting = ({ user, styles, techniques }) => {
     },
     {
       accessorKey: "athleteFirstName",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Athlete First Name <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: "Athlete First",
     },
-
     {
       accessorKey: "athleteLastName",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Athlete Last Name <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: "Athlete Last",
     },
     {
       accessorKey: "athleteNationalRank",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          National Ranking <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: "National Rank",
     },
     {
       accessorKey: "athleteWorldRank",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          World Ranking <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: "World Rank",
     },
     {
       accessorKey: "athleteClub",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Club <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: "Club",
+      meta: { className: "hidden md:table-cell" },
     },
     {
       accessorKey: "athleteCountry",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Country <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: "Country",
     },
     {
       accessorKey: "division",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Division <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: "Division",
+      meta: { className: "hidden md:table-cell" },
     },
     {
       accessorKey: "weightCategory",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Weight Class <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: "Weight Class",
+      meta: { className: "hidden md:table-cell" },
     },
     {
       id: "actions",
@@ -204,42 +128,35 @@ const DashboardScouting = ({ user, styles, techniques }) => {
       cell: ({ row }) => {
         const report = row.original;
         return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                className="h-8 w-8 p-0"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem
-                onClick={() => {
-                  setSelectedReport(report);
-                  setPreviewOpen(true);
-                }}
-              >
-                View Match Details
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  setSelectedReport(report);
-                  setOpen(true);
-                }}
-              >
-                Edit Match
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-ms-dark-red"
-                onClick={() => handleDeleteReport(report)}
-              >
-                Delete Match
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex justify-center gap-3">
+            <button
+              onClick={() => {
+                setSelectedReport(report);
+                setPreviewOpen(true);
+              }}
+              title="View Details"
+              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+            >
+              <Eye className="w-5 h-5 text-blue-500" />
+            </button>
+            <button
+              onClick={() => {
+                setSelectedReport(report);
+                setOpen(true);
+              }}
+              title="Edit Report"
+              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+            >
+              <Edit className="w-5 h-5 text-green-500" />
+            </button>
+            <button
+              onClick={() => handleDeleteReport(report)}
+              title="Delete Report"
+              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+            >
+              <Trash className="w-5 h-5 text-red-500" />
+            </button>
+          </div>
         );
       },
     },
@@ -247,50 +164,129 @@ const DashboardScouting = ({ user, styles, techniques }) => {
 
   return (
     <div>
-      <div className="flex items-center">
-        <h1 className="2xl">My Scouting Reports</h1>
+      {/* Header with Add Button on next line */}
+      <div className="flex flex-col items-start gap-4 mb-4">
+        <h1 className="text-2xl font-bold">My Scouting Reports</h1>
         <Dialog
           open={open}
-          onOpenChange={handleDialogClose}
+          onOpenChange={setOpen}
         >
           <DialogTrigger asChild>
-            <Button className="ml-6 bg-gray-900 hover:bg-gray-500 border-gray-500 dark:border-gray-100 border-2 drop-shadow-md text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+            <Button
+              className="bg-gray-900 hover:bg-gray-500 text-white border-2 border-gray-500 dark:border-gray-100"
+              onClick={() => {
+                setSelectedReport(null);
+                setOpen(true);
+              }}
+            >
               Add Scouting Report
             </Button>
           </DialogTrigger>
           <DialogContent className="overflow-y-scroll max-h-[90%]">
             <DialogHeader>
               <DialogTitle>
-                {selectedReport ? "Edit this " : "Add a "} Scouting Report
+                {selectedReport
+                  ? "Edit Scouting Report"
+                  : "Add Scouting Report"}
               </DialogTitle>
               <DialogDescription>
-                {selectedReport
-                  ? " "
-                  : "Add a new report here. You can edit this report at any time."}
+                Fill out all scouting details below.
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4 min-width-full">
-              <ScoutingReportForm
-                key={selectedReport?._id}
-                athlete={user}
-                styles={styles?.styles}
-                techniques={techniques}
-                userType="user"
-                setOpen={setOpen}
-                report={selectedReport}
-                onSuccess={fetchReports}
-              />
-            </div>
+            <ScoutingReportForm
+              athlete={user}
+              styles={styles?.styles}
+              techniques={techniques}
+              userType="user"
+              report={selectedReport}
+              setOpen={setOpen}
+              onSuccess={fetchReports}
+            />
           </DialogContent>
         </Dialog>
       </div>
-      <div>
-        <ReportDataTable
-          columns={columns}
-          data={scoutingReports}
-        />
+
+      {/* Mobile Cards */}
+      <div className="grid grid-cols-1 sm:hidden gap-4 mb-6">
+        {scoutingReports.length > 0 ? (
+          scoutingReports.map((report) => (
+            <div
+              key={report._id}
+              className="bg-gray-900 text-white p-4 rounded-xl shadow-md border border-gray-700"
+            >
+              <p>
+                <strong>Type:</strong> {report.matchType}
+              </p>
+              <p>
+                <strong>Athlete:</strong> {report.athleteFirstName}{" "}
+                {report.athleteLastName}
+              </p>
+              <p>
+                <strong>Country:</strong> {report.athleteCountry}
+              </p>
+              <p>
+                <strong>Division:</strong> {report.division}
+              </p>
+              <p>
+                <strong>Weight Class:</strong> {report.weightCategory}
+              </p>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-4 mt-4">
+                <button
+                  onClick={() => {
+                    setSelectedReport(report);
+                    setPreviewOpen(true);
+                  }}
+                  title="View Details"
+                  className="text-blue-400 hover:text-blue-300"
+                >
+                  <Eye size={18} />
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedReport(report);
+                    setOpen(true);
+                  }}
+                  title="Edit"
+                  className="text-green-400 hover:text-green-300"
+                >
+                  <Edit size={18} />
+                </button>
+                <button
+                  onClick={() => handleDeleteReport(report)}
+                  title="Delete"
+                  className="text-red-500 hover:text-red-400"
+                >
+                  <Trash size={18} />
+                </button>
+              </div>
+            </div>
+          ))
+        ) : (
+          <p className="text-gray-400">No scouting reports found.</p>
+        )}
       </div>
-      {previewOpen && (
+
+      {/* Desktop Table */}
+      <div className="hidden md:block overflow-x-auto">
+        <div className="min-w-[800px]">
+          <ReportDataTable
+            columns={columns}
+            data={scoutingReports}
+            onView={(match) => {
+              setSelectedMatch(match);
+              setPreviewOpen(true);
+            }}
+            onEdit={(match) => {
+              setSelectedMatch(match);
+              setOpen(true);
+            }}
+            onDelete={(match) => handleDeleteMatch(match)}
+          />
+        </div>
+      </div>
+      {previewOpen && selectedReport && (
         <PreviewReportModal
           previewOpen={previewOpen}
           setPreviewOpen={setPreviewOpen}

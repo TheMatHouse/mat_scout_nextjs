@@ -17,6 +17,7 @@ export async function GET(request, { params }) {
     const user = await User.findOne({ username })
       .populate("userStyles")
       .populate("matchReports")
+      .populate("scoutingReports")
       .lean();
 
     console.log("user ", user);

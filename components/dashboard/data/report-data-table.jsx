@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/table";
 
 import { Input } from "@/components/ui/input";
-//mport { Button } from "react-day-picker";
 
 export function ReportDataTable({ columns, data }) {
   const [sorting, setSorting] = useState([]);
@@ -44,86 +43,81 @@ export function ReportDataTable({ columns, data }) {
     },
   });
 
+  // ✅ Check if a column exists
+  const hasColumn = (id) =>
+    table.getAllLeafColumns().some((col) => col.id === id);
+
   return (
     <div>
+      {/* ✅ Dynamic Filters */}
       <div className="items-center py-4">
-        <h4 className="text-lg font-bold">Filter by:</h4>
-        <br />
-        <div className="flex">
-          <Input
-            placeholder="Match type..."
-            value={table.getColumn("matchType")?.getFilterValue() ?? ""} // Ensure it's always a string
-            onChange={(event) =>
-              table.getColumn("matchType")?.setFilterValue(event.target.value)
-            }
-            className="max-w-fit"
-          />
-          {columns.some((col) => col.accessorKey === "eventName") && (
+        <h4 className="text-lg font-bold mb-2">Filter by:</h4>
+        <div className="flex flex-wrap gap-3">
+          {hasColumn("matchType") && (
             <Input
-              placeholder="Event name..."
-              value={table.getColumn("eventName")?.getFilterValue() ?? ""} // Ensure it's always a string
-              onChange={(event) =>
-                table.getColumn("eventName")?.setFilterValue(event.target.value)
+              placeholder="Match type..."
+              value={table.getColumn("matchType")?.getFilterValue() ?? ""}
+              onChange={(e) =>
+                table.getColumn("matchType")?.setFilterValue(e.target.value)
               }
-              className="max-w-fit"
+              className="max-w-xs"
             />
           )}
-          {columns.some((col) => col.accessorKey === "matchDate") && (
+
+          {hasColumn("eventName") && (
+            <Input
+              placeholder="Event name..."
+              value={table.getColumn("eventName")?.getFilterValue() ?? ""}
+              onChange={(e) =>
+                table.getColumn("eventName")?.setFilterValue(e.target.value)
+              }
+              className="max-w-xs"
+            />
+          )}
+
+          {hasColumn("matchDate") && (
             <Input
               placeholder="Match date (YYYY-MM-DD)"
               value={table.getColumn("matchDate")?.getFilterValue() ?? ""}
-              onChange={(event) =>
-                table.getColumn("matchDate")?.setFilterValue(event.target.value)
+              onChange={(e) =>
+                table.getColumn("matchDate")?.setFilterValue(e.target.value)
               }
-              className="max-w-fit"
+              className="max-w-xs"
             />
           )}
         </div>
       </div>
-      <div className="rounded-md border">
-        <Table className="table-auto my-4 border border-gray-900 dark:border-white border-collapse">
-          <TableHeader className="border-b-2 border-gray-900 dark:border-white">
+
+      {/* Table */}
+      <div className="rounded-md border overflow-x-auto">
+        <Table className="table-auto w-full border border-gray-300 dark:border-gray-700">
+          <TableHeader className="bg-gray-900 text-white dark:bg-gray-900">
             {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow
-                key={headerGroup.id}
-                className="bg-ms-blue hover:bg-ms-blue dark:bg-ms-blue-gray border-b-2 border-gray-900 dark:border-white"
-              >
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead
-                      key={header.id}
-                      className="text-gray-100 dark:text-gray-900 text-center font-bold border-r-2 border-gray-900 dark:border-white"
-                    >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </TableHead>
-                  );
-                })}
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead
+                    key={header.id}
+                    className="px-4 py-3 font-semibold text-left border-b border-gray-700"
+                  >
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                  </TableHead>
+                ))}
               </TableRow>
             ))}
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row, index) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                  className={`border-b-2 border-gray-900 dark:border-white hover:bg-gray-400 ${
-                    index === 0 ? "border-t-2" : ""
-                  } ${
-                    index === table.getRowModel().rows.length - 1
-                      ? "border-b-2"
-                      : ""
-                  }`}
-                >
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id}>
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
                       key={cell.id}
-                      className="border-gray-900 dark:border-white"
+                      className="px-4 py-3"
                     >
                       {flexRender(
                         cell.column.columnDef.cell,
@@ -137,7 +131,7 @@ export function ReportDataTable({ columns, data }) {
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center border-t-2 border-b-2 border-gray-900 dark:border-white"
+                  className="text-center py-6"
                 >
                   No results.
                 </TableCell>
@@ -146,20 +140,24 @@ export function ReportDataTable({ columns, data }) {
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-center space-x-10 py-4">
+
+      {/* Pagination */}
+      <div className="flex items-center justify-center space-x-6 py-4">
         <button
-          variant="outline"
-          size="sm"
           onClick={() => table.previousPage()}
           disabled={!table.getCanPreviousPage()}
+          className="px-3 py-2 bg-gray-200 dark:bg-gray-800 rounded disabled:opacity-50"
         >
           Previous
         </button>
+        <span>
+          Page {table.getState().pagination.pageIndex + 1} of{" "}
+          {table.getPageCount()}
+        </span>
         <button
-          variant="outline"
-          size="sm"
           onClick={() => table.nextPage()}
           disabled={!table.getCanNextPage()}
+          className="px-3 py-2 bg-gray-200 dark:bg-gray-800 rounded disabled:opacity-50"
         >
           Next
         </button>

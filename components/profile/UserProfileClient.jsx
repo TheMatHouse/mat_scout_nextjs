@@ -7,31 +7,28 @@ import Link from "next/link";
 import StyleCard from "@/components/profile/StyleCard";
 import { notFound } from "next/navigation";
 
-export default function UserProfileClient({ username, initialData }) {
-  const [profileUser, setProfileUser] = useState(initialData);
+export default function UserProfileClient({ username }) {
+  const [profileUser, setProfileUser] = useState();
   const [currentUser, setCurrentUser] = useState(undefined);
-  const [loading, setLoading] = useState(!initialData);
+  const [loading, setLoading] = useState();
 
-  console.log("initialData ", initialData);
   useEffect(() => {
     async function fetchData() {
-      if (!initialData) {
-        try {
-          const res = await fetch(`/api/users/${username}`);
-          const data = await res.json();
-          console.log(data);
-          setProfileUser(data?.user || null);
-        } catch (err) {
-          console.error("Error fetching profile:", err);
-          setProfileUser(null);
-        }
+      try {
+        const res = await fetch(`/api/users/${username}`);
+        const data = await res.json();
+        setProfileUser(data?.user || null);
+      } catch (err) {
+        console.error("Error fetching profile:", err);
+        setProfileUser(null);
       }
+
       const viewer = await getCurrentUser();
       setCurrentUser(viewer);
       setLoading(false);
     }
     fetchData();
-  }, [username, initialData]);
+  }, [username]);
 
   if (loading || currentUser === undefined) return <div>Loading...</div>;
   if (!profileUser) return notFound();
@@ -48,17 +45,20 @@ export default function UserProfileClient({ username, initialData }) {
       </div>
     );
   }
-
+  console.log(profileUser);
   const styleResults = {};
   if (Array.isArray(profileUser.userStyles)) {
     profileUser.userStyles.forEach((style) => {
-      const styleName = style.styleName?.trim().toLowerCase();
+      const normalizedStyleName = style.styleName?.trim().toLowerCase();
       const reports = profileUser.matchReports?.filter(
-        (report) => report.matchType?.trim().toLowerCase() === styleName
+        (report) =>
+          report.matchType?.trim().toLowerCase() === normalizedStyleName
       );
+
       const wins = reports?.filter((r) => r.result === "Won").length || 0;
       const losses = reports?.filter((r) => r.result === "Lost").length || 0;
-      styleResults[style.styleName] = { Wins: wins, Losses: losses };
+
+      styleResults[normalizedStyleName] = { Wins: wins, Losses: losses };
     });
   }
 
@@ -117,9 +117,11 @@ export default function UserProfileClient({ username, initialData }) {
         {profileUser.userStyles?.length > 0 ? (
           profileUser.userStyles.map((style) => (
             <StyleCard
-              key={style}
+              key={style._id || style}
               style={style}
-              styleResults={styleResults[style.styleName] || {}}
+              styleResults={
+                styleResults[style.styleName?.trim().toLowerCase()] || {}
+              }
               username={profileUser.username}
             />
           ))

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import moment from "moment";
 import { toast } from "react-toastify";
 
-import { ReportDataTable } from "./data/report-data-table";
+import { ReportDataTable } from "../shared/report-data-table";
 import MatchReportForm from "./forms/MatchReportForm";
 import PreviewReportModal from "./PreviewReportModal";
 
@@ -18,17 +18,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, ArrowUpDown } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { ArrowUpDown, Eye, Edit, Trash } from "lucide-react";
 
-const DashboardMatches = ({ user, refreshUser }) => {
+const DashboardMatches = ({ user }) => {
   const router = useRouter();
   const [matchReports, setMatchReports] = useState([]);
   const [open, setOpen] = useState(false);
@@ -69,7 +61,7 @@ const DashboardMatches = ({ user, refreshUser }) => {
         const data = await res.json();
         if (res.ok) {
           toast.success(data.message);
-          fetchMatches(); // refresh after delete
+          fetchMatches();
         } else {
           toast.error(data.message);
         }
@@ -117,91 +109,58 @@ const DashboardMatches = ({ user, refreshUser }) => {
     },
     {
       accessorKey: "division",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Division <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: "Division",
+      meta: { className: "hidden md:table-cell" },
     },
     {
       accessorKey: "opponentName",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Opponent <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: "Opponent",
     },
     {
       accessorKey: "opponentCountry",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Country <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: "Country",
+      meta: { className: "hidden sm:table-cell" },
     },
     {
       accessorKey: "result",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Result <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: "Result",
     },
     {
       id: "actions",
-      header: "Actions", // ❌ no sort controls here
-      enableSorting: false, // explicitly prevent sorting (optional with custom id)
+      header: "Actions",
+      enableSorting: false,
       cell: ({ row }) => {
         const match = row.original;
         return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                className="h-8 w-8 p-0"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem
-                onClick={() => {
-                  setSelectedMatch(match);
-                  setPreviewOpen(true);
-                }}
-              >
-                View Match Details
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  setSelectedMatch(match);
-                  setOpen(true);
-                }}
-              >
-                Edit Match
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-ms-dark-red"
-                onClick={() => handleDeleteMatch(match)}
-              >
-                Delete Match
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex justify-center gap-3">
+            <button
+              onClick={() => {
+                setSelectedMatch(match);
+                setPreviewOpen(true);
+              }}
+              title="View Match Details"
+              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+            >
+              <Eye className="w-5 h-5 text-blue-500" />
+            </button>
+            <button
+              onClick={() => {
+                setSelectedMatch(match);
+                setOpen(true);
+              }}
+              title="Edit Match"
+              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+            >
+              <Edit className="w-5 h-5 text-green-500" />
+            </button>
+            <button
+              onClick={() => handleDeleteMatch(match)}
+              title="Delete Match"
+              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+            >
+              <Trash className="w-5 h-5 text-red-500" />
+            </button>
+          </div>
         );
       },
     },
@@ -209,18 +168,19 @@ const DashboardMatches = ({ user, refreshUser }) => {
 
   return (
     <div>
-      <div className="flex items-center">
-        <h1 className="text-2xl">My Matches</h1>
+      {/* Header with Add Button */}
+      <div className="flex flex-col items-start gap-4 mb-4">
+        <h1 className="text-2xl font-bold">My Matches</h1>
         <Dialog
           open={open}
           onOpenChange={setOpen}
         >
           <DialogTrigger asChild>
             <Button
-              className="ml-6 bg-gray-900 hover:bg-gray-500 text-white border-2 border-gray-500 dark:border-gray-100"
+              className="bg-gray-900 hover:bg-gray-500 text-white border-2 border-gray-500 dark:border-gray-100"
               onClick={() => {
-                setSelectedMatch(null); // ✅ Clear previous data
-                setOpen(true); // ✅ Open dialog manually
+                setSelectedMatch(null);
+                setOpen(true);
               }}
             >
               Add Match Report
@@ -245,10 +205,89 @@ const DashboardMatches = ({ user, refreshUser }) => {
         </Dialog>
       </div>
 
-      <ReportDataTable
-        columns={columns}
-        data={matchReports}
-      />
+      {/* Cards for Mobile */}
+      <div className="block md:hidden space-y-4">
+        {matchReports.length > 0 ? (
+          matchReports.map((match) => (
+            <div
+              key={match._id}
+              className="bg-gray-900 text-white p-4 rounded-lg shadow-md border border-gray-700"
+            >
+              <p>
+                <strong>Type:</strong> {match.matchType}
+              </p>
+              <p>
+                <strong>Event:</strong> {match.eventName}
+              </p>
+              <p>
+                <strong>Date:</strong>{" "}
+                {moment(match.matchDate).format("MMM D, YYYY")}
+              </p>
+              <p>
+                <strong>Opponent:</strong> {match.opponentName}
+              </p>
+              <p>
+                <strong>Result:</strong>{" "}
+                {match.result === "Won" ? (
+                  <span className="text-green-400">Win</span>
+                ) : (
+                  <span className="text-red-400">Loss</span>
+                )}
+              </p>
+              <div className="flex justify-end gap-3 mt-3">
+                <button
+                  onClick={() => {
+                    setSelectedMatch(match);
+                    setPreviewOpen(true);
+                  }}
+                  title="View Details"
+                  className="text-blue-400 hover:text-blue-300"
+                >
+                  <Eye size={18} />
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedMatch(match);
+                    setOpen(true);
+                  }}
+                  title="Edit"
+                  className="text-green-400 hover:text-green-300"
+                >
+                  <Edit size={18} />
+                </button>
+                <button
+                  onClick={() => handleDeleteMatch(match)}
+                  title="Delete"
+                  className="text-red-500 hover:text-red-400"
+                >
+                  <Trash size={18} />
+                </button>
+              </div>
+            </div>
+          ))
+        ) : (
+          <p className="text-gray-400">No match reports found.</p>
+        )}
+      </div>
+
+      {/* Table for Desktop */}
+      <div className="hidden md:block overflow-x-auto">
+        <div className="min-w-[800px]">
+          <ReportDataTable
+            columns={columns}
+            data={matchReports}
+            onView={(match) => {
+              setSelectedMatch(match);
+              setPreviewOpen(true);
+            }}
+            onEdit={(match) => {
+              setSelectedMatch(match);
+              setOpen(true);
+            }}
+            onDelete={(match) => handleDeleteMatch(match)}
+          />
+        </div>
+      </div>
 
       {previewOpen && selectedMatch && (
         <PreviewReportModal

@@ -65,7 +65,6 @@ export default async function UserProfilePage({ params }) {
   return (
     <UserProfileClient
       username={username}
-      initialData={JSON.parse(JSON.stringify(user))}
     />
   );
 }
