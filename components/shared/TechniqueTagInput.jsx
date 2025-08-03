@@ -65,32 +65,35 @@ export default function TechniqueTagInput({
       ref={containerRef}
     >
       {label && (
-        <label className="block text-sm font-medium mb-2 text-gray-200">
+        <label className="block text-sm font-medium mb-2 text-[var(--color-text)]">
           {label}
         </label>
       )}
 
-      {/* Updated Input Container */}
+      {/* Input Container */}
       <div
         className="
           flex flex-wrap items-center gap-2
           border rounded-md px-3 py-2
-          bg-[var(--color-card)] text-gray-100
+          bg-[var(--color-card)] text-[var(--color-text)]
           shadow-sm transition
-          focus-within:border-[var(--color-border-focus)]
-          focus-within:ring-1 focus-within:ring-[var(--color-border-focus)]
+          focus-within:border-[var(--color-border)]
+          focus-within:ring-1 focus-within:ring-[var(--color-border)]
         "
       >
         {selected.map((tag, i) => (
           <span
             key={i}
-            className="flex items-center gap-1 bg-gray-800 text-gray-100 text-sm rounded-full px-3 py-1"
+            className="
+              flex items-center gap-1 bg-[var(--color-border)]
+              text-[var(--color-text)] text-sm rounded-full px-3 py-1
+            "
           >
             {tag.label}
             <button
               type="button"
               onClick={() => onDelete(i)}
-              className="ml-1 text-gray-300 hover:text-red-400 focus:outline-none"
+              className="ml-1 text-[var(--color-text)] hover:text-[var(--color-danger)] focus:outline-none"
             >
               ×
             </button>
@@ -107,19 +110,21 @@ export default function TechniqueTagInput({
           onFocus={() => setIsFocused(true)}
           className="
             flex-1 min-w-[140px] py-1 px-2 bg-transparent border-none
-            focus:outline-none text-sm text-gray-100 placeholder-gray-400
+            focus:outline-none text-sm text-[var(--color-text)]
+            placeholder-gray-400
           "
           placeholder="Type technique and press Enter"
         />
       </div>
 
+      {/* Dropdown Suggestions */}
       {isFocused &&
         (filteredSuggestions.length > 0 || inputValue.trim() !== "") && (
           <ul
             className="
               absolute z-50 mt-1 w-full
               bg-[var(--color-card)] border border-[var(--color-border)]
-              rounded-md shadow text-sm text-gray-100
+              rounded-md shadow text-sm text-[var(--color-text)]
               max-h-52 overflow-y-auto
             "
           >
@@ -127,7 +132,10 @@ export default function TechniqueTagInput({
               <li
                 key={i}
                 onMouseDown={() => handleAdd(sug)}
-                className="px-4 py-2 cursor-pointer hover:bg-gray-800"
+                className="
+                  px-4 py-2 cursor-pointer
+                  hover:bg-[var(--color-border)]
+                "
               >
                 {sug.label}
               </li>
@@ -140,7 +148,7 @@ export default function TechniqueTagInput({
                     value: selected.length,
                   })
                 }
-                className="px-4 py-2 cursor-pointer hover:bg-gray-800"
+                className="px-4 py-2 cursor-pointer hover:bg-[var(--color-border)]"
               >
                 Add “{inputValue}”
               </li>

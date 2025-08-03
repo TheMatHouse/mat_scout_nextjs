@@ -432,16 +432,21 @@ const MatchReportForm = ({
         </div>
       )}
 
-      <div className="flex items-center">
+      <div className="flex items-center gap-2 mt-4">
         <input
           type="checkbox"
           id="isPublic"
           name="isPublic"
           checked={isPublic}
           onChange={() => setIsPublic((prev) => !prev)}
-          className="mr-2"
+          className="h-4 w-4 accent-[var(--ms-light-red)]"
         />
-        <label htmlFor="isPublic">Make this match report public</label>
+        <label
+          htmlFor="isPublic"
+          className="text-sm font-medium text-[var(--color-text)]"
+        >
+          Make this match report public
+        </label>
       </div>
 
       <div className="pt-4">
