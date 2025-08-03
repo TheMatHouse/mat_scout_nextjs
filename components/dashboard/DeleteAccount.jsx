@@ -62,7 +62,7 @@ export default function DeleteAccount({ user }) {
   return (
     <div className="max-w-3xl mx-auto mt-8 p-6 border border-red-600 rounded-lg">
       <h2 className="text-xl font-bold mb-2 text-red-600">Danger Zone</h2>
-      <p className="text-gray-300 mb-4">
+      <p className="text-gray-700 dark:text-gray-300 mb-4 text-sm leading-relaxed">
         Deleting your account will remove all your data, including match
         reports, scouting reports, family members, notifications, and cannot be
         undone.

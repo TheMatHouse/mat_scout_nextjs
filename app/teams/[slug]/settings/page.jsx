@@ -15,7 +15,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import FormField from "@/components/shared/FormField"; // ✅ Centralized FormField
+import FormField from "@/components/shared/FormField";
 import Countries from "@/assets/countries.json";
 import PhoneInput from "react-phone-number-input";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
@@ -309,33 +309,12 @@ export default function TeamSettingsPage() {
         </div>
       </form>
 
-      {/* ✅ Danger Zone */}
+      {/* ✅ New Danger Zone using AlertDialog */}
       {team && (
-        <div className="border border-red-500 rounded-lg p-6 bg-transparent">
-          <h3 className="text-xl font-bold text-red-600 mb-2">Danger Zone</h3>
-          <p className="text-gray-300 mb-4 text-sm leading-relaxed">
-            Deleting this team will permanently remove all associated data,
-            including members, match reports, and scouting reports. This action
-            cannot be undone.
-          </p>
-          <Button
-            variant="destructive"
-            className="bg-red-700 hover:bg-red-800 text-white font-semibold px-4 py-2 rounded-md"
-            onClick={() => {
-              // ✅ Trigger delete confirmation modal or DeleteTeamSection logic
-              document.getElementById("delete-team-trigger")?.click();
-            }}
-          >
-            Delete Team
-          </Button>
-          {/* Hidden DeleteTeamSection for modal or confirmation */}
-          <div className="hidden">
-            <DeleteTeamSection
-              teamSlug={team.teamSlug}
-              teamName={team.teamName}
-            />
-          </div>
-        </div>
+        <DeleteTeamSection
+          teamSlug={team.teamSlug}
+          teamName={team.teamName}
+        />
       )}
     </div>
   );

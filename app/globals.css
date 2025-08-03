@@ -200,6 +200,9 @@ body {
   }
 
   /* Full Red Modal for Danger Alerts */
+  /* =========================================
+   FULL RED MODAL FOR DANGER ALERTS
+========================================= */
   .alert-danger {
     background-color: #dc2626 !important; /* Bright red */
     color: #fff !important;
@@ -209,60 +212,68 @@ body {
     text-align: center;
   }
 
+  /* Dark Mode Variant */
   .dark .alert-danger {
-    background-color: #b91c1c !important; /* Darker red for dark mode */
+    background-color: #b91c1c !important; /* Darker red */
   }
 
-  /* Title and description inside modal */
-  .alert-title {
-    font-size: 1.25rem;
-    font-weight: 700;
+  /* Ensure all text inside the alert is white */
+  .alert-danger h1,
+  .alert-danger h2,
+  .alert-danger h3,
+  .alert-danger h4,
+  .alert-danger p,
+  .alert-danger span {
     color: #fff !important;
   }
 
-  .alert-description {
-    margin-top: 0.5rem;
-    font-size: 1rem;
-    color: #fef2f2 !important;
+  /* Alert Title */
+  .alert-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
   }
 
-  /* White button on red background */
-  .btn-light {
-    background-color: #fff;
-    color: #dc2626;
-    font-weight: bold;
-    border: none;
-    padding: 0.75rem 1.5rem;
-    border-radius: var(--radius);
-    transition: background-color 0.3s ease;
-  }
-  .btn-light:hover {
-    background-color: #f3f4f6;
+  /* Alert Description */
+  .alert-description {
+    font-size: 1rem;
+    line-height: 1.5;
+    margin-bottom: 1.25rem;
+    color: #fef2f2 !important; /* Slightly lighter text for contrast */
   }
 
   /* Cancel Button (Safe Action) */
   .alert-cancel {
-    background-color: #fff !important;
-    color: #374151 !important; /* Neutral gray */
+    background-color: #fff !important; /* White background */
+    color: #374151 !important; /* Neutral gray text */
     font-weight: 600;
+    border: none !important;
     border-radius: var(--radius);
-    padding: 0.75rem 1.5rem;
+    padding: 0.75rem 1.5rem !important;
+    transition: background-color 0.3s ease;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
   }
   .alert-cancel:hover {
     background-color: #f3f4f6 !important;
   }
 
   /* Confirm Delete Button (Danger Action) */
-
   .alert-confirm {
-    background-color: #dc2626 !important; /* Red */
-    color: #fff !important;
-    font-weight: 700;
+    background-color: var(--ms-dark-red) !important; /* Solid red button */
+    color: #fff !important; /* White text */
+    font-weight: 700 !important;
+    border: none !important;
     border-radius: var(--radius);
-    padding: 0.75rem 1.5rem;
+    padding: 0.75rem 1.5rem !important;
+    transition: background-color 0.3s ease;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
   }
   .alert-confirm:hover {
-    background-color: #b91c1c !important;
+    background-color: var(--ms-light-red) !important; /* Lighter red on hover */
   }
 
   /* ---------- MODALS & CARDS ---------- */

@@ -2,15 +2,31 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-toastify";
 
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+
 export default function DeleteTeamSection({ teamSlug, teamName }) {
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleDelete = async () => {
+    if (!teamSlug) {
+      toast.error("Team not found.");
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch(`/api/teams/${teamSlug}`, {
@@ -26,7 +42,7 @@ export default function DeleteTeamSection({ teamSlug, teamName }) {
 
       toast.success(`${teamName} has been deleted successfully!`);
 
-      // Give a short delay so toast can show before redirect
+      // Redirect after short delay
       setTimeout(() => {
         router.push("/teams");
       }, 1200);
@@ -35,68 +51,54 @@ export default function DeleteTeamSection({ teamSlug, teamName }) {
       toast.error("Something went wrong while deleting the team.");
     } finally {
       setLoading(false);
+      setOpen(false);
     }
   };
 
   return (
-    <div className="mt-12 border border-red-500 rounded-md p-6 bg-red-50 dark:bg-red-900">
-      <h3 className="text-lg font-semibold text-red-600 dark:text-red-300 mb-2">
-        Danger Zone
-      </h3>
-      <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+    <div className="max-w-3xl mx-auto mt-8 p-6 border border-red-600 rounded-lg">
+      <h2 className="text-xl font-bold mb-2 text-red-600">Danger Zone</h2>
+      <p className="text-gray-900 dark:text-gray-100 mb-4 text-md leading-relaxed">
         Deleting this team will remove all members, scouting reports, and cannot
         be undone.
       </p>
-      <button
-        onClick={() => setIsModalOpen(true)}
-        className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-md font-semibold transition"
-      >
-        Delete Team
-      </button>
 
-      {/* Confirmation Modal */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <motion.div
-            className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+      <AlertDialog
+        open={open}
+        onOpenChange={setOpen}
+      >
+        <AlertDialogTrigger asChild>
+          <button
+            type="button"
+            className="btn btn-danger"
           >
-            <motion.div
-              className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-sm w-full"
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.9 }}
+            Delete Team
+          </button>
+        </AlertDialogTrigger>
+        <AlertDialogContent className="alert-danger">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="alert-title">
+              ⚠ Are you absolutely sure?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="alert-description">
+              This will permanently delete <strong>{teamName}</strong> and all
+              related data. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="alert-cancel">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={loading}
+              className="alert-confirm"
             >
-              <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
-                Confirm Deletion
-              </h4>
-              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-                Are you sure you want to delete{" "}
-                <span className="font-bold">{teamName}</span>? This action
-                cannot be undone.
-              </p>
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-3 py-1 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md"
-                  disabled={loading}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDelete}
-                  className="px-4 py-1 text-white bg-red-600 hover:bg-red-700 rounded-md font-semibold disabled:opacity-50"
-                  disabled={loading}
-                >
-                  {loading ? "Deleting..." : "Delete"}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              {loading ? "Deleting..." : "Yes, Delete Team"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
