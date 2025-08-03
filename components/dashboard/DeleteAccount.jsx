@@ -80,22 +80,24 @@ export default function DeleteAccount({ user }) {
             Delete Account
           </button>
         </AlertDialogTrigger>
-        <AlertDialogContent className="alert-dialog-content">
+        <AlertDialogContent className="alert-danger">
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="alert-title">
+              ⚠ Are you absolutely sure?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="alert-description">
               This action is permanent. Your account and all associated data
               will be permanently deleted and cannot be recovered.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="btn-secondary">
+            <AlertDialogCancel className="alert-cancel">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               disabled={loading}
-              className="btn-danger"
+              className="alert-confirm"
             >
               {loading ? "Deleting..." : "Yes, Delete My Account"}
             </AlertDialogAction>

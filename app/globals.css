@@ -199,6 +199,72 @@ body {
     color: var(--ms-light-gray);
   }
 
+  /* Full Red Modal for Danger Alerts */
+  .alert-danger {
+    background-color: #dc2626 !important; /* Bright red */
+    color: #fff !important;
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    max-width: 500px;
+    text-align: center;
+  }
+
+  .dark .alert-danger {
+    background-color: #b91c1c !important; /* Darker red for dark mode */
+  }
+
+  /* Title and description inside modal */
+  .alert-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #fff !important;
+  }
+
+  .alert-description {
+    margin-top: 0.5rem;
+    font-size: 1rem;
+    color: #fef2f2 !important;
+  }
+
+  /* White button on red background */
+  .btn-light {
+    background-color: #fff;
+    color: #dc2626;
+    font-weight: bold;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius);
+    transition: background-color 0.3s ease;
+  }
+  .btn-light:hover {
+    background-color: #f3f4f6;
+  }
+
+  /* Cancel Button (Safe Action) */
+  .alert-cancel {
+    background-color: #fff !important;
+    color: #374151 !important; /* Neutral gray */
+    font-weight: 600;
+    border-radius: var(--radius);
+    padding: 0.75rem 1.5rem;
+  }
+  .alert-cancel:hover {
+    background-color: #f3f4f6 !important;
+  }
+
+  /* Confirm Delete Button (Danger Action) */
+
+  .alert-confirm {
+    background-color: #dc2626 !important; /* Red */
+    color: #fff !important;
+    font-weight: 700;
+    border-radius: var(--radius);
+    padding: 0.75rem 1.5rem;
+  }
+  .alert-confirm:hover {
+    background-color: #b91c1c !important;
+  }
+
   /* ---------- MODALS & CARDS ---------- */
   .dialog-content-custom {
     background-color: var(--color-card);
@@ -289,6 +355,33 @@ body {
     justify-content: flex-end;
     gap: 0.75rem;
     margin-top: 1rem;
+  }
+
+  /* Danger Alert Styling */
+  .alert-danger {
+    background-color: #dc2626 !important; /* Bright red */
+    color: #fff !important; /* White text */
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    max-width: 500px;
+    text-align: center;
+  }
+
+  .dark .alert-danger {
+    background-color: #b91c1c !important; /* Darker red */
+  }
+
+  /* Title and description inside modal */
+  .alert-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #fff !important;
+  }
+
+  .alert-description {
+    margin-top: 0.5rem;
+    font-size: 1rem;
+    color: #fef2f2 !important; /* Slightly lighter */
   }
 }
 
