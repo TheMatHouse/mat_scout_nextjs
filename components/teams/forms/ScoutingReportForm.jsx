@@ -11,13 +11,15 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import Countries from "@/assets/countries.json";
 import Editor from "@/components/shared/Editor";
-import Select from "react-select";
 import TechniqueTagInput from "@/components/shared/TechniqueTagInput";
+
+// ✅ Shared Form Components
+import FormField from "@/components/shared/FormField";
+import FormSelect from "@/components/shared/FormSelect";
+import FormMultiSelect from "@/components/shared/FormMultiSelect";
 
 const TeamScoutingReportForm = ({
   team,
@@ -28,7 +30,8 @@ const TeamScoutingReportForm = ({
   setOpen,
 }) => {
   const router = useRouter();
-  const { teamSlug } = team;
+  const teamSlug = team?.teamSlug || ""; // ✅ Safe destructuring
+
   // Refs
   const newVideosRef = useRef([]);
   const deletedVideoIdsRef = useRef([]);
@@ -147,7 +150,7 @@ const TeamScoutingReportForm = ({
 
   const deleteVideo = async (videoId) => {
     try {
-      const url = `/api/teams/${team.teamSlug}/scouting-reports/${report._id}/videos/${videoId}`;
+      const url = `/api/teams/${teamSlug}/scouting-reports/${report._id}/videos/${videoId}`;
       const res = await fetch(url, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete video");
 
@@ -167,7 +170,7 @@ const TeamScoutingReportForm = ({
   };
 
   const handleAddNewVideo = () => {
-    const updated = [...newVideos, { title: "", notes: "", url: "" }]; // ✅ includes notes by default
+    const updated = [...newVideos, { title: "", notes: "", url: "" }];
     setNewVideos(updated);
     newVideosRef.current = updated;
   };
@@ -209,8 +212,8 @@ const TeamScoutingReportForm = ({
 
     const method = report ? "PATCH" : "POST";
     const url = report
-      ? `/api/teams/${team.teamSlug}/scouting-reports/${report._id}`
-      : `/api/teams/${team.teamSlug}/scouting-reports`;
+      ? `/api/teams/${teamSlug}/scouting-reports/${report._id}`
+      : `/api/teams/${teamSlug}/scouting-reports`;
 
     try {
       const res = await fetch(url, {
@@ -233,375 +236,248 @@ const TeamScoutingReportForm = ({
   };
 
   return (
-    <Card className="p-6">
-      <CardHeader>
-        <CardTitle>
-          {report ? "Update Scouting Report" : "Add Scouting Report"}
-        </CardTitle>
-        <CardDescription>
-          Fill out the report for your team member(s).
-        </CardDescription>
-      </CardHeader>
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-6"
+    >
+      {/* ✅ Select Athletes */}
+      <FormMultiSelect
+        label="Select Athletes"
+        value={reportFor}
+        onChange={setReportFor}
+        options={memberOptions}
+        placeholder="Select athletes..."
+      />
 
-      <CardContent>
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-6"
-        >
-          {members.length > 0 ? (
-            <div>
-              <Label>Select Athletes</Label>
-              <Select
-                isMulti
-                options={memberOptions}
-                value={memberOptions.filter((m) =>
-                  reportFor.some(
-                    (r) =>
-                      r.athleteId === m.value && r.athleteType === m.athleteType
-                  )
-                )}
-                onChange={(options) =>
-                  setReportFor(
-                    options.map((opt) => ({
-                      athleteId: opt.value,
-                      athleteType: opt.athleteType,
-                    }))
-                  )
-                }
-                className="mt-1"
-                styles={{
-                  control: (base, state) => ({
-                    ...base,
-                    backgroundColor: "#0f172a",
-                    borderColor: state.isFocused ? "#3b82f6" : "#334155",
-                    color: "#f8fafc",
-                    boxShadow: "none",
-                    ":hover": { borderColor: "#3b82f6" },
-                  }),
-                  menu: (base) => ({
-                    ...base,
-                    backgroundColor: "#1e293b",
-                    color: "#f8fafc",
-                  }),
-                  option: (base, state) => ({
-                    ...base,
-                    backgroundColor: state.isFocused ? "#334155" : "#1e293b",
-                    color: "#f8fafc",
-                    ":active": { backgroundColor: "#3b82f6" },
-                  }),
-                  multiValue: (base) => ({
-                    ...base,
-                    backgroundColor: "#334155",
-                    color: "#f8fafc",
-                  }),
-                  multiValueLabel: (base) => ({ ...base, color: "#f8fafc" }),
-                  multiValueRemove: (base) => ({
-                    ...base,
-                    color: "#f8fafc",
-                    ":hover": { backgroundColor: "#3b82f6", color: "white" },
-                  }),
-                  input: (base) => ({ ...base, color: "#f8fafc" }),
-                  singleValue: (base) => ({ ...base, color: "#f8fafc" }),
-                }}
-              />
-            </div>
-          ) : (
-            <div className="mt-1 text-sm text-gray-700 dark:text-gray-300 italic">
-              No team members available to share with.
-            </div>
-          )}
+      {/* ✅ Match Type */}
+      <FormSelect
+        label="Match Type"
+        value={matchType}
+        onChange={setMatchType}
+        placeholder="Select match type..."
+        options={userStyles.map((style) => ({
+          value: style.styleName,
+          label: style.styleName,
+        }))}
+      />
 
-          <div>
-            <Label>Match Type</Label>
-            <select
-              value={matchType}
-              onChange={(e) => setMatchType(e.target.value)}
-              className="w-full rounded-md border px-3 py-2 dark:bg-gray-800 dark:text-white"
-              required
-            >
-              <option value="">Select match type...</option>
-              {userStyles.map((style) => (
-                <option
-                  key={style._id}
-                  value={style.styleName}
-                >
-                  {style.styleName}
-                </option>
-              ))}
-            </select>
-          </div>
+      {/* ✅ Athlete Info */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <FormField
+          label="Athlete First Name"
+          name="athleteFirstName"
+          value={athleteFirstName}
+          onChange={(e) => setAthleteFirstName(e.target.value)}
+          required
+        />
+        <FormField
+          label="Athlete Last Name"
+          name="athleteLastName"
+          value={athleteLastName}
+          onChange={(e) => setAthleteLastName(e.target.value)}
+          required
+        />
+      </div>
 
-          <div>
-            <Label>Athlete First Name</Label>
-            <Input
-              value={athleteFirstName}
-              onChange={(e) => setAthleteFirstName(e.target.value)}
-              required
+      <FormField
+        label="Division"
+        name="division"
+        value={division}
+        onChange={(e) => setDivision(e.target.value)}
+      />
+
+      <FormField
+        label="Weight Category"
+        name="weightCategory"
+        value={weightCategory}
+        onChange={(e) => setWeightCategory(e.target.value)}
+      />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <FormField
+          label="National Rank"
+          name="athleteNationalRank"
+          value={athleteNationalRank}
+          onChange={(e) => setAthleteNationalRank(e.target.value)}
+        />
+        <FormField
+          label="World Rank"
+          name="athleteWorldRank"
+          value={athleteWorldRank}
+          onChange={(e) => setAthleteWorldRank(e.target.value)}
+        />
+      </div>
+
+      <FormField
+        label="Club"
+        name="athleteClub"
+        value={athleteClub}
+        onChange={(e) => setAthleteClub(e.target.value)}
+      />
+
+      <FormSelect
+        label="Country"
+        value={athleteCountry}
+        onChange={setAthleteCountry}
+        placeholder="Select country..."
+        options={Countries.map((c) => ({
+          value: c.code3,
+          label: c.name,
+        }))}
+      />
+
+      {/* ✅ Grip */}
+      <div>
+        <label className="block mb-1 font-medium">Grip</label>
+        <div className="flex gap-4 mt-2">
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="athleteGrip"
+              value="Righty"
+              checked={athleteGrip === "Righty"}
+              onChange={(e) => setAthleteGrip(e.target.value)}
             />
-          </div>
-
-          <div>
-            <Label>Athlete Last Name</Label>
-            <Input
-              value={athleteLastName}
-              onChange={(e) => setAthleteLastName(e.target.value)}
-              required
+            Righty
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="athleteGrip"
+              value="Lefty"
+              checked={athleteGrip === "Lefty"}
+              onChange={(e) => setAthleteGrip(e.target.value)}
             />
-          </div>
+            Lefty
+          </label>
+        </div>
+      </div>
 
-          <div>
-            <Label>Division</Label>
-            <Input
-              value={division}
-              onChange={(e) => setDivision(e.target.value)}
+      {/* ✅ Techniques */}
+      <TechniqueTagInput
+        label="Known Attacks"
+        name="athleteAttacks"
+        suggestions={suggestions}
+        selected={athleteSelected}
+        onAdd={onAthleteAdd}
+        onDelete={onAthleteDelete}
+      />
+
+      {/* ✅ Notes */}
+      <Editor
+        name="athleteAttackNotes"
+        text={athleteAttackNotes}
+        onChange={setAthleteAttackNotes}
+        label="Attack Notes"
+      />
+
+      {/* ✅ Videos */}
+      <div className="mt-6">
+        <h3 className="text-lg font-semibold mb-2">Videos</h3>
+        {videos.map((vid, index) => (
+          <div
+            key={vid._id || index}
+            className="bg-muted p-4 rounded-lg mb-4"
+          >
+            <FormField
+              label="Video Title"
+              value={vid.title}
+              onChange={(e) =>
+                handleVideoChange(index, "title", e.target.value)
+              }
             />
-          </div>
-
-          <div>
-            <Label>Weight Category</Label>
-            <Input
-              value={weightCategory}
-              onChange={(e) => setWeightCategory(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <Label>National Rank</Label>
-            <Input
-              value={athleteNationalRank}
-              onChange={(e) => setAthleteNationalRank(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <Label>World Rank</Label>
-            <Input
-              value={athleteWorldRank}
-              onChange={(e) => setAthleteWorldRank(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <Label>Club</Label>
-            <Input
-              value={athleteClub}
-              onChange={(e) => setAthleteClub(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <Label>Country</Label>
-            <select
-              value={athleteCountry}
-              onChange={(e) => setAthleteCountry(e.target.value)}
-              className="w-full rounded-md border px-3 py-2 dark:bg-gray-800 dark:text-white"
-            >
-              <option value="">Select country...</option>
-              {Countries.map((c) => (
-                <option
-                  key={c.code3}
-                  value={c.code3}
-                >
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <Label>Grip</Label>
-            <div className="flex gap-4 mt-2">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  value="Righty"
-                  checked={athleteGrip === "Righty"}
-                  onChange={() => setAthleteGrip("Righty")}
-                />
-                Righty
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  value="Lefty"
-                  checked={athleteGrip === "Lefty"}
-                  onChange={() => setAthleteGrip("Lefty")}
-                />
-                Lefty
-              </label>
-            </div>
-          </div>
-
-          <div>
-            <Label>Techniques Used</Label>
-            <TechniqueTagInput
-              name="athleteAttacks"
-              suggestions={suggestions}
-              selected={athleteSelected}
-              onAdd={onAthleteAdd}
-              onDelete={onAthleteDelete}
-            />
-          </div>
-
-          <div>
-            <Label>Technique Notes</Label>
             <Editor
-              name="athleteAttackNotes"
-              text={athleteAttackNotes}
-              onChange={setAthleteAttackNotes}
+              name="notes"
+              text={vid.notes}
+              onChange={(val) => handleVideoChange(index, "notes", val)}
+              label="Video Notes"
             />
-          </div>
-
-          {/* Videos Section */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-lg">Match Videos</h3>
-
-            {videos.length > 0 && (
-              <div className="space-y-4">
-                <h4 className="font-medium">Existing Videos</h4>
-                {videos.map((video, index) => (
-                  <div
-                    key={video._id}
-                    className="border p-4 rounded-md space-y-2"
-                  >
-                    <div>
-                      <Label>Title</Label>
-                      <Input
-                        value={video.title}
-                        onChange={(e) =>
-                          handleVideoChange(index, "title", e.target.value)
-                        }
-                      />
-                    </div>
-                    <div>
-                      <Label>Notes</Label>
-                      <Editor
-                        name="notes"
-                        value={video.notes}
-                        text={video.notes}
-                        onChange={(val) =>
-                          handleVideoChange(index, "notes", val)
-                        }
-                      />
-                    </div>
-                    <div>
-                      <Label>URL</Label>
-                      <Input
-                        value={video.url}
-                        onChange={(e) =>
-                          handleVideoChange(index, "url", e.target.value)
-                        }
-                      />
-
-                      {extractYouTubeID(video.url) && (
-                        <div className="mt-3">
-                          <iframe
-                            width="100%"
-                            height="200"
-                            src={`https://www.youtube.com/embed/${extractYouTubeID(
-                              video.url
-                            )}`}
-                            frameBorder="0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                          />
-                        </div>
-                      )}
-                    </div>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      onClick={() => deleteVideo(video._id)}
-                    >
-                      Delete Video
-                    </Button>
-                  </div>
-                ))}
-              </div>
+            <FormField
+              label="YouTube URL"
+              value={vid.url}
+              onChange={(e) => handleVideoChange(index, "url", e.target.value)}
+            />
+            {extractYouTubeID(vid.url) && (
+              <iframe
+                className="mt-3 w-full h-52"
+                src={`https://www.youtube.com/embed/${extractYouTubeID(
+                  vid.url
+                )}`}
+                allowFullScreen
+              />
             )}
-
-            {newVideos.length > 0 && (
-              <div className="space-y-4">
-                <h4 className="font-medium">New Videos</h4>
-                {newVideos.map((video, index) => (
-                  <div
-                    key={index}
-                    className="border p-4 rounded-md space-y-2"
-                  >
-                    <div>
-                      <Label>Title</Label>
-                      <Input
-                        value={video.title}
-                        onChange={(e) =>
-                          handleNewVideoChange(index, "title", e.target.value)
-                        }
-                      />
-                    </div>
-                    <div>
-                      <Label>Notes</Label>
-                      <Editor
-                        name="notes"
-                        value={video.notes}
-                        text={video.notes}
-                        onChange={(val) =>
-                          handleVideoChange(index, "notes", val, "new")
-                        }
-                      />
-                    </div>
-                    <div>
-                      <Label>URL</Label>
-                      <Input
-                        value={video.url}
-                        onChange={(e) =>
-                          handleNewVideoChange(index, "url", e.target.value)
-                        }
-                      />
-
-                      {extractYouTubeID(video.url) && (
-                        <div className="mt-3">
-                          <iframe
-                            width="100%"
-                            height="200"
-                            src={`https://www.youtube.com/embed/${extractYouTubeID(
-                              video.url
-                            )}`}
-                            frameBorder="0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                          />
-                        </div>
-                      )}
-                    </div>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      onClick={() => handleDeleteNewVideo(index)}
-                    >
-                      Delete New Video
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-
             <Button
               type="button"
-              onClick={handleAddNewVideo}
-              variant="outline"
+              variant="destructive"
+              onClick={() => deleteVideo(vid._id)}
+              className="mt-2"
             >
-              ➕ Add {videos.length + newVideos.length ? "Another" : "a"} Video
+              Delete
             </Button>
           </div>
+        ))}
 
-          <Button
-            type="submit"
-            className="bg-ms-blue-gray hover:bg-ms-blue text-white"
+        {newVideos.map((vid, index) => (
+          <div
+            key={index}
+            className="bg-muted p-4 rounded-lg mb-4"
           >
-            {report ? "Update Report" : "Submit Report"}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+            <FormField
+              label="Video Title"
+              value={vid.title}
+              onChange={(e) =>
+                handleNewVideoChange(index, "title", e.target.value)
+              }
+            />
+            <Editor
+              name="notes"
+              text={vid.notes}
+              onChange={(val) => handleVideoChange(index, "notes", val, "new")}
+              label="Video Notes"
+            />
+            <FormField
+              label="YouTube URL"
+              value={vid.url}
+              onChange={(e) =>
+                handleNewVideoChange(index, "url", e.target.value)
+              }
+            />
+            {extractYouTubeID(vid.url) && (
+              <iframe
+                className="mt-3 w-full h-52"
+                src={`https://www.youtube.com/embed/${extractYouTubeID(
+                  vid.url
+                )}`}
+                allowFullScreen
+              />
+            )}
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => handleDeleteNewVideo(index)}
+              className="mt-2"
+            >
+              Delete New Video
+            </Button>
+          </div>
+        ))}
+
+        <Button
+          type="button"
+          onClick={handleAddNewVideo}
+          variant="outline"
+        >
+          ➕ Add {videos.length + newVideos.length ? "Another" : "a"} Video
+        </Button>
+      </div>
+
+      <Button
+        type="submit"
+        className="bg-ms-blue-gray hover:bg-ms-blue text-white"
+      >
+        {report ? "Update Report" : "Submit Report"}
+      </Button>
+    </form>
   );
 };
 

@@ -1,15 +1,13 @@
 "use client";
 
 import { useRef, useState, useEffect, forwardRef } from "react";
-import { toast } from "react-toastify";
 import { useRouter, useParams } from "next/navigation";
+import { toast } from "react-toastify";
 import { useTeam } from "@/context/TeamContext";
 
 import Editor from "@/components/shared/Editor";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectTrigger,
@@ -17,20 +15,20 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
+import FormField from "@/components/shared/FormField"; // ✅ Centralized FormField
 import Countries from "@/assets/countries.json";
-import "react-phone-number-input/style.css";
 import PhoneInput from "react-phone-number-input";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 
-// ✅ Import Delete Section
+import { Settings } from "lucide-react";
 import DeleteTeamSection from "@/components/teams/DeleteTeamSection";
 
-// Stable input component for PhoneInput to avoid remounts
+// ✅ PhoneInput wrapper
 const PhoneInputField = forwardRef((props, ref) => (
-  <Input
+  <input
     ref={ref}
     {...props}
-    className="!rounded-none !rounded-r-md"
+    className="border border-gray-300 dark:border-gray-600 rounded-md p-2 w-full"
   />
 ));
 
@@ -40,11 +38,12 @@ export default function TeamSettingsPage() {
   const { team, setTeam } = useTeam();
   const teamSlug = params.slug;
 
-  // form state
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [logoPreview, setLogoPreview] = useState(team?.logoURL || null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const fileInputRef = useRef();
 
-  // initialize form when team loads
   useEffect(() => {
     if (team) {
       const parsed = parsePhoneNumberFromString(
@@ -64,11 +63,6 @@ export default function TeamSettingsPage() {
       });
     }
   }, [team]);
-
-  // logo upload
-  const [logoPreview, setLogoPreview] = useState(team?.logoURL || null);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
-  const fileInputRef = useRef();
 
   const handleLogoChange = async (e) => {
     const file = e.target.files[0];
@@ -134,15 +128,25 @@ export default function TeamSettingsPage() {
   if (!form) return null;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-        Team Settings
-      </h2>
+    <div className="max-w-5xl mx-auto px-4 py-6 space-y-8">
+      {/* ✅ Page Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <Settings className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Team Settings
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Manage your team details, contact info, and branding.
+          </p>
+        </div>
+      </div>
+
       <form
         onSubmit={handleSubmit}
         className="space-y-8"
       >
-        {/* Logo Upload */}
+        {/* ✅ Logo Upload */}
         <Card>
           <CardHeader>
             <CardTitle>Team Logo</CardTitle>
@@ -172,105 +176,102 @@ export default function TeamSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Public Info */}
+        {/* ✅ Public Info */}
         <Card>
           <CardHeader>
             <CardTitle>Public Info</CardTitle>
           </CardHeader>
           <CardContent>
-            <Label htmlFor="info">Team Description</Label>
-            <Editor
-              text={form.info}
-              onChange={(val) => setForm((prev) => ({ ...prev, info: val }))}
-            />
+            <FormField label="Team Description">
+              <Editor
+                text={form.info}
+                onChange={(val) => setForm((prev) => ({ ...prev, info: val }))}
+              />
+            </FormField>
           </CardContent>
         </Card>
 
-        {/* Contact Details */}
+        {/* ✅ Contact Details */}
         <Card>
           <CardHeader>
             <CardTitle>Contact Details</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                name="email"
+            <FormField label="Email">
+              <input
                 type="email"
+                name="email"
                 value={form.email}
                 onChange={handleChange}
+                className="input"
               />
-            </div>
-            <div>
-              <Label htmlFor="phone">Phone</Label>
-              <div className="flex flex-1">
-                <PhoneInput
-                  international
-                  defaultCountry="US"
-                  value={form.phone}
-                  onChange={handlePhoneChange}
-                  inputComponent={PhoneInputField}
-                />
-              </div>
-            </div>
+            </FormField>
+            <FormField label="Phone">
+              <PhoneInput
+                international
+                defaultCountry="US"
+                value={form.phone}
+                onChange={handlePhoneChange}
+                inputComponent={PhoneInputField}
+              />
+            </FormField>
           </CardContent>
         </Card>
 
-        {/* Address Section */}
+        {/* ✅ Address */}
         <Card>
           <CardHeader>
             <CardTitle>Address</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="sm:col-span-2">
-                <Label htmlFor="address">Address</Label>
-                <Input
-                  id="address"
+              <FormField
+                label="Address"
+                className="sm:col-span-2"
+              >
+                <input
                   name="address"
                   value={form.address}
                   onChange={handleChange}
+                  className="input"
                 />
-              </div>
-              <div className="sm:col-span-2">
-                <Label htmlFor="address2">Address 2</Label>
-                <Input
-                  id="address2"
+              </FormField>
+              <FormField
+                label="Address 2"
+                className="sm:col-span-2"
+              >
+                <input
                   name="address2"
                   value={form.address2}
                   onChange={handleChange}
+                  className="input"
                 />
-              </div>
-              <div>
-                <Label htmlFor="city">City</Label>
-                <Input
-                  id="city"
+              </FormField>
+              <FormField label="City">
+                <input
                   name="city"
                   value={form.city}
                   onChange={handleChange}
+                  className="input"
                 />
-              </div>
-              <div>
-                <Label htmlFor="state">State</Label>
-                <Input
-                  id="state"
+              </FormField>
+              <FormField label="State">
+                <input
                   name="state"
                   value={form.state}
                   onChange={handleChange}
+                  className="input"
                 />
-              </div>
-              <div>
-                <Label htmlFor="postalCode">Postal Code</Label>
-                <Input
-                  id="postalCode"
+              </FormField>
+              <FormField label="Postal Code">
+                <input
                   name="postalCode"
                   value={form.postalCode}
                   onChange={handleChange}
+                  className="input"
                 />
-              </div>
-              <div>
-                <Label htmlFor="country">Country</Label>
+              </FormField>
+              <FormField label="Country">
                 <Select
                   value={form.country}
                   onValueChange={(v) =>
@@ -291,30 +292,50 @@ export default function TeamSettingsPage() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
+              </FormField>
             </div>
           </CardContent>
         </Card>
 
-        {/* Submit */}
+        {/* ✅ Save Button */}
         <div className="text-right">
           <Button
-            variant="ms"
-            size="default"
             type="submit"
             disabled={saving}
+            className="btn btn-primary"
           >
             {saving ? "Saving..." : "Save Changes"}
           </Button>
         </div>
       </form>
 
-      {/* ✅ Danger Zone - Delete Team */}
+      {/* ✅ Danger Zone */}
       {team && (
-        <DeleteTeamSection
-          teamSlug={team.teamSlug}
-          teamName={team.teamName}
-        />
+        <div className="border border-red-500 rounded-lg p-6 bg-transparent">
+          <h3 className="text-xl font-bold text-red-600 mb-2">Danger Zone</h3>
+          <p className="text-gray-300 mb-4 text-sm leading-relaxed">
+            Deleting this team will permanently remove all associated data,
+            including members, match reports, and scouting reports. This action
+            cannot be undone.
+          </p>
+          <Button
+            variant="destructive"
+            className="bg-red-700 hover:bg-red-800 text-white font-semibold px-4 py-2 rounded-md"
+            onClick={() => {
+              // ✅ Trigger delete confirmation modal or DeleteTeamSection logic
+              document.getElementById("delete-team-trigger")?.click();
+            }}
+          >
+            Delete Team
+          </Button>
+          {/* Hidden DeleteTeamSection for modal or confirmation */}
+          <div className="hidden">
+            <DeleteTeamSection
+              teamSlug={team.teamSlug}
+              teamName={team.teamName}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

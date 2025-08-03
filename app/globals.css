@@ -125,6 +125,41 @@ body {
     color: var(--ms-blue);
   }
 
+  /* Secondary button */
+  .btn-secondary {
+    background-color: #f3f4f6; /* light gray */
+    color: #1f2937; /* dark text */
+    border: 1px solid #d1d5db; /* light border */
+  }
+  .btn-secondary:hover {
+    background-color: #e5e7eb; /* slightly darker gray */
+  }
+  .dark .btn-secondary {
+    background-color: #374151; /* dark gray for dark mode */
+    color: #f9fafb; /* light text */
+    border-color: #4b5563;
+  }
+  .dark .btn-secondary:hover {
+    background-color: #4b5563;
+  }
+
+  /* Danger button */
+  .btn-danger {
+    background-color: #dc2626; /* red */
+    color: #fff;
+    border: 1px solid transparent;
+  }
+  .btn-danger:hover {
+    background-color: #b91c1c;
+  }
+  .dark .btn-danger {
+    background-color: #f87171; /* lighter red for dark mode */
+    color: #1f2937;
+  }
+  .dark .btn-danger:hover {
+    background-color: #ef4444;
+  }
+
   /* Outline button */
   .btn-outline {
     border: 1px solid var(--ms-blue);
@@ -142,22 +177,6 @@ body {
   .dark .btn-outline:hover {
     background-color: var(--ms-light-gray);
     color: var(--ms-blue);
-  }
-
-  /* Danger button */
-  .btn-danger {
-    background-color: var(--ms-dark-red);
-    color: #fff;
-  }
-  .btn-danger:hover {
-    background-color: #a3021f;
-  }
-  .dark .btn-danger {
-    background-color: var(--ms-light-red);
-    color: #fff;
-  }
-  .dark .btn-danger:hover {
-    background-color: #ff4f5e;
   }
 
   /* Icon button */

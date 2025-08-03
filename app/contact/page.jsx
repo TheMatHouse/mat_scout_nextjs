@@ -1,6 +1,4 @@
-export const dynamic = "force-dynamic"; // Prevents static generation issues
-
-import ContactClient from "./ContactClient";
+import ContactClient from "@/components/contact/ContactClient";
 
 export const metadata = {
   title: "Contact Us – MatScout",
@@ -63,13 +61,10 @@ export default function ContactPage() {
 
   return (
     <>
-      {/* Structured Data for SEO */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-
-      {/* Client-side form logic */}
       <ContactClient />
     </>
   );

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { connectDB } from "@/lib/mongo";
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
@@ -14,7 +15,6 @@ export default async function TeamLayout({ children, params }) {
   const team = await Team.findOne({ teamSlug: slug });
   const currentUser = await getCurrentUser();
 
-  // ✅ If team does not exist, render custom "Team Not Found" page
   if (!team) {
     return (
       <div className="max-w-2xl mx-auto text-center py-20">
@@ -50,7 +50,7 @@ export default async function TeamLayout({ children, params }) {
     member = await TeamMember.findOne({
       teamId: team._id,
       userId: currentUser._id,
-      familyMemberId: { $exists: false }, // Exclude family members
+      familyMemberId: { $exists: false },
     });
   }
 
@@ -69,7 +69,6 @@ export default async function TeamLayout({ children, params }) {
       href: `/teams/${slug}/scouting-reports`,
     });
 
-  // ✅ Remove Mongoose internals
   const { _id, __v, createdAt, updatedAt, user, ...rest } = team.toObject();
   const safeTeam = {
     ...rest,
@@ -78,29 +77,46 @@ export default async function TeamLayout({ children, params }) {
 
   return (
     <TeamWrapper team={safeTeam}>
-      <div className="max-w-8xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">
+      {/* ✅ Banner/Header */}
+      <div className="bg-gray-100 dark:bg-gray-900 py-8 shadow-sm">
+        <div className="max-w-5xl mx-auto flex flex-col items-center text-center">
+          <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white shadow-md mb-4">
+            {safeTeam.logoURL ? (
+              <Image
+                src={safeTeam.logoURL}
+                alt={`${safeTeam.teamName} logo`}
+                width={112}
+                height={112}
+                className="object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gray-300 dark:bg-gray-600 text-gray-500">
+                No Logo
+              </div>
+            )}
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
             {safeTeam.teamName}
           </h1>
-          {safeTeam.logoURL && (
-            <img
-              src={safeTeam.logoURL}
-              alt={`${safeTeam.teamName} Logo`}
-              className="mx-auto mt-4 w-32 h-32 rounded-full border-2 border-ms-blue object-cover shadow-lg"
-            />
+          {(safeTeam.city || safeTeam.country) && (
+            <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
+              {[safeTeam.city, safeTeam.state, safeTeam.country]
+                .filter(Boolean)
+                .join(", ")}
+            </p>
           )}
         </div>
+      </div>
 
-        {/* Tabs */}
-        <TeamTabs tabs={tabs} />
-
-        {/* Content Container */}
-        <div className="bg-white dark:bg-gray-800 shadow sm:rounded-lg p-6">
-          {children}
+      {/* ✅ Tabs */}
+      <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="max-w-5xl mx-auto">
+          <TeamTabs tabs={tabs} />
         </div>
       </div>
+
+      {/* ✅ Main Content */}
+      <main className="max-w-5xl mx-auto px-4 py-8">{children}</main>
     </TeamWrapper>
   );
 }

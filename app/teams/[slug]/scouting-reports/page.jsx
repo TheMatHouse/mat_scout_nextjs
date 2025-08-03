@@ -4,21 +4,13 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Eye, Edit, Trash, ArrowUpDown, CirclePlus } from "lucide-react";
+import { Eye, Edit, Trash, FilePlus2, Download } from "lucide-react";
 import PreviewReportModal from "@/components/shared/PreviewReportModal";
 import ScoutingReportForm from "@/components/teams/forms/ScoutingReportForm";
 import { ReportDataTable } from "@/components/shared/report-data-table";
+import ModalLayout from "@/components/shared/ModalLayout";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
-import moment from "moment";
 
 export default function TeamScoutingReportsPage() {
   const params = useParams();
@@ -33,7 +25,7 @@ export default function TeamScoutingReportsPage() {
   const [selectedReport, setSelectedReport] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  // Fetch team data
+  // ✅ Fetch team data
   useEffect(() => {
     if (!slug) return;
 
@@ -52,7 +44,7 @@ export default function TeamScoutingReportsPage() {
     fetchTeam();
   }, [slug]);
 
-  // Fetch scouting reports
+  // ✅ Fetch scouting reports
   const fetchReports = async () => {
     try {
       const res = await fetch(
@@ -74,7 +66,7 @@ export default function TeamScoutingReportsPage() {
     fetchReports();
   }, [slug]);
 
-  // Fetch current user
+  // ✅ Fetch current user
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -211,54 +203,51 @@ export default function TeamScoutingReportsPage() {
 
   return (
     <div>
-      {/* Header and Buttons */}
-      <div className="flex flex-col items-start gap-4 mb-4">
+      {/* ✅ Header and Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
         <h1 className="text-2xl font-bold">Scouting Reports</h1>
-        <div className="flex flex-wrap gap-4">
-          <Dialog
-            open={open}
-            onOpenChange={setOpen}
+        <div className="flex flex-wrap gap-3">
+          {/* Add Report Button */}
+          <button
+            className="btn-primary px-4 py-2 rounded-md"
+            onClick={() => {
+              setSelectedReport(null);
+              setOpen(true); // ✅ This opens your ModalLayout
+            }}
           >
-            <DialogTrigger asChild>
-              <Button
-                className="bg-gray-900 hover:bg-gray-500 text-white border-2 border-gray-500 dark:border-gray-100"
-                onClick={() => {
-                  setSelectedReport(null);
-                  setOpen(true);
-                }}
-              >
-                <CirclePlus className="w-4 h-4 mr-2" /> Add Scouting Report
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="overflow-y-scroll max-h-[90%]">
-              <DialogHeader>
-                <DialogTitle>
-                  {selectedReport
-                    ? "Edit Scouting Report"
-                    : "Add Scouting Report"}
-                </DialogTitle>
-              </DialogHeader>
-              <ScoutingReportForm
-                key={selectedReport?._id}
-                team={team}
-                user={user}
-                userStyles={user?.user.userStyles || []}
-                report={selectedReport}
-                setOpen={setOpen}
-                onSuccess={fetchReports}
-              />
-            </DialogContent>
-          </Dialog>
-          <Button
-            variant="outline"
+            ➕ Add Scouting Report
+          </button>
+
+          {/* Export Button */}
+          <button
+            className="btn-secondary px-4 py-2 rounded-md"
             onClick={exportReportsToExcel}
           >
             Export to Excel
-          </Button>
+          </button>
         </div>
       </div>
 
-      {/* Mobile Cards */}
+      {/* ✅ Modal for Add/Edit */}
+      <ModalLayout
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        title={selectedReport ? "Edit Scouting Report" : "Add Scouting Report"}
+        description="Fill out all scouting details below."
+        withCard={true}
+      >
+        <ScoutingReportForm
+          key={selectedReport?._id}
+          team={team}
+          user={user}
+          userStyles={user?.user.userStyles || []}
+          report={selectedReport}
+          setOpen={setOpen}
+          onSuccess={fetchReports}
+        />
+      </ModalLayout>
+
+      {/* ✅ Mobile Cards */}
       <div className="grid grid-cols-1 sm:hidden gap-4 mb-6">
         {reports.length > 0 ? (
           reports.map((report) => (
@@ -316,7 +305,7 @@ export default function TeamScoutingReportsPage() {
         )}
       </div>
 
-      {/* Desktop Table */}
+      {/* ✅ Desktop Table */}
       {!loading && reports.length > 0 && (
         <div className="hidden md:block overflow-x-auto">
           <div className="min-w-[800px]">
@@ -337,6 +326,7 @@ export default function TeamScoutingReportsPage() {
         </div>
       )}
 
+      {/* ✅ Preview Modal */}
       {previewOpen && selectedReport && (
         <PreviewReportModal
           previewOpen={previewOpen}

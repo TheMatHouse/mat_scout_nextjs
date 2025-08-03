@@ -16,20 +16,27 @@ export default function NotificationBell() {
 
   // ✅ Fetch notifications only if user is logged in
   const fetchNotifications = async () => {
-    if (!user || loading) return; // ✅ Wait until user context is ready
+    if (!user || loading) return; // ✅ Avoid early calls
     try {
       const res = await fetch("/api/notifications", {
         method: "GET",
-        credentials: "include", // ✅ Send cookies
+        credentials: "include",
       });
+
+      if (res.status === 404) {
+        // ✅ Treat as empty list instead of error
+        setNotifications([]);
+        setUnreadCount(0);
+        return;
+      }
 
       if (res.ok) {
         const data = await res.json();
-        setNotifications(data);
+        setNotifications(Array.isArray(data) ? data : []);
         const unread = data.filter((n) => !n.viewed).length;
         setUnreadCount(unread);
       } else {
-        console.error("Notifications fetch error:", res.status);
+        console.warn(`Notifications fetch returned ${res.status}`);
       }
     } catch (err) {
       console.error("Failed to fetch notifications:", err);

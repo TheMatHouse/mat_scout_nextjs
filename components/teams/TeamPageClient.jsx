@@ -97,35 +97,36 @@ export default function TeamPageClient({ slug, initialData }) {
   if (loading) return <div>Loading...</div>;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      {/* Membership Section */}
-      <div className="border rounded-md p-4 shadow-sm bg-white dark:bg-gray-800">
-        <h2 className="text-xl font-semibold mb-3">Your Membership</h2>
+    <div className="space-y-8">
+      {/* ✅ Membership Section */}
+      <div className="border rounded-lg p-5 bg-white dark:bg-gray-800 shadow-sm">
+        <h2 className="text-xl font-semibold mb-3 text-gray-900 dark:text-white">
+          Your Membership
+        </h2>
         {userMember ? (
           <div className="flex items-center justify-between flex-wrap gap-2">
             <span>
               {userMember.role === "pending" ? (
-                <span>
+                <>
                   Your membership is{" "}
-                  <span className="inline-block bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-yellow-900 dark:text-yellow-200">
+                  <span className="px-2 py-1 text-xs font-medium rounded bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
                     pending
                   </span>
-                  .
-                </span>
+                </>
               ) : (
-                <span>
+                <>
                   You are a{" "}
-                  <span className="inline-block bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-green-900 dark:text-green-200">
+                  <span className="px-2 py-1 text-xs font-medium rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                     {userMember.role}
                   </span>{" "}
                   of this team.
-                </span>
+                </>
               )}
             </span>
             <button
               onClick={() => handleLeave({ membershipId: userMember._id })}
               disabled={buttonLoading || userMember.role === "manager"}
-              className={`inline-flex items-center justify-center min-w-[120px] px-4 py-2 text-sm font-semibold rounded transition disabled:opacity-50 ${
+              className={`min-w-[120px] px-4 py-2 text-sm font-semibold rounded transition disabled:opacity-50 ${
                 userMember.role === "pending"
                   ? "bg-yellow-600 text-white hover:bg-yellow-700"
                   : "bg-red-600 text-white hover:bg-red-700"
@@ -145,7 +146,7 @@ export default function TeamPageClient({ slug, initialData }) {
             <button
               onClick={() => handleJoin()}
               disabled={buttonLoading}
-              className="inline-flex items-center justify-center min-w-[120px] px-4 py-2 text-sm font-semibold rounded bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50"
+              className="min-w-[120px] px-4 py-2 text-sm font-semibold rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
             >
               {buttonLoading ? "Joining..." : "Join Team"}
             </button>
@@ -153,11 +154,11 @@ export default function TeamPageClient({ slug, initialData }) {
         )}
       </div>
 
-      {/* Family Members Section */}
+      {/* ✅ Family Members Section */}
       {family.length > 0 && (
-        <div className="border rounded-md p-4 shadow-sm bg-white dark:bg-gray-800">
-          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-            <UsersIcon className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+        <div className="border rounded-lg p-5 bg-white dark:bg-gray-800 shadow-sm">
+          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2 text-gray-900 dark:text-white">
+            <UsersIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             Family Members
           </h2>
           <div className="space-y-4">
@@ -174,7 +175,7 @@ export default function TeamPageClient({ slug, initialData }) {
                   <button
                     onClick={() => handleLeave({ membershipId: m._id })}
                     disabled={buttonLoading}
-                    className="inline-flex items-center justify-center min-w-[120px] px-4 py-2 text-sm font-semibold rounded bg-yellow-600 text-white hover:bg-yellow-700 transition disabled:opacity-50"
+                    className="min-w-[120px] px-4 py-2 text-sm font-semibold rounded bg-yellow-600 text-white hover:bg-yellow-700 disabled:opacity-50"
                   >
                     {buttonLoading ? "Withdrawing..." : "Withdraw"}
                   </button>
@@ -185,7 +186,7 @@ export default function TeamPageClient({ slug, initialData }) {
                   <button
                     onClick={() => handleLeave({ membershipId: m._id })}
                     disabled={buttonLoading}
-                    className="inline-flex items-center justify-center min-w-[120px] px-4 py-2 text-sm font-semibold rounded bg-red-600 text-white hover:bg-red-700 transition disabled:opacity-50"
+                    className="min-w-[120px] px-4 py-2 text-sm font-semibold rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
                   >
                     {buttonLoading ? "Leaving..." : "Leave Team"}
                   </button>
@@ -195,7 +196,7 @@ export default function TeamPageClient({ slug, initialData }) {
                   <button
                     onClick={() => handleJoin(fm._id)}
                     disabled={buttonLoading}
-                    className="inline-flex items-center justify-center min-w-[120px] px-4 py-2 text-sm font-semibold rounded bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50"
+                    className="min-w-[120px] px-4 py-2 text-sm font-semibold rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
                   >
                     {buttonLoading ? "Adding..." : "Add to Team"}
                   </button>
@@ -223,7 +224,7 @@ export default function TeamPageClient({ slug, initialData }) {
         </div>
       )}
 
-      {/* Team Info */}
+      {/* ✅ Team Info */}
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
         <TeamInfoDisplay team={team} />
       </div>

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { Button } from "@/components/ui/button";
+import TeamModal from "@/components/teams/TeamModal";
 
 export default function TeamsPage() {
   const [teams, setTeams] = useState([]);
@@ -10,6 +12,7 @@ export default function TeamsPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [open, setOpen] = useState(false);
 
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
@@ -90,16 +93,16 @@ export default function TeamsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         {/* MAIN */}
         <div className="lg:col-span-3 space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col items-start gap-3 mb-2">
             <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">
               Teams
             </h1>
-            <Link
-              href="/teams/new"
-              className="inline-block bg-[var(--ms-blue-gray)] hover:bg-[var(--ms-light-gray)] text-black dark:text-gray-900 font-semibold px-4 py-2 rounded-lg shadow transition"
+            <Button
+              className="btn btn-primary"
+              onClick={() => setOpen(true)}
             >
               + Add Team
-            </Link>
+            </Button>
           </div>
 
           <p className="text-sm text-gray-500 dark:text-gray-300">
@@ -144,18 +147,18 @@ export default function TeamsPage() {
               />
             </div>
             <div className="flex gap-3">
-              <button
+              <Button
                 onClick={() => fetchTeams(1)}
-                className="bg-[var(--ms-blue)] hover:bg-[var(--ms-dark-red)] text-white px-4 py-2 rounded-lg"
+                className="btn btn-primary"
               >
                 Search
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={clearFilters}
                 className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg"
               >
                 Clear Filters
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -244,6 +247,13 @@ export default function TeamsPage() {
           )}
         </aside>
       </div>
+
+      {/* ✅ Team Modal */}
+      <TeamModal
+        open={open}
+        setOpen={setOpen}
+        onSuccess={fetchTeams}
+      />
     </div>
   );
 }

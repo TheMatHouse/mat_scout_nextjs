@@ -2,11 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, XCircle } from "lucide-react";
 import { toast } from "react-toastify";
+import FormField from "@/components/shared/FormField";
 
 export default function CreateTeamPage() {
   const [teamName, setTeamName] = useState("");
@@ -16,9 +15,7 @@ export default function CreateTeamPage() {
 
   const router = useRouter();
 
-  // Suggest a slug when team name is typed
   // Auto-generate slug from team name
-  // Auto-suggest slug based on team name
   useEffect(() => {
     if (!teamName.trim()) return;
 
@@ -31,7 +28,7 @@ export default function CreateTeamPage() {
     });
   }, [teamName]);
 
-  // Check slug availability (only if >= 3 characters)
+  // Check slug availability
   useEffect(() => {
     if (!teamSlug.trim() || teamSlug.length < 3) {
       setSlugAvailable(null);
@@ -94,38 +91,29 @@ export default function CreateTeamPage() {
           onSubmit={handleSubmit}
           className="space-y-6"
         >
-          <div>
-            <Label
-              htmlFor="teamName"
-              className="text-gray-800 dark:text-gray-200"
-            >
-              Team Name
-            </Label>
-            <Input
-              id="teamName"
-              value={teamName}
-              onChange={(e) => setTeamName(e.target.value)}
-              placeholder="Team name"
-              required
-              className="mt-1"
-            />
-          </div>
+          {/* Team Name */}
+          <FormField
+            label="Team Name"
+            value={teamName}
+            onChange={(e) => setTeamName(e.target.value)}
+            placeholder="Enter team name"
+            required
+          />
 
+          {/* Team Slug */}
           <div>
-            <Label
-              htmlFor="teamSlug"
-              className="text-gray-800 dark:text-gray-200"
-            >
+            <label className="block text-sm font-medium mb-1">
               Team Page URL
-            </Label>
-            <div className="relative mt-1">
-              <Input
-                id="teamSlug"
+            </label>
+            <div className="relative">
+              <input
+                type="text"
                 value={teamSlug}
                 onChange={(e) =>
                   setTeamSlug(e.target.value.toLowerCase().replace(/\s+/g, "_"))
                 }
                 required
+                className="w-full rounded-md border px-3 py-2 bg-background text-foreground"
               />
               {checkingSlug ? (
                 <span className="absolute right-2 top-2 text-gray-400 text-sm">
@@ -138,7 +126,7 @@ export default function CreateTeamPage() {
               ) : null}
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              This will be your team’s web address:
+              Your team page URL:
               <br />
               <code>
                 https://matscout.com/teams/{teamSlug || "your_team_slug"}
@@ -146,12 +134,21 @@ export default function CreateTeamPage() {
             </p>
           </div>
 
-          <div className="pt-2">
+          {/* Buttons */}
+          <div className="flex gap-4 pt-2">
             <Button
               type="submit"
               disabled={!slugAvailable || checkingSlug || teamSlug.length < 3}
+              className="btn btn-primary"
             >
               Create Team
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.push("/teams")}
+            >
+              Cancel
             </Button>
           </div>
         </form>

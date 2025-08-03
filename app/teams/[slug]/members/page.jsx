@@ -1,10 +1,10 @@
-// app/teams/[slug]/members/page.jsx
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { useTeam } from "@/context/TeamContext";
 import MemberRow from "@/components/teams/MemberRow";
+import { Users } from "lucide-react";
 
 export default function MembersPage() {
   const params = useParams();
@@ -30,7 +30,8 @@ export default function MembersPage() {
     fetchMembers();
   }, [fetchMembers]);
 
-  if (loading) return <p className="p-4">Loading...</p>;
+  if (loading)
+    return <p className="p-4 text-center text-gray-500">Loading...</p>;
 
   const currentUserMembership = members.find((m) => m.userId === team.user);
   const isManager = currentUserMembership?.role === "manager";
@@ -41,46 +42,73 @@ export default function MembersPage() {
   );
 
   return (
-    <div className="max-w-4xl  mx-auto space-y-8">
-      <section>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+    <div className="max-w-5xl mx-auto px-4 py-6 space-y-8">
+      {/* ✅ Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-3 text-gray-900 dark:text-white">
+            <Users className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+            Team Members
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+            Manage pending requests and team members.
+          </p>
+        </div>
+      </div>
+
+      {/* ✅ Pending Requests */}
+      <section className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-5">
+        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           Pending Requests
         </h2>
         {pending.length > 0 ? (
-          <div className="space-y-2">
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {pending.map((m) => (
-              <MemberRow
+              <div
                 key={m.id}
-                member={m}
-                slug={slug}
-                isManager={isManager}
-                onRoleChange={fetchMembers}
-              />
+                className="py-3"
+              >
+                <MemberRow
+                  member={m}
+                  slug={slug}
+                  isManager={isManager}
+                  onRoleChange={fetchMembers}
+                />
+              </div>
             ))}
           </div>
         ) : (
-          <p className="text-gray-500">No pending requests.</p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">
+            No pending requests.
+          </p>
         )}
       </section>
 
-      <section>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-          Team Members
+      {/* ✅ Active Members */}
+      <section className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-5">
+        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
+          Active Members
         </h2>
         {active.length > 0 ? (
-          <div className="space-y-2">
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {active.map((m) => (
-              <MemberRow
+              <div
                 key={m.id}
-                member={m}
-                slug={slug}
-                isManager={isManager}
-                onRoleChange={fetchMembers}
-              />
+                className="py-3"
+              >
+                <MemberRow
+                  member={m}
+                  slug={slug}
+                  isManager={isManager}
+                  onRoleChange={fetchMembers}
+                />
+              </div>
             ))}
           </div>
         ) : (
-          <p className="text-gray-500">No members yet.</p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">
+            No active members yet.
+          </p>
         )}
       </section>
     </div>
