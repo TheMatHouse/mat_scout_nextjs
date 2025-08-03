@@ -4,7 +4,7 @@ import { useRef, useState, useEffect, forwardRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { toast } from "react-toastify";
 import { useTeam } from "@/context/TeamContext";
-
+import 'react-phone-number-input/style.css';
 import Editor from "@/components/shared/Editor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -182,12 +182,16 @@ export default function TeamSettingsPage() {
             <CardTitle>Public Info</CardTitle>
           </CardHeader>
           <CardContent>
-            <FormField label="Team Description">
-              <Editor
-                text={form.info}
-                onChange={(val) => setForm((prev) => ({ ...prev, info: val }))}
-              />
-            </FormField>
+            <FormField
+              label="team description"
+              name="info"
+              value={form.info}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, info: e.target.value }))
+              }
+              type="textarea"
+              className="input"
+            />
           </CardContent>
         </Card>
 
@@ -197,16 +201,16 @@ export default function TeamSettingsPage() {
             <CardTitle>Contact Details</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="Email">
-              <input
-                type="email"
-                name="email"
-                value={form.email}
-                onChange={handleChange}
-                className="input"
-              />
-            </FormField>
-            <FormField label="Phone">
+            <FormField
+              label="email"
+              name="email"
+              value={form.email}
+              onChange={handleChange}
+              className="input"
+            />
+            {/* ✅ Phone Field (custom component) */}
+            <div>
+              <label className="block text-sm font-medium mb-1">Phone</label>
               <PhoneInput
                 international
                 defaultCountry="US"
@@ -214,7 +218,7 @@ export default function TeamSettingsPage() {
                 onChange={handlePhoneChange}
                 inputComponent={PhoneInputField}
               />
-            </FormField>
+            </div>
           </CardContent>
         </Card>
 
@@ -226,52 +230,45 @@ export default function TeamSettingsPage() {
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
-                label="Address"
-                className="sm:col-span-2"
-              >
-                <input
-                  name="address"
-                  value={form.address}
-                  onChange={handleChange}
-                  className="input"
-                />
-              </FormField>
+                label="address"
+                name="address"
+                value={form.address}
+                onChange={handleChange}
+                className="sm:col-span-2 input"
+              />
               <FormField
-                label="Address 2"
-                className="sm:col-span-2"
-              >
-                <input
-                  name="address2"
-                  value={form.address2}
-                  onChange={handleChange}
-                  className="input"
-                />
-              </FormField>
-              <FormField label="City">
-                <input
-                  name="city"
-                  value={form.city}
-                  onChange={handleChange}
-                  className="input"
-                />
-              </FormField>
-              <FormField label="State">
-                <input
-                  name="state"
-                  value={form.state}
-                  onChange={handleChange}
-                  className="input"
-                />
-              </FormField>
-              <FormField label="Postal Code">
-                <input
-                  name="postalCode"
-                  value={form.postalCode}
-                  onChange={handleChange}
-                  className="input"
-                />
-              </FormField>
-              <FormField label="Country">
+                label="address 2"
+                name="address2"
+                value={form.address2}
+                onChange={handleChange}
+                className="sm:col-span-2 input"
+              />
+              <FormField
+                label="city"
+                name="city"
+                value={form.city}
+                onChange={handleChange}
+                className="input"
+              />
+              <FormField
+                label="state"
+                name="state"
+                value={form.state}
+                onChange={handleChange}
+                className="input"
+              />
+              <FormField
+                label="postal code"
+                name="postalCode"
+                value={form.postalCode}
+                onChange={handleChange}
+                className="input"
+              />
+              {/* ✅ Country Dropdown */}
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Country
+                </label>
                 <Select
                   value={form.country}
                   onValueChange={(v) =>
@@ -292,7 +289,7 @@ export default function TeamSettingsPage() {
                     ))}
                   </SelectContent>
                 </Select>
-              </FormField>
+              </div>
             </div>
           </CardContent>
         </Card>
