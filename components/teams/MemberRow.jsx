@@ -1,7 +1,7 @@
-// components/teams/MemberRow.jsx
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   Select,
   SelectTrigger,
@@ -11,20 +11,21 @@ import {
 } from "@/components/ui/select";
 import { toast } from "react-toastify";
 
-/**
- * Renders a single member with avatar, name, and a role-select dropdown.
- * Calls onRoleChange() after successful update.
- */
 export default function MemberRow({ member, slug, isManager, onRoleChange }) {
   const [role, setRole] = useState(member.role);
 
   // Use avatarUrl returned by API
   const displayAvatar = member.avatarUrl;
-  // For Cloudinary-hosted uploads, insert f_auto to serve browser-compatible format
   const avatarSrc =
     displayAvatar && displayAvatar.startsWith("https://res.cloudinary.com/")
       ? displayAvatar.replace("/upload/", "/upload/f_auto/")
       : displayAvatar;
+
+  // ✅ Determine profile link
+  const profileLink =
+    member.isFamilyMember === true
+      ? `/family/${member.username}`
+      : `/${member.username}`;
 
   const handleChange = async (newRole) => {
     try {
@@ -37,7 +38,7 @@ export default function MemberRow({ member, slug, isManager, onRoleChange }) {
 
       setRole(newRole);
       toast.success("Membership updated");
-      onRoleChange(); // trigger parent to re-fetch
+      onRoleChange();
     } catch (err) {
       console.error(err);
       toast.error("Could not update role");
@@ -46,7 +47,11 @@ export default function MemberRow({ member, slug, isManager, onRoleChange }) {
 
   return (
     <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 shadow rounded-lg">
-      <div className="flex items-center gap-3">
+      {/* ✅ Avatar + Name as clickable link */}
+      <Link
+        href={profileLink}
+        className="flex items-center gap-3 hover:underline"
+      >
         {avatarSrc ? (
           <img
             src={avatarSrc}
@@ -61,7 +66,9 @@ export default function MemberRow({ member, slug, isManager, onRoleChange }) {
         <span className="font-medium text-gray-900 dark:text-gray-100">
           {member.name}
         </span>
-      </div>
+      </Link>
+
+      {/* ✅ Role Dropdown */}
       {isManager ? (
         <Select
           value={role}

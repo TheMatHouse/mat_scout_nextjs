@@ -97,7 +97,7 @@ export async function POST(req, context) {
         userId: team.user, // Team owner
         type: "Join Request",
         body: `${joinerName} requested to join ${team.teamName}`,
-        link: `/teams/${slug}`,
+        link: `/teams/${slug}/members`,
       });
     } catch (notifErr) {
       console.error("❌ Failed to create join request notification:", notifErr);

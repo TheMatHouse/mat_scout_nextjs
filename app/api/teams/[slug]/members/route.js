@@ -41,6 +41,7 @@ export async function GET(request, { params }) {
           role: m.role,
           avatarUrl: fm.avatar || null,
           isFamilyMember: true,
+          username: fm.username,
         };
       }
 
@@ -59,6 +60,7 @@ export async function GET(request, { params }) {
           role: m.role,
           avatarUrl,
           isFamilyMember: false,
+          username: u.username,
         };
       }
 
