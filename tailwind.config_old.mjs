@@ -12,16 +12,12 @@ export default {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
-
-        // Brand Colors
         "ms-blue": "#2b2d42",
         "ms-blue-gray": "#8d99ae",
         "ms-light-gray": "#edf2f4",
         "ms-light-red": "#ef233c",
         "ms-dark-red": "#d90429",
         "ms-nav-text": "#f2f2f2",
-
-        // UI Components
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
@@ -30,42 +26,29 @@ export default {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",
         },
-
-        // Primary/Secondary Colors (Brand Variables)
         primary: {
-          DEFAULT: "var(--color-primary)", // ✅ Updated to use CSS variable
-          hover: "var(--color-primary-hover)",
-          foreground: "#ffffff",
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
           foreground: "hsl(var(--secondary-foreground))",
         },
-
-        // Accent & Status Colors
-        accent: {
-          DEFAULT: "var(--color-accent)",
-          hover: "#2563eb", // ✅ Fallback hover color
-        },
-        danger: {
-          DEFAULT: "var(--color-danger)",
-          hover: "#dc2626", // ✅ Fallback hover color
-        },
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
+        },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
         },
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
-
-        // Inputs, Borders & Ring
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
-
-        // Charts
         chart: {
           1: "hsl(var(--chart-1))",
           2: "hsl(var(--chart-2))",
@@ -73,8 +56,6 @@ export default {
           4: "hsl(var(--chart-4))",
           5: "hsl(var(--chart-5))",
         },
-
-        // Sidebar Colors
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
@@ -93,12 +74,20 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: { height: "0" },
-          to: { height: "var(--radix-accordion-content-height)" },
+          from: {
+            height: "0",
+          },
+          to: {
+            height: "var(--radix-accordion-content-height)",
+          },
         },
         "accordion-up": {
-          from: { height: "var(--radix-accordion-content-height)" },
-          to: { height: "0" },
+          from: {
+            height: "var(--radix-accordion-content-height)",
+          },
+          to: {
+            height: "0",
+          },
         },
       },
       animation: {

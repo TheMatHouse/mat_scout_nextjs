@@ -139,7 +139,7 @@ const DashboardMatches = ({ user }) => {
                 setPreviewOpen(true);
               }}
               title="View Match Details"
-              className="icon-btn"
+              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
             >
               <Eye className="w-5 h-5 text-blue-500" />
             </button>
@@ -149,14 +149,14 @@ const DashboardMatches = ({ user }) => {
                 setOpen(true);
               }}
               title="Edit Match"
-              className="icon-btn"
+              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
             >
               <Edit className="w-5 h-5 text-green-500" />
             </button>
             <button
               onClick={() => handleDeleteMatch(match)}
               title="Delete Match"
-              className="icon-btn"
+              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
             >
               <Trash className="w-5 h-5 text-red-500" />
             </button>
@@ -211,7 +211,7 @@ const DashboardMatches = ({ user }) => {
           matchReports.map((match) => (
             <div
               key={match._id}
-              className="card p-4 rounded-lg shadow-md"
+              className="bg-gray-900 text-white p-4 rounded-lg shadow-md border border-gray-700"
             >
               <p>
                 <strong>Type:</strong> {match.matchType}
@@ -229,9 +229,9 @@ const DashboardMatches = ({ user }) => {
               <p>
                 <strong>Result:</strong>{" "}
                 {match.result === "Won" ? (
-                  <span className="text-[var(--color-success)]">Win</span>
+                  <span className="text-green-400">Win</span>
                 ) : (
-                  <span className="text-[var(--color-danger)]">Loss</span>
+                  <span className="text-red-400">Loss</span>
                 )}
               </p>
               <div className="flex justify-end gap-3 mt-3">
@@ -241,7 +241,7 @@ const DashboardMatches = ({ user }) => {
                     setPreviewOpen(true);
                   }}
                   title="View Details"
-                  className="icon-btn"
+                  className="text-blue-400 hover:text-blue-300"
                 >
                   <Eye size={18} />
                 </button>
@@ -251,14 +251,14 @@ const DashboardMatches = ({ user }) => {
                     setOpen(true);
                   }}
                   title="Edit"
-                  className="icon-btn"
+                  className="text-green-400 hover:text-green-300"
                 >
                   <Edit size={18} />
                 </button>
                 <button
                   onClick={() => handleDeleteMatch(match)}
                   title="Delete"
-                  className="icon-btn"
+                  className="text-red-500 hover:text-red-400"
                 >
                   <Trash size={18} />
                 </button>

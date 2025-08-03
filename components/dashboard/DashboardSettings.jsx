@@ -1,8 +1,7 @@
-// components/dashboard/DashboardSettings.jsx
 "use client";
 
 import { useState } from "react";
-import { Pencil, Camera } from "lucide-react";
+import { Pencil, Camera, Copy, Share } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -16,8 +15,6 @@ import SettingsForm from "./forms/SettingsForm";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
-import { Copy, Share } from "lucide-react";
-
 import GoogleIcon from "@/components/icons/GoogleIcon";
 import FacebookIcon from "@/components/icons/FacebookIcon";
 
@@ -25,6 +22,23 @@ export default function DashboardSettings({ user, refreshUser }) {
   const [open, setOpen] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState(null);
   const router = useRouter();
+
+  // ✅ States for Notification Switches
+  const [notifications, setNotifications] = useState({
+    joinRequests: { inApp: false, email: false },
+    teamUpdates: { inApp: false, email: false },
+    scoutingReports: { inApp: false, email: false },
+  });
+
+  const toggleNotification = (key, type) => {
+    setNotifications((prev) => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        [type]: !prev[key][type],
+      },
+    }));
+  };
 
   if (!user) {
     return (
@@ -58,13 +72,8 @@ export default function DashboardSettings({ user, refreshUser }) {
       try {
         const res = await fetch(`/api/dashboard/${user._id}/avatar`, {
           method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            image: base64Image,
-            avatarType: "uploaded",
-          }),
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: base64Image, avatarType: "uploaded" }),
         });
 
         if (!res.ok) throw new Error("Failed to upload avatar");
@@ -85,9 +94,7 @@ export default function DashboardSettings({ user, refreshUser }) {
   const revertToSocial = async (provider) => {
     await fetch(`/api/dashboard/${user._id}/avatar`, {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ avatarType: provider }),
     });
 
@@ -99,13 +106,8 @@ export default function DashboardSettings({ user, refreshUser }) {
   const revertToUploaded = async () => {
     await fetch(`/api/dashboard/${user._id}/avatar`, {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        avatarType: "uploaded",
-        image: "use-existing",
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ avatarType: "uploaded", image: "use-existing" }),
     });
 
     toast.success("Switched to uploaded avatar");
@@ -113,7 +115,6 @@ export default function DashboardSettings({ user, refreshUser }) {
     router.refresh();
   };
 
-  // 🔔 Resend Verification Logic
   const handleResendVerification = async () => {
     try {
       const res = await fetch("/api/auth/resend-verification", {
@@ -132,22 +133,22 @@ export default function DashboardSettings({ user, refreshUser }) {
   };
 
   return (
-    <section className="max-w-3xl mx-auto px-4 py-8">
-      {/* 🔔 Email verification reminder */}
+    <section className="max-w-4xl mx-auto px-4 py-8">
       {user && !user.verified && (
-        <div className="bg-yellow-800 text-yellow-100 px-4 py-3 rounded text-center">
-          Please verify your email address to unlock full features.{" "}
+        <div className="bg-yellow-800 text-yellow-100 px-4 py-3 rounded text-center mb-4">
+          Please verify your email to unlock full features.
           <Button
             variant="secondary"
             size="sm"
             onClick={handleResendVerification}
-            className="ml-2 inline-block"
+            className="ml-2"
           >
             Resend verification email
           </Button>
         </div>
       )}
 
+      {/* Profile Header */}
       <header className="mb-6">
         <div className="flex flex-col items-center gap-4 mb-4">
           <Image
@@ -158,48 +159,44 @@ export default function DashboardSettings({ user, refreshUser }) {
             className="rounded-full border object-cover w-24 h-24"
           />
 
-          <div className="flex flex-col items-center gap-2">
-            <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded border text-sm hover:bg-muted transition">
-              <Camera className="h-4 w-4" /> Change Avatar
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-            </label>
+          <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded border text-sm hover:bg-muted transition">
+            <Camera className="h-4 w-4" /> Change Avatar
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+          </label>
 
-            <div className="flex gap-2 flex-wrap justify-center">
-              {user.googleAvatar && user.avatarType !== "google" && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => revertToSocial("google")}
-                >
-                  <GoogleIcon className="w-4 h-4 mr-1" /> Use Google Avatar
-                </Button>
-              )}
-
-              {user.facebookAvatar && user.avatarType !== "facebook" && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => revertToSocial("facebook")}
-                >
-                  <FacebookIcon className="w-4 h-4 mr-1" /> Use Facebook Avatar
-                </Button>
-              )}
-
-              {user.avatarType !== "uploaded" && user.avatarId && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={revertToUploaded}
-                >
-                  Use Uploaded Avatar
-                </Button>
-              )}
-            </div>
+          <div className="flex gap-2 flex-wrap justify-center">
+            {user.googleAvatar && user.avatarType !== "google" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => revertToSocial("google")}
+              >
+                <GoogleIcon className="w-4 h-4 mr-1" /> Google Avatar
+              </Button>
+            )}
+            {user.facebookAvatar && user.avatarType !== "facebook" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => revertToSocial("facebook")}
+              >
+                <FacebookIcon className="w-4 h-4 mr-1" /> Facebook Avatar
+              </Button>
+            )}
+            {user.avatarType !== "uploaded" && user.avatarId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={revertToUploaded}
+              >
+                Uploaded Avatar
+              </Button>
+            )}
           </div>
 
           <h1 className="text-3xl font-bold text-center">
@@ -220,7 +217,7 @@ export default function DashboardSettings({ user, refreshUser }) {
                 Edit Settings <Pencil className="ml-2 h-4 w-4" />
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-h-[90vh] overflow-y-auto dialog-content-custom">
               <DialogHeader>
                 <DialogTitle>Edit Settings</DialogTitle>
                 <DialogDescription>
@@ -237,10 +234,11 @@ export default function DashboardSettings({ user, refreshUser }) {
         </div>
       </header>
 
+      {/* Info Cards */}
       <div className="space-y-4">
-        <div className="rounded-lg border bg-card text-card-foreground p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="text-sm">
-            <p className="font-semibold mb-1">Your Public Profile</p>
+        <div className="settings-card flex justify-between items-center">
+          <div>
+            <p className="font-semibold">Your Public Profile</p>
             <a
               href={`https://matscout.com/${user.username}`}
               target="_blank"
@@ -250,7 +248,7 @@ export default function DashboardSettings({ user, refreshUser }) {
               https://matscout.com/{user.username}
             </a>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex gap-2">
             <Button
               variant="ghost"
               size="icon"
@@ -263,7 +261,6 @@ export default function DashboardSettings({ user, refreshUser }) {
             >
               <Copy className="w-4 h-4" />
             </Button>
-
             {navigator.share && (
               <Button
                 variant="ghost"
@@ -281,12 +278,14 @@ export default function DashboardSettings({ user, refreshUser }) {
           </div>
         </div>
 
-        <div className="rounded-lg border bg-card text-card-foreground p-4">
+        {/* Email */}
+        <div className="settings-card">
           <h2 className="text-lg font-semibold mb-1">Email</h2>
           <p className="text-sm">{user.email}</p>
         </div>
 
-        <div className="rounded-lg border bg-card text-card-foreground p-4">
+        {/* Location */}
+        <div className="settings-card">
           <h2 className="text-lg font-semibold mb-1">Location</h2>
           {user.city && user.state && user.country ? (
             <p className="text-sm">
@@ -299,14 +298,16 @@ export default function DashboardSettings({ user, refreshUser }) {
           )}
         </div>
 
-        <div className="rounded-lg border bg-card text-card-foreground p-4">
+        {/* Gender */}
+        <div className="settings-card">
           <h2 className="text-lg font-semibold mb-1">Gender</h2>
           <p className="text-sm text-muted-foreground">
             {user.gender || "Not specified"}
           </p>
         </div>
 
-        <div className="rounded-lg border bg-card text-card-foreground p-4">
+        {/* Privacy */}
+        <div className="settings-card">
           <h2 className="text-lg font-semibold mb-1">Privacy Settings</h2>
           <p className="text-sm">
             Your profile is currently{" "}

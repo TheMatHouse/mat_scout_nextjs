@@ -1,12 +1,16 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Countries from "@/assets/countries.json";
 import useGeolocationCountry from "@/hooks/useGeolocationCountry";
-
 import { toast } from "react-toastify";
 
 export default function SettingsForm({ user, onClose, refreshUser }) {
@@ -66,19 +70,8 @@ export default function SettingsForm({ user, onClose, refreshUser }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     const payload = {
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      email: formData.email,
-      username: formData.username,
-      city: formData.city,
-      state: formData.state,
-      country: formData.country,
-      gender: formData.gender,
-      bMonth: formData.bMonth,
-      bDay: formData.bDay,
-      bYear: formData.bYear,
+      ...formData,
       allowPublic: formData.allowPublic ? "Public" : "Private",
       ...(formData.newPassword && { password: formData.newPassword }),
     };
@@ -93,228 +86,222 @@ export default function SettingsForm({ user, onClose, refreshUser }) {
         }
       );
 
-      const text = await response.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = { message: text || "Unknown response format" };
-      }
-
+      const data = await response.json();
       if (response.ok) {
         onClose();
-        setTimeout(async () => {
-          await refreshUser();
-          toast.success(data.message || "User updated successfully");
-        }, 300);
+        await refreshUser();
+        toast.success(data.message || "User updated successfully");
       } else {
         toast.error(data.message || "Something went wrong");
       }
     } catch (err) {
       toast.error(err.message || "Unexpected error");
-      console.error(err);
     }
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-8 bg-background text-foreground p-6 rounded-lg shadow-lg"
-    >
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <div>
-          <Label htmlFor="firstName">First Name</Label>
-          <Input
-            type="text"
-            id="firstName"
-            name="firstName"
-            value={formData.firstName}
-            onChange={handleChange}
-            disabled={isOAuthUser}
-          />
-          {isOAuthUser && (
-            <p className="text-sm text-muted-foreground">
-              This name is managed by {user.provider}
-            </p>
-          )}
-        </div>
-        <div>
-          <Label htmlFor="lastName">Last Name</Label>
-          <Input
-            type="text"
-            id="lastName"
-            name="lastName"
-            value={formData.lastName}
-            onChange={handleChange}
-            disabled={isOAuthUser}
-          />
-        </div>
-      </div>
-
-      <div>
-        <Label htmlFor="email">Email</Label>
-        <Input
-          type="email"
-          id="email"
-          name="email"
-          value={formData.email}
-          onChange={handleChange}
-          disabled={isOAuthUser}
-        />
-        {isOAuthUser && (
-          <p className="text-sm text-muted-foreground">
-            This email is managed by {user.provider}
-          </p>
-        )}
-      </div>
-
-      <div>
-        <Label htmlFor="username">Username</Label>
-        <Input
-          type="text"
-          id="username"
-          name="username"
-          value={formData.username}
-          onChange={handleChange}
-        />
-        {usernameStatus === "taken" && (
-          <p className="text-sm text-red-500">Username is already taken</p>
-        )}
-        {usernameStatus === "available" && (
-          <p className="text-sm text-green-500">Username is available</p>
-        )}
-      </div>
-
-      <div className="grid grid-cols-3 gap-4">
-        <div>
-          <Label htmlFor="bMonth">Birth Month</Label>
-          <Input
-            type="number"
-            id="bMonth"
-            name="bMonth"
-            value={formData.bMonth}
-            onChange={handleChange}
-            min="1"
-            max="12"
-          />
-        </div>
-        <div>
-          <Label htmlFor="bDay">Birth Day</Label>
-          <Input
-            type="number"
-            id="bDay"
-            name="bDay"
-            value={formData.bDay}
-            onChange={handleChange}
-            min="1"
-            max="31"
-          />
-        </div>
-        <div>
-          <Label htmlFor="bYear">Birth Year</Label>
-          <Input
-            type="number"
-            id="bYear"
-            name="bYear"
-            value={formData.bYear}
-            onChange={handleChange}
-            min="1900"
-            max={new Date().getFullYear()}
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        <div>
-          <Label htmlFor="city">City</Label>
-          <Input
-            type="text"
-            id="city"
-            name="city"
-            value={formData.city}
-            onChange={handleChange}
-          />
-        </div>
-        <div>
-          <Label htmlFor="state">State</Label>
-          <Input
-            type="text"
-            id="state"
-            name="state"
-            value={formData.state}
-            onChange={handleChange}
-          />
-        </div>
-        <div>
-          <Label htmlFor="country">Country</Label>
-          <select
-            id="country"
-            name="country"
-            value={formData.country}
-            onChange={handleChange}
-            className="w-full rounded-md border px-3 py-2"
-          >
-            <option value="">Select country...</option>
-            {Countries.map((country) => (
-              <option
-                key={country.code3}
-                value={country.code3}
+    <Card className="shadow-md card-dark">
+      <CardHeader>
+        <CardTitle>Edit Settings</CardTitle>
+        <CardDescription>
+          Update your personal profile details below.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-6"
+        >
+          {/* First/Last Name */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label
+                className="block mb-1 font-medium"
+                htmlFor="firstName"
               >
-                {country.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+                First Name
+              </label>
+              <input
+                type="text"
+                id="firstName"
+                name="firstName"
+                value={formData.firstName}
+                onChange={handleChange}
+                disabled={isOAuthUser}
+                className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-700 bg-background text-foreground"
+              />
+            </div>
+            <div>
+              <label
+                className="block mb-1 font-medium"
+                htmlFor="lastName"
+              >
+                Last Name
+              </label>
+              <input
+                type="text"
+                id="lastName"
+                name="lastName"
+                value={formData.lastName}
+                onChange={handleChange}
+                disabled={isOAuthUser}
+                className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-700 bg-background text-foreground"
+              />
+            </div>
+          </div>
 
-      <div>
-        <Label htmlFor="gender">Gender</Label>
-        <select
-          id="gender"
-          name="gender"
-          value={formData.gender}
-          onChange={handleChange}
-          className="w-full rounded-md border px-3 py-2"
-        >
-          <option value="">Select gender...</option>
-          <option value="male">Male</option>
-          <option value="female">Female</option>
-          <option value="not specified">Not specified</option>
-        </select>
-      </div>
+          {/* Email */}
+          <div>
+            <label
+              className="block mb-1 font-medium"
+              htmlFor="email"
+            >
+              Email
+            </label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              disabled={isOAuthUser}
+              className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-700 bg-background text-foreground"
+            />
+          </div>
 
-      <div>
-        <Label htmlFor="newPassword">New Password</Label>
-        <Input
-          type="password"
-          id="newPassword"
-          name="newPassword"
-          value={formData.newPassword}
-          onChange={handleChange}
-          placeholder="Leave blank to keep existing password"
-        />
-      </div>
+          {/* Username */}
+          <div>
+            <label
+              className="block mb-1 font-medium"
+              htmlFor="username"
+            >
+              Username
+            </label>
+            <input
+              type="text"
+              id="username"
+              name="username"
+              value={formData.username}
+              onChange={handleChange}
+              className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-700 bg-background text-foreground"
+            />
+            {usernameStatus === "taken" && (
+              <p className="text-sm text-red-500">Username is already taken</p>
+            )}
+            {usernameStatus === "available" && (
+              <p className="text-sm text-green-500">Username is available</p>
+            )}
+          </div>
 
-      <div className="flex items-center">
-        <input
-          type="checkbox"
-          id="allowPublic"
-          name="allowPublic"
-          checked={formData.allowPublic}
-          onChange={handleChange}
-          className="mr-2"
-        />
-        <Label htmlFor="allowPublic">Make Profile Public</Label>
-      </div>
+          {/* Location & Birthdate */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label
+                className="block mb-1 font-medium"
+                htmlFor="city"
+              >
+                City
+              </label>
+              <input
+                type="text"
+                id="city"
+                name="city"
+                value={formData.city}
+                onChange={handleChange}
+                className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-700 bg-background text-foreground"
+              />
+            </div>
+            <div>
+              <label
+                className="block mb-1 font-medium"
+                htmlFor="state"
+              >
+                State
+              </label>
+              <input
+                type="text"
+                id="state"
+                name="state"
+                value={formData.state}
+                onChange={handleChange}
+                className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-700 bg-background text-foreground"
+              />
+            </div>
+            <div>
+              <label
+                className="block mb-1 font-medium"
+                htmlFor="country"
+              >
+                Country
+              </label>
+              <select
+                id="country"
+                name="country"
+                value={formData.country}
+                onChange={handleChange}
+                className="w-full rounded border border-gray-300 dark:border-gray-700 bg-background text-foreground"
+              >
+                <option value="">Select country...</option>
+                {Countries.map((country) => (
+                  <option
+                    key={country.code3}
+                    value={country.code3}
+                  >
+                    {country.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-      <div className="pt-4">
-        <Button
-          type="submit"
-          className="bg-ms-blue-gray hover:bg-ms-blue text-white"
-        >
-          Save Changes
-        </Button>
-      </div>
-    </form>
+          {/* Password */}
+          <div>
+            <label
+              className="block mb-1 font-medium"
+              htmlFor="newPassword"
+            >
+              New Password
+            </label>
+            <input
+              type="password"
+              id="newPassword"
+              name="newPassword"
+              value={formData.newPassword}
+              onChange={handleChange}
+              placeholder="Leave blank to keep existing password"
+              className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-700 bg-background text-foreground"
+            />
+          </div>
+
+          {/* Checkbox */}
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="allowPublic"
+              name="allowPublic"
+              checked={formData.allowPublic}
+              onChange={handleChange}
+              className="h-4 w-4 rounded border-gray-300"
+            />
+            <label
+              htmlFor="allowPublic"
+              className="font-medium"
+            >
+              Make Profile Public
+            </label>
+          </div>
+
+          {/* Submit */}
+          <div className="pt-4">
+            <Button
+              type="submit"
+              className="btn btn-primary"
+            >
+              Save Changes
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useUser } from "@/context/UserContext";
 import { cn } from "@/lib/utils";
+import { LayoutDashboard, Users, User } from "lucide-react";
 
 export default function AuthenticatedSidebar() {
   const { user } = useUser();
@@ -19,9 +20,14 @@ export default function AuthenticatedSidebar() {
   if (!user) return null;
 
   const mainLinks = [
-    { href: "/dashboard", label: "Dashboard", exact: true },
-    { href: "/teams", label: "Teams" },
-    { href: `/${user.username}`, label: "Profile" },
+    {
+      href: "/dashboard",
+      label: "Dashboard",
+      icon: <LayoutDashboard size={18} />,
+      exact: true,
+    },
+    { href: "/teams", label: "Teams", icon: <Users size={18} /> },
+    { href: `/${user.username}`, label: "Profile", icon: <User size={18} /> },
   ];
 
   const dashboardSubLinks = [
@@ -42,6 +48,7 @@ export default function AuthenticatedSidebar() {
       <nav className="space-y-4">
         {mainLinks.map((link) => (
           <div key={link.href}>
+            {/* Main link */}
             <Link
               href={link.href}
               onClick={() => {
@@ -53,23 +60,26 @@ export default function AuthenticatedSidebar() {
                 }
               }}
               className={cn(
-                "block text-lg font-medium hover:text-ms-light-red transition",
-                pathname === link.href && "text-ms-light-red"
+                "flex items-center gap-2 text-lg font-medium px-2 py-2 rounded-md transition hover:text-ms-light-red hover:bg-[hsl(222_47%_20%)]",
+                pathname === link.href &&
+                  "bg-[hsl(222_47%_25%)] text-ms-light-red font-semibold border-l-4 border-[var(--ms-light-red)]"
               )}
             >
+              {link.icon}
               {link.label}
             </Link>
 
             {/* Dashboard submenu */}
             {link.href === "/dashboard" && isDashboardOpen && (
-              <div className="pl-4 mt-2 space-y-2 text-sm text-ms-blue-gray">
+              <div className="pl-6 mt-2 space-y-2 text-sm text-ms-blue-gray">
                 {dashboardSubLinks.map((sub) => (
                   <Link
                     key={sub.href}
                     href={sub.href}
                     className={cn(
-                      "block hover:text-white transition",
-                      pathname === sub.href && "text-white font-semibold"
+                      "block px-2 py-1 rounded-md transition hover:bg-[hsl(222_47%_20%)] hover:text-white",
+                      pathname === sub.href &&
+                        "bg-[hsl(222_47%_25%)] text-white font-semibold border-l-4 border-[var(--ms-light-red)]"
                     )}
                   >
                     {sub.label}
@@ -80,14 +90,15 @@ export default function AuthenticatedSidebar() {
 
             {/* Teams submenu */}
             {link.href === "/teams" && isTeamsOpen && (
-              <div className="pl-4 mt-2 space-y-2 text-sm text-ms-blue-gray">
+              <div className="pl-6 mt-2 space-y-2 text-sm text-ms-blue-gray">
                 {teamSubLinks.map((sub) => (
                   <Link
                     key={sub.href}
                     href={sub.href}
                     className={cn(
-                      "block hover:text-white transition",
-                      pathname === sub.href && "text-white font-semibold"
+                      "block px-2 py-1 rounded-md transition hover:bg-[hsl(222_47%_20%)] hover:text-white",
+                      pathname === sub.href &&
+                        "bg-[hsl(222_47%_25%)] text-white font-semibold border-l-4 border-[var(--ms-light-red)]"
                     )}
                   >
                     {sub.label}
@@ -98,17 +109,6 @@ export default function AuthenticatedSidebar() {
           </div>
         ))}
       </nav>
-
-      <div className="space-y-2 text-sm text-ms-blue-gray">
-        <Link href="/contact">Contact</Link>
-        <Link href="/social">Social</Link>
-        <Link
-          href="/logout"
-          className="text-red-400 hover:text-white"
-        >
-          Logout
-        </Link>
-      </div>
     </aside>
   );
 }

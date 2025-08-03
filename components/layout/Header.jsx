@@ -9,7 +9,7 @@ import NotificationBell from "@/components/notifications/NotificationBell"; // â
 
 export default function Header() {
   return (
-    <header className="w-full sticky top-0 z-50 bg-ms-blue text-ms-nav-text dark:bg-[hsl(222.2_47.4%_11.2%)] dark:text-white shadow-sm border-b border-border">
+    <header className="w-full sticky top-0 z-50 bg-ms-blue text-ms-nav-text dark:bg-[hsl(222.2_47.4%_11.2%)] dark:text-white shadow-sm">
       <div className="flex items-center justify-between px-6 md:px-12 lg:px-20 py-4 w-full">
         {/* Mobile Logo */}
         <Link
