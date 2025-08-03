@@ -64,26 +64,39 @@ export default function TechniqueTagInput({
       className="mb-4 relative"
       ref={containerRef}
     >
-      {/* {label && (
-        <label className="block font-medium mb-1 text-sm">{label}</label>
-      )} */}
+      {label && (
+        <label className="block text-sm font-medium mb-2 text-gray-200">
+          {label}
+        </label>
+      )}
 
-      <div className="flex flex-wrap items-center gap-2 border border-gray-600 rounded-md px-2 py-2 bg-black">
+      {/* Updated Input Container */}
+      <div
+        className="
+          flex flex-wrap items-center gap-2
+          border rounded-md px-3 py-2
+          bg-[var(--color-card)] text-gray-100
+          shadow-sm transition
+          focus-within:border-[var(--color-border-focus)]
+          focus-within:ring-1 focus-within:ring-[var(--color-border-focus)]
+        "
+      >
         {selected.map((tag, i) => (
           <span
             key={i}
-            className="flex items-center gap-1 bg-gray-800 text-white text-sm rounded-full px-3 py-1"
+            className="flex items-center gap-1 bg-gray-800 text-gray-100 text-sm rounded-full px-3 py-1"
           >
             {tag.label}
             <button
               type="button"
               onClick={() => onDelete(i)}
-              className="ml-1 text-white hover:text-red-300 focus:outline-none"
+              className="ml-1 text-gray-300 hover:text-red-400 focus:outline-none"
             >
               ×
             </button>
           </span>
         ))}
+
         <input
           type="text"
           name={name}
@@ -92,14 +105,24 @@ export default function TechniqueTagInput({
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => setIsFocused(true)}
-          className="flex-1 min-w-[140px] py-1 px-2 bg-transparent border-none focus:outline-none text-sm text-white placeholder-gray-400"
+          className="
+            flex-1 min-w-[140px] py-1 px-2 bg-transparent border-none
+            focus:outline-none text-sm text-gray-100 placeholder-gray-400
+          "
           placeholder="Type technique and press Enter"
         />
       </div>
 
       {isFocused &&
         (filteredSuggestions.length > 0 || inputValue.trim() !== "") && (
-          <ul className="absolute z-50 mt-1 w-full bg-gray-900 border border-gray-700 rounded-md shadow text-sm text-white max-h-52 overflow-y-auto">
+          <ul
+            className="
+              absolute z-50 mt-1 w-full
+              bg-[var(--color-card)] border border-[var(--color-border)]
+              rounded-md shadow text-sm text-gray-100
+              max-h-52 overflow-y-auto
+            "
+          >
             {filteredSuggestions.map((sug, i) => (
               <li
                 key={i}

@@ -5,14 +5,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "react-toastify";
 import StyleCard from "../../StyleCard";
 import StyleForm from "../../forms/StyleForm";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import ModalLayout from "@/components/shared/ModalLayout";
 
 const FamilyStyles = ({ member }) => {
   const [styles, setStyles] = useState([]);
@@ -56,53 +49,47 @@ const FamilyStyles = ({ member }) => {
 
   return (
     <div>
-      {/* Header and Add Style button */}
-      <div className="flex items-center">
-        <h1 className="text-2xl">
+      {/* Header and Add Button */}
+      <div className="flex flex-col items-start gap-4 mb-4">
+        <h1 className="text-2xl font-bold">
           {member.firstName} {member.lastName}’s Styles/Sports
         </h1>
-        <Dialog
-          open={open}
-          onOpenChange={setOpen}
-          className="min-w-[800px]"
+        <Button
+          className="bg-gray-900 hover:bg-gray-500 text-white border-2 border-gray-500 dark:border-gray-100"
+          onClick={() => setOpen(true)}
         >
-          <DialogTrigger asChild>
-            <Button className="bg-gray-900 hover:bg-gray-500 border-gray-500 dark:border-gray-100 border-2 drop-shadow-md text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ml-6">
-              Add Style
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="overflow-y-scroll max-h-[90%]">
-            <DialogHeader>
-              <DialogTitle>Add Style</DialogTitle>
-              <DialogDescription>
-                Add a new style/sport here. You can edit this style at any time.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4 min-width-full">
-              <StyleForm
-                user={{
-                  _id: member._id,
-                  parentId: member.userId, // 👈 parent user ID needed for form submission
-                }}
-                member={member}
-                userType="family"
-                setOpen={setOpen}
-                onSuccess={handleStylesRefresh}
-              />
-            </div>
-          </DialogContent>
-        </Dialog>
+          Add Style
+        </Button>
       </div>
 
-      <hr className="inline-block w-full border-t-1 border-gray-100 mt-2" />
+      {/* Modal */}
+      <ModalLayout
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        title="Add Style"
+        description="Add a new style/sport here. You can edit this style at any time."
+        withCard={true}
+      >
+        <StyleForm
+          user={{
+            _id: member._id,
+            parentId: member.userId, // ✅ parent user ID for form submission
+          }}
+          member={member}
+          userType="family"
+          setOpen={setOpen}
+          onSuccess={handleStylesRefresh}
+        />
+      </ModalLayout>
 
-      {/* Style card grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5 lg:gap-6 mt-3">
+      <hr className="border-gray-200 dark:border-gray-700 my-4" />
+
+      {/* Style Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5 lg:gap-6">
         {styles.map((style, index) => (
           <StyleCard
             key={index}
             style={style}
-            //user={user}
             member={member}
             userType="family"
             onDelete={handleDeleteStyle}

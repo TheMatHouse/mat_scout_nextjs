@@ -1,14 +1,8 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import ModalLayout from "@/components/shared/ModalLayout";
 import AddFamilyForm from "./forms/FamilyMemberForm";
 import FamilyCard from "./FamilyCard";
 import { useUser } from "@/context/UserContext";
@@ -40,37 +34,35 @@ const FamilyDashboard = () => {
 
   return (
     <div>
-      <div className="flex flex-column items-center">
-        <Dialog
-          open={open}
-          onOpenChange={setOpen}
+      {/* Header + Add Button */}
+      <div className="flex flex-col items-start mb-4">
+        <h1 className="text-2xl font-bold mb-4">My Family Members</h1>
+        <Button
+          className="btn btn-primary"
+          onClick={() => setOpen(true)}
         >
-          <DialogTrigger asChild>
-            <Button className="ml-6 bg-gray-900 hover:bg-gray-500 border-gray-500 dark:border-gray-100 border-2 drop-shadow-md text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-              Add Family Member
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="overflow-y-scroll max-h-[90%]">
-            <DialogHeader>
-              <DialogTitle>Add Family Member</DialogTitle>
-              <DialogDescription>
-                Add a new family member to your profile. You can manage their
-                styles, matches, and more later.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <AddFamilyForm
-                user={user}
-                onClose={() => setOpen(false)}
-                onSuccess={fetchFamilyMembers}
-              />
-            </div>
-          </DialogContent>
-        </Dialog>
+          Add Family Member
+        </Button>
       </div>
 
-      <hr className="inline-block w-full border-t-1 border-gray-100 my-6" />
+      {/* Modal using ModalLayout */}
+      <ModalLayout
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        title="Add Family Member"
+        description="Add a new family member to your profile. You can manage their styles, matches, and more later."
+        withCard={true}
+      >
+        <AddFamilyForm
+          user={user}
+          onClose={() => setOpen(false)}
+          onSuccess={fetchFamilyMembers}
+        />
+      </ModalLayout>
 
+      <hr className="border-gray-200 dark:border-gray-700 my-4" />
+
+      {/* Family Member Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {Array.isArray(familyMembers) && familyMembers.length > 0 ? (
           familyMembers.map((member) => (

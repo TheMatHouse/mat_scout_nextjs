@@ -1,5 +1,5 @@
-// Updated MatchReportForm.jsx to support both user and family member match reports
 "use client";
+
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
@@ -13,12 +13,14 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import Countries from "@/assets/countries.json";
 import Editor from "../../shared/Editor";
 import TechniqueTagInput from "../../shared/TechniqueTagInput";
+
+// ✅ Shared Form Components
+import FormField from "@/components/shared/FormField";
+import FormSelect from "@/components/shared/FormSelect";
 
 const MatchReportForm = ({
   athlete,
@@ -32,6 +34,8 @@ const MatchReportForm = ({
 }) => {
   const router = useRouter();
   const { refreshUser } = useUser();
+
+  // Form State
   const [matchType, setMatchType] = useState(match?.matchType || "");
   const [eventName, setEventName] = useState(match?.eventName || "");
   const [matchDate, setMatchDate] = useState(
@@ -71,11 +75,11 @@ const MatchReportForm = ({
           setLoadedTechniques(data);
         } else {
           console.warn("Expected array but got:", data);
-          setLoadedTechniques([]); // fallback to empty array
+          setLoadedTechniques([]);
         }
       } catch (error) {
         console.error("Error fetching techniques:", error);
-        setLoadedTechniques([]); // fallback
+        setLoadedTechniques([]);
       }
     };
 
@@ -85,11 +89,6 @@ const MatchReportForm = ({
   const techniqueList = loadedTechniques.map((tech, i) => ({
     label: tech.name,
     value: i,
-  }));
-
-  const suggestions = techniqueList.map((name, i) => ({
-    value: i,
-    label: name,
   }));
 
   const [opponentSelected, setOpponentSelected] = useState(
@@ -133,28 +132,27 @@ const MatchReportForm = ({
     }
 
     const payload = {
-      matchType: formData.get("matchType"),
-      eventName: formData.get("eventName"),
-      matchDate: formData.get("matchDate"),
-      division: formData.get("division"),
-      weightCategory: formData.get("weightCategory"),
-      opponentName: formData.get("opponentName"),
-      opponentClub: formData.get("opponentClub"),
-      opponentRank: formData.get("opponentRank"),
+      matchType,
+      eventName,
+      matchDate,
+      division,
+      weightCategory,
+      opponentName,
+      opponentClub,
+      opponentRank,
       opponentGrip,
       opponentCountry,
       opponentAttacks: opponentSelected.map((item) => item.label.toLowerCase()),
       opponentAttackNotes: oppAttackNotes,
       athleteAttacks: athleteSelected.map((item) => item.label.toLowerCase()),
       athleteAttackNotes: athAttackNotes,
-      result: formData.get("result"),
-      score: formData.get("score"),
-      videoTitle: formData.get("videoTitle"),
+      result,
+      score,
+      videoTitle,
       videoURL: embedURL,
-      isPublic: formData.get("isPublic") === "on",
+      isPublic,
     };
 
-    // Determine IDs
     const userId = athlete?.userId || athlete._id;
     const memberId = athlete?._id;
 
@@ -171,13 +169,14 @@ const MatchReportForm = ({
     const url =
       userType === "family"
         ? match
-          ? `${base}/family/${memberId}/matchReports/${match._id}` // PATCH
-          : `${base}/family/${memberId}/matchReports` // POST
+          ? `${base}/family/${memberId}/matchReports/${match._id}`
+          : `${base}/family/${memberId}/matchReports`
         : match
-        ? `${base}/matchReports/${match._id}` // PATCH
-        : `${base}/matchReports`; // POST
+        ? `${base}/matchReports/${match._id}`
+        : `${base}/matchReports`;
 
     try {
+      console.log("Payload being sent:", payload);
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -206,330 +205,254 @@ const MatchReportForm = ({
     videoURL.includes("youtube.com/embed/");
 
   const userStyles = athlete?.userStyles || [];
+
   return (
-    <Card className="p-6 shadow-md">
-      <CardHeader>
-        <CardTitle>
-          {match ? "Update Match Report" : "Add Match Report"}
-        </CardTitle>
-        <CardDescription>
-          {match
-            ? "Edit your match details."
-            : "Fill out the form below to create a new report."}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-6"
-        >
-          <div>
-            <Label htmlFor="matchType">Match Type</Label>
-            <select
-              id="matchType"
-              name="matchType"
-              value={matchType}
-              onChange={(e) => setMatchType(e.target.value)}
-              className="w-full rounded-md border px-3 py-2"
-            >
-              <option value="">Select match type...</option>
-              {userStyles?.map((style) => (
-                <option
-                  key={style._id}
-                  value={style.styleName}
-                >
-                  {style.styleName}
-                </option>
-              ))}
-            </select>
-          </div>
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-6"
+    >
+      {/* Match Type */}
+      <FormSelect
+        label="Match Type"
+        placeholder="Select match type..."
+        value={matchType}
+        onChange={setMatchType}
+        options={userStyles.map((style) => ({
+          value: style.styleName,
+          label: style.styleName,
+        }))}
+      />
 
-          <div>
-            <Label htmlFor="eventName">Event Name</Label>
-            <Input
-              type="text"
-              id="eventName"
-              name="eventName"
-              value={eventName}
-              onChange={(e) => setEventName(e.target.value)}
-              required
-            />
-          </div>
+      <FormField
+        label="Event Name"
+        name="eventName"
+        type="text"
+        value={eventName}
+        onChange={(e) => setEventName(e.target.value)}
+        required
+      />
 
-          <div>
-            <Label htmlFor="matchDate">Match Date</Label>
-            <Input
-              type="date"
-              id="matchDate"
-              name="matchDate"
-              value={matchDate}
-              onChange={(e) => setMatchDate(e.target.value)}
-              required
-            />
-          </div>
+      <FormField
+        label="Match Date"
+        name="matchDate"
+        type="date"
+        value={matchDate}
+        onChange={(e) => setMatchDate(e.target.value)}
+        required
+      />
 
-          <div>
-            <Label htmlFor="division">Division</Label>
-            <Input
-              type="text"
-              id="division"
-              name="division"
-              value={division}
-              onChange={(e) => setDivision(e.target.value)}
-            />
-          </div>
+      <FormField
+        label="Division"
+        name="division"
+        type="text"
+        value={division}
+        onChange={(e) => setDivision(e.target.value)}
+      />
 
-          <div>
-            <Label htmlFor="weightCategory">Weight Category</Label>
-            <Input
-              type="text"
-              id="weightCategory"
-              name="weightCategory"
-              value={weightCategory}
-              onChange={(e) => setWeightCategory(e.target.value)}
-            />
-          </div>
+      <FormField
+        label="Weight Category"
+        name="weightCategory"
+        type="text"
+        value={weightCategory}
+        onChange={(e) => setWeightCategory(e.target.value)}
+      />
 
-          <div>
-            <Label htmlFor="opponentName">Opponent's Name</Label>
-            <Input
-              type="text"
-              id="opponentName"
-              name="opponentName"
-              value={opponentName}
-              onChange={(e) => setOpponentName(e.target.value)}
-              required
-            />
-            {opponentName.length > 0 && opponentName.length < 2 && (
-              <p className="text-sm text-red-500 mt-1">
-                Name must be at least 2 characters
-              </p>
-            )}
-          </div>
+      <FormField
+        label="Opponent's Name"
+        name="opponentName"
+        type="text"
+        value={opponentName}
+        onChange={(e) => setOpponentName(e.target.value)}
+        required
+      />
 
-          <div>
-            <Label htmlFor="opponentClub">Opponent's Club</Label>
-            <Input
-              type="text"
-              id="opponentClub"
-              name="opponentClub"
-              value={opponentClub}
-              onChange={(e) => setOpponentClub(e.target.value)}
-            />
-          </div>
+      <FormField
+        label="Opponent's Club"
+        name="opponentClub"
+        type="text"
+        value={opponentClub}
+        onChange={(e) => setOpponentClub(e.target.value)}
+      />
 
-          <div>
-            <Label htmlFor="opponentRank">Opponent's Rank</Label>
-            <Input
-              type="text"
-              id="opponentRank"
-              name="opponentRank"
-              value={opponentRank}
-              onChange={(e) => setOpponentRank(e.target.value)}
-            />
-          </div>
+      <FormField
+        label="Opponent's Rank"
+        name="opponentRank"
+        type="text"
+        value={opponentRank}
+        onChange={(e) => setOpponentRank(e.target.value)}
+      />
 
-          <div>
-            <Label htmlFor="opponentCountry">Opponent's Country</Label>
-            <select
-              id="opponentCountry"
-              name="opponentCountry"
-              value={opponentCountry}
-              onChange={(e) => setOpponentCountry(e.target.value)}
-              className="w-full rounded-md border px-3 py-2"
-            >
-              <option value="">Select country...</option>
-              {Countries.map((country) => (
-                <option
-                  key={country.code3}
-                  value={country.code3}
-                >
-                  {country.name}
-                </option>
-              ))}
-            </select>
-          </div>
+      {/* Country */}
+      <FormSelect
+        label="Opponent's Country"
+        placeholder="Select country..."
+        value={opponentCountry}
+        onChange={setOpponentCountry}
+        options={Countries.map((country) => ({
+          value: country.code3,
+          label: country.name,
+        }))}
+      />
 
-          <div>
-            <Label>Opponent's Grip</Label>
-            <div className="flex gap-4 mt-2">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="opponentGrip"
-                  value="Righty"
-                  checked={opponentGrip === "Righty"}
-                  onChange={(e) => setOpponentGrip(e.target.value)}
-                />{" "}
-                Righty
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="opponentGrip"
-                  value="Lefty"
-                  checked={opponentGrip === "Lefty"}
-                  onChange={(e) => setOpponentGrip(e.target.value)}
-                />{" "}
-                Lefty
-              </label>
-            </div>
-          </div>
-
-          <div>
-            <Label>Opponent's Techniques</Label>
-            <TechniqueTagInput
-              label="Opponent's Techniques"
-              name="opponentAttacks"
-              selected={opponentSelected}
-              suggestions={techniqueList}
-              onAdd={onOpponentAdd} // ✅ FIXED
-              onDelete={onOpponentDelete} // ✅ FIXED
-            />
-          </div>
-
-          <div>
-            <Label>Opponent Attack Notes</Label>
-            <Editor
-              name="oppAttackNotes"
-              onChange={setOppAttackNotes}
-              text={oppAttackNotes}
-            />
-          </div>
-
-          <div>
-            <Label>Your Techniques</Label>
-            <TechniqueTagInput
-              label="Your Techniques"
-              name="athleteAttacks"
-              selected={athleteSelected}
-              suggestions={techniqueList}
-              onAdd={onAthleteAdd}
-              onDelete={onAthleteDelete}
-            />
-          </div>
-
-          <div>
-            <Label>Your Attack Notes</Label>
-            <Editor
-              name="athAttackNotes"
-              onChange={setAthAttackNotes}
-              text={athAttackNotes}
-            />
-          </div>
-
-          <div>
-            <Label>Match Result</Label>
-            <div className="flex gap-4 mt-2">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="result"
-                  value="Won"
-                  checked={result === "Won"}
-                  onChange={(e) => setResult(e.target.value)}
-                />{" "}
-                Won
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="result"
-                  value="Lost"
-                  checked={result === "Lost"}
-                  onChange={(e) => setResult(e.target.value)}
-                />{" "}
-                Lost
-              </label>
-            </div>
-          </div>
-
-          <div>
-            <Label htmlFor="score">Match Score</Label>
-            <Input
-              type="text"
-              id="score"
-              name="score"
-              value={score}
-              onChange={(e) => setScore(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="videoTitle">Video Title</Label>
-            <Input
-              type="text"
-              id="videoTitle"
-              name="videoTitle"
-              value={videoTitle}
-              onChange={(e) => setVideoTitle(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="videoURL">YouTube Video URL</Label>
-            <Input
-              type="text"
-              id="videoURL"
-              name="videoURL"
-              value={videoURL}
-              onChange={(e) => setVideoURL(e.target.value)}
-            />
-            {!isYouTubeURL && videoURL && (
-              <p className="text-sm text-red-500 mt-1">
-                This does not appear to be a valid YouTube link
-              </p>
-            )}
-            {isYouTubeURL && (
-              <div className="mt-4">
-                <p className="text-sm font-semibold mb-2">Video Preview:</p>
-                <div className="aspect-video w-full mt-4 rounded-lg shadow overflow-hidden">
-                  <iframe
-                    className="w-full h-full"
-                    src={
-                      videoURL.includes("embed/")
-                        ? videoURL
-                        : videoURL.includes("youtu.be")
-                        ? `https://www.youtube.com/embed/${
-                            videoURL.split("youtu.be/")[1]?.split("?")[0]
-                          }`
-                        : videoURL.includes("watch?v=")
-                        ? `https://www.youtube.com/embed/${
-                            videoURL.split("watch?v=")[1]?.split("&")[0]
-                          }`
-                        : ""
-                    }
-                    title="YouTube Video Preview"
-                    allowFullScreen
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center">
+      {/* Grip */}
+      <div>
+        <label className="block mb-1 font-medium">Opponent's Grip</label>
+        <div className="flex gap-4 mt-2">
+          <label className="flex items-center gap-2">
             <input
-              type="checkbox"
-              id="isPublic"
-              name="isPublic"
-              checked={isPublic}
-              onChange={() => setIsPublic((prev) => !prev)}
-              className="mr-2"
+              type="radio"
+              name="opponentGrip"
+              value="Righty"
+              checked={opponentGrip === "Righty"}
+              onChange={(e) => setOpponentGrip(e.target.value)}
             />
-            <Label htmlFor="isPublic">Make this match report public</Label>
-          </div>
+            Righty
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="opponentGrip"
+              value="Lefty"
+              checked={opponentGrip === "Lefty"}
+              onChange={(e) => setOpponentGrip(e.target.value)}
+            />
+            Lefty
+          </label>
+        </div>
+      </div>
 
-          <div className="pt-4">
-            <Button
-              type="submit"
-              className="bg-ms-blue-gray hover:bg-ms-blue text-white"
-            >
-              {match ? "Update" : "Submit"} Report
-            </Button>
+      {/* Techniques & Notes */}
+      <TechniqueTagInput
+        label="Opponent's Techniques"
+        name="opponentAttacks"
+        selected={opponentSelected}
+        suggestions={techniqueList}
+        onAdd={onOpponentAdd}
+        onDelete={onOpponentDelete}
+      />
+
+      <Editor
+        name="oppAttackNotes"
+        onChange={setOppAttackNotes}
+        text={oppAttackNotes}
+        label="Opponent's Attack Notes"
+      />
+
+      <TechniqueTagInput
+        label="Your Techniques"
+        name="athleteAttacks"
+        selected={athleteSelected}
+        suggestions={techniqueList}
+        onAdd={onAthleteAdd}
+        onDelete={onAthleteDelete}
+      />
+
+      <Editor
+        name="athAttackNotes"
+        onChange={setAthAttackNotes}
+        text={athAttackNotes}
+        label="My Attack Notes"
+      />
+
+      {/* Result */}
+      <div>
+        <label className="block mb-1 font-medium">Match Result</label>
+        <div className="flex gap-4 mt-2">
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="result"
+              value="Won"
+              checked={result === "Won"}
+              onChange={(e) => setResult(e.target.value)}
+            />
+            Won
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="result"
+              value="Lost"
+              checked={result === "Lost"}
+              onChange={(e) => setResult(e.target.value)}
+            />
+            Lost
+          </label>
+        </div>
+      </div>
+
+      <FormField
+        label="Match Score"
+        name="score"
+        type="text"
+        value={score}
+        onChange={(e) => setScore(e.target.value)}
+      />
+
+      <FormField
+        label="Video Title"
+        name="videoTitle"
+        type="text"
+        value={videoTitle}
+        onChange={(e) => setVideoTitle(e.target.value)}
+      />
+
+      <FormField
+        label="YouTube Video URL"
+        name="videoURL"
+        type="text"
+        value={videoURL}
+        onChange={(e) => setVideoURL(e.target.value)}
+      />
+
+      {/* Video Preview */}
+      {isYouTubeURL && (
+        <div className="mt-4">
+          <p className="text-sm font-semibold mb-2">Video Preview:</p>
+          <div className="aspect-video w-full mt-4 rounded-lg shadow overflow-hidden">
+            <iframe
+              className="w-full h-full"
+              src={
+                videoURL.includes("embed/")
+                  ? videoURL
+                  : videoURL.includes("youtu.be")
+                  ? `https://www.youtube.com/embed/${
+                      videoURL.split("youtu.be/")[1]?.split("?")[0]
+                    }`
+                  : videoURL.includes("watch?v=")
+                  ? `https://www.youtube.com/embed/${
+                      videoURL.split("watch?v=")[1]?.split("&")[0]
+                    }`
+                  : ""
+              }
+              title="YouTube Video Preview"
+              allowFullScreen
+            />
           </div>
-        </form>
-      </CardContent>
-    </Card>
+        </div>
+      )}
+
+      <div className="flex items-center">
+        <input
+          type="checkbox"
+          id="isPublic"
+          name="isPublic"
+          checked={isPublic}
+          onChange={() => setIsPublic((prev) => !prev)}
+          className="mr-2"
+        />
+        <label htmlFor="isPublic">Make this match report public</label>
+      </div>
+
+      <div className="pt-4">
+        <Button
+          type="submit"
+          className="btn btn-primary"
+        >
+          {match ? "Update" : "Submit"} Report
+        </Button>
+      </div>
+    </form>
   );
 };
 

@@ -6,19 +6,11 @@ import { toast } from "react-toastify";
 import { ReportDataTable } from "@/components/shared/report-data-table";
 import ScoutingReportForm from "@/components/dashboard/forms/ScoutingReportForm";
 import PreviewReportModal from "@/components/dashboard/PreviewReportModal";
-
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ArrowUpDown, Eye, Edit, Trash } from "lucide-react";
+import ModalLayout from "@/components/shared/ModalLayout";
 
-const FamilyScoutingReports = ({ member }) => {
+const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
   const router = useRouter();
   const [scoutingReports, setScoutingReports] = useState([]);
   const [open, setOpen] = useState(false);
@@ -99,48 +91,61 @@ const FamilyScoutingReports = ({ member }) => {
     },
   ];
 
+  const hasStyles = member?.styles && member.styles.length > 0;
+
   return (
     <div>
       {/* Header with Add Button */}
       <div className="flex flex-col items-start gap-4 mb-4">
         <h1 className="text-2xl font-bold">Family Member Scouting</h1>
-        <Dialog
-          open={open}
-          onOpenChange={setOpen}
+        <Button
+          className="bg-gray-900 hover:bg-gray-500 text-white border-2 border-gray-500 dark:border-gray-100"
+          onClick={() => {
+            setSelectedReport(null);
+            setOpen(true);
+          }}
         >
-          <DialogTrigger asChild>
-            <Button
-              className="bg-gray-900 hover:bg-gray-500 text-white border-2 border-gray-500 dark:border-gray-100"
-              onClick={() => {
-                setSelectedReport(null);
-                setOpen(true);
-              }}
-            >
-              Add Scouting Report
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="overflow-y-scroll max-h-[90%]">
-            <DialogHeader>
-              <DialogTitle>
-                {selectedReport
-                  ? "Edit Scouting Report"
-                  : "Add Scouting Report"}
-              </DialogTitle>
-              <DialogDescription>
-                Fill out all scouting details below.
-              </DialogDescription>
-            </DialogHeader>
-            <ScoutingReportForm
-              key={selectedReport?._id}
-              athlete={member}
-              report={selectedReport}
-              setOpen={setOpen}
-              onSuccess={fetchReports}
-              userType="family"
-            />
-          </DialogContent>
-        </Dialog>
+          Add Scouting Report
+        </Button>
       </div>
+
+      {/* Modal */}
+      <ModalLayout
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        title={selectedReport ? "Edit Scouting Report" : "Add Scouting Report"}
+        description="Fill out all scouting details below."
+        withCard={true}
+      >
+        {hasStyles ? (
+          <ScoutingReportForm
+            key={selectedReport?._id}
+            athlete={member}
+            report={selectedReport}
+            setOpen={setOpen}
+            onSuccess={fetchReports}
+            userType="family"
+          />
+        ) : (
+          <div className="p-6 text-center">
+            <p className="text-base text-muted-foreground mb-4">
+              You must add a style/sport to this profile before creating a
+              scouting report.
+            </p>
+            <Button
+              onClick={() => {
+                setOpen(false);
+                if (typeof onSwitchToStyles === "function") {
+                  onSwitchToStyles();
+                }
+              }}
+              className="bg-ms-blue-gray hover:bg-ms-blue text-white"
+            >
+              Add Style
+            </Button>
+          </div>
+        )}
+      </ModalLayout>
 
       {/* Mobile Cards */}
       <div className="grid grid-cols-1 sm:hidden gap-4 mb-6">

@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "react-toastify";
+import FormField from "@/components/shared/FormField";
+import FormSelect from "@/components/shared/FormSelect";
 
 export default function FamilyMemberSettings({ member }) {
   const [formData, setFormData] = useState({
@@ -66,7 +66,6 @@ export default function FamilyMemberSettings({ member }) {
         }));
         toast.success("Avatar updated!");
       } else {
-        console.error("Cloudinary error:", data);
         toast.error("Upload failed: " + (data.message || "Unknown error"));
       }
     } catch (err) {
@@ -108,15 +107,16 @@ export default function FamilyMemberSettings({ member }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-8 bg-background text-foreground p-6 rounded-lg shadow-md border border-border"
+      className="space-y-6 bg-background text-foreground p-6 rounded-lg shadow-md border border-border"
     >
       {/* Avatar Upload */}
       <div>
-        <Label htmlFor="avatar">Avatar</Label>
-        <Input
+        <label className="block font-medium mb-2">Avatar</label>
+        <input
           type="file"
           accept="image/*"
           onChange={handleAvatarUpload}
+          className="w-full"
         />
         {uploading && <p className="text-sm mt-1">Uploading...</p>}
         {formData.avatar && (
@@ -128,69 +128,66 @@ export default function FamilyMemberSettings({ member }) {
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <div>
-          <Label htmlFor="firstName">First Name</Label>
-          <Input
-            id="firstName"
-            name="firstName"
-            value={formData.firstName}
-            onChange={handleChange}
-          />
-        </div>
-        <div>
-          <Label htmlFor="lastName">Last Name</Label>
-          <Input
-            id="lastName"
-            name="lastName"
-            value={formData.lastName}
-            onChange={handleChange}
-          />
-        </div>
-      </div>
-
-      <div>
-        <Label htmlFor="username">Username</Label>
-        <Input
-          id="username"
-          name="username"
-          value={formData.username}
+      {/* Name Fields */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <FormField
+          label="First Name"
+          name="firstName"
+          value={formData.firstName}
+          onChange={handleChange}
+        />
+        <FormField
+          label="Last Name"
+          name="lastName"
+          value={formData.lastName}
           onChange={handleChange}
         />
       </div>
 
-      <div>
-        <Label htmlFor="gender">Gender</Label>
-        <select
-          id="gender"
-          name="gender"
-          value={formData.gender}
-          onChange={handleChange}
-          className="w-full rounded-md border px-3 py-2 dark:bg-black dark:text-white"
-        >
-          <option value="">Select gender...</option>
-          <option value="male">Male</option>
-          <option value="female">Female</option>
-          <option value="not specified">Not specified</option>
-        </select>
-      </div>
+      {/* Username */}
+      <FormField
+        label="Username"
+        name="username"
+        value={formData.username}
+        onChange={handleChange}
+      />
 
-      <div className="flex items-center">
+      {/* Gender */}
+      <FormSelect
+        label="Gender"
+        value={formData.gender}
+        onChange={(val) => setFormData((prev) => ({ ...prev, gender: val }))}
+        placeholder="Select gender..."
+        options={[
+          { value: "male", label: "Male" },
+          { value: "female", label: "Female" },
+          { value: "not specified", label: "Not specified" },
+        ]}
+      />
+
+      {/* Public Profile Checkbox */}
+      <div className="flex items-center gap-2">
         <input
           type="checkbox"
           id="allowPublic"
           name="allowPublic"
           checked={formData.allowPublic}
           onChange={handleChange}
-          className="mr-2"
+          className="h-4 w-4 rounded border-gray-300"
         />
-        <Label htmlFor="allowPublic">Make profile public</Label>
+        <label
+          htmlFor="allowPublic"
+          className="font-medium"
+        >
+          Make profile public
+        </label>
       </div>
 
+      {/* Submit */}
       <div className="pt-4">
         <Button
           type="submit"
-          className="bg-ms-blue-gray hover:bg-ms-blue text-white"
+          className="btn btn-primary"
         >
           Save Changes
         </Button>

@@ -4,7 +4,6 @@ import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import DashboardSettings from "@/components/dashboard/DashboardSettings";
 import NotificationSettings from "@/components/dashboard/NotificationSettings";
-import DeleteAccountSection from "@/components/dashboard/DeleteAccount";
 import { useUser } from "@/context/UserContext";
 import DeleteAccount from "@/components/dashboard/DeleteAccount";
 

@@ -9,16 +9,9 @@ import { ReportDataTable } from "../shared/report-data-table";
 import MatchReportForm from "./forms/MatchReportForm";
 import PreviewReportModal from "./PreviewReportModal";
 
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ArrowUpDown, Eye, Edit, Trash } from "lucide-react";
+import ModalLayout from "@/components/shared/ModalLayout";
 
 const DashboardMatches = ({ user }) => {
   const router = useRouter();
@@ -53,9 +46,7 @@ const DashboardMatches = ({ user }) => {
           `/api/dashboard/${user._id}/matchReports/${match._id}`,
           {
             method: "DELETE",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
           }
         );
         const data = await res.json();
@@ -112,19 +103,13 @@ const DashboardMatches = ({ user }) => {
       header: "Division",
       meta: { className: "hidden md:table-cell" },
     },
-    {
-      accessorKey: "opponentName",
-      header: "Opponent",
-    },
+    { accessorKey: "opponentName", header: "Opponent" },
     {
       accessorKey: "opponentCountry",
       header: "Country",
       meta: { className: "hidden sm:table-cell" },
     },
-    {
-      accessorKey: "result",
-      header: "Result",
-    },
+    { accessorKey: "result", header: "Result" },
     {
       id: "actions",
       header: "Actions",
@@ -166,44 +151,57 @@ const DashboardMatches = ({ user }) => {
     },
   ];
 
+  const hasStyles = user?.userStyles && user.userStyles.length > 0;
+
   return (
     <div>
       {/* Header with Add Button */}
       <div className="flex flex-col items-start gap-4 mb-4">
         <h1 className="text-2xl font-bold">My Matches</h1>
-        <Dialog
-          open={open}
-          onOpenChange={setOpen}
+        <Button
+          className="btn btn-primary"
+          onClick={() => {
+            setSelectedMatch(null);
+            setOpen(true);
+          }}
         >
-          <DialogTrigger asChild>
-            <Button
-              className="btn btn-primary"
-              onClick={() => {
-                setSelectedMatch(null);
-                setOpen(true);
-              }}
-            >
-              Add Match Report
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="overflow-y-scroll max-h-[90%]">
-            <DialogHeader>
-              <DialogTitle>
-                {selectedMatch ? "Edit Match Report" : "Add Match Report"}
-              </DialogTitle>
-              <DialogDescription>
-                Fill out all match details below.
-              </DialogDescription>
-            </DialogHeader>
-            <MatchReportForm
-              athlete={user}
-              match={selectedMatch}
-              setOpen={setOpen}
-              onSuccess={fetchMatches}
-            />
-          </DialogContent>
-        </Dialog>
+          Add Match Report
+        </Button>
       </div>
+
+      {/* Modal using ModalLayout */}
+      <ModalLayout
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        title={selectedMatch ? "Edit Match Report" : "Add Match Report"}
+        description="Fill out all match details below."
+        withCard={true}
+      >
+        {hasStyles ? (
+          <MatchReportForm
+            athlete={user}
+            match={selectedMatch}
+            setOpen={setOpen}
+            onSuccess={fetchMatches}
+            userType="user"
+          />
+        ) : (
+          <div className="p-6 text-center">
+            <p className="text-base text-muted-foreground mb-4">
+              You must add a style/sport before creating a match report.
+            </p>
+            <Button
+              onClick={() => {
+                setOpen(false);
+                router.push("/dashboard/styles"); // ✅ Redirect to Styles
+              }}
+              className="bg-ms-blue-gray hover:bg-ms-blue text-white"
+            >
+              Go to Styles
+            </Button>
+          </div>
+        )}
+      </ModalLayout>
 
       {/* Cards for Mobile */}
       <div className="block md:hidden space-y-4">

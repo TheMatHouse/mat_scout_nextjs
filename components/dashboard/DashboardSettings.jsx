@@ -2,16 +2,9 @@
 
 import { useState } from "react";
 import { Pencil, Camera, Copy, Share } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import SettingsForm from "./forms/SettingsForm";
+import ModalLayout from "@/components/shared/ModalLayout";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
@@ -22,23 +15,6 @@ export default function DashboardSettings({ user, refreshUser }) {
   const [open, setOpen] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState(null);
   const router = useRouter();
-
-  // ✅ States for Notification Switches
-  const [notifications, setNotifications] = useState({
-    joinRequests: { inApp: false, email: false },
-    teamUpdates: { inApp: false, email: false },
-    scoutingReports: { inApp: false, email: false },
-  });
-
-  const toggleNotification = (key, type) => {
-    setNotifications((prev) => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        [type]: !prev[key][type],
-      },
-    }));
-  };
 
   if (!user) {
     return (
@@ -205,37 +181,33 @@ export default function DashboardSettings({ user, refreshUser }) {
         </div>
 
         <div className="flex justify-end">
-          <Dialog
-            open={open}
-            onOpenChange={setOpen}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setOpen(true)}
           >
-            <DialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-              >
-                Edit Settings <Pencil className="ml-2 h-4 w-4" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-h-[90vh] overflow-y-auto dialog-content-custom">
-              <DialogHeader>
-                <DialogTitle>Edit Settings</DialogTitle>
-                <DialogDescription>
-                  Update your personal settings below.
-                </DialogDescription>
-              </DialogHeader>
-              <SettingsForm
-                user={user}
-                onClose={() => setOpen(false)}
-                refreshUser={refreshUser}
-              />
-            </DialogContent>
-          </Dialog>
+            Edit Settings <Pencil className="ml-2 h-4 w-4" />
+          </Button>
         </div>
       </header>
 
+      {/* Reusable Modal Layout */}
+      <ModalLayout
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        title="Edit Settings"
+        description="Update your personal settings below."
+        withCard={true}
+      >
+        <SettingsForm
+          user={user}
+          onClose={() => setOpen(false)}
+          refreshUser={refreshUser}
+        />
+      </ModalLayout>
+
       {/* Info Cards */}
-      <div className="space-y-4">
+      <div className="space-y-4 mt-6">
         <div className="settings-card flex justify-between items-center">
           <div>
             <p className="font-semibold">Your Public Profile</p>
@@ -301,9 +273,7 @@ export default function DashboardSettings({ user, refreshUser }) {
         {/* Gender */}
         <div className="settings-card">
           <h2 className="text-lg font-semibold mb-1">Gender</h2>
-          <p className="text-sm text-muted-foreground">
-            {user.gender || "Not specified"}
-          </p>
+          <p className="text-sm">{user.gender || "Not specified"}</p>
         </div>
 
         {/* Privacy */}

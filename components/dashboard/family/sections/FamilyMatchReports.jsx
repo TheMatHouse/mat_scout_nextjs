@@ -7,19 +7,11 @@ import { toast } from "react-toastify";
 import { ReportDataTable } from "@/components/shared/report-data-table";
 import MatchReportForm from "@/components/dashboard/forms/MatchReportForm";
 import PreviewReportModal from "@/components/dashboard/PreviewReportModal";
-
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ArrowUpDown, Eye, Edit, Trash } from "lucide-react";
+import ModalLayout from "@/components/shared/ModalLayout";
 
-const FamilyMatchReports = ({ member }) => {
+const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
   const router = useRouter();
   const [matchReports, setMatchReports] = useState([]);
   const [open, setOpen] = useState(false);
@@ -114,60 +106,69 @@ const FamilyMatchReports = ({ member }) => {
       header: "Division",
       meta: { className: "hidden md:table-cell" },
     },
-    {
-      accessorKey: "opponentName",
-      header: "Opponent",
-    },
+    { accessorKey: "opponentName", header: "Opponent" },
     {
       accessorKey: "opponentCountry",
       header: "Country",
       meta: { className: "hidden sm:table-cell" },
     },
-    {
-      accessorKey: "result",
-      header: "Result",
-    },
+    { accessorKey: "result", header: "Result" },
   ];
+
+  const hasStyles = member?.styles && member.styles.length > 0;
 
   return (
     <div>
-      {/* Header with Add Button on next line */}
+      {/* Header with Add Button */}
       <div className="flex flex-col items-start gap-4 mb-4">
         <h1 className="text-2xl font-bold">Family Member Matches</h1>
-        <Dialog
-          open={open}
-          onOpenChange={setOpen}
+        <Button
+          className="bg-gray-900 hover:bg-gray-500 text-white border-2 border-gray-500 dark:border-gray-100"
+          onClick={() => {
+            setSelectedMatch(null);
+            setOpen(true);
+          }}
         >
-          <DialogTrigger asChild>
-            <Button
-              className="bg-gray-900 hover:bg-gray-500 text-white border-2 border-gray-500 dark:border-gray-100"
-              onClick={() => {
-                setSelectedMatch(null);
-                setOpen(true);
-              }}
-            >
-              Add Match Report
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="overflow-y-scroll max-h-[90%]">
-            <DialogHeader>
-              <DialogTitle>
-                {selectedMatch ? "Edit Match Report" : "Add Match Report"}
-              </DialogTitle>
-              <DialogDescription>
-                Fill out all match details below.
-              </DialogDescription>
-            </DialogHeader>
-            <MatchReportForm
-              athlete={member}
-              match={selectedMatch}
-              setOpen={setOpen}
-              onSuccess={fetchMatches}
-              userType="family"
-            />
-          </DialogContent>
-        </Dialog>
+          Add Match Report
+        </Button>
       </div>
+
+      {/* Modal */}
+      <ModalLayout
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        title={selectedMatch ? "Edit Match Report" : "Add Match Report"}
+        description="Fill out all match details below."
+        withCard={true}
+      >
+        {hasStyles ? (
+          <MatchReportForm
+            athlete={member}
+            match={selectedMatch}
+            setOpen={setOpen}
+            onSuccess={fetchMatches}
+            userType="family"
+          />
+        ) : (
+          <div className="p-6 text-center">
+            <p className="text-base text-muted-foreground mb-4">
+              You must add a style/sport to this profile before creating a match
+              report.
+            </p>
+            <Button
+              onClick={() => {
+                setOpen(false);
+                if (typeof onSwitchToStyles === "function") {
+                  onSwitchToStyles();
+                }
+              }}
+              className="bg-ms-blue-gray hover:bg-ms-blue text-white"
+            >
+              Add Style
+            </Button>
+          </div>
+        )}
+      </ModalLayout>
 
       {/* Mobile Cards */}
       <div className="block md:hidden space-y-4">

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-export default function Editor({ name, onChange, text }) {
+export default function Editor({ name, onChange, text, label }) {
   const editorRef = useRef(null);
 
   useEffect(() => {
@@ -11,9 +11,8 @@ export default function Editor({ name, onChange, text }) {
         const selection = window.getSelection();
         const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
 
-        editorRef.current.innerHTML = text; // Only set if different
+        editorRef.current.innerHTML = text;
 
-        // Restore cursor position after updating content
         if (range) {
           selection.removeAllRanges();
           selection.addRange(range);
@@ -24,7 +23,7 @@ export default function Editor({ name, onChange, text }) {
 
   const handleInput = () => {
     if (editorRef.current && onChange) {
-      onChange(editorRef.current.innerHTML); // Send updated content to parent
+      onChange(editorRef.current.innerHTML);
     }
   };
 
@@ -45,43 +44,50 @@ export default function Editor({ name, onChange, text }) {
 
   const applyStyle = (command) => {
     document.execCommand(command, false, null);
-    handleInput(); // Ensure updated content is sent to parent
+    handleInput();
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-6 rounded-lg">
+    <div className="w-full space-y-2">
+      {/* Label */}
+      {label && (
+        <label
+          htmlFor={name}
+          className="block text-sm font-medium text-gray-900 dark:text-gray-100"
+        >
+          {label}
+        </label>
+      )}
+
       {/* Toolbar */}
-      <div className="mb-2 flex gap-2 border p-2 text-foreground bg-muted rounded-md shadow-sm">
-        <button
-          onClick={() => applyStyle("bold")}
-          className="px-2 py-1 border rounded"
-        >
-          Bold
-        </button>
-        <button
-          onClick={() => applyStyle("italic")}
-          className="px-2 py-1 border rounded"
-        >
-          Italic
-        </button>
-        <button
-          onClick={() => applyStyle("underline")}
-          className="px-2 py-1 border rounded"
-        >
-          Underline
-        </button>
+      <div className="flex gap-2 rounded-md border border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 p-2">
+        {["Bold", "Italic", "Underline"].map((style) => (
+          <button
+            key={style}
+            type="button"
+            onClick={() => applyStyle(style.toLowerCase())}
+            className="px-3 py-1 rounded-md text-sm font-medium bg-white dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 border border-gray-300 dark:border-gray-600"
+          >
+            {style}
+          </button>
+        ))}
       </div>
 
-      {/* Editable Content */}
+      {/* Editable Area */}
       <div
         contentEditable
         ref={editorRef}
         id={name}
         name={name}
-        onInput={handleInput} // Capture text updates
-        onKeyDown={handleKeyDown} // Fix Enter behavior
-        className="text-gray-900 dark:text-gray-100 rounded-lg shadow-md p-4 min-h-[200px] border border-gray-300 outline-none"
+        onInput={handleInput}
+        onKeyDown={handleKeyDown}
         suppressContentEditableWarning={true}
+        className="
+          block w-full rounded-md border border-gray-300 dark:border-gray-700 
+          bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 
+          shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 
+          sm:text-sm p-3 min-h-[150px]
+        "
       />
     </div>
   );

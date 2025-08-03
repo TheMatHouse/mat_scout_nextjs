@@ -1,21 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { useState, useEffect } from "react";
-
-import { AlertDialog } from "@/components/ui/alert-dialog";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/context/UserContext";
+import FormField from "@/components/shared/FormField";
+import FormSelect from "@/components/shared/FormSelect";
 
 const StyleForm = ({
   user,
@@ -39,6 +30,7 @@ const StyleForm = ({
     promotionDate: "",
   });
 
+  // Fetch available styles
   useEffect(() => {
     const fetchStyles = async () => {
       try {
@@ -57,6 +49,7 @@ const StyleForm = ({
     fetchStyles();
   }, []);
 
+  // Populate form if editing existing style
   useEffect(() => {
     if (style) {
       const formatDate = (dateStr) => {
@@ -65,8 +58,6 @@ const StyleForm = ({
         return utcDate.toISOString().split("T")[0];
       };
 
-      const formattedDate = formatDate(style.promotionDate);
-
       setFormData({
         styleName: style.styleName || "",
         rank: style.rank || "",
@@ -74,10 +65,15 @@ const StyleForm = ({
         weightClass: style.weightClass || "",
         grip: style.grip || "",
         favoriteTechnique: style.favoriteTechnique || "",
-        promotionDate: formattedDate,
+        promotionDate: formatDate(style.promotionDate),
       });
     }
   }, [style]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -123,7 +119,7 @@ const StyleForm = ({
 
       if (response.ok) {
         toast.success(data.message || "Style saved!");
-        refreshUser(); // Will only refresh main user, not family member
+        refreshUser();
         setTimeout(() => {
           onSuccess?.(data.updatedStyle || data.createdStyle || {});
           setOpen?.(false);
@@ -138,147 +134,98 @@ const StyleForm = ({
   };
 
   return (
-    <AlertDialog>
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle>Style/Sport</CardTitle>
-          <CardDescription>
-            {style?._id
-              ? `Update ${style?.styleName} style information`
-              : "Add a style or sport. You can edit this later."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form
-            onSubmit={handleSubmit}
-            className="space-y-4"
-          >
-            <div className="space-y-1">
-              <label className="block text-sm font-medium">Style/Sport</label>
-              <select
-                className="w-full p-2 border rounded"
-                value={formData.styleName}
-                onChange={(e) =>
-                  setFormData({ ...formData, styleName: e.target.value })
-                }
-              >
-                <option value="">Select Style/Sport</option>
-                {availableStyles.map((style) => (
-                  <option
-                    key={style._id}
-                    value={style.styleName}
-                  >
-                    {style.styleName}
-                  </option>
-                ))}
-              </select>
-            </div>
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-6"
+    >
+      <FormSelect
+        label="Style/Sport"
+        value={formData.styleName}
+        onChange={(val) => setFormData((prev) => ({ ...prev, styleName: val }))}
+        placeholder="Select Style/Sport"
+        options={availableStyles.map((s) => ({
+          value: s.styleName,
+          label: s.styleName,
+        }))}
+        required
+      />
 
-            <div className="space-y-1">
-              <label className="block text-sm font-medium">Rank</label>
-              <Input
-                placeholder="Rank"
-                value={formData.rank}
-                onChange={(e) =>
-                  setFormData({ ...formData, rank: e.target.value })
-                }
-              />
-            </div>
+      <FormField
+        label="Rank"
+        name="rank"
+        value={formData.rank}
+        onChange={handleChange}
+        placeholder="Rank"
+      />
 
-            <div className="space-y-1">
-              <label className="block text-sm font-medium">
-                Promotion Date
-              </label>
-              <Input
-                type="date"
-                value={formData.promotionDate}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    promotionDate: e.target.value,
-                  })
-                }
-              />
-            </div>
+      <FormField
+        label="Promotion Date"
+        name="promotionDate"
+        type="date"
+        value={formData.promotionDate}
+        onChange={handleChange}
+      />
 
-            <div className="space-y-1">
-              <label className="block text-sm font-medium">Division</label>
-              <Input
-                placeholder="Division"
-                value={formData.division}
-                onChange={(e) =>
-                  setFormData({ ...formData, division: e.target.value })
-                }
-              />
-            </div>
+      <FormField
+        label="Division"
+        name="division"
+        value={formData.division}
+        onChange={handleChange}
+        placeholder="Division"
+      />
 
-            <div className="space-y-1">
-              <label className="block text-sm font-medium">Weight Class</label>
-              <Input
-                placeholder="Weight Class"
-                value={formData.weightClass}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    weightClass: e.target.value,
-                  })
-                }
-              />
-            </div>
+      <FormField
+        label="Weight Class"
+        name="weightClass"
+        value={formData.weightClass}
+        onChange={handleChange}
+        placeholder="Weight Class"
+      />
 
-            <div className="space-y-1">
-              <label className="block text-sm font-medium">Grip/Stance</label>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-1">
-                  <input
-                    type="radio"
-                    value="righty"
-                    checked={formData.grip === "righty"}
-                    onChange={(e) =>
-                      setFormData({ ...formData, grip: e.target.value })
-                    }
-                  />
-                  Righty
-                </label>
-                <label className="flex items-center gap-1">
-                  <input
-                    type="radio"
-                    value="lefty"
-                    checked={formData.grip === "lefty"}
-                    onChange={(e) =>
-                      setFormData({ ...formData, grip: e.target.value })
-                    }
-                  />
-                  Lefty
-                </label>
-              </div>
-            </div>
+      {/* Grip/Stance */}
+      <div>
+        <label className="block text-sm font-medium mb-2">Grip/Stance</label>
+        <div className="flex gap-4">
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="grip"
+              value="righty"
+              checked={formData.grip === "righty"}
+              onChange={handleChange}
+            />
+            Righty
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="grip"
+              value="lefty"
+              checked={formData.grip === "lefty"}
+              onChange={handleChange}
+            />
+            Lefty
+          </label>
+        </div>
+      </div>
 
-            <div className="space-y-1">
-              <label className="block text-sm font-medium">
-                Favorite Technique
-              </label>
-              <Input
-                placeholder="Favorite Technique"
-                value={formData.favoriteTechnique}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    favoriteTechnique: e.target.value,
-                  })
-                }
-              />
-            </div>
+      <FormField
+        label="Favorite Technique"
+        name="favoriteTechnique"
+        value={formData.favoriteTechnique}
+        onChange={handleChange}
+        placeholder="Favorite Technique"
+      />
 
-            <div className="flex justify-center">
-              <Button type="submit">
-                {style?._id ? "Update Style" : "Add Style"}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-    </AlertDialog>
+      <div className="flex justify-center pt-4">
+        <Button
+          type="submit"
+          className="btn btn-primary"
+        >
+          {style?._id ? "Update Style" : "Add Style"}
+        </Button>
+      </div>
+    </form>
   );
 };
 

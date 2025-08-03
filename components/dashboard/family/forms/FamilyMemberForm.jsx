@@ -1,23 +1,17 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "react-toastify";
+import FormField from "@/components/shared/FormField";
+import FormSelect from "@/components/shared/FormSelect";
 
 export default function FamilyMemberForm({ user, onClose, onSuccess }) {
   const getInitialFormData = () => ({
     firstName: "",
     lastName: "",
     username: "",
-    city: "",
-    state: "",
-    country: "",
     gender: "",
-    bMonth: "",
-    bDay: "",
-    bYear: "",
     allowPublic: false,
   });
 
@@ -72,7 +66,6 @@ export default function FamilyMemberForm({ user, onClose, onSuccess }) {
         onClose();
         onSuccess(data);
       } else {
-        // Read error once
         const errorData = await res.json();
         console.error("❌ Server error:", errorData);
         toast.error(errorData.message || "Failed to add family member");
@@ -86,76 +79,72 @@ export default function FamilyMemberForm({ user, onClose, onSuccess }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-8 bg-background text-foreground p-6 rounded-lg shadow-lg"
+      className="space-y-6"
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <div>
-          <Label htmlFor="firstName">First Name</Label>
-          <Input
-            type="text"
-            id="firstName"
-            name="firstName"
-            value={formData.firstName}
-            onChange={handleChange}
-          />
-        </div>
-        <div>
-          <Label htmlFor="lastName">Last Name</Label>
-          <Input
-            type="text"
-            id="lastName"
-            name="lastName"
-            value={formData.lastName}
-            onChange={handleChange}
-          />
-        </div>
+      {/* First & Last Name */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <FormField
+          label="First Name"
+          name="firstName"
+          value={formData.firstName}
+          onChange={handleChange}
+        />
+        <FormField
+          label="Last Name"
+          name="lastName"
+          value={formData.lastName}
+          onChange={handleChange}
+        />
       </div>
 
+      {/* Username */}
       <div>
-        <Label htmlFor="username">Username</Label>
-        <Input
-          type="text"
-          id="username"
+        <FormField
+          label="Username"
           name="username"
           value={formData.username}
           onChange={handleChange}
         />
         {usernameStatus === "taken" && (
-          <p className="text-sm text-red-500">Username is already taken</p>
+          <p className="text-sm text-red-500 mt-1">Username is already taken</p>
         )}
         {usernameStatus === "available" && (
-          <p className="text-sm text-green-500">Username is available</p>
+          <p className="text-sm text-green-500 mt-1">Username is available</p>
         )}
       </div>
 
-      <div>
-        <Label htmlFor="gender">Gender</Label>
-        <select
-          id="gender"
-          name="gender"
-          value={formData.gender}
-          onChange={handleChange}
-          className="w-full rounded-md border px-3 py-2"
-        >
-          <option value="">Select gender...</option>
-          <option value="male">Male</option>
-          <option value="female">Female</option>
-          <option value="not specified">Not specified</option>
-        </select>
-      </div>
+      {/* Gender */}
+      <FormSelect
+        label="Gender"
+        value={formData.gender}
+        onChange={(val) => setFormData((prev) => ({ ...prev, gender: val }))}
+        placeholder="Select gender..."
+        options={[
+          { value: "male", label: "Male" },
+          { value: "female", label: "Female" },
+          { value: "not specified", label: "Not specified" },
+        ]}
+      />
 
-      <div className="flex items-center">
+      {/* Public Profile Checkbox */}
+      <div className="flex items-center gap-2">
         <input
           type="checkbox"
           id="allowPublic"
           name="allowPublic"
           checked={formData.allowPublic}
           onChange={handleChange}
-          className="mr-2"
+          className="h-4 w-4 rounded border-gray-300"
         />
-        <Label htmlFor="allowPublic">Make Profile Public</Label>
+        <label
+          htmlFor="allowPublic"
+          className="font-medium"
+        >
+          Make Profile Public
+        </label>
       </div>
 
+      {/* Submit Button */}
       <div className="pt-4">
         <Button
           type="submit"

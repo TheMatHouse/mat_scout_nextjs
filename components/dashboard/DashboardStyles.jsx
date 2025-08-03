@@ -1,45 +1,34 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import moment from "moment";
 import { toast } from "react-toastify";
 import { useUser } from "@/context/UserContext";
-import ModalFrame from "../shared/modalContainer/ModalFrame";
-import { GrEdit } from "react-icons/gr";
-import StyleCard from "./StyleCard";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import ModalLayout from "@/components/shared/ModalLayout";
+import StyleCard from "./StyleCard";
 import StyleForm from "./forms/StyleForm";
 
 const DashboardStyles = () => {
-  const { user } = useUser(); // fetch from context
+  const { user } = useUser();
   const [myStyles, setMyStyles] = useState([]);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     if (!user?._id) return;
-
-    const fetchStyles = async () => {
-      try {
-        const res = await fetch(`/api/dashboard/${user._id}/userStyles`);
-        if (!res.ok) throw new Error("Failed to fetch user styles");
-        const data = await res.json();
-        setMyStyles(data);
-      } catch (err) {
-        console.error("Error loading user styles:", err);
-        toast.error("Could not load styles.");
-      }
-    };
-
     fetchStyles();
   }, [user]);
+
+  const fetchStyles = async () => {
+    try {
+      const res = await fetch(`/api/dashboard/${user._id}/userStyles`);
+      if (!res.ok) throw new Error("Failed to fetch user styles");
+      const data = await res.json();
+      setMyStyles(data);
+    } catch (err) {
+      console.error("Error loading user styles:", err);
+      toast.error("Could not load styles.");
+    }
+  };
 
   const handleStylesRefresh = async () => {
     try {
@@ -58,6 +47,7 @@ const DashboardStyles = () => {
     );
   };
 
+  // Compute style results for stats
   const styleResults = [
     { name: "Brazilian Jiu Jitsu", Wins: 0, Losses: 0 },
     { name: "Judo", Wins: 0, Losses: 0 },
@@ -77,38 +67,37 @@ const DashboardStyles = () => {
 
   return (
     <div>
-      <div className="flex items-center">
-        <h1 className="text-2xl">My Styles/Sports</h1>
-        <Dialog
-          open={open}
-          onOpenChange={setOpen}
-          className="min-w-[800px]"
+      {/* Header */}
+      <div className="flex flex-col items-start gap-4 mb-4">
+        <h1 className="text-2xl font-bold">My Styles/Sports</h1>
+        <Button
+          className="btn btn-primary"
+          onClick={() => setOpen(true)}
         >
-          <DialogTrigger asChild>
-            <Button className="bg-gray-900 hover:bg-gray-500 border-gray-500 dark:border-gray-100 border-2 drop-shadow-md text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ml-6">
-              Add Style
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="overflow-y-scroll max-h-[90%]">
-            <DialogHeader>
-              <DialogTitle>Add Style</DialogTitle>
-              <DialogDescription>
-                Add a new style/sport here. You can edit this style at any time.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4 min-width-full">
-              <StyleForm
-                user={user}
-                userType="user"
-                setOpen={setOpen}
-                onSuccess={handleStylesRefresh}
-              />
-            </div>
-          </DialogContent>
-        </Dialog>
+          Add Style
+        </Button>
       </div>
-      <hr className="inline-block w-full border-t-1 border-gray-100" />
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5 lg:gap-6 mt-3">
+
+      {/* Modal */}
+      <ModalLayout
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        title="Add Style"
+        description="Add a new style/sport here. You can edit this style at any time."
+        withCard={true}
+      >
+        <StyleForm
+          user={user}
+          userType="user"
+          setOpen={setOpen}
+          onSuccess={handleStylesRefresh}
+        />
+      </ModalLayout>
+
+      <hr className="border-gray-200 dark:border-gray-700 my-4" />
+
+      {/* Style Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {myStyles.map((style, index) => (
           <StyleCard
             key={index}

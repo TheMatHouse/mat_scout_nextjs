@@ -1,22 +1,16 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import ScoutingReportForm from "./forms/ScoutingReportForm";
-import { ReportDataTable } from "../shared/report-data-table";
-import { ArrowUpDown, Eye, Edit, Trash } from "lucide-react";
-import moment from "moment";
-import PreviewReportModal from "../shared/PreviewReportModal";
 import { toast } from "react-toastify";
+import moment from "moment";
+import { ArrowUpDown, Eye, Edit, Trash } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { ReportDataTable } from "../shared/report-data-table";
+import PreviewReportModal from "../shared/PreviewReportModal";
+import ScoutingReportForm from "./forms/ScoutingReportForm";
+import ModalLayout from "@/components/shared/ModalLayout";
 
 const DashboardScouting = ({ user, styles, techniques }) => {
   const router = useRouter();
@@ -86,31 +80,16 @@ const DashboardScouting = ({ user, styles, techniques }) => {
         </Button>
       ),
     },
-    {
-      accessorKey: "athleteFirstName",
-      header: "Athlete First",
-    },
-    {
-      accessorKey: "athleteLastName",
-      header: "Athlete Last",
-    },
-    {
-      accessorKey: "athleteNationalRank",
-      header: "National Rank",
-    },
-    {
-      accessorKey: "athleteWorldRank",
-      header: "World Rank",
-    },
+    { accessorKey: "athleteFirstName", header: "Athlete First" },
+    { accessorKey: "athleteLastName", header: "Athlete Last" },
+    { accessorKey: "athleteNationalRank", header: "National Rank" },
+    { accessorKey: "athleteWorldRank", header: "World Rank" },
     {
       accessorKey: "athleteClub",
       header: "Club",
       meta: { className: "hidden md:table-cell" },
     },
-    {
-      accessorKey: "athleteCountry",
-      header: "Country",
-    },
+    { accessorKey: "athleteCountry", header: "Country" },
     {
       accessorKey: "division",
       header: "Division",
@@ -135,7 +114,7 @@ const DashboardScouting = ({ user, styles, techniques }) => {
                 setPreviewOpen(true);
               }}
               title="View Details"
-              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+              className="icon-btn"
             >
               <Eye className="w-5 h-5 text-blue-500" />
             </button>
@@ -145,14 +124,14 @@ const DashboardScouting = ({ user, styles, techniques }) => {
                 setOpen(true);
               }}
               title="Edit Report"
-              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+              className="icon-btn"
             >
               <Edit className="w-5 h-5 text-green-500" />
             </button>
             <button
               onClick={() => handleDeleteReport(report)}
               title="Delete Report"
-              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+              className="icon-btn"
             >
               <Trash className="w-5 h-5 text-red-500" />
             </button>
@@ -162,49 +141,59 @@ const DashboardScouting = ({ user, styles, techniques }) => {
     },
   ];
 
+  const hasStyles = user?.userStyles && user.userStyles.length > 0;
+
   return (
     <div>
-      {/* Header with Add Button on next line */}
+      {/* Header */}
       <div className="flex flex-col items-start gap-4 mb-4">
         <h1 className="text-2xl font-bold">My Scouting Reports</h1>
-        <Dialog
-          open={open}
-          onOpenChange={setOpen}
+        <Button
+          className="btn btn-primary"
+          onClick={() => {
+            setSelectedReport(null);
+            setOpen(true);
+          }}
         >
-          <DialogTrigger asChild>
-            <Button
-              className="bg-gray-900 hover:bg-gray-500 text-white border-2 border-gray-500 dark:border-gray-100"
-              onClick={() => {
-                setSelectedReport(null);
-                setOpen(true);
-              }}
-            >
-              Add Scouting Report
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="overflow-y-scroll max-h-[90%]">
-            <DialogHeader>
-              <DialogTitle>
-                {selectedReport
-                  ? "Edit Scouting Report"
-                  : "Add Scouting Report"}
-              </DialogTitle>
-              <DialogDescription>
-                Fill out all scouting details below.
-              </DialogDescription>
-            </DialogHeader>
-            <ScoutingReportForm
-              athlete={user}
-              styles={styles?.styles}
-              techniques={techniques}
-              userType="user"
-              report={selectedReport}
-              setOpen={setOpen}
-              onSuccess={fetchReports}
-            />
-          </DialogContent>
-        </Dialog>
+          Add Scouting Report
+        </Button>
       </div>
+
+      {/* Modal using ModalLayout */}
+      <ModalLayout
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        title={selectedReport ? "Edit Scouting Report" : "Add Scouting Report"}
+        description="Fill out all scouting details below."
+        withCard={true}
+      >
+        {hasStyles ? (
+          <ScoutingReportForm
+            athlete={user}
+            styles={styles?.styles}
+            techniques={techniques}
+            userType="user"
+            report={selectedReport}
+            setOpen={setOpen}
+            onSuccess={fetchReports}
+          />
+        ) : (
+          <div className="p-6 text-center">
+            <p className="text-base text-muted-foreground mb-4">
+              You must add a style/sport before creating a scouting report.
+            </p>
+            <Button
+              onClick={() => {
+                setOpen(false);
+                router.push("/dashboard/styles"); // ✅ Redirect to Styles page
+              }}
+              className="bg-ms-blue-gray hover:bg-ms-blue text-white"
+            >
+              Go to Styles
+            </Button>
+          </div>
+        )}
+      </ModalLayout>
 
       {/* Mobile Cards */}
       <div className="grid grid-cols-1 sm:hidden gap-4 mb-6">
@@ -231,7 +220,6 @@ const DashboardScouting = ({ user, styles, techniques }) => {
                 <strong>Weight Class:</strong> {report.weightCategory}
               </p>
 
-              {/* Actions */}
               <div className="flex justify-end gap-4 mt-4">
                 <button
                   onClick={() => {
@@ -274,24 +262,17 @@ const DashboardScouting = ({ user, styles, techniques }) => {
           <ReportDataTable
             columns={columns}
             data={scoutingReports}
-            onView={(match) => {
-              setSelectedMatch(match);
-              setPreviewOpen(true);
-            }}
-            onEdit={(match) => {
-              setSelectedMatch(match);
-              setOpen(true);
-            }}
-            onDelete={(match) => handleDeleteMatch(match)}
           />
         </div>
       </div>
+
+      {/* Preview Modal */}
       {previewOpen && selectedReport && (
         <PreviewReportModal
           previewOpen={previewOpen}
           setPreviewOpen={setPreviewOpen}
           report={selectedReport}
-          reportType="match"
+          reportType="scouting"
         />
       )}
     </div>

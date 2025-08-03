@@ -15,6 +15,11 @@ const TABS = [
 
 export default function FamilyMemberDashboard({ member }) {
   const [activeTab, setActiveTab] = useState("settings");
+
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+  };
+
   const renderTabContent = () => {
     switch (activeTab) {
       case "settings":
@@ -22,9 +27,19 @@ export default function FamilyMemberDashboard({ member }) {
       case "styles":
         return <FamilyStyles member={member} />;
       case "matches":
-        return <FamilyMatches member={member} />;
+        return (
+          <FamilyMatches
+            member={member}
+            onSwitchToStyles={() => handleTabChange("styles")}
+          />
+        );
       case "scouting":
-        return <FamilyScoutingReports member={member} />;
+        return (
+          <FamilyScoutingReports
+            member={member}
+            onSwitchToStyles={() => handleTabChange("styles")}
+          />
+        );
       default:
         return null;
     }
@@ -37,7 +52,7 @@ export default function FamilyMemberDashboard({ member }) {
           {TABS.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
               className={`px-4 py-2 rounded-t-md font-medium transition-colors
                 ${
                   activeTab === tab.id
