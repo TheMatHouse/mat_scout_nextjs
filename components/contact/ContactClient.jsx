@@ -3,12 +3,27 @@
 import { useState } from "react";
 import { toast } from "react-toastify";
 import FormField from "@/components/shared/FormField";
+import FormSelect from "@/components/shared/FormSelect";
 import Editor from "@/components/shared/Editor";
 import { Button } from "@/components/ui/button";
 
+const messageTypes = [
+  { value: "General Inquiry", label: "General Inquiry" },
+  { value: "Support", label: "Support" },
+  { value: "Feature Request", label: "Feature Request" },
+  { value: "Bug Report", label: "Bug Report" },
+];
+
 export default function ContactClient() {
-  const [form, setForm] = useState({ name: "", email: "", message: "" });
+  const [form, setForm] = useState({
+    type: "",
+    name: "",
+    email: "",
+    phone: "",
+    message: "",
+  });
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -27,8 +42,8 @@ export default function ContactClient() {
       });
 
       if (!res.ok) throw new Error("Failed to send message");
+      setSubmitted(true);
       toast.success("Message sent successfully!");
-      setForm({ name: "", email: "", message: "" });
     } catch (err) {
       console.error(err);
       toast.error("Something went wrong.");
@@ -37,12 +52,32 @@ export default function ContactClient() {
     }
   };
 
+  if (submitted) {
+    return (
+      <div className="max-w-lg mx-auto text-center bg-green-50 dark:bg-green-900 p-6 rounded-lg shadow">
+        <h2 className="text-xl font-semibold text-green-700 dark:text-green-300">
+          Thank you!
+        </h2>
+        <p className="text-gray-700 dark:text-gray-300 mt-2">
+          Your message has been sent. We’ll get back to you soon.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <form
       onSubmit={handleSubmit}
       className="space-y-6 max-w-lg mx-auto"
     >
-      {/* Name */}
+      <FormSelect
+        label="Message Type"
+        value={form.type}
+        onChange={(val) => setForm((prev) => ({ ...prev, type: val }))}
+        placeholder="Select type..."
+        options={messageTypes}
+      />
+
       <FormField
         label="Name"
         name="name"
@@ -51,7 +86,6 @@ export default function ContactClient() {
         required
       />
 
-      {/* Email */}
       <FormField
         label="Email"
         type="email"
@@ -61,7 +95,13 @@ export default function ContactClient() {
         required
       />
 
-      {/* Message */}
+      <FormField
+        label="Phone"
+        name="phone"
+        value={form.phone}
+        onChange={handleChange}
+      />
+
       <Editor
         name="message"
         text={form.message}
@@ -69,7 +109,6 @@ export default function ContactClient() {
         label="Message"
       />
 
-      {/* Submit Button */}
       <Button
         type="submit"
         className="btn-primary w-full"

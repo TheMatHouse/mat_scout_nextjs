@@ -1,18 +1,16 @@
-// app/api/contact/route.js
 import { sendContactEmail } from "@/lib/email/sendContactEmail";
 
 export async function POST(req) {
   try {
     const body = await req.json();
-    const { type, firstName, lastName, email, phone, comments } = body;
+    const { type, name, email, phone, message } = body;
 
     const result = await sendContactEmail({
       type,
-      firstName,
-      lastName,
+      name,
       email,
-      phone,
-      comments,
+      phone: phone || "Not provided",
+      message,
     });
 
     if (!result) {
