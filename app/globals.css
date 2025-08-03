@@ -155,18 +155,18 @@ body {
   }
 
   .btn-danger {
-    background-color: #dc2626;
+    background-color: var(--ms-dark-red);
     color: #fff;
   }
   .btn-danger:hover {
-    background-color: #b91c1c;
+    background-color: var(--ms-dark-red);
   }
   .dark .btn-danger {
-    background-color: #f87171;
+    background-color: var(--ms-light-red);
     color: #1f2937;
   }
   .dark .btn-danger:hover {
-    background-color: #ef4444;
+    background-color: var(--ms-light-red);
   }
 
   .btn-outline {
@@ -200,11 +200,8 @@ body {
   }
 
   /* Full Red Modal for Danger Alerts */
-  /* =========================================
-   FULL RED MODAL FOR DANGER ALERTS
-========================================= */
   .alert-danger {
-    background-color: #dc2626 !important; /* Bright red */
+    background-color: var(--ms-light-red) !important; /* Bright red */
     color: #fff !important;
     border-radius: var(--radius);
     padding: 1.5rem;
@@ -214,7 +211,7 @@ body {
 
   /* Dark Mode Variant */
   .dark .alert-danger {
-    background-color: #b91c1c !important; /* Darker red */
+    background-color: var(--ms-dark-red) !important; /* Darker red */
   }
 
   /* Ensure all text inside the alert is white */
@@ -370,7 +367,7 @@ body {
 
   /* Danger Alert Styling */
   .alert-danger {
-    background-color: #dc2626 !important; /* Bright red */
+    background-color: var(--ms-light-red) !important; /* Bright red */
     color: #fff !important; /* White text */
     border-radius: var(--radius);
     padding: 1.5rem;
@@ -379,7 +376,7 @@ body {
   }
 
   .dark .alert-danger {
-    background-color: #b91c1c !important; /* Darker red */
+    background-color: var(--ms-dark-red) !important; /* Darker red */
   }
 
   /* Title and description inside modal */
