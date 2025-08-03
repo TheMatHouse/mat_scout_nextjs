@@ -9,6 +9,9 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["Roboto", "Inter", "Arial", "Helvetica", "sans-serif"], // ✅ Added Roboto as primary
+      },
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
@@ -33,7 +36,7 @@ export default {
 
         // Primary/Secondary Colors (Brand Variables)
         primary: {
-          DEFAULT: "var(--color-primary)", // ✅ Updated to use CSS variable
+          DEFAULT: "var(--color-primary)", // ✅ Using CSS variable
           hover: "var(--color-primary-hover)",
           foreground: "#ffffff",
         },

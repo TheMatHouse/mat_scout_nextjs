@@ -1,16 +1,34 @@
+/* =========================================
+   ✅ IMPORT GOOGLE FONT (Roboto)
+========================================= */
+@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap");
+
+/* =========================================
+   ✅ TAILWIND BASE STYLES
+========================================= */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* =========================================
+   ✅ BASE RESET & TYPOGRAPHY
+========================================= */
 html {
   scroll-behavior: smooth;
 }
 
 body {
-  font-family: "Inter", Arial, Helvetica, sans-serif;
+  font-family: "Roboto", Arial, Helvetica, sans-serif;
+  @apply bg-[var(--color-bg)] text-[var(--color-text)];
 }
 
-/* === THEME VARIABLES === */
+* {
+  @apply border-border;
+}
+
+/* =========================================
+   ✅ THEME VARIABLES
+========================================= */
 @layer base {
   :root {
     /* Brand Colors */
@@ -20,33 +38,28 @@ body {
     --ms-light-red: #ef233c;
     --ms-dark-red: #d90429;
     --ms-nav-text: #f2f2f2;
-    --ms-nav-text-dark: #2b2d42;
 
-    /* Light Mode Colors */
+    /* Light Mode Defaults */
     --color-bg: #ffffff;
     --color-text: #1f2937;
     --color-card: #f9fafb;
     --color-border: #e5e7eb;
 
-    /* ShadCN tokens for Tailwind theme (Light) */
+    /* ShadCN Tokens (Light) */
     --background: 0 0% 100%;
     --foreground: 222.2 47.4% 11.2%;
     --card: 0 0% 100%;
     --card-foreground: 222.2 47.4% 11.2%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 47.4% 11.2%;
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
     --radius: 0.5rem;
 
-    /* Primary, Accent, States */
+    /* Custom State Colors */
     --color-primary: var(--ms-blue);
     --color-primary-hover: #1e2132;
     --color-accent: var(--ms-blue-gray);
@@ -54,59 +67,60 @@ body {
     --color-success: #28a745;
   }
 
-  /* Dark Mode Colors */
+  /* Dark Mode */
   .dark {
     --color-bg: var(--ms-blue);
     --color-text: #f3f4f6;
-
-    /* Custom modal + card colors */
-    --color-card-light: #2d3045; /* For DialogHeader */
-    --color-card-dark: #0b0f1a; /* For Card */
-    --color-card: var(--color-card-dark); /* ✅ Added */
+    --color-card-light: #2d3045;
+    --color-card-dark: #0b0f1a;
+    --color-card: var(--color-card-dark);
     --color-border: #374151;
 
-    /* ShadCN tokens for Tailwind theme (Dark) */
+    /* ShadCN Tokens (Dark) */
     --background: 222.2 47.4% 11.2%;
     --foreground: 210 40% 98%;
     --card: 222.2 47.4% 11.2%;
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 47.4% 11.2%;
-    --popover-foreground: 210 40% 98%;
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
 
+    /* Custom State Colors */
     --color-primary: var(--ms-light-gray);
     --color-primary-hover: #8d99ae;
-    --color-accent: var(--ms-blue-gray);
     --color-danger: var(--ms-light-red);
     --color-success: #4ade80;
   }
-
-  body {
-    @apply bg-[var(--color-bg)] text-[var(--color-text)];
-  }
-
-  * {
-    @apply border-border;
-  }
 }
 
-/* === BUTTON & COMPONENT STYLES === */
+/* =========================================
+   ✅ COMPONENT STYLES
+========================================= */
 @layer components {
-  /* Base button */
+  /* ---------- INFO CARDS (Profile Page) ---------- */
+  .settings-card {
+    background-color: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    color: var(--color-text);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .dark .settings-card {
+    background-color: #1e2132; /* Darker than page bg */
+  }
+
+  /* ---------- BUTTONS ---------- */
   .btn {
     @apply inline-flex items-center justify-center font-semibold px-4 py-2 transition-all duration-200 shadow-sm;
     border-radius: var(--radius);
   }
 
-  /* Primary button */
   .btn-primary {
     background-color: var(--ms-blue);
     color: #fff;
@@ -114,7 +128,6 @@ body {
   }
   .btn-primary:hover {
     background-color: #1a1c2d;
-    color: #fff;
   }
   .dark .btn-primary {
     background-color: var(--ms-light-gray);
@@ -122,45 +135,40 @@ body {
   }
   .dark .btn-primary:hover {
     background-color: #cbd5e1;
-    color: var(--ms-blue);
   }
 
-  /* Secondary button */
   .btn-secondary {
-    background-color: #f3f4f6; /* light gray */
-    color: #1f2937; /* dark text */
-    border: 1px solid #d1d5db; /* light border */
+    background-color: #f3f4f6;
+    color: #1f2937;
+    border: 1px solid #d1d5db;
   }
   .btn-secondary:hover {
-    background-color: #e5e7eb; /* slightly darker gray */
+    background-color: #e5e7eb;
   }
   .dark .btn-secondary {
-    background-color: #374151; /* dark gray for dark mode */
-    color: #f9fafb; /* light text */
+    background-color: #374151;
+    color: #f9fafb;
     border-color: #4b5563;
   }
   .dark .btn-secondary:hover {
     background-color: #4b5563;
   }
 
-  /* Danger button */
   .btn-danger {
-    background-color: #dc2626; /* red */
+    background-color: #dc2626;
     color: #fff;
-    border: 1px solid transparent;
   }
   .btn-danger:hover {
     background-color: #b91c1c;
   }
   .dark .btn-danger {
-    background-color: #f87171; /* lighter red for dark mode */
+    background-color: #f87171;
     color: #1f2937;
   }
   .dark .btn-danger:hover {
     background-color: #ef4444;
   }
 
-  /* Outline button */
   .btn-outline {
     border: 1px solid var(--ms-blue);
     color: var(--ms-blue);
@@ -179,226 +187,76 @@ body {
     color: var(--ms-blue);
   }
 
-  /* Icon button */
   .icon-btn {
-    background-color: transparent;
+    background: transparent;
     color: var(--ms-blue);
     border-radius: var(--radius);
-    transition: all 0.3s ease;
     padding: 0.5rem;
+    transition: all 0.3s ease;
   }
   .icon-btn:hover {
     background-color: rgba(43, 45, 66, 0.1);
     color: var(--ms-light-gray);
   }
 
-  /* === DIALOG HEADER (outer section) === */
+  /* ---------- MODALS & CARDS ---------- */
   .dialog-content-custom {
-    background-color: var(--color-card-light) !important;
+    background-color: var(--color-card);
     color: var(--color-text);
     border-radius: var(--radius);
     border: 1px solid var(--color-border);
-    padding: 0; /* inner padding handled by Card */
-    max-height: 90vh; /* limit modal height */
-    overflow-y: auto; /* allow scrolling inside */
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 0;
   }
 
-  /* === CARD (inner section) === */
   .card-dark {
-    background-color: var(--color-card-dark) !important;
+    background-color: var(--color-card);
     color: var(--color-text);
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
     padding: 1.5rem;
   }
 
-  /* Fix for settings info boxes */
-  .settings-card {
+  /* ---------- FORMS ---------- */
+  input,
+  select,
+  textarea {
     background-color: var(--color-card);
+    color: var(--color-text);
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
-    padding: 1rem;
-    margin-bottom: 1rem;
-  }
-  .dark .settings-card {
-    background-color: #1e2132;
-  }
-
-  /* Switch styling */
-  .switch {
-    position: relative;
-    width: 42px;
-    height: 22px;
-    background-color: #d1d5db;
-    border-radius: 999px;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-  }
-  .switch::before {
-    content: "";
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 18px;
-    height: 18px;
-    background-color: #fff;
-    border-radius: 50%;
-    transition: transform 0.3s ease;
-  }
-  .switch.on {
-    background-color: var(--ms-blue);
-  }
-  .switch.on::before {
-    transform: translateX(20px);
-  }
-
-  /* === Sidebar Styling === */
-  .sidebar-link {
-    display: block;
-    padding: 0.5rem 1rem;
-    border-radius: var(--radius);
-    color: var(--ms-blue-gray);
-    font-size: 1.125rem;
-    font-weight: 500;
-    transition: all 0.3s ease;
-  }
-  .sidebar-link:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-    color: var(--ms-light-gray);
-  }
-  .active-link {
-    background-color: rgba(255, 255, 255, 0.15);
-    color: var(--ms-light-gray);
-    font-weight: 600;
-    border-left: 3px solid var(--ms-light-red);
-    padding-left: calc(1rem - 3px);
-  }
-
-  .sidebar-sublink {
-    display: block;
-    padding: 0.4rem 1rem;
-    font-size: 0.95rem;
-    color: var(--ms-blue-gray);
-    border-radius: var(--radius);
-    transition: all 0.3s ease;
-  }
-  .sidebar-sublink:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-    color: var(--ms-light-gray);
-  }
-  .active-sublink {
-    background-color: rgba(255, 255, 255, 0.15);
-    color: var(--ms-light-gray);
-    font-weight: 500;
-    border-left: 3px solid var(--ms-light-red);
-    padding-left: calc(1rem - 3px);
-  }
-
-  /* === Notification Settings Container === */
-  .notification-settings {
-    background-color: #131a23;
-    border-radius: var(--radius);
-    padding: 1.5rem;
-    margin-top: 2rem;
-    color: var(--color-text);
-  }
-  .notification-settings h2 {
-    font-size: 1.25rem;
-    font-weight: 700;
-    margin-bottom: 0.5rem;
-  }
-  .notification-settings p {
-    color: var(--ms-blue-gray);
-    margin-bottom: 1.5rem;
-  }
-  .switch-container {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.75rem 0;
-    border-bottom: 1px solid var(--color-border);
-  }
-  .switch-container:last-child {
-    border-bottom: none;
-  }
-  .switch-label {
-    font-weight: 600;
-  }
-
-  /* Input fields (text, email, password) */
-  .input-field {
-    @apply w-full h-10 px-3 rounded border;
-    background-color: var(--color-card);
-    color: var(--color-text);
-    border-color: var(--color-border);
-  }
-
-  .input-field::placeholder {
-    color: var(--ms-blue-gray);
-  }
-
-  /* Disabled input */
-  .input-field:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  /* ShadCN Select Trigger */
-  .select-trigger-custom {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
     width: 100%;
-    height: 2.5rem; /* same as .input-field */
-    padding: 0 0.75rem;
-    background-color: var(--color-card);
-    color: var(--color-text);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius);
   }
 
-  .select-trigger-custom span[data-placeholder] {
+  input::placeholder,
+  textarea::placeholder {
     color: var(--ms-blue-gray);
     opacity: 0.8;
   }
 
-  .form-control {
-    @apply block w-full rounded-md border border-gray-600 
-           bg-gray-900 text-gray-100 
-           shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500 
-           sm:text-sm p-3;
+  select option {
+    background-color: var(--color-bg);
+    color: var(--color-text);
   }
 
-  .form-toolbar {
-    @apply mb-2 flex gap-2 border border-gray-600 bg-gray-800 p-2 rounded-md;
+  .form-section {
+    background-color: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
   }
-
-  .form-toolbar button {
-    @apply px-2 py-1 border border-gray-500 rounded bg-gray-700 text-gray-100 hover:bg-gray-600;
+  .dark .form-section {
+    background-color: #1e2132;
   }
 }
 
-/* select.input-field option {
-  background-color: var(--color-bg);
-  color: var(--color-text);
-} */
-
-/* === THEME DROPDOWN FIX === */
-[data-state="open"][role="menu"] {
-  background-color: var(--color-card);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  padding: 0.5rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 50;
-}
-.dark [data-state="open"][role="menu"] {
-  background-color: #1f2937;
-  color: #f3f4f6;
-}
-
-/* === PAGE LOAD ANIMATION === */
+/* =========================================
+   ✅ UTILITIES
+========================================= */
 @layer utilities {
   .fade-in {
     animation: fadeIn 0.4s ease-in-out forwards;
@@ -415,11 +273,12 @@ body {
   }
 }
 
-/* === NAV & LINK HOVERS === */
+/* =========================================
+   ✅ NAVIGATION & DROPDOWN FIX
+========================================= */
 nav a,
 aside a {
   color: var(--ms-light-gray);
-  text-decoration: none;
   transition: color 0.2s ease;
 }
 nav a:hover,
@@ -427,59 +286,16 @@ aside a:hover {
   color: var(--ms-light-red);
 }
 
-/* === FORM CONTAINER FOR CONSISTENCY === */
-.form-section {
+[data-state="open"][role="menu"] {
   background-color: var(--color-card);
+  color: var(--color-text);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  padding: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 50;
 }
-
-.dark .form-section {
-  background-color: #1e2132; /* Darker than page bg for clear contrast */
-}
-
-/* === LABEL STYLING === */
-.switch-label {
-  font-size: 0.95rem;
-  color: var(--color-text);
-}
-
-/* === SWITCH STYLING === */
-.custom-switch {
-  width: 2.75rem; /* 44px */
-  height: 1.5rem; /* 24px */
-  border-radius: 9999px;
-  background-color: var(--ms-blue-gray); /* OFF track */
-  position: relative;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-}
-
-.custom-switch::before {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 1.1rem;
-  height: 1.1rem;
-  background-color: #fff; /* Knob: white by default */
-  border-radius: 50%;
-  transition: transform 0.3s ease, background-color 0.3s ease;
-}
-
-/* ON State */
-.custom-switch[data-state="checked"] {
-  background-color: var(--ms-blue); /* Track becomes blue */
-}
-.custom-switch[data-state="checked"]::before {
-  transform: translateX(1.25rem);
-  background-color: #fff; /* Knob stays white */
-}
-
-/* Hover effect */
-.custom-switch:hover {
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+.dark [data-state="open"][role="menu"] {
+  background-color: #1f2937;
+  color: #f3f4f6;
 }
