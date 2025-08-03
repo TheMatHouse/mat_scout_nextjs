@@ -252,6 +252,44 @@ body {
   .dark .form-section {
     background-color: #1e2132;
   }
+
+  /* ---------- ALERT DIALOG (Radix) ---------- */
+  .alert-dialog-content,
+  [data-state="open"].alert-dialog-content,
+  [data-state="open"] .alert-dialog-content,
+  [role="alertdialog"] {
+    background-color: var(--color-card) !important;
+    color: var(--color-text) !important;
+    border-radius: var(--radius);
+    border: 1px solid var(--color-border);
+    padding: 1.5rem;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    max-width: 500px;
+    margin: auto;
+  }
+
+  /* Header text inside AlertDialog */
+  .alert-dialog-content h2,
+  .alert-dialog-content [data-radix-alert-dialog-title] {
+    color: var(--color-text);
+    font-weight: 700;
+    font-size: 1.25rem;
+  }
+
+  .alert-dialog-content p,
+  .alert-dialog-content [data-radix-alert-dialog-description] {
+    color: var(--color-text);
+    opacity: 0.8;
+  }
+
+  /* Footer buttons alignment */
+  .alert-dialog-content footer,
+  [data-radix-alert-dialog-footer] {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 1rem;
+  }
 }
 
 /* =========================================

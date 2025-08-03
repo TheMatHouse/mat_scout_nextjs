@@ -73,9 +73,14 @@ export default function DeleteAccount({ user }) {
         onOpenChange={setOpen}
       >
         <AlertDialogTrigger asChild>
-          <Button variant="destructive">Delete Account</Button>
+          <button
+            type="button"
+            className="btn btn-danger"
+          >
+            Delete Account
+          </button>
         </AlertDialogTrigger>
-        <AlertDialogContent>
+        <AlertDialogContent className="alert-dialog-content">
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -84,11 +89,13 @@ export default function DeleteAccount({ user }) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="btn-secondary">
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               disabled={loading}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="btn-danger"
             >
               {loading ? "Deleting..." : "Yes, Delete My Account"}
             </AlertDialogAction>
