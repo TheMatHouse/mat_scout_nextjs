@@ -116,6 +116,14 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
               >
                 Profile
               </Link>
+              {user?.isAdmin && (
+                <Link
+                  href="/admin"
+                  className="hover:text-ms-light-red"
+                >
+                  Admin
+                </Link>
+              )}
             </nav>
 
             <div className="mt-8 space-y-4 text-sm text-ms-blue-gray">

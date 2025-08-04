@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useUser } from "@/context/UserContext";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Users, User } from "lucide-react";
+import { LayoutDashboard, Users, User, Shield } from "lucide-react";
 
 export default function AuthenticatedSidebar() {
   const { user } = useUser();
@@ -108,6 +108,23 @@ export default function AuthenticatedSidebar() {
             )}
           </div>
         ))}
+
+        {/* ✅ Admin link for admins only */}
+        {user?.isAdmin && (
+          <div className="mt-6">
+            <Link
+              href="/admin"
+              className={cn(
+                "flex items-center gap-2 text-lg font-medium px-2 py-2 rounded-md transition hover:text-ms-light-red hover:bg-[hsl(222_47%_20%)]",
+                pathname.startsWith("/admin") &&
+                  "bg-[hsl(222_47%_25%)] text-ms-light-red font-semibold border-l-4 border-[var(--ms-light-red)]"
+              )}
+            >
+              <Shield size={18} />
+              Admin Panel
+            </Link>
+          </div>
+        )}
       </nav>
     </aside>
   );

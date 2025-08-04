@@ -29,6 +29,7 @@ const Navbar = () => {
               >
                 Dashboard
               </Link>
+
               <Link
                 href="/contact"
                 className="hover:underline"

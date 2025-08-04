@@ -3,8 +3,9 @@ import User from "@/models/userModel";
 import FamilyProfileClient from "@/components/profile/FamilyProfileClient";
 
 export async function generateMetadata({ params }) {
+  const { username } = await params; // ✅ Await params
   await connectDB();
-  const member = await User.findOne({ username: params.username });
+  const member = await User.findOne({ username });
 
   if (!member) {
     return {
@@ -21,12 +22,12 @@ export async function generateMetadata({ params }) {
     title,
     description,
     alternates: {
-      canonical: `${process.env.NEXT_PUBLIC_DOMAIN}/family/${params.username}`,
+      canonical: `${process.env.NEXT_PUBLIC_DOMAIN}/family/${username}`,
     },
     openGraph: {
       title,
       description,
-      url: `${process.env.NEXT_PUBLIC_DOMAIN}/family/${params.username}`,
+      url: `${process.env.NEXT_PUBLIC_DOMAIN}/family/${username}`,
       images: [{ url: image }],
     },
     twitter: {
@@ -39,12 +40,13 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function FamilyProfilePage({ params }) {
+  const { username } = await params; // ✅ Await params
   await connectDB();
-  const member = await User.findOne({ username: params.username });
+  const member = await User.findOne({ username });
 
   return (
     <FamilyProfileClient
-      username={params.username}
+      username={username}
       initialData={member ? JSON.parse(JSON.stringify(member)) : null}
     />
   );
