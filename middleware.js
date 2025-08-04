@@ -24,7 +24,6 @@ export async function middleware(req) {
 
       // If route is admin-only, check isAdmin flag
       if (isAdmin && !payload.isAdmin) {
-        // If it's an API request, return 403
         if (pathname.startsWith("/api")) {
           return new NextResponse(JSON.stringify({ error: "Forbidden" }), {
             status: 403,
@@ -32,8 +31,10 @@ export async function middleware(req) {
           });
         }
 
-        // If it's a page route, redirect to home
-        return NextResponse.redirect(new URL("/", req.url));
+        // ✅ Redirect non-admin to home with error param
+        const homeUrl = new URL("/dashboard", req.url);
+        homeUrl.searchParams.set("error", "forbidden");
+        return NextResponse.redirect(homeUrl);
       }
 
       return NextResponse.next();

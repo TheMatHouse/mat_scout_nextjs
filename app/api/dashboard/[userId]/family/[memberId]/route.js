@@ -1,7 +1,7 @@
 // app/api/dashboard/[userId]/family/[memberId]/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
-import { getCurrentUserFromCookies } from "@/lib/auth";
+import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import FamilyMember from "@/models/familyMemberModel";
 import { Types } from "mongoose";
 

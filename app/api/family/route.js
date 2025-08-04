@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import FamilyMember from "@/models/familyMemberModel";
-import { getCurrentUserFromCookies } from "@/lib/auth";
+import { getCurrentUserFromCookies } from "@/lib/auth-server";
 
 export async function GET() {
   await connectDB();

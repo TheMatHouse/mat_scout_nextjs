@@ -1,5 +1,5 @@
 import { connectDB } from "@/lib/mongo";
-import { getCurrentUserFromCookies } from "@/lib/auth";
+import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
 

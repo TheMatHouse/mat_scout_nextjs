@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
-import { getCurrentUserFromCookies } from "@/lib/auth";
+import { getCurrentUserFromCookies } from "@/lib/auth-server";
 
 export async function GET() {
   try {

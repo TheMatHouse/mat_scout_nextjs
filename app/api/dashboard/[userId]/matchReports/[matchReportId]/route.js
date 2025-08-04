@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import MatchReport from "@/models/matchReportModel";
 import { Types } from "mongoose";
-import { getCurrentUserFromCookies } from "@/lib/auth";
+import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 // PATCH: Update a user's own match report

@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
 import sendVerificationEmail from "@/lib/email/sendVerificationEmail";
-import { getCurrentUserFromCookies } from "@/lib/auth";
+import { getCurrentUserFromCookies } from "@/lib/auth-server";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 

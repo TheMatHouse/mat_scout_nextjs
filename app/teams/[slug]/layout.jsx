@@ -3,7 +3,7 @@ import Image from "next/image";
 import { connectDB } from "@/lib/mongo";
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
-import { getCurrentUser } from "@/lib/getCurrentUser";
+import { getCurrentUser } from "@/lib/auth-server";
 import TeamWrapper from "@/components/teams/TeamWrapper";
 import TeamTabs from "@/components/teams/TeamTabs";
 

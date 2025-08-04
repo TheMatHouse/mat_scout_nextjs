@@ -35,9 +35,11 @@ export async function POST(req) {
     }
 
     // ✅ Use `userId` consistently
-    const token = jwt.sign({ userId: user._id }, JWT_SECRET, {
-      expiresIn: "7d",
-    });
+    const token = jwt.sign(
+      { userId: user._id, isAdmin: user.isAdmin || false }, // ✅ add isAdmin
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
     const response = NextResponse.json({
       message: "Login successful",

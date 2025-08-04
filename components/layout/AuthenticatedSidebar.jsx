@@ -5,9 +5,10 @@ import { useState, useEffect } from "react";
 import { useUser } from "@/context/UserContext";
 import { cn } from "@/lib/utils";
 import { LayoutDashboard, Users, User, Shield } from "lucide-react";
+import Spinner from "@/components/shared/Spinner";
 
 export default function AuthenticatedSidebar() {
-  const { user } = useUser();
+  const { user, loading } = useUser();
   const pathname = usePathname();
   const [isDashboardOpen, setDashboardOpen] = useState(false);
   const [isTeamsOpen, setTeamsOpen] = useState(false);
@@ -17,6 +18,16 @@ export default function AuthenticatedSidebar() {
     setTeamsOpen(pathname.startsWith("/teams"));
   }, [pathname]);
 
+  // ✅ Show spinner while loading (prevents sidebar disappearing)
+  if (loading) {
+    return (
+      <aside className="hidden md:flex w-64 h-full bg-[hsl(222.2_47.4%_11.2%)] text-white flex-col justify-center items-center py-8 px-6">
+        <Spinner size={32} />
+      </aside>
+    );
+  }
+
+  // ✅ If no user, return nothing (middleware will handle redirect)
   if (!user) return null;
 
   const mainLinks = [

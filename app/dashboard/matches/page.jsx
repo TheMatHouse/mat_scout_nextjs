@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import DashboardMatches from "@/components/dashboard/DashboardMatches";
 import { useUser } from "@/context/UserContext";
+import Spinner from "@/components/shared/Spinner";
 
 export default function MatchesPage() {
   const router = useRouter();
@@ -18,12 +19,16 @@ export default function MatchesPage() {
   }, [loading, user]);
 
   if (loading) {
-    return <div>Loading...</div>; // Or your preferred spinner
+    return (
+      <div className="flex flex-col justify-center items-center h-[70vh] bg-background">
+        <Spinner size={64} />
+        <p className="text-gray-400 dark:text-gray-300 mt-2 text-lg">
+          Loading your match reports...
+        </p>
+      </div>
+    );
   }
-
-  if (!user) {
-    return null; // User is unauthenticated — useEffect will redirect
-  }
+  if (!user) return null;
 
   return (
     <DashboardMatches

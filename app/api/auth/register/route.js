@@ -42,10 +42,11 @@ export async function POST(req) {
     });
 
     // ✅ Use consistent token payload
-    const token = jwt.sign({ userId: newUser._id }, JWT_SECRET, {
-      expiresIn: "7d",
-    });
-
+    const token = jwt.sign(
+      { userId: newUser._id, isAdmin: newUser.isAdmin || false }, // ✅ add isAdmin
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
     const response = NextResponse.json({
       message: "Registration successful",
       user: {

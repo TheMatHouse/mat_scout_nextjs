@@ -6,6 +6,7 @@ import DashboardSettings from "@/components/dashboard/DashboardSettings";
 import NotificationSettings from "@/components/dashboard/NotificationSettings";
 import { useUser } from "@/context/UserContext";
 import DeleteAccount from "@/components/dashboard/DeleteAccount";
+import Spinner from "@/components/shared/Spinner";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -20,12 +21,16 @@ export default function SettingsPage() {
   }, [loading, user]);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="flex flex-col justify-center items-center h-[70vh] bg-background">
+        <Spinner size={64} />
+        <p className="text-gray-400 dark:text-gray-300 mt-2 text-lg">
+          Loading your settings...
+        </p>
+      </div>
+    );
   }
-
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
     <div className="max-w-3xl mx-auto space-y-8 p-6">

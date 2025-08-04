@@ -3,7 +3,7 @@ import { connectDB } from "@/lib/mongo";
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
 import FamilyMember from "@/models/familyMemberModel";
-import { getCurrentUser } from "@/lib/getCurrentUser";
+import { getCurrentUser } from "@/lib/auth-server";
 import { sendEmail } from "@/lib/email/email";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 import User from "@/models/userModel";

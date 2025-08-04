@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
-import { getCurrentUser } from "@/lib/getCurrentUser";
+import { getCurrentUser } from "@/lib/auth-server";
 import User from "@/models/userModel";
 import FamilyMember from "@/models/familyMemberModel";
 import { createNotification } from "@/lib/createNotification"; // ✅ Added

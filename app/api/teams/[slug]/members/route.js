@@ -4,7 +4,7 @@ import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
 import User from "@/models/userModel";
 import FamilyMember from "@/models/familyMemberModel";
-import { getCurrentUser } from "@/lib/getCurrentUser";
+import { getCurrentUser } from "@/lib/auth-server";
 
 export async function GET(request, { params }) {
   await connectDB();

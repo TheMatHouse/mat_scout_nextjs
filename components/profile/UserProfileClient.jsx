@@ -1,20 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getCurrentUser } from "@/lib/authClient";
 import Image from "next/image";
 import Link from "next/link";
 import StyleCard from "@/components/profile/StyleCard";
 import { notFound } from "next/navigation";
+import Spinner from "../shared/Spinner";
 
 export default function UserProfileClient({ username }) {
   const [profileUser, setProfileUser] = useState();
   const [currentUser, setCurrentUser] = useState(undefined);
-  const [loading, setLoading] = useState();
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
       try {
+        // ✅ Fetch the profile user by username
         const res = await fetch(`/api/users/${username}`);
         const data = await res.json();
         setProfileUser(data?.user || null);
@@ -23,14 +24,37 @@ export default function UserProfileClient({ username }) {
         setProfileUser(null);
       }
 
-      const viewer = await getCurrentUser();
-      setCurrentUser(viewer);
+      try {
+        // ✅ Fetch the current logged-in user safely
+        const viewerRes = await fetch("/api/auth/me");
+        if (viewerRes.ok) {
+          const viewerData = await viewerRes.json();
+          setCurrentUser(viewerData.user || null);
+        } else {
+          setCurrentUser(null);
+        }
+      } catch (err) {
+        console.error("Error fetching current user:", err);
+        setCurrentUser(null);
+      }
+
       setLoading(false);
     }
+
     fetchData();
   }, [username]);
 
-  if (loading || currentUser === undefined) return <div>Loading...</div>;
+  if (loading || currentUser === undefined) {
+    return (
+      <div className="flex flex-col justify-center items-center h-[70vh] bg-background">
+        <Spinner size={64} />
+        <p className="text-gray-400 dark:text-gray-300 mt-2 text-lg">
+          Loading profile...
+        </p>
+      </div>
+    );
+  }
+
   if (!profileUser) return notFound();
 
   const isMyProfile = currentUser?.username === profileUser.username;
@@ -45,7 +69,7 @@ export default function UserProfileClient({ username }) {
       </div>
     );
   }
-  console.log(profileUser);
+
   const styleResults = {};
   if (Array.isArray(profileUser.userStyles)) {
     profileUser.userStyles.forEach((style) => {

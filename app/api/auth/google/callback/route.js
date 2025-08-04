@@ -84,9 +84,11 @@ export async function GET(request) {
     }
 
     // ✅ 4. Create JWT token for session
-    const token = jwt.sign({ userId: user._id }, JWT_SECRET, {
-      expiresIn: "7d",
-    });
+    const token = jwt.sign(
+      { userId: user._id, isAdmin: user.isAdmin || false }, // ✅ add isAdmin
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
     // ✅ 5. Set secure HttpOnly cookie
     const response = NextResponse.redirect(`${origin}/dashboard`);

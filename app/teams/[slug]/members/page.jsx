@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useTeam } from "@/context/TeamContext";
 import MemberRow from "@/components/teams/MemberRow";
 import { Users } from "lucide-react";
+import Spinner from "@/components/shared/Spinner";
 
 export default function MembersPage() {
   const params = useParams();
@@ -30,9 +31,16 @@ export default function MembersPage() {
     fetchMembers();
   }, [fetchMembers]);
 
-  if (loading)
-    return <p className="p-4 text-center text-gray-500">Loading...</p>;
-
+  if (loading) {
+    return (
+      <div className="flex flex-col justify-center items-center h-[70vh] bg-background">
+        <Spinner size={64} />
+        <p className="text-gray-400 dark:text-gray-300 mt-2 text-lg">
+          Loading your team members...
+        </p>
+      </div>
+    );
+  }
   const currentUserMembership = members.find((m) => m.userId === team.user);
   const isManager = currentUserMembership?.role === "manager";
 

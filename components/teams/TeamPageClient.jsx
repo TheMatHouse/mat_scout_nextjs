@@ -94,7 +94,13 @@ export default function TeamPageClient({ slug, initialData }) {
     setMemberships(Array.isArray(dataM.memberships) ? dataM.memberships : []);
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-[70vh]">
+        <Spinner size={48} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

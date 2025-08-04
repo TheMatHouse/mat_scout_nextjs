@@ -83,9 +83,11 @@ export async function GET(request) {
     }
 
     // ✅ Create JWT and set cookie
-    const token = jwt.sign({ userId: user._id }, JWT_SECRET, {
-      expiresIn: "7d",
-    });
+    const token = jwt.sign(
+      { userId: user._id, isAdmin: user.isAdmin || false }, // ✅ add isAdmin
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
     const response = NextResponse.redirect(`${origin}/dashboard`);
     response.cookies.set({

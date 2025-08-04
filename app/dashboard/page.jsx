@@ -3,12 +3,22 @@
 import { useUser } from "@/context/UserContext";
 import Link from "next/link";
 import { CalendarPlus, Binoculars, UserCog, Users } from "lucide-react";
+import Spinner from "@/components/shared/Spinner";
 
 export default function DashboardHome() {
   const { user, loading } = useUser();
 
-  if (loading) return <div className="p-6">Loading...</div>;
-  if (!user) return <div className="p-6">Unauthorized</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col justify-center items-center h-[70vh] bg-background">
+        <Spinner size={64} />
+        <p className="text-gray-400 dark:text-gray-300 mt-2 text-lg">
+          Loading your dashboard...
+        </p>
+      </div>
+    );
+  }
+  if (!user) return null; // middleware will redirect
 
   const matchCount = user.matchReports ? user.matchReports.length : 0;
   const scoutingCount = user.scoutingReports ? user.scoutingReports.length : 0;

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import FamilyMember from "@/models/familyMemberModel";
 import cloudinary from "@/lib/cloudinary";
-import { getCurrentUserFromCookies } from "@/lib/auth";
+import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import { Types } from "mongoose";
 
 export const PATCH = async (req, context) => {

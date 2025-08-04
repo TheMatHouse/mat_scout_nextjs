@@ -4,7 +4,7 @@ import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
 import ScoutingReport from "@/models/scoutingReportModel";
 import User from "@/models/userModel";
-import { getCurrentUser } from "@/lib/getCurrentUser";
+import { getCurrentUser } from "@/lib/auth-server";
 import { createNotification } from "@/lib/createNotification";
 import { sendEmail } from "@/lib/email/email";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";

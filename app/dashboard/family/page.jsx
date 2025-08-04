@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import FamilyDashboard from "@/components/dashboard/family/FamilyDashboard";
 import { useUser } from "@/context/UserContext";
+import Spinner from "@/components/shared/Spinner";
 
 export default function FamilyPage() {
   const router = useRouter();
@@ -15,7 +16,13 @@ export default function FamilyPage() {
     }
   }, [loading, user]);
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-[70vh]">
+        <Spinner size={48} />
+      </div>
+    );
+  }
   if (!user) return null;
 
   return (

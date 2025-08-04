@@ -6,7 +6,6 @@ import { toast } from "react-toastify";
 import FormField from "@/components/shared/FormField";
 import FormSelect from "@/components/shared/FormSelect";
 import Link from "next/link";
-import { getCurrentUser } from "@/lib/authClient";
 import { Copy, Share } from "lucide-react";
 
 export default function FamilyMemberSettings({ member }) {
@@ -35,8 +34,21 @@ export default function FamilyMemberSettings({ member }) {
     }
   }, [member]);
 
+  // ✅ Fetch current user safely from API
   useEffect(() => {
-    getCurrentUser().then(setCurrentUser);
+    const fetchUser = async () => {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const data = await res.json();
+          setCurrentUser(data.user);
+        }
+      } catch (err) {
+        console.error("Error fetching user:", err);
+      }
+    };
+
+    fetchUser();
   }, []);
 
   const handleChange = (e) => {
@@ -111,11 +123,10 @@ export default function FamilyMemberSettings({ member }) {
       toast.error("Unexpected error");
     }
   };
-  console.log("current User ", currentUser);
-  console.log("member ");
+
   return (
     <div>
-      {/* ✅ Add Your Profile link if this is the parent */}
+      {/* ✅ Show Public Profile link if this is the parent */}
       {currentUser && member && member.userId === currentUser._id && (
         <div className="bg-[var(--color-card)] border border-border rounded-lg p-4 max-w-md shadow-md">
           <h3 className="text-base font-semibold text-gray-100 mb-2">

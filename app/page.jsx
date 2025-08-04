@@ -1,6 +1,6 @@
 // app/page.jsx
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/getCurrentUser";
+import { getCurrentUser } from "@/lib/auth-server"; // ✅ Updated import
 import HomePage from "./home/page";
 
 export const metadata = {
@@ -39,7 +39,7 @@ export const metadata = {
 };
 
 export default async function Home() {
-  const user = await getCurrentUser();
+  const user = await getCurrentUser(); // ✅ Server-safe
 
   if (user) {
     redirect("/dashboard");

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/getCurrentUser";
+import { getCurrentUser } from "@/lib/auth-server";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
 import FamilyMember from "@/models/familyMemberModel";

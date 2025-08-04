@@ -3,7 +3,7 @@ import { connectDB } from "@/lib/mongo";
 import { Types } from "mongoose";
 import ScoutingReport from "@/models/scoutingReportModel";
 import Video from "@/models/videoModel";
-import { getCurrentUserFromCookies } from "@/lib/auth";
+import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 export async function PATCH(request, context) {

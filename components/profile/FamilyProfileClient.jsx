@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getCurrentUser } from "@/lib/authClient";
+import { useUser } from "@/context/UserContext"; // ✅ Use context instead of server call
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import StyleCard from "@/components/profile/StyleCard";
+import Spinner from "../shared/Spinner";
 
 export default function FamilyProfileClient({ username, initialData }) {
+  const { user: currentUser } = useUser(); // ✅ Current logged-in user
   const [member, setMember] = useState(initialData);
-  const [currentUser, setCurrentUser] = useState(undefined);
   const [loading, setLoading] = useState(!initialData);
 
   useEffect(() => {
@@ -22,11 +23,19 @@ export default function FamilyProfileClient({ username, initialData }) {
     } else {
       setLoading(false);
     }
-
-    getCurrentUser().then(setCurrentUser);
   }, [username, initialData]);
 
-  if (loading || currentUser === undefined) return <div>Loading...</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col justify-center items-center h-[70vh] bg-background">
+        <Spinner size={64} />
+        <p className="text-gray-400 dark:text-gray-300 mt-2 text-lg">
+          Loading profile...
+        </p>
+      </div>
+    );
+  }
+
   if (!member) return notFound();
 
   const isParent = currentUser && member.parentId === currentUser._id;
@@ -57,6 +66,7 @@ export default function FamilyProfileClient({ username, initialData }) {
 
   return (
     <section className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-4 gap-6">
+      {/* Left Sidebar */}
       <div className="md:col-span-1 bg-white dark:bg-gray-900 rounded-xl shadow border border-border p-6 text-center space-y-4 self-start">
         <Image
           src={member.avatar || "/default-avatar.png"}
@@ -128,6 +138,7 @@ export default function FamilyProfileClient({ username, initialData }) {
         </Link>
       </div>
 
+      {/* Right Content */}
       <div className="md:col-span-3 grid gap-6 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
         {member.userStyles?.length > 0 ? (
           member.userStyles.map((style) => (

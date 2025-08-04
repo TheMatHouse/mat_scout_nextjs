@@ -1,6 +1,6 @@
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth-server";
 
 export async function GET(req) {
   await connectDB();

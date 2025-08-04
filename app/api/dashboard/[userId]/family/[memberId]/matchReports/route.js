@@ -4,7 +4,7 @@ import MatchReport from "@/models/matchReportModel";
 import FamilyMember from "@/models/familyMemberModel";
 import User from "@/models/userModel";
 import { Types } from "mongoose";
-import { getCurrentUserFromCookies } from "@/lib/auth";
+import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 // GET: Return match reports for a family member

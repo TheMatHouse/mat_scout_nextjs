@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useUser } from "@/context/UserContext";
 import FamilyMemberDashboard from "@/components/dashboard/family/FamilyMemberDashboard";
 import { apiFetch } from "@/lib/apiClient";
+import Spinner from "@/components/shared/Spinner";
 
 export default function FamilyMemberPage({ params }) {
   const { memberId } = use(params);
@@ -36,7 +37,16 @@ export default function FamilyMemberPage({ params }) {
     }
   }, [loading, user, memberId]);
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col justify-center items-center h-[70vh] bg-background">
+        <Spinner size={64} />
+        <p className="text-gray-400 dark:text-gray-300 mt-2 text-lg">
+          Loading your dashboard...
+        </p>
+      </div>
+    );
+  }
   if (error) return <div className="text-red-500">{error}</div>;
   if (!member) return null;
 

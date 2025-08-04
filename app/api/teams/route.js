@@ -1,7 +1,7 @@
 // app/api/teams/route.js
 import { connectDB } from "@/lib/mongo";
 import Team from "@/models/teamModel";
-import { getCurrentUserFromCookies } from "@/lib/auth";
+import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import { NextResponse } from "next/server";
 import TeamMember from "@/models/teamMemberModel";
 

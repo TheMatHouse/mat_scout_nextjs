@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import Notification from "@/models/notification"; // ✅ lowercase is fine for your setup
-import { getCurrentUserFromCookies } from "@/lib/auth"; // ✅ correct auth helper
+import { getCurrentUserFromCookies } from "@/lib/auth-server"; // ✅ correct auth helper
 
 export async function PATCH(req) {
   await connectDB();

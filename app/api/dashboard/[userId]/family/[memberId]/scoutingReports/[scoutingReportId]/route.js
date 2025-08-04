@@ -6,7 +6,7 @@ import ScoutingReport from "@/models/scoutingReportModel";
 import Video from "@/models/videoModel";
 import User from "@/models/userModel";
 import { Types } from "mongoose";
-import { getCurrentUserFromCookies } from "@/lib/auth";
+import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 // PATCH: Update a family member's scouting report

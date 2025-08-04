@@ -2,7 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
-import { getCurrentUserFromCookies } from "@/lib/auth";
+import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import FamilyMember from "@/models/familyMemberModel";
 
 // GET all family members for the user
