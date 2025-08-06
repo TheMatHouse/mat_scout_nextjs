@@ -11,10 +11,15 @@ export function UserProvider({ children }) {
     const fetchUser = async () => {
       try {
         const res = await fetch("/api/auth/me");
+
         if (res.ok) {
           const data = await res.json();
           setUser(data.user || null);
+        } else if (res.status === 401) {
+          // Don't spam console for expected logged-out case
+          setUser(null);
         } else {
+          console.error("Unexpected user fetch error:", res.status);
           setUser(null);
         }
       } catch (err) {
@@ -37,7 +42,7 @@ export function UserProvider({ children }) {
     } catch (err) {
       console.error("Logout API error:", err);
     } finally {
-      setUser(null); // ✅ Clear user state immediately
+      setUser(null);
     }
   };
 

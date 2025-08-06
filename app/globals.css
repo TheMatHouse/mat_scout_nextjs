@@ -106,13 +106,6 @@ body {
 }
 
 /* =========================================
-   ✅ PAGE-SPECIFIC OVERRIDES
-========================================= */
-.home-wrapper {
-  background-color: var(--ms-blue) !important;
-}
-
-/* =========================================
    ✅ COMPONENT STYLES
 ========================================= */
 @layer components {
