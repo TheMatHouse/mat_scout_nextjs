@@ -94,7 +94,7 @@ export const DELETE = async (request, context) => {
       );
     }
 
-    const { getCurrentUser } = await import("@/lib/getCurrentUser.js");
+    const { getCurrentUser } = await import("@/lib/auth-server.js");
     const currentUser = await getCurrentUser();
 
     if (!currentUser || currentUser._id.toString() !== userId) {
