@@ -2,6 +2,9 @@ import "@/app/globals.css";
 import { ThemeProvider } from "next-themes";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+
+import Header from "@/components/layout/Header";
+import Footer from "@/components/layout/Footer";
 import { UserProvider } from "@/context/UserContext";
 import LayoutClient from "@/components/layout/LayoutClient";
 
@@ -24,8 +27,14 @@ export default function RootLayout({ children }) {
             autoClose={5000}
           />
           <UserProvider>
-            {/* ✅ Client wrapper handles pathname & params */}
+            {/* ✅ Header stays static */}
+            <Header />
+
+            {/* ✅ Client-side wrapper for sidebar + query params */}
             <LayoutClient>{children}</LayoutClient>
+
+            {/* ✅ Footer stays static */}
+            <Footer />
           </UserProvider>
         </ThemeProvider>
       </body>
