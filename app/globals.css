@@ -17,11 +17,22 @@ html {
   scroll-behavior: smooth;
 }
 
-body {
-  font-family: "Roboto", Arial, Helvetica, sans-serif;
-  @apply bg-[var(--color-bg)] text-[var(--color-text)];
+html,
+body,
+#__next {
+  height: 100%;
 }
 
+body {
+  font-family: "Roboto", Arial, Helvetica, sans-serif;
+  margin: 0;
+  padding: 0;
+  display: flex; /* ✅ Keep flex for footer positioning */
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--color-bg); /* ✅ Theme-aware background */
+  color: var(--color-text); /* ✅ Theme-aware text */
+}
 * {
   @apply border-border;
 }
@@ -92,6 +103,13 @@ body {
     --color-danger: var(--ms-light-red);
     --color-success: #4ade80;
   }
+}
+
+/* =========================================
+   ✅ PAGE-SPECIFIC OVERRIDES
+========================================= */
+.home-wrapper {
+  background-color: var(--ms-blue) !important;
 }
 
 /* =========================================

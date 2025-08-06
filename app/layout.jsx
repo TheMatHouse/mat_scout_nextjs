@@ -17,10 +17,9 @@ export default function RootLayout({ children }) {
   const showSidebar =
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/teams") ||
-    /^\/[^/]+$/.test(pathname) || // Single segment, like /username
+    /^\/[^/]+$/.test(pathname) ||
     pathname.startsWith("/family/");
 
-  // ✅ Show toast if redirected due to forbidden access
   useEffect(() => {
     if (params.get("error") === "forbidden") {
       toast.error("You are not authorized to access that page.");
@@ -32,7 +31,7 @@ export default function RootLayout({ children }) {
       lang="en"
       suppressHydrationWarning
     >
-      <body className="font-sans flex flex-col min-h-screen">
+      <body className="font-sans flex flex-col min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
@@ -43,26 +42,18 @@ export default function RootLayout({ children }) {
             autoClose={5000}
           />
           <UserProvider>
-            {/* Header */}
-            <Header className="border-b border-border" />
+            <Header />
 
-            {/* Main Content Wrapper */}
-            <div className="flex flex-1 min-h-0">
+            <div className="flex flex-1">
               {showSidebar && (
                 <aside className="hidden md:flex w-64 bg-sidebar-background text-sidebar-foreground">
-                  <div className="flex flex-col w-full h-full">
-                    <AuthenticatedSidebar />
-                  </div>
+                  <AuthenticatedSidebar />
                 </aside>
               )}
-
-              <main className="flex-1 px-4 py-6 md:px-8 md:py-10 bg-background text-foreground fade-in">
-                {children}
-              </main>
+              <main className="flex-1">{children}</main>
             </div>
 
-            {/* Footer */}
-            <Footer className="border-t border-border" />
+            <Footer />
           </UserProvider>
         </ThemeProvider>
       </body>
