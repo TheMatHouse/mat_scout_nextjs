@@ -1,18 +1,11 @@
-// app/layout.jsx
 import "@/app/globals.css";
 import { ThemeProvider } from "next-themes";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import Header from "@/components/layout/Header";
-import Footer from "@/components/layout/Footer";
-import AuthenticatedSidebar from "@/components/layout/AuthenticatedSidebar";
 import { UserProvider } from "@/context/UserContext";
-import LayoutClient from "@/components/layout/LayoutClient"; // ✅ NEW component
+import LayoutClient from "@/components/layout/LayoutClient";
 
-export const metadata = {
-  title: "MatScout",
-  description: "Your grappling analytics platform.",
-};
+export const dynamic = "force-dynamic";
 
 export default function RootLayout({ children }) {
   return (
@@ -31,9 +24,8 @@ export default function RootLayout({ children }) {
             autoClose={5000}
           />
           <UserProvider>
-            <Header />
+            {/* ✅ Client wrapper handles pathname & params */}
             <LayoutClient>{children}</LayoutClient>
-            <Footer />
           </UserProvider>
         </ThemeProvider>
       </body>
