@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 
 import { useUser } from "@/context/UserContext";
 import Link from "next/link";

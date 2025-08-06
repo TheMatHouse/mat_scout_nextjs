@@ -1,10 +1,11 @@
 "use client";
+export const dynamic = "force-dynamic";
 
 import { useRef, useState, useEffect, forwardRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { toast } from "react-toastify";
 import { useTeam } from "@/context/TeamContext";
-import 'react-phone-number-input/style.css';
+import "react-phone-number-input/style.css";
 import Editor from "@/components/shared/Editor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
