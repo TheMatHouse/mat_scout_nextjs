@@ -1,5 +1,6 @@
 // components/dashboard/ClientDashboard.jsx
 "use client";
+export const dynamic = "force-dynamic";
 
 import { useSearchParams } from "next/navigation";
 import DashboardSettings from "./DashboardSettings";

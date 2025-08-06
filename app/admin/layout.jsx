@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth-server";
 import Link from "next/link";
@@ -29,11 +31,7 @@ export default async function AdminLayout({ children }) {
               key={link.href}
               href={link.href}
               className={cn(
-                "block px-3 py-2 rounded hover:bg-[hsl(222_47%_20%)]",
-                // Active state
-                typeof window !== "undefined" &&
-                  window.location.pathname === link.href &&
-                  "bg-[hsl(222_47%_25%)] text-ms-light-red font-semibold"
+                "block px-3 py-2 rounded hover:bg-[hsl(222_47%_20%)]"
               )}
             >
               {link.label}

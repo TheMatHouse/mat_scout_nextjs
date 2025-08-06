@@ -1,5 +1,5 @@
 "use client";
-
+export const dynamic = "force-dynamic";
 import { useEffect, useState, use } from "react";
 import { slugToStyleMap } from "@/lib/styleSlugMap";
 import { useSearchParams } from "next/navigation";

@@ -1,5 +1,6 @@
 "use client";
 export const dynamic = "force-dynamic";
+
 import "@/app/globals.css";
 import { ThemeProvider } from "next-themes";
 import { ToastContainer, toast } from "react-toastify";
