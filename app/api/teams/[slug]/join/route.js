@@ -1,14 +1,16 @@
+// app/api/teams/[slug]/join/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
 import FamilyMember from "@/models/familyMemberModel";
 import { getCurrentUser } from "@/lib/auth-server";
-import { sendEmail } from "@/lib/email/email";
-import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 import User from "@/models/userModel";
-import EmailLog from "@/models/emailLog";
-import { createNotification } from "@/lib/createNotification"; // ✅ Added for notifications
+import { createNotification } from "@/lib/createNotification";
+
+// ⬇️ New: centralized mailer (Resend + policy)
+import { Mail } from "@/lib/mailer";
+import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
 export async function POST(req, context) {
   await connectDB();
@@ -39,6 +41,7 @@ export async function POST(req, context) {
     `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username;
   let joinerId = user._id.toString();
 
+  // Optional body for family member join
   try {
     const text = await req.text();
     if (text) {
@@ -65,10 +68,10 @@ export async function POST(req, context) {
       }
     }
   } catch {
-    // silently ignore body parse failure
+    // ignore parse errors
   }
 
-  // ✅ Check if already a member (user or family)
+  // Already requested or a member?
   const existing = await TeamMember.findOne({
     teamId: team._id,
     ...(familyMemberId
@@ -84,17 +87,17 @@ export async function POST(req, context) {
   }
 
   try {
-    const newMember = await TeamMember.create({
+    await TeamMember.create({
       teamId: team._id,
       userId: user._id,
       role: "pending",
       ...(familyMemberId && { familyMemberId }),
     });
 
-    // ✅ Create notification for team owner
+    // In-app notification for the team owner
     try {
       await createNotification({
-        userId: team.user, // Team owner
+        userId: team.user,
         type: "Join Request",
         body: `${joinerName} requested to join ${team.teamName}`,
         link: `/teams/${slug}/members`,
@@ -103,55 +106,52 @@ export async function POST(req, context) {
       console.error("❌ Failed to create join request notification:", notifErr);
     }
 
+    // Prepare HTTP response first (don’t block user on email)
     const response = NextResponse.json(
       { message: "Request submitted" },
       { status: 200 }
     );
 
-    // ✅ Email logic for join request
-    if (ownerEmail) {
-      const existingLog = await EmailLog.findOne({
-        to: ownerEmail,
-        type: "team_join_request",
-        relatedUserId: joinerId,
-        teamId: team._id.toString(),
+    // Email the owner (policy: respects prefs + 24h dedupe)
+    if (owner && ownerEmail) {
+      const subject = `${joinerName} Requests to Join ${team.teamName} at MatScout!`;
+      const message = `
+        <p>Hello ${owner.firstName || owner.username},</p>
+        <p><strong>${joinerName}</strong> has requested to join <strong>${
+        team.teamName
+      }</strong>.</p>
+        <p>Please <a href="https://matscout.com/login" style="color:#1a73e8;">sign in</a> to approve or deny this request.</p>
+        <p>
+          <a href="https://matscout.com/login"
+            style="display:inline-block;background-color:#1a73e8;color:white;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:bold;">
+            Login to MatScout
+          </a>
+        </p>
+      `;
+
+      const html = baseEmailTemplate({
+        title: "New Team Join Request",
+        message,
+        logoUrl:
+          "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png",
       });
 
-      if (!existingLog) {
-        const subject = `${joinerName} Requests to Join ${team.teamName} at MatScout!`;
-        const message = `
-          <p>Hello ${owner.firstName || owner.username},</p>
-          <p><strong>${joinerName}</strong> has requested to join <strong>${
-          team.teamName
-        }</strong>.</p>
-          <p>Please <a href="https://matscout.com/login" style="color: #1a73e8;">sign in</a> to MatScout to approve or deny this request.</p>
-          <p>
-            <a href="https://matscout.com/login"
-              style="display: inline-block; background-color: #1a73e8; color: white; padding: 10px 16px; border-radius: 4px; text-decoration: none; font-weight: bold;">
-              Login to MatScout
-            </a>
-          </p>
-        `;
-
-        const html = baseEmailTemplate({
-          title: "New Team Join Request",
-          message,
-          logoUrl:
-            "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png",
+      try {
+        const result = await Mail.sendEmail({
+          type: Mail.kinds.JOIN_REQUEST, // ✅ checks owner.notificationSettings.joinRequests.email
+          toUser: owner,
+          subject,
+          html,
+          relatedUserId: joinerId, // used in dedupe key
+          teamId: team._id.toString(), // used in dedupe key
         });
 
-        try {
-          await sendEmail({ to: ownerEmail, subject, html });
-
-          await EmailLog.create({
-            to: ownerEmail,
-            type: "team_join_request",
-            relatedUserId: joinerId,
-            teamId: team._id.toString(),
-          });
-        } catch (emailErr) {
-          console.error("❌ Failed to send join email:", emailErr);
+        if (!result.sent) {
+          // Common reasons: "rate_limited_24h" or "user_pref_opt_out"
+          console.warn("Join request email skipped:", result.reason);
         }
+      } catch (emailErr) {
+        console.error("❌ Failed to send join request email:", emailErr);
       }
     }
 

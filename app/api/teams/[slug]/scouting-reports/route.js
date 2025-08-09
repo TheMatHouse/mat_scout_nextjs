@@ -1,4 +1,4 @@
-// app/api/teams/[slug]/scoutingReports/route.js
+// app/api/teams/[slug]/scouting-reports/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
@@ -8,13 +8,18 @@ import ScoutingReport from "@/models/scoutingReportModel";
 import Video from "@/models/videoModel";
 import TeamMember from "@/models/teamMemberModel";
 import FamilyMember from "@/models/familyMemberModel";
-import { createNotification } from "@/lib/createNotification"; // ✅ Added
+import User from "@/models/userModel";
+import { createNotification } from "@/lib/createNotification";
 
-export async function POST(req, context) {
+// ⬇️ new: centralized mailer + template
+import { Mail } from "@/lib/mailer";
+import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
+
+export async function POST(req, { params }) {
   try {
     await connectDB();
 
-    const { slug } = await context.params;
+    const { slug } = params;
     if (!slug) {
       return NextResponse.json(
         { message: "Missing team slug" },
@@ -50,61 +55,133 @@ export async function POST(req, context) {
       reportFor: dedupedReportFor,
       teamId: team._id,
       createdById: currentUser._id,
-      createdByName: `${currentUser.firstName} ${currentUser.lastName}`,
+      createdByName: `${currentUser.firstName} ${currentUser.lastName}`.trim(),
     });
 
-    // ✅ Use shared utility to save any new techniques
+    // Save unknown techniques
     await saveUnknownTechniques(
       Array.isArray(body.athleteAttacks) ? body.athleteAttacks : []
     );
 
     // Save new videos and link to report
     const incomingVideos = body.videos || body.newVideos || [];
-    const videoIds = [];
-
-    for (const vid of incomingVideos) {
-      const video = await Video.create({
-        ...vid,
-        report: newReport._id,
-        createdBy: currentUser._id,
-      });
-      videoIds.push(video._id);
-    }
-
-    if (videoIds.length) {
-      newReport.videos = videoIds;
+    if (incomingVideos.length) {
+      const videoDocs = await Promise.all(
+        incomingVideos.map((vid) =>
+          Video.create({
+            ...vid,
+            report: newReport._id,
+            createdBy: currentUser._id,
+          })
+        )
+      );
+      newReport.videos = videoDocs.map((v) => v._id);
       await newReport.save();
     }
 
-    // ✅ Notifications for each athlete in reportFor
+    // In-app notifications + emails per assignment
     try {
-      for (const entry of dedupedReportFor) {
-        if (entry.athleteType === "user") {
-          // Notify the user directly
-          await createNotification({
-            userId: entry.athleteId,
-            type: "Scouting Report",
-            body: `A new scouting report was added for you in ${team.teamName}`,
-            link: `/teams/${slug}?tab=scouting-reports`,
-          });
-        } else if (entry.athleteType === "family") {
-          // Get parent user for family member
-          const familyMember = await FamilyMember.findById(entry.athleteId);
-          if (familyMember && familyMember.userId) {
+      await Promise.all(
+        dedupedReportFor.map(async (entry) => {
+          if (entry.athleteType === "user") {
+            // Notify & email the user directly
             await createNotification({
-              userId: familyMember.userId,
+              userId: entry.athleteId,
               type: "Scouting Report",
-              body: `A new scouting report was added for ${familyMember.firstName} ${familyMember.lastName} in ${team.teamName}`,
+              body: `A new scouting report was added for you in ${team.teamName}`,
               link: `/teams/${slug}?tab=scouting-reports`,
             });
+
+            const recipient = await User.findById(entry.athleteId);
+            if (recipient) {
+              const subject = `New scouting report in ${team.teamName}`;
+              const message = `
+                <p>Hi ${recipient.firstName || recipient.username},</p>
+                <p>A new scouting report has been created for you in <strong>${
+                  team.teamName
+                }</strong>.</p>
+                <p>You can review it here after signing in.</p>
+                <p>
+                  <a href="https://matscout.com/teams/${encodeURIComponent(
+                    slug
+                  )}?tab=scouting-reports"
+                    style="display:inline-block;background-color:#1a73e8;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:bold;">
+                    View Scouting Reports
+                  </a>
+                </p>
+              `;
+              const html = baseEmailTemplate({
+                title: "New Scouting Report",
+                message,
+                logoUrl:
+                  "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png",
+              });
+
+              // Respect user prefs + 24h dedupe (relatedUserId = athlete userId)
+              await Mail.sendEmail({
+                type: Mail.kinds.SCOUTING_REPORT,
+                toUser: recipient,
+                subject,
+                html,
+                relatedUserId: entry.athleteId.toString(),
+                teamId: team._id.toString(),
+              });
+            }
+          } else if (entry.athleteType === "family") {
+            // Notify & email the parent of the family member
+            const familyMember = await FamilyMember.findById(entry.athleteId);
+            if (familyMember?.userId) {
+              await createNotification({
+                userId: familyMember.userId,
+                type: "Scouting Report",
+                body: `A new scouting report was added for ${familyMember.firstName} ${familyMember.lastName} in ${team.teamName}`,
+                link: `/teams/${slug}?tab=scouting-reports`,
+              });
+
+              const parentUser = await User.findById(familyMember.userId);
+              if (parentUser) {
+                const subject = `New scouting report for ${familyMember.firstName} ${familyMember.lastName}`;
+                const message = `
+                  <p>Hi ${parentUser.firstName || parentUser.username},</p>
+                  <p>A new scouting report has been created for <strong>${
+                    familyMember.firstName
+                  } ${familyMember.lastName}</strong> in <strong>${
+                  team.teamName
+                }</strong>.</p>
+                  <p>You can review it here after signing in.</p>
+                  <p>
+                    <a href="https://matscout.com/teams/${encodeURIComponent(
+                      slug
+                    )}?tab=scouting-reports"
+                      style="display:inline-block;background-color:#1a73e8;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:bold;">
+                      View Scouting Reports
+                    </a>
+                  </p>
+                `;
+                const html = baseEmailTemplate({
+                  title: "New Scouting Report",
+                  message,
+                  logoUrl:
+                    "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png",
+                });
+
+                // relatedUserId = familyMember._id to keep dedupe scoped to that athlete
+                await Mail.sendEmail({
+                  type: Mail.kinds.SCOUTING_REPORT,
+                  toUser: parentUser,
+                  subject,
+                  html,
+                  relatedUserId: familyMember._id.toString(),
+                  teamId: team._id.toString(),
+                });
+              }
+            }
           }
-        }
-      }
-    } catch (notifErr) {
-      console.error(
-        "❌ Failed to create scouting report notifications:",
-        notifErr
+        })
       );
+    } catch (notifyErr) {
+      // Don't fail the request for notification/email issues
+      console.error("❌ Scouting report notify/email error:", notifyErr);
     }
 
     return NextResponse.json(
@@ -120,9 +197,9 @@ export async function POST(req, context) {
   }
 }
 
-export async function GET(request, context) {
+export async function GET(_request, { params }) {
   try {
-    const { slug } = await context.params;
+    const { slug } = params;
     await connectDB();
 
     const team = await Team.findOne({ teamSlug: slug });

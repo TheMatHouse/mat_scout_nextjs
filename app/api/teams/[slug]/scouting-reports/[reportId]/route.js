@@ -1,27 +1,44 @@
 // app/api/teams/[slug]/scoutingReports/[reportId]/route.js
 import { NextResponse } from "next/server";
-import mongoose, { Types } from "mongoose";
+import { Types } from "mongoose";
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 import Team from "@/models/teamModel";
 import ScoutingReport from "@/models/scoutingReportModel";
 import Video from "@/models/videoModel";
+import FamilyMember from "@/models/familyMemberModel";
+import User from "@/models/userModel";
+import { createNotification } from "@/lib/createNotification";
 
-export async function PATCH(req, context) {
+// ⬇️ centralized mailer + template
+import { Mail } from "@/lib/mailer";
+import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
+
+export async function PATCH(req, { params }) {
   try {
     await connectDB();
 
-    const { slug, reportId } = await context.params;
+    const { slug, reportId } = params;
     const currentUser = await getCurrentUserFromCookies();
-
     if (!currentUser || !currentUser._id) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
     const body = await req.json();
 
-    const report = await ScoutingReport.findById(reportId);
+    // Fetch team (for email copy + link) and validate report belongs to team
+    const team = await Team.findOne({ teamSlug: slug }).select(
+      "_id teamName teamSlug"
+    );
+    if (!team) {
+      return NextResponse.json({ message: "Team not found" }, { status: 404 });
+    }
+
+    const report = await ScoutingReport.findOne({
+      _id: reportId,
+      teamId: team._id,
+    });
     if (!report) {
       return NextResponse.json(
         { message: "Scouting report not found" },
@@ -29,7 +46,30 @@ export async function PATCH(req, context) {
       );
     }
 
-    // Update standard fields
+    // ---- Compute newly added assignees -------------------------------------
+    // Previous keys
+    const prevKeys = new Set(
+      (report.reportFor || []).map((e) => `${e.athleteType}:${e.athleteId}`)
+    );
+
+    // Deduplicate incoming reportFor & build list
+    const incoming = Array.isArray(body.reportFor)
+      ? body.reportFor
+      : report.reportFor || [];
+    const seen = new Set();
+    const dedupedIncoming = incoming.filter((e) => {
+      const k = `${e.athleteId}-${e.athleteType}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+
+    // Newly added entries = in incoming but not in prev
+    const newlyAdded = dedupedIncoming.filter(
+      (e) => !prevKeys.has(`${e.athleteType}:${e.athleteId}`)
+    );
+
+    // ---- Update standard fields -------------------------------------------
     const allowedFields = [
       "title",
       "notes",
@@ -49,18 +89,20 @@ export async function PATCH(req, context) {
     ];
 
     allowedFields.forEach((field) => {
-      if (body[field] !== undefined) {
+      if (field === "reportFor") {
+        report.reportFor = dedupedIncoming;
+      } else if (body[field] !== undefined) {
         report[field] = body[field];
       }
     });
 
-    // ✅ Save any new techniques that don't exist yet
+    // Save any new techniques
     await saveUnknownTechniques(
       Array.isArray(body.athleteAttacks) ? body.athleteAttacks : []
     );
 
-    // Handle new videos
-    if (body.newVideos && Array.isArray(body.newVideos)) {
+    // New videos
+    if (Array.isArray(body.newVideos) && body.newVideos.length) {
       for (const vid of body.newVideos) {
         const newVid = await Video.create({
           title: vid.title,
@@ -73,8 +115,8 @@ export async function PATCH(req, context) {
       }
     }
 
-    // Handle updated videos
-    if (body.updatedVideos && Array.isArray(body.updatedVideos)) {
+    // Updated videos
+    if (Array.isArray(body.updatedVideos) && body.updatedVideos.length) {
       for (const vid of body.updatedVideos) {
         await Video.findByIdAndUpdate(vid._id, {
           title: vid.title,
@@ -84,8 +126,8 @@ export async function PATCH(req, context) {
       }
     }
 
-    // Handle deleted videos
-    if (body.deletedVideos && Array.isArray(body.deletedVideos)) {
+    // Deleted videos
+    if (Array.isArray(body.deletedVideos) && body.deletedVideos.length) {
       for (const videoId of body.deletedVideos) {
         await Video.findByIdAndDelete(videoId);
         report.videos = report.videos.filter((id) => id.toString() !== videoId);
@@ -93,6 +135,112 @@ export async function PATCH(req, context) {
     }
 
     await report.save();
+
+    // ---- Notify & email only the newly added assignees ---------------------
+    try {
+      await Promise.all(
+        newlyAdded.map(async (entry) => {
+          if (entry.athleteType === "user") {
+            // In-app
+            await createNotification({
+              userId: entry.athleteId,
+              type: "Scouting Report",
+              body: `A scouting report was shared with you in ${team.teamName}`,
+              link: `/teams/${team.teamSlug}?tab=scouting-reports`,
+            });
+
+            // Email (respects prefs + 24h dedupe)
+            const recipient = await User.findById(entry.athleteId);
+            if (recipient) {
+              const subject = `Scouting report shared in ${team.teamName}`;
+              const message = `
+                <p>Hi ${recipient.firstName || recipient.username},</p>
+                <p>A scouting report has been shared with you in <strong>${
+                  team.teamName
+                }</strong>.</p>
+                <p>You can review it here after signing in.</p>
+                <p>
+                  <a href="https://matscout.com/teams/${encodeURIComponent(
+                    team.teamSlug
+                  )}?tab=scouting-reports"
+                    style="display:inline-block;background-color:#1a73e8;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;border-radius:4px;font-weight:bold;">
+                    View Scouting Reports
+                  </a>
+                </p>
+              `;
+              const html = baseEmailTemplate({
+                title: "New Scouting Report Shared",
+                message,
+                logoUrl:
+                  "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png",
+              });
+
+              await Mail.sendEmail({
+                type: Mail.kinds.SCOUTING_REPORT,
+                toUser: recipient,
+                subject,
+                html,
+                relatedUserId: entry.athleteId.toString(), // dedupe per athlete
+                teamId: team._id.toString(),
+              });
+            }
+          } else if (entry.athleteType === "family") {
+            const familyMember = await FamilyMember.findById(entry.athleteId);
+            if (familyMember?.userId) {
+              // In-app to the parent
+              await createNotification({
+                userId: familyMember.userId,
+                type: "Scouting Report",
+                body: `A scouting report was shared for ${familyMember.firstName} ${familyMember.lastName} in ${team.teamName}`,
+                link: `/teams/${team.teamSlug}?tab=scouting-reports`,
+              });
+
+              // Email to the parent (respects prefs + 24h dedupe)
+              const parentUser = await User.findById(familyMember.userId);
+              if (parentUser) {
+                const subject = `Scouting report for ${familyMember.firstName} ${familyMember.lastName}`;
+                const message = `
+                  <p>Hi ${parentUser.firstName || parentUser.username},</p>
+                  <p>A scouting report has been shared for <strong>${
+                    familyMember.firstName
+                  } ${familyMember.lastName}</strong> in <strong>${
+                  team.teamName
+                }</strong>.</p>
+                  <p>You can review it here after signing in.</p>
+                  <p>
+                    <a href="https://matscout.com/teams/${encodeURIComponent(
+                      team.teamSlug
+                    )}?tab=scouting-reports"
+                      style="display:inline-block;background-color:#1a73e8;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:bold;">
+                      View Scouting Reports
+                    </a>
+                  </p>
+                `;
+                const html = baseEmailTemplate({
+                  title: "New Scouting Report Shared",
+                  message,
+                  logoUrl:
+                    "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png",
+                });
+
+                await Mail.sendEmail({
+                  type: Mail.kinds.SCOUTING_REPORT,
+                  toUser: parentUser,
+                  subject,
+                  html,
+                  relatedUserId: familyMember._id.toString(), // dedupe per family athlete
+                  teamId: team._id.toString(),
+                });
+              }
+            }
+          }
+        })
+      );
+    } catch (notifyErr) {
+      console.error("❌ Scouting report update notify/email error:", notifyErr);
+      // Do not fail the request on email/notify errors
+    }
+
     return NextResponse.json(
       { message: "Report updated", report },
       { status: 200 }
@@ -106,9 +254,9 @@ export async function PATCH(req, context) {
   }
 }
 
-export async function DELETE(request, context) {
+export async function DELETE(_request, { params }) {
   await connectDB();
-  const { slug, reportId } = await context.params;
+  const { slug, reportId } = params;
 
   const currentUser = await getCurrentUserFromCookies();
 
@@ -120,7 +268,6 @@ export async function DELETE(request, context) {
   }
 
   if (!currentUser || !currentUser._id) {
-    console.warn("Unauthorized - no user");
     return new NextResponse(JSON.stringify({ message: "Unauthorized" }), {
       status: 401,
       headers: { "Content-Type": "application/json" },

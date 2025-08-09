@@ -12,19 +12,35 @@ export async function POST(req) {
   try {
     const { token, email, password } = await req.json();
 
-    if (!token || !email || !password) {
+    if (
+      !token ||
+      typeof token !== "string" ||
+      !email ||
+      typeof email !== "string" ||
+      !password ||
+      typeof password !== "string"
+    ) {
       return NextResponse.json(
         { message: "Missing token, email, or password" },
         { status: 400 }
       );
     }
 
+    // (Optional) basic guard; keep or replace with your own password policy
+    if (password.length < 8) {
+      return NextResponse.json(
+        { message: "Password must be at least 8 characters." },
+        { status: 400 }
+      );
+    }
+
     await connectDB();
 
+    const normalized = email.toLowerCase().trim();
     const user = await User.findOne({
-      email: email.toLowerCase(),
+      email: normalized,
       resetPasswordToken: token,
-      resetPasswordExpires: { $gt: Date.now() },
+      resetPasswordExpires: { $gt: new Date() },
     });
 
     if (!user) {
@@ -34,16 +50,27 @@ export async function POST(req) {
       );
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    user.password = hashedPassword;
+    // Hash and save new password
+    user.password = await bcrypt.hash(password, 10);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
+    if (typeof user.tempPassword === "boolean") {
+      user.tempPassword = false;
+    }
     user.updatedAt = new Date();
     await user.save();
 
-    const jwtToken = jwt.sign({ _id: user._id }, JWT_SECRET, {
-      expiresIn: "7d",
-    });
+    // Create a fresh session JWT
+    const jwtToken = jwt.sign(
+      {
+        sub: user._id.toString(),
+        email: user.email,
+        username: user.username,
+        role: user.role,
+      },
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
     const response = NextResponse.json({
       message: "Password reset successful",
@@ -54,12 +81,13 @@ export async function POST(req) {
       },
     });
 
+    // Set session cookie
     const serialized = Cookie.serialize("token", jwtToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: 60 * 60 * 24 * 7, // 7 days
     });
 
     response.headers.set("Set-Cookie", serialized);

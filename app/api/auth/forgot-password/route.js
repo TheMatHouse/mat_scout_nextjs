@@ -1,9 +1,12 @@
 // app/api/auth/forgot-password/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
-import User from "@/models/userModel"; // adjust path if needed
+import User from "@/models/userModel";
 import crypto from "crypto";
-import { sendResetPasswordEmail } from "@/lib/email/sendResetPassEmail";
+
+// ⬇️ new: use centralized mailer + template
+import { Mail } from "@/lib/mailer";
+import { buildPasswordResetEmail } from "@/lib/emails/passwordReset";
 
 export async function POST(req) {
   try {
@@ -17,10 +20,11 @@ export async function POST(req) {
     }
 
     await connectDB();
-    const user = await User.findOne({ email });
+    const normalized = email.toLowerCase().trim();
+    const user = await User.findOne({ email: normalized });
 
+    // Always return 200 to avoid user enumeration
     if (!user) {
-      // For security, don’t reveal user existence
       return NextResponse.json(
         {
           message:
@@ -30,15 +34,15 @@ export async function POST(req) {
       );
     }
 
-    // Generate a reset token
+    // Generate token + 30-minute expiry
     const resetToken = crypto.randomBytes(32).toString("hex");
-    const tokenExpiration = Date.now() + 1000 * 60 * 30; // valid for 30 minutes
-
     user.resetPasswordToken = resetToken;
-    user.resetPasswordExpires = tokenExpiration;
+    user.resetPasswordExpires = new Date(Date.now() + 30 * 60 * 1000); // Date type in schema
     await user.save();
 
-    await sendResetPasswordEmail({ to: email, token: resetToken });
+    // Build HTML + send (transactional -> bypasses dedupe & prefs)
+    const html = buildPasswordResetEmail({ token: resetToken });
+    await Mail.sendPasswordReset(user, { html });
 
     return NextResponse.json(
       {
