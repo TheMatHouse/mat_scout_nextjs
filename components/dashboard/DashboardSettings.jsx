@@ -56,7 +56,7 @@ export default function DashboardSettings({ user, refreshUser }) {
 
         toast.success("Avatar updated successfully");
         setAvatarPreview(null);
-        await refreshUser();
+        await refreshUser?.();
         router.refresh();
       } catch (err) {
         console.error("Upload error:", err);
@@ -75,7 +75,7 @@ export default function DashboardSettings({ user, refreshUser }) {
     });
 
     toast.success(`Switched to ${provider} avatar`);
-    await refreshUser();
+    await refreshUser?.();
     router.refresh();
   };
 
@@ -87,7 +87,7 @@ export default function DashboardSettings({ user, refreshUser }) {
     });
 
     toast.success("Switched to uploaded avatar");
-    await refreshUser();
+    await refreshUser?.();
     router.refresh();
   };
 
@@ -111,16 +111,14 @@ export default function DashboardSettings({ user, refreshUser }) {
   return (
     <section className="max-w-4xl mx-auto px-4 py-8">
       {user && !user.verified && (
-        <div className="bg-yellow-800 text-yellow-100 px-4 py-3 rounded text-center mb-4">
+        <div className="bg-[var(--ms-blue-gray)] text-white px-4 py-3 rounded text-center mb-4">
           Please verify your email to unlock full features.
-          <Button
-            variant="secondary"
-            size="sm"
+          <button
             onClick={handleResendVerification}
-            className="ml-2"
+            className="ml-2 text-white underline font-medium hover:opacity-80 transition-colors"
           >
             Resend verification email
-          </Button>
+          </button>
         </div>
       )}
 
@@ -233,7 +231,7 @@ export default function DashboardSettings({ user, refreshUser }) {
             >
               <Copy className="w-4 h-4" />
             </Button>
-            {navigator.share && (
+            {typeof navigator !== "undefined" && navigator.share && (
               <Button
                 variant="ghost"
                 size="icon"
