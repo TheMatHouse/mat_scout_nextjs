@@ -16,9 +16,12 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!loading && user && !user.verified && !hasRefreshed.current) {
       hasRefreshed.current = true;
-      if (typeof refreshUser === "function") refreshUser();
+      // 👇 guard so we don't crash if refreshUser isn't present for any reason
+      if (typeof refreshUser === "function") {
+        refreshUser();
+      }
     }
-  }, [loading, user, refreshUser]);
+  }, [loading, user, refreshUser]); // 👈 include refreshUser in deps
 
   if (loading) {
     return (
