@@ -3,21 +3,17 @@ import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
-// ⬇️ New imports
-import { Mail } from "@/lib/mailer";
-import { buildVerificationEmail } from "@/lib/emails/verification";
+import { sendWelcomeAndVerifyEmail } from "@/lib/email/sendWelcomeAndVerifyEmail";
 
 const JWT_SECRET = process.env.JWT_SECRET;
-const PUBLIC_DOMAIN = process.env.NEXT_PUBLIC_DOMAIN; // e.g., https://matscout.com
+const PUBLIC_DOMAIN =
+  process.env.NEXT_PUBLIC_DOMAIN || process.env.NEXT_PUBLIC_BASE_URL;
 
 export async function POST() {
   try {
     await connectDB();
 
-    // Get the currently authenticated user
     const user = await getCurrentUserFromCookies();
-
-    // Must be logged in, have an email, and not already verified
     if (!user || !user.email || user.verified) {
       return NextResponse.json(
         { message: "Unauthorized or already verified" },
@@ -25,25 +21,19 @@ export async function POST() {
       );
     }
 
-    // Create a fresh verification token (JWT) with 1-day expiry
-    const verificationToken = jwt.sign(
+    // Fresh 1-day token
+    const token = jwt.sign(
       { sub: user._id?.toString?.(), email: user.email },
       JWT_SECRET,
       { expiresIn: "1d" }
     );
 
-    // Build HTML (link points to your verify page with the new token)
-    const html = buildVerificationEmail({
-      token: verificationToken,
-      url:
-        PUBLIC_DOMAIN &&
-        `${PUBLIC_DOMAIN}/verify?token=${encodeURIComponent(
-          verificationToken
-        )}`,
-    });
+    const verifyUrl = `${PUBLIC_DOMAIN}/verify?token=${encodeURIComponent(
+      token
+    )}`;
 
-    // 🚀 Transactional = always allowed, bypasses EmailLog + user prefs
-    await Mail.sendVerification({ email: user.email }, { html });
+    // Reuse the same Welcome+Verify helper (transactional/always sends)
+    await sendWelcomeAndVerifyEmail({ toUser: user, verifyUrl });
 
     return NextResponse.json({ message: "Verification email sent" });
   } catch (error) {
