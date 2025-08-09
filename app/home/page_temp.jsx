@@ -4,7 +4,7 @@ import Link from "next/link";
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen w-full bg-[var(--color-bg)] text-[var(--color-text)]">
+    <div className="min-h-screen w-full overflow-x-hidden bg-[var(--color-bg)] text-[var(--color-text)]">
       {/* ✅ Hero Section */}
       <section className="w-full py-8 lg:pt-20 px-6 lg:px-24 flex flex-col lg:flex-row items-center justify-between gap-8">
         {/* Left: Hero Text */}
@@ -37,18 +37,16 @@ export default function HomePage() {
         </div>
 
         {/* Right: Hero Image with Background Effects */}
-        <div className="lg:w-5/12 flex justify-center">
+        <div className="w-full lg:w-5/12 flex justify-center mt-6 lg:mt-0">
           <div className="relative w-full max-w-[640px] aspect-[3/2] flex justify-center items-center z-10">
-            {/* 🔵 Blue-Gray Blob */}
-            <div className="absolute -top-32 -left-24 w-[420px] h-[420px] bg-[var(--ms-blue-gray)] rounded-full blur-[100px] opacity-30 z-0" />
+            {/* 🔵/🔴 blobs: hide on <lg */}
+            <div className="hidden lg:block absolute -top-32 -left-24 w-[420px] h-[420px] bg-[var(--ms-blue-gray)] rounded-full blur-[100px] opacity-30 z-0" />
+            <div className="hidden lg:block absolute -bottom-20 -right-10 w-[380px] h-[380px] bg-[var(--ms-dark-red)] rounded-full blur-[100px] opacity-40 z-0" />
 
-            {/* 🔴 Dark Red Blob */}
-            <div className="absolute -bottom-20 -right-10 w-[380px] h-[380px] bg-[var(--ms-dark-red)] rounded-full blur-[100px] opacity-40 z-0" />
-
-            {/* 🔴 Wavy Line (red) */}
+            {/* 🔴 wavy line: hide on <lg */}
             <svg
               viewBox="0 0 300 50"
-              className="absolute -top-12 left-1/4 w-[300px] h-[50px] z-0"
+              className="hidden lg:block absolute -top-12 left-1/4 w-[300px] h-[50px] z-0"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
             >
@@ -59,10 +57,10 @@ export default function HomePage() {
               />
             </svg>
 
-            {/* 🔵 Wavy Line (blue-gray) */}
+            {/* 🔵 wavy line: hide on <lg */}
             <svg
               viewBox="0 0 300 50"
-              className="absolute top-20 left-0 w-[300px] h-[50px] z-0"
+              className="hidden lg:block absolute top-20 left-0 w-[300px] h-[50px] z-0"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
             >
@@ -73,13 +71,13 @@ export default function HomePage() {
               />
             </svg>
 
-            {/* Hero Image */}
+            {/* Hero Image — always visible */}
             <div className="relative w-full h-full max-w-[600px] aspect-[3/2] z-10">
               <Image
                 src="/assets/judo-throw-hero.png"
                 alt="Judo Throw"
                 fill
-                sizes="(max-width: 768px) 100vw, 600px"
+                sizes="(max-width: 1024px) 90vw, 600px"
                 className="object-contain"
                 priority
               />
