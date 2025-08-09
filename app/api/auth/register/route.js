@@ -1,81 +1,70 @@
 // app/api/auth/register/route.js
 import { NextResponse } from "next/server";
+import { connectDB } from "@/lib/mongo";
+import User from "@/models/userModel";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import User from "@/models/userModel";
-import { connectDB } from "@/lib/mongo";
+import { sendWelcomeAndVerifyEmail } from "@/lib/email/sendWelcomeAndVerifyEmail";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
 export async function POST(req) {
   try {
     await connectDB();
-    const { firstName, lastName, username, email, password } = await req.json();
+    const { firstName, lastName, email, username, password } = await req.json();
 
-    if (!email || !password || !username || !firstName || !lastName) {
+    if (!email || !password || !username) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { message: "Email, username, and password are required." },
         { status: 400 }
       );
     }
 
-    const existing = await User.findOne({
-      $or: [{ email: email.toLowerCase() }, { username }],
-    });
-
+    const normalizedEmail = email.toLowerCase().trim();
+    const existing = await User.findOne({ email: normalizedEmail });
     if (existing) {
       return NextResponse.json(
-        { error: "Email or username already in use" },
+        { message: "Email already in use." },
         { status: 409 }
       );
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const newUser = await User.create({
-      firstName,
-      lastName,
-      username,
-      email: email.toLowerCase(),
-      password: hashedPassword,
-      verified: false, // ✅ Add verified flag
+    const hashed = await bcrypt.hash(password, 10);
+    const user = await User.create({
+      firstName: firstName || "",
+      lastName: lastName || "",
+      email: normalizedEmail,
+      username: username.toLowerCase().trim(),
+      password: hashed,
+      provider: "local",
+      verified: false,
     });
 
-    // ✅ Use consistent token payload
+    // Create a verification token (24h)
     const token = jwt.sign(
-      { userId: newUser._id, isAdmin: newUser.isAdmin || false }, // ✅ add isAdmin
+      { sub: user._id.toString(), email: user.email },
       JWT_SECRET,
-      { expiresIn: "7d" }
+      { expiresIn: "1d" }
     );
-    const response = NextResponse.json({
-      message: "Registration successful",
-      user: {
-        _id: newUser._id,
-        email: newUser.email,
-        username: newUser.username,
-        firstName: newUser.firstName,
-        lastName: newUser.lastName,
-        role: newUser.role,
+
+    const verifyUrl = `${
+      process.env.NEXT_PUBLIC_DOMAIN || process.env.NEXT_PUBLIC_BASE_URL
+    }/verify?token=${encodeURIComponent(token)}`;
+
+    // Always send Welcome + Verify
+    await sendWelcomeAndVerifyEmail({ toUser: user, verifyUrl });
+
+    // You can choose to not log in the user until verified:
+    return NextResponse.json(
+      {
+        message: "Registered. Please check your email to verify your account.",
       },
-    });
+      { status: 201 }
+    );
 
-    // ✅ Set auth cookie
-    response.cookies.set({
-      name: "token",
-      value: token,
-      httpOnly: true,
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-    });
-
-    return response;
+    // If you want to auto-login instead, tell me and I’ll return a JWT cookie like your OAuth flows.
   } catch (err) {
     console.error("Register error:", err);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: "Server error" }, { status: 500 });
   }
 }

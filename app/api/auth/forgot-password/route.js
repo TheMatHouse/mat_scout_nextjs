@@ -6,7 +6,7 @@ import crypto from "crypto";
 
 // ⬇️ new: use centralized mailer + template
 import { Mail } from "@/lib/mailer";
-import { buildPasswordResetEmail } from "@/lib/emails/passwordReset";
+import { buildPasswordResetEmail } from "@/lib/email/templates/passwordReset";
 
 export async function POST(req) {
   try {
