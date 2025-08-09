@@ -3,7 +3,6 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
 import DashboardSettings from "@/components/dashboard/DashboardSettings";
 import NotificationSettings from "@/components/dashboard/NotificationSettings";
 import { useUser } from "@/context/UserContext";
@@ -11,16 +10,18 @@ import DeleteAccount from "@/components/dashboard/DeleteAccount";
 import Spinner from "@/components/shared/Spinner";
 
 export default function SettingsPage() {
-  const router = useRouter();
   const { user, loading, refreshUser } = useUser();
   const hasRefreshed = useRef(false);
 
   useEffect(() => {
     if (!loading && user && !user.verified && !hasRefreshed.current) {
       hasRefreshed.current = true;
-      refreshUser();
+      // 👇 guard so we don't crash if refreshUser isn't present for any reason
+      if (typeof refreshUser === "function") {
+        refreshUser();
+      }
     }
-  }, [loading, user]);
+  }, [loading, user, refreshUser]); // 👈 include refreshUser in deps
 
   if (loading) {
     return (
@@ -32,23 +33,19 @@ export default function SettingsPage() {
       </div>
     );
   }
+
   if (!user) return null;
 
   return (
     <div className="max-w-3xl mx-auto space-y-8 p-6">
-      {/* Account Settings */}
       <DashboardSettings
         user={user}
         refreshUser={refreshUser}
       />
-
-      {/* Notification Settings */}
       <NotificationSettings
         user={user}
         refreshUser={refreshUser}
       />
-
-      {/* Delete Account */}
       <DeleteAccount user={user} />
     </div>
   );
