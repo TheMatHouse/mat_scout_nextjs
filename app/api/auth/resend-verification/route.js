@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
-import { sendWelcomeAndVerifyEmail } from "@/lib/email/sendVerificationEmail";
+import { sendWelcomeAndVerifyEmail } from "@/lib/email/sendWelcomeAndVerifyEmail";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const PUBLIC_DOMAIN =
