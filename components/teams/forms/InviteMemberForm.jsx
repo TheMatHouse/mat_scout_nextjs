@@ -38,9 +38,12 @@ export default function InviteMemberForm({
   const defaultMessage = useMemo(() => {
     const teamName = team?.teamName || "our team";
     const signed = managerName || "";
-    return `<p>Hi,</p>
-       <p>I'd like to invite you to join <strong>${teamName}</strong> on MatScout.</p><br />
-       <p>Thanks,<br /><br />${signed}</p>`;
+    return `
+    <p>Hi,</p>
+    <p>I'd like to invite you to join <strong>${teamName}</strong> on MatScout.</p>
+    <p>Thanks,</p>
+    <p>${signed}</p>
+  `;
   }, [team?.teamName, managerName]);
 
   async function onSubmit(e) {
