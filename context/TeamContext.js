@@ -1,13 +1,10 @@
-import { createContext, useContext, useState, useEffect } from "react";
+// context/TeamContext.js
+import { createContext, useContext, useState } from "react";
 
 const TeamContext = createContext();
 
-export function TeamProvider({ children }) {
-  const [team, setTeam] = useState(null);
-
-  useEffect(() => {
-    // Fetch team logic already here
-  }, []);
+export function TeamProvider({ children, initialTeam = null }) {
+  const [team, setTeam] = useState(initialTeam);
 
   return (
     <TeamContext.Provider value={{ team, setTeam }}>

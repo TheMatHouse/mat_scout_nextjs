@@ -9,13 +9,12 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
+    const cookieStore = cookies(); // no await
     const token =
       cookieStore.get("token")?.value || cookieStore.get("authToken")?.value;
 
     if (!token) {
-      console.warn("⚠️ No token found in cookies.");
-      return NextResponse.json({ error: "No token provided" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     await connectDB();
@@ -24,11 +23,11 @@ export async function GET() {
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch {
-      console.warn("⚠️ Invalid JWT token.");
       const res = NextResponse.json(
         { error: "Invalid or expired token" },
         { status: 401 }
       );
+      // clear bad token
       res.cookies.set("token", "", { path: "/", maxAge: 0 });
       return res;
     }
@@ -42,15 +41,13 @@ export async function GET() {
       .populate("scoutingReports");
 
     if (!user) {
-      const res = NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
+      const res = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      // clear stale token that points to a missing user
       res.cookies.set("token", "", { path: "/", maxAge: 0 });
       return res;
     }
 
-    // Populate familyMembers.userStyles
+    // Populate familyMembers.userStyles if present
     if (user.familyMembers?.length) {
       const familyWithStyles = await Promise.all(
         user.familyMembers.map(async (member) => {
@@ -69,12 +66,12 @@ export async function GET() {
 
     return NextResponse.json({ user });
   } catch (err) {
-    console.error("🔥 /api/auth/me error:", err.message);
+    console.error("🔥 /api/auth/me error:", err?.message || err);
     const res = NextResponse.json(
       { error: "Something went wrong" },
       { status: 500 }
     );
-    res.cookies.set("token", "", { path: "/", maxAge: 0 });
+    // defensive: clear token on server error only if you prefer
     return res;
   }
 }

@@ -1,17 +1,17 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/apiClient";
 import { useUser } from "@/context/UserContext";
 import FacebookIcon from "@/components/icons/FacebookIcon";
 import GoogleIcon from "@/components/icons/GoogleIcon";
 import Link from "next/link";
 
-export default function LoginForm() {
+export default function LoginForm({ redirect = "/dashboard" }) {
   const router = useRouter();
   const { refreshUser } = useUser();
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -20,40 +20,30 @@ export default function LoginForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-
+    setLoading(true);
     try {
-      try {
-        const res = await fetch("/api/auth/login", {
-          method: "POST",
-          body: JSON.stringify(form),
-          headers: { "Content-Type": "application/json" },
-        });
-
-        const data = await res.json();
-        if (res.ok) {
-          await refreshUser();
-          router.push("/dashboard");
-        } else {
-          setError(data.error || "Login failed.");
-        }
-      } catch (err) {
-        setError("Login failed. Please try again.");
-      }
-      const res = await apiFetch("/api/auth/login", {
+      const res = await fetch("/api/auth/login", {
         method: "POST",
         body: JSON.stringify(form),
         headers: { "Content-Type": "application/json" },
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Login failed.");
 
-      if (res.error) {
-        setError(res.error);
-      } else {
-        await refreshUser();
-        setTimeout(() => router.push("/dashboard"), 500);
-      }
-    } catch {
-      setError("Login failed. Please try again.");
+      await refreshUser();
+      router.replace(redirect); // ← honor redirect
+    } catch (err) {
+      setError(err.message || "Login failed. Please try again.");
+    } finally {
+      setLoading(false);
     }
+  };
+
+  // Stash redirect for OAuth callbacks to read
+  const setRedirectCookie = () => {
+    document.cookie = `post_auth_redirect=${encodeURIComponent(
+      redirect
+    )}; Path=/; Max-Age=600; SameSite=Lax`;
   };
 
   return (
@@ -97,9 +87,10 @@ export default function LoginForm() {
           </div>
           <button
             type="submit"
-            className="w-full py-2.5 rounded-lg font-semibold shadow-md text-white bg-[var(--ms-blue)] hover:bg-[var(--ms-blue-gray)] transition"
+            disabled={loading}
+            className="w-full py-2.5 rounded-lg font-semibold shadow-md text-white bg-[var(--ms-blue)] hover:bg-[var(--ms-blue-gray)] transition disabled:opacity-60"
           >
-            Log In
+            {loading ? "Logging in…" : "Log In"}
           </button>
 
           <div className="text-right mt-2">
@@ -119,6 +110,7 @@ export default function LoginForm() {
           <div className="flex justify-center gap-4">
             <a
               href="/api/auth/facebook"
+              onClick={setRedirectCookie} // ← store redirect
               className="flex items-center gap-2 px-4 py-2 border rounded bg-white dark:bg-gray-800 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
             >
               <FacebookIcon className="w-4 h-4" />
@@ -126,6 +118,7 @@ export default function LoginForm() {
             </a>
             <a
               href="/api/auth/google"
+              onClick={setRedirectCookie} // ← store redirect
               className="flex items-center gap-2 px-4 py-2 border rounded bg-white dark:bg-gray-800 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
             >
               <GoogleIcon className="w-4 h-4" />
@@ -137,7 +130,7 @@ export default function LoginForm() {
         <div className="text-sm text-center mt-6 text-gray-600 dark:text-[var(--ms-light-gray)]">
           Don’t have an account?{" "}
           <Link
-            href="/register"
+            href={`/register?redirect=${encodeURIComponent(redirect)}`} // ← keep redirect
             className="text-sm text-[var(--ms-blue)] hover:underline dark:text-[var(--ms-light-gray)]"
           >
             <u>Create one</u>

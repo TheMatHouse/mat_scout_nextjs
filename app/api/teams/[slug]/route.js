@@ -10,9 +10,9 @@ import { sendEmail } from "@/lib/email/email";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
 // ✅ GET: Fetch team details
-export async function GET(request, { params }) {
+export async function GET(request, ctx) {
   await connectDB();
-  const { slug } = params;
+  const { slug } = await ctx.params;
 
   try {
     const team = await Team.findOne({ teamSlug: slug });

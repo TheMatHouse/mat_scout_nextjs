@@ -23,7 +23,7 @@ export async function GET(request) {
       return NextResponse.redirect(`${origin}/login?error=google`);
     }
 
-    // 1) Exchange code for token
+    // 1) Exchange authorization code for access token
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -36,18 +36,19 @@ export async function GET(request) {
       }),
     });
     const tokenData = await tokenRes.json();
-    if (!tokenData.access_token)
+    if (!tokenData.access_token) {
       throw new Error("Failed to get Google access token");
-    const accessToken = tokenData.access_token;
+    }
 
-    // 2) Get profile
+    // 2) Fetch Google profile
     const userRes = await fetch(
       "https://www.googleapis.com/oauth2/v3/userinfo",
       {
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
       }
     );
     const profile = await userRes.json();
+
     const emailRaw = profile?.email;
     if (!emailRaw) {
       return NextResponse.redirect(`${origin}/login?error=google`);
@@ -58,7 +59,7 @@ export async function GET(request) {
 
     await connectDB();
 
-    // 3) Find or create
+    // 3) Find or create user
     let user = await User.findOne({ email });
     if (!user) {
       const [firstName = "", lastName = ""] = name.split(" ");
@@ -73,23 +74,30 @@ export async function GET(request) {
         avatar: picture,
         avatarType: "google",
         provider: "google",
-        verified: true, // OAuth users are considered verified
+        verified: true,
       });
 
-      // Welcome email (non-transactional by default; respects prefs/dedupe)
-      await sendWelcomeEmail({ toUser: user });
-      // If you want it to always send, switch Mail.kinds in sendWelcomeEmail as discussed.
+      // Send welcome email (simple version accepts { to })
+      await sendWelcomeEmail({ to: email });
     }
 
-    // 4) Session JWT
+    // 4) Create session JWT
     const token = jwt.sign(
       { userId: user._id, isAdmin: user.isAdmin || false },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    // 5) Cookie
-    const response = NextResponse.redirect(`${origin}/dashboard`);
+    // 5) Figure out post-auth redirect
+    const postRedirect = cookieStore.get("post_auth_redirect")?.value; // e.g. /accept-invite?token=...
+    const safeRedirect =
+      postRedirect && postRedirect.startsWith("/")
+        ? postRedirect
+        : "/dashboard";
+    const target = `${origin}${safeRedirect}`;
+
+    // 6) Build response with cookie + cleanup
+    const response = NextResponse.redirect(target);
     response.cookies.set({
       name: "token",
       value: token,
@@ -100,13 +108,14 @@ export async function GET(request) {
       secure: process.env.NODE_ENV === "production",
     });
 
-    // 6) Clear state cookie
+    // Clear helper cookies
     response.cookies.delete("oauth_state_google");
+    response.cookies.delete("post_auth_redirect");
 
     console.log(`✅ Google login successful: ${email}`);
     return response;
   } catch (err) {
-    console.error("Google OAuth callback error:", err.message || err);
+    console.error("Google OAuth callback error:", err?.message || err);
     const origin =
       process.env.NEXT_PUBLIC_DOMAIN || new URL(request.url).origin;
     return NextResponse.redirect(`${origin}/login?error=google`);

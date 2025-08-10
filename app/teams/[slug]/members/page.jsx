@@ -1,3 +1,4 @@
+// app/teams/[slug]/members/page.jsx
 "use client";
 export const dynamic = "force-dynamic";
 
@@ -5,20 +6,25 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { useTeam } from "@/context/TeamContext";
 import MemberRow from "@/components/teams/MemberRow";
-import { Users } from "lucide-react";
+import { Users, UserPlus } from "lucide-react";
 import Spinner from "@/components/shared/Spinner";
+import ModalLayout from "@/components/shared/ModalLayout";
+import InviteMemberForm from "@/components/teams/forms/InviteMemberForm";
 
 export default function MembersPage() {
   const params = useParams();
   const slug = params.slug;
   const { team } = useTeam();
+
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   const fetchMembers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/teams/${slug}/members`);
+      const res = await fetch(`/api/teams/${slug}/members?ts=${Date.now()}`);
       const data = await res.json();
       setMembers(data.members || []);
     } catch (err) {
@@ -42,17 +48,19 @@ export default function MembersPage() {
       </div>
     );
   }
+
   const currentUserMembership = members.find((m) => m.userId === team.user);
   const isManager = currentUserMembership?.role === "manager";
+  const isCoach = currentUserMembership?.role === "coach";
 
   const pending = members.filter((m) => m.role === "pending");
-  const active = members.filter(
-    (m) => m.role === "member" || m.role === "manager"
+  const active = members.filter((m) =>
+    ["member", "manager", "coach"].includes(m.role)
   );
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-8">
-      {/* ✅ Header */}
+      {/* Header + Invite button */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3 text-gray-900 dark:text-white">
@@ -63,14 +71,24 @@ export default function MembersPage() {
             Manage pending requests and team members.
           </p>
         </div>
+
+        {(isManager || isCoach) && (
+          <button
+            onClick={() => setInviteOpen(true)}
+            className="btn btn-primary"
+          >
+            <UserPlus className="w-4 h-4" />{" "}
+            <span className="pl-2">Invite members</span>
+          </button>
+        )}
       </div>
 
-      {/* ✅ Pending Requests */}
+      {/* Pending */}
       <section className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-5">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           Pending Requests
         </h2>
-        {pending.length > 0 ? (
+        {pending.length ? (
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {pending.map((m) => (
               <div
@@ -93,12 +111,12 @@ export default function MembersPage() {
         )}
       </section>
 
-      {/* ✅ Active Members */}
+      {/* Active */}
       <section className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-5">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           Active Members
         </h2>
-        {active.length > 0 ? (
+        {active.length ? (
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {active.map((m) => (
               <div
@@ -120,6 +138,21 @@ export default function MembersPage() {
           </p>
         )}
       </section>
+
+      {/* Invite Modal (same pattern as Scouting Reports) */}
+      <ModalLayout
+        isOpen={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        title="Invite Team Member"
+        description="Send an invitation to join this team."
+        withCard={true}
+      >
+        <InviteMemberForm
+          slug={slug}
+          setOpen={setInviteOpen}
+          onSuccess={fetchMembers}
+        />
+      </ModalLayout>
     </div>
   );
 }

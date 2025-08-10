@@ -6,7 +6,7 @@ import TeamMember from "@/models/teamMemberModel";
 import FamilyMember from "@/models/familyMemberModel";
 import { getCurrentUser } from "@/lib/auth-server";
 
-export async function GET(_request, { params }) {
+export async function GET(_request, ctx) {
   try {
     await connectDB();
 
@@ -15,7 +15,7 @@ export async function GET(_request, { params }) {
       return NextResponse.json({ memberships: [] }, { status: 200 });
     }
 
-    const { slug } = params;
+    const { slug } = await ctx.params;
     const team = await Team.findOne({ teamSlug: slug }).select("_id").lean();
     if (!team) {
       return NextResponse.json({ memberships: [] }, { status: 200 });

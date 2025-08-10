@@ -3,19 +3,21 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useUser } from "@/context/UserContext";
 import RegisterForm from "@/components/auth/RegisterForm";
 
 export default function RegisterPage() {
   const { user } = useUser();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirect = searchParams.get("redirect") || "/dashboard"; // ← preserve it
 
   useEffect(() => {
     if (user) {
-      router.push("/dashboard");
+      router.replace(redirect); // ← go to intended place if already logged in
     }
-  }, [user, router]);
+  }, [user, router, redirect]);
 
-  return <RegisterForm />;
+  return <RegisterForm redirect={redirect} />; // ← pass it to the form
 }

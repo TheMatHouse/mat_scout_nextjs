@@ -7,7 +7,7 @@ import GoogleIcon from "@/components/icons/GoogleIcon";
 import FacebookIcon from "@/components/icons/FacebookIcon";
 import Link from "next/link";
 
-export default function RegisterForm() {
+export default function RegisterForm({ redirect = "/dashboard" }) {
   const router = useRouter();
   const { refreshUser } = useUser();
 
@@ -30,13 +30,16 @@ export default function RegisterForm() {
       setCheckingUsername(true);
       try {
         const res = await apiFetch(
-          `/api/auth/check-username?username=${form.username}`
+          `/api/auth/check-username?username=${encodeURIComponent(
+            form.username
+          )}`
         );
-        setUsernameAvailable(res.available);
+        setUsernameAvailable(!!res.available);
       } catch {
         setUsernameAvailable(null);
+      } finally {
+        setCheckingUsername(false);
       }
-      setCheckingUsername(false);
     };
     const debounce = setTimeout(checkUsername, 500);
     return () => clearTimeout(debounce);
@@ -49,8 +52,14 @@ export default function RegisterForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    setLoading(true);
 
+    // Optional: prevent submit if username is known taken
+    if (usernameAvailable === false) {
+      setError("That username is already taken. Please choose another.");
+      return;
+    }
+
+    setLoading(true);
     try {
       const res = await apiFetch("/api/auth/register", {
         method: "POST",
@@ -61,9 +70,11 @@ export default function RegisterForm() {
       if (res.error) {
         setError(res.error);
       } else {
-        await new Promise((res) => setTimeout(res, 300));
+        // If your API sets the session cookie, refresh and go to redirect
         await refreshUser();
-        router.push("/dashboard");
+        router.replace(redirect);
+        // If your API does NOT log the user in, use:
+        // router.replace(`/login?redirect=${encodeURIComponent(redirect)}`);
       }
     } catch (err) {
       console.error("Registration error:", err);
@@ -71,6 +82,13 @@ export default function RegisterForm() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // For OAuth: stash redirect for the callback to read
+  const setRedirectCookie = () => {
+    document.cookie = `post_auth_redirect=${encodeURIComponent(
+      redirect
+    )}; Path=/; Max-Age=600; SameSite=Lax`;
   };
 
   return (
@@ -108,6 +126,8 @@ export default function RegisterForm() {
             <p className="text-sm mt-1">
               {checkingUsername ? (
                 <span className="text-gray-500">Checking...</span>
+              ) : usernameAvailable === null ? (
+                <span className="text-gray-500">—</span>
               ) : usernameAvailable ? (
                 <span className="text-green-500">✓ Available</span>
               ) : (
@@ -146,6 +166,7 @@ export default function RegisterForm() {
           <div className="flex justify-center gap-4">
             <a
               href="/api/auth/facebook"
+              onClick={setRedirectCookie}
               className="flex items-center gap-2 px-4 py-2 border rounded bg-white dark:bg-gray-800 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
             >
               <FacebookIcon className="w-4 h-4" />
@@ -153,6 +174,7 @@ export default function RegisterForm() {
             </a>
             <a
               href="/api/auth/google"
+              onClick={setRedirectCookie}
               className="flex items-center gap-2 px-4 py-2 border rounded bg-white dark:bg-gray-800 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
             >
               <GoogleIcon className="w-4 h-4" />
@@ -164,7 +186,7 @@ export default function RegisterForm() {
         <div className="text-sm text-center mt-6 text-gray-600 dark:text-gray-400">
           Already have an account?{" "}
           <Link
-            href="/login"
+            href={`/login?redirect=${encodeURIComponent(redirect)}`}
             className="text-[var(--ms-blue)] hover:underline"
           >
             Log in

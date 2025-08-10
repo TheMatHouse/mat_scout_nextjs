@@ -12,18 +12,16 @@ export default function LoginPage() {
   const { user } = useUser();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const redirect = searchParams.get("redirect") || "/dashboard";
 
   useEffect(() => {
-    // If redirected from a protected page, show a toast
     if (searchParams.get("from")) {
       toast.info("You must be logged in to view that page.");
     }
-
-    // Redirect if already logged in
     if (user) {
-      router.push("/dashboard");
+      router.replace(redirect); // ← go to redirect if already logged in
     }
-  }, [user, router, searchParams]);
+  }, [user, router, searchParams, redirect]);
 
-  return <LoginForm />;
+  return <LoginForm redirect={redirect} />; // ← pass it down
 }
