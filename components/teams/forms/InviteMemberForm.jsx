@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "react-toastify";
 import FormField from "@/components/shared/FormField";
 import FormSelect from "@/components/shared/FormSelect";
+import Editor from "@/components/shared/Editor";
 
 export default function InviteMemberForm({ slug, setOpen, onSuccess }) {
   const [role, setRole] = useState("member"); // member | coach | manager
@@ -20,6 +21,7 @@ export default function InviteMemberForm({ slug, setOpen, onSuccess }) {
   const [pLast, setPLast] = useState("");
   const [pEmail, setPEmail] = useState("");
 
+  // WYSIWYG message
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -54,7 +56,7 @@ export default function InviteMemberForm({ slug, setOpen, onSuccess }) {
           parentFirstName: pFirst.trim(),
           parentLastName: pLast.trim(),
           parentEmail: pEmail.trim(),
-          message: message.trim() || undefined,
+          message: message || undefined, // already HTML/text from Editor
         }
       : {
           isMinor: false,
@@ -62,7 +64,7 @@ export default function InviteMemberForm({ slug, setOpen, onSuccess }) {
           inviteeFirstName: firstName.trim(),
           inviteeLastName: lastName.trim(),
           email: email.trim(),
-          message: message.trim() || undefined,
+          message: message || undefined,
         };
 
     setSubmitting(true);
@@ -170,13 +172,12 @@ export default function InviteMemberForm({ slug, setOpen, onSuccess }) {
         </div>
       )}
 
-      <FormField
-        label="Message (optional)"
+      {/* WYSIWYG message */}
+      <Editor
         name="message"
-        as="textarea"
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-        placeholder="Add a note for the recipient…"
+        text={message}
+        onChange={setMessage}
+        label="Message (optional)"
       />
 
       <div className="flex items-center justify-end gap-3">
