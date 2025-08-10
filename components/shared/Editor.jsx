@@ -30,23 +30,21 @@ export default function Editor({ name, onChange, text, label }) {
   };
 
   const handleKeyDown = (e) => {
-    // Shift+Enter => soft line break (<br>)
-    if (e.key === "Enter" && e.shiftKey) {
+    if (e.key === "Enter") {
       e.preventDefault();
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0) return;
-      const range = sel.getRangeAt(0);
-      const br = document.createElement("br");
-      range.deleteContents();
-      range.insertNode(br);
-      range.setStartAfter(br);
-      range.setEndAfter(br);
-      sel.removeAllRanges();
-      sel.addRange(range);
+
+      // Shift+Enter => soft line break
+      if (e.shiftKey) {
+        document.execCommand("insertHTML", false, "<br>");
+        handleInput();
+        return;
+      }
+
+      // Enter => force a real paragraph block
+      // Empty <p> shows as a blank line due to CSS below
+      document.execCommand("insertHTML", false, "<p><br /></p>");
       handleInput();
-      return;
     }
-    // Enter (no shift) => allow browser to create a new paragraph/block
   };
 
   const applyStyle = (command) => {
@@ -57,6 +55,7 @@ export default function Editor({ name, onChange, text, label }) {
 
   return (
     <div className="w-full space-y-2">
+      {/* Label */}
       {label && (
         <label
           htmlFor={name}
