@@ -105,6 +105,21 @@ body {
   }
 }
 
+/* globals.css (or wherever your theme vars live) */
+:root {
+  --tbl-header-bg: var(--ms-blue, #2563eb); /* light mode header bg */
+  --tbl-header-fg: #ffffff;
+  --tbl-row-hover-bg: rgba(37, 99, 235, 0.06);
+  --tbl-border: rgba(0, 0, 0, 0.12);
+}
+
+.dark {
+  /* darker, richer header for dark mode */
+  --tbl-header-bg: #1b2738; /* or var(--ms-blue), tweak as needed */
+  --tbl-header-fg: #ffffff;
+  --tbl-row-hover-bg: rgba(255, 255, 255, 0.06);
+  --tbl-border: rgba(255, 255, 255, 0.18);
+}
 /* =========================================
    ✅ COMPONENT STYLES
 ========================================= */

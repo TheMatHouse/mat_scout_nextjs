@@ -49,81 +49,77 @@ export function ReportDataTable({ columns, data }) {
       <div className="items-center py-4">
         <h4 className="text-lg font-bold">Filter by:</h4>
         <br />
-        <div className="flex">
+        <div className="flex gap-3 flex-wrap">
           <Input
             placeholder="Match type..."
-            value={table.getColumn("matchType")?.getFilterValue() ?? ""} // Ensure it's always a string
-            onChange={(event) =>
-              table.getColumn("matchType")?.setFilterValue(event.target.value)
+            value={table.getColumn("matchType")?.getFilterValue() ?? ""}
+            onChange={(e) =>
+              table.getColumn("matchType")?.setFilterValue(e.target.value)
             }
-            className="max-w-fit"
+            className="max-w-xs"
           />
-          {columns.some((col) => col.accessorKey === "eventName") && (
+          {columns.some((c) => c.accessorKey === "eventName") && (
             <Input
               placeholder="Event name..."
-              value={table.getColumn("eventName")?.getFilterValue() ?? ""} // Ensure it's always a string
-              onChange={(event) =>
-                table.getColumn("eventName")?.setFilterValue(event.target.value)
+              value={table.getColumn("eventName")?.getFilterValue() ?? ""}
+              onChange={(e) =>
+                table.getColumn("eventName")?.setFilterValue(e.target.value)
               }
-              className="max-w-fit"
+              className="max-w-xs"
             />
           )}
-          {columns.some((col) => col.accessorKey === "matchDate") && (
+          {columns.some((c) => c.accessorKey === "matchDate") && (
             <Input
               placeholder="Match date (YYYY-MM-DD)"
               value={table.getColumn("matchDate")?.getFilterValue() ?? ""}
-              onChange={(event) =>
-                table.getColumn("matchDate")?.setFilterValue(event.target.value)
+              onChange={(e) =>
+                table.getColumn("matchDate")?.setFilterValue(e.target.value)
               }
-              className="max-w-fit"
+              className="max-w-xs"
             />
           )}
         </div>
       </div>
-      <div className="rounded-md border">
-        <Table className="table-auto my-4 border border-gray-900 dark:border-white border-collapse">
-          <TableHeader className="border-b-2 border-gray-900 dark:border-white">
+
+      <div className="rounded-md border border-[color:var(--tbl-border)] overflow-hidden">
+        <Table className="table-auto my-4">
+          <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow
                 key={headerGroup.id}
-                className="bg-ms-blue hover:bg-ms-blue dark:bg-ms-blue-gray border-b-2 border-gray-900 dark:border-white"
+                className="bg-[var(--tbl-header-bg)] hover:bg-[var(--tbl-header-bg)]"
               >
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead
-                      key={header.id}
-                      className="text-gray-100 dark:text-gray-900 text-center font-bold border-r-2 border-gray-900 dark:border-white"
-                    >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </TableHead>
-                  );
-                })}
+                {headerGroup.headers.map((header) => (
+                  <TableHead
+                    key={header.id}
+                    className="text-[var(--tbl-header-fg)] text-center font-semibold tracking-wide
+                 border-r border-[color:var(--tbl-border)] last:border-r-0"
+                  >
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                  </TableHead>
+                ))}
               </TableRow>
             ))}
           </TableHeader>
+
           <TableBody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row, index) => (
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className={`border-b-2 border-gray-900 dark:border-white hover:bg-gray-400 ${
-                    index === 0 ? "border-t-2" : ""
-                  } ${
-                    index === table.getRowModel().rows.length - 1
-                      ? "border-b-2"
-                      : ""
-                  }`}
+                  className={`border-b border-[color:var(--tbl-border)]
+                          hover:bg-[var(--tbl-row-hover-bg)] transition-colors`}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
                       key={cell.id}
-                      className="border-gray-900 dark:border-white"
+                      className="border-r border-[color:var(--tbl-border)] last:border-r-0"
                     >
                       {flexRender(
                         cell.column.columnDef.cell,
@@ -137,7 +133,7 @@ export function ReportDataTable({ columns, data }) {
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center border-t-2 border-b-2 border-gray-900 dark:border-white"
+                  className="h-24 text-center border-t border-[color:var(--tbl-border)]"
                 >
                   No results.
                 </TableCell>
@@ -146,7 +142,8 @@ export function ReportDataTable({ columns, data }) {
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-center space-x-10 py-4">
+
+      <div className="flex items-center justify-center space-x-3 py-4">
         <button
           variant="outline"
           size="sm"
