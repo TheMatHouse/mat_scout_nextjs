@@ -15,15 +15,12 @@ const adminLinks = [
 
 export default async function AdminLayout({ children }) {
   const user = await getCurrentUser();
-
-  if (!user || !user.isAdmin) {
-    redirect("/"); // Secure check
-  }
+  if (!user || !user.isAdmin) redirect("/");
 
   return (
     <div className="flex min-h-screen">
-      {/* Admin sidebar */}
-      <aside className="w-64 bg-[hsl(222_47%_11%)] text-white p-6">
+      {/* Desktop-only sidebar */}
+      <aside className="hidden md:block w-64 bg-[hsl(222_47%_11%)] text-white p-6">
         <h2 className="text-xl font-bold mb-6">Admin Panel</h2>
         <nav className="space-y-2">
           {adminLinks.map((link) => (
@@ -41,7 +38,7 @@ export default async function AdminLayout({ children }) {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 p-8 bg-gray-50 dark:bg-[hsl(222_47%_8%)]">
+      <main className="flex-1 p-4 md:p-8 bg-gray-50 dark:bg-[hsl(222_47%_8%)]">
         {children}
       </main>
     </div>

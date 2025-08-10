@@ -9,16 +9,26 @@ import { useUser } from "@/context/UserContext";
 import LogoutButton from "@/components/shared/LogoutButton";
 import ThemeToggle from "../shared/theme-toggle";
 
+const ADMIN_LINKS = [
+  { href: "/admin/dashboard", label: "Dashboard" },
+  { href: "/admin/users", label: "Users" },
+  { href: "/admin/teams", label: "Teams" },
+  { href: "/admin/reports", label: "Reports" },
+  { href: "/admin/settings", label: "Settings" },
+];
+
 export default function MobileSidebarDrawer({ isOpen, onClose }) {
   const pathname = usePathname();
   const { user, loading } = useUser();
 
   const [isDashboardOpen, setDashboardOpen] = useState(false);
   const [isTeamsOpen, setTeamsOpen] = useState(false);
+  const [isAdminOpen, setAdminOpen] = useState(false);
 
   useEffect(() => {
     setDashboardOpen(pathname.startsWith("/dashboard"));
     setTeamsOpen(pathname.startsWith("/teams"));
+    setAdminOpen(pathname.startsWith("/admin"));
   }, [pathname]);
 
   if (loading) return null;
@@ -118,13 +128,37 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
               >
                 Profile
               </Link>
+
+              {/* Admin (only for admins) */}
               {user?.isAdmin && (
-                <Link
-                  href="/admin"
-                  className="hover:text-ms-light-red"
-                >
-                  Admin
-                </Link>
+                <>
+                  <button
+                    onClick={() => setAdminOpen(!isAdminOpen)}
+                    className={cn(
+                      "block w-full text-left text-lg font-medium hover:text-ms-light-red transition mt-2",
+                      pathname.startsWith("/admin") && "text-ms-light-red"
+                    )}
+                  >
+                    Admin
+                  </button>
+                  {isAdminOpen && (
+                    <div className="pl-4 mt-2 space-y-2 text-sm text-ms-blue-gray">
+                      {ADMIN_LINKS.map((l) => (
+                        <Link
+                          key={l.href}
+                          href={l.href}
+                          onClick={onClose}
+                          className={cn(
+                            "block hover:text-white transition",
+                            pathname === l.href && "text-white font-semibold"
+                          )}
+                        >
+                          {l.label}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </nav>
 
@@ -137,7 +171,7 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
               </Link>
               <LogoutButton className="text-red-400 hover:text-white" />
 
-              {/* ✅ Dark/Light Mode Toggle */}
+              {/* Dark/Light Mode Toggle */}
               <div className="pt-4 border-t border-gray-700">
                 <ThemeToggle />
               </div>
@@ -188,7 +222,6 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
               Sign Up
             </Link>
 
-            {/* ✅ Dark/Light Mode Toggle for non-authenticated users */}
             <div className="pt-4 border-t border-gray-700">
               <ThemeToggle />
             </div>
