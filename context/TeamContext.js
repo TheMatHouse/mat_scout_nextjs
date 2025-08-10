@@ -1,10 +1,17 @@
 // context/TeamContext.js
-import { createContext, useContext, useState } from "react";
+"use client";
+import { createContext, useContext, useState, useEffect } from "react";
 
-const TeamContext = createContext();
+// Provide a safe default so SSR doesn't explode
+const TeamContext = createContext({ team: null, setTeam: () => {} });
 
-export function TeamProvider({ children, initialTeam = null }) {
+export function TeamProvider({ initialTeam = null, children }) {
   const [team, setTeam] = useState(initialTeam);
+
+  // Optional: keep initialTeam in sync if the prop changes
+  useEffect(() => {
+    setTeam(initialTeam);
+  }, [initialTeam]);
 
   return (
     <TeamContext.Provider value={{ team, setTeam }}>
@@ -13,8 +20,4 @@ export function TeamProvider({ children, initialTeam = null }) {
   );
 }
 
-export const useTeam = () => {
-  const context = useContext(TeamContext);
-  if (!context) throw new Error("useTeam must be used within TeamProvider");
-  return context;
-};
+export const useTeam = () => useContext(TeamContext);
