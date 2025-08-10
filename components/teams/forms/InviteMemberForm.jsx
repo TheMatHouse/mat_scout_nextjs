@@ -1,14 +1,19 @@
-// components/teams/forms/InviteMemberForm.jsx
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "react-toastify";
 import FormField from "@/components/shared/FormField";
 import FormSelect from "@/components/shared/FormSelect";
 import Editor from "@/components/shared/Editor";
 
-export default function InviteMemberForm({ slug, setOpen, onSuccess }) {
-  const [role, setRole] = useState("member"); // member | coach | manager
+export default function InviteMemberForm({
+  slug,
+  setOpen,
+  onSuccess,
+  team,
+  managerName,
+}) {
+  const [role, setRole] = useState("member");
   const [isMinor, setIsMinor] = useState(false);
 
   // Invitee
@@ -21,7 +26,6 @@ export default function InviteMemberForm({ slug, setOpen, onSuccess }) {
   const [pLast, setPLast] = useState("");
   const [pEmail, setPEmail] = useState("");
 
-  // WYSIWYG message
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -30,6 +34,14 @@ export default function InviteMemberForm({ slug, setOpen, onSuccess }) {
     { value: "coach", label: "Coach" },
     { value: "manager", label: "Manager" },
   ];
+
+  const defaultMessage = useMemo(() => {
+    const teamName = team?.teamName || "our team";
+    const signed = managerName || "";
+    return `<p>Hi,</p>
+       <p>I'd like to invite you to join <strong>${teamName}</strong> on MatScout.</p><br />
+       <p>Thanks,<br /><br />${signed}</p>`;
+  }, [team?.teamName, managerName]);
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -56,7 +68,7 @@ export default function InviteMemberForm({ slug, setOpen, onSuccess }) {
           parentFirstName: pFirst.trim(),
           parentLastName: pLast.trim(),
           parentEmail: pEmail.trim(),
-          message: message || undefined, // already HTML/text from Editor
+          message: message || defaultMessage,
         }
       : {
           isMinor: false,
@@ -64,7 +76,7 @@ export default function InviteMemberForm({ slug, setOpen, onSuccess }) {
           inviteeFirstName: firstName.trim(),
           inviteeLastName: lastName.trim(),
           email: email.trim(),
-          message: message || undefined,
+          message: message || defaultMessage,
         };
 
     setSubmitting(true);
@@ -103,7 +115,6 @@ export default function InviteMemberForm({ slug, setOpen, onSuccess }) {
         placeholder="Select role..."
       />
 
-      {/* Minor toggle */}
       <div>
         <label className="inline-flex items-center gap-2 whitespace-nowrap">
           <input
@@ -115,7 +126,6 @@ export default function InviteMemberForm({ slug, setOpen, onSuccess }) {
         </label>
       </div>
 
-      {/* Invitee name */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <FormField
           label="Invitee First Name"
@@ -133,7 +143,6 @@ export default function InviteMemberForm({ slug, setOpen, onSuccess }) {
         />
       </div>
 
-      {/* Adult email OR Parent contact */}
       {!isMinor ? (
         <FormField
           label="Invitee Email"
@@ -172,10 +181,9 @@ export default function InviteMemberForm({ slug, setOpen, onSuccess }) {
         </div>
       )}
 
-      {/* WYSIWYG message */}
       <Editor
         name="message"
-        text={message}
+        text={message || defaultMessage}
         onChange={setMessage}
         label="Message (optional)"
       />
