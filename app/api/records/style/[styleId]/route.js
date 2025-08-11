@@ -25,20 +25,40 @@ function normalizeResult(val) {
   return "";
 }
 
+// Fetch a remote image and embed as data URI so it always renders in the PDF
+async function fetchImageAsDataURI(url) {
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const ct = res.headers.get("content-type") || "image/png";
+    const buf = Buffer.from(await res.arrayBuffer());
+    return `data:${ct};base64,${buf.toString("base64")}`;
+  } catch (e) {
+    console.error("Logo fetch failed:", e);
+    return "";
+  }
+}
+
 export async function GET(req, { params }) {
   try {
     await connectDB();
 
-    const { styleId } = await params; // in your Next version, params can be a Promise
+    const { styleId } = await params; // Next.js params can be a Promise
     const decoded = decodeURIComponent(String(styleId || "")).trim();
+    const allMode = /^all(-styles)?$/i.test(decoded); // support /style/all and /style/all-styles
 
     const url = new URL(req.url);
     const username = url.searchParams.get("username");
-    const from = url.searchParams.get("from"); // YYYY-MM-DD optional
-    const to = url.searchParams.get("to"); // YYYY-MM-DD optional
+    const from = url.searchParams.get("from");
+    const to = url.searchParams.get("to");
     const download = url.searchParams.get("download") === "1";
-    const logoUrl =
+
+    // Logo handling (embed to avoid CORS/render issues)
+    const logoHttpUrl =
+      url.searchParams.get("logo") ||
+      process.env.NEXT_PUBLIC_PDF_LOGO ||
       "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png";
+    const embeddedLogo = await fetchImageAsDataURI(logoHttpUrl);
 
     // 1) Resolve user
     let userDoc;
@@ -48,7 +68,6 @@ export async function GET(req, { params }) {
       );
       if (!userDoc)
         return NextResponse.json({ error: "User not found" }, { status: 404 });
-      // If you enforce public-only, check userDoc.allowPublic here
     } else {
       const me = await getCurrentUser();
       if (!me)
@@ -60,27 +79,9 @@ export async function GET(req, { params }) {
         return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // 2) Resolve a style name used by MatchReport.matchType
-    let styleDoc = null;
-    let matchTypeName = null;
-
-    if (isValidObjectId(decoded)) {
-      styleDoc = await Style.findById(decoded).select("_id styleName");
-      if (!styleDoc)
-        return NextResponse.json({ error: "Style not found" }, { status: 404 });
-      matchTypeName = styleDoc.styleName;
-    } else {
-      const byName = await Style.findOne({
-        styleName: new RegExp(`^${escapeRegex(decoded)}$`, "i"),
-      }).select("_id styleName");
-      matchTypeName = byName ? byName.styleName : decoded; // allow raw "Judo"
-      if (byName) styleDoc = byName;
-    }
-
-    // 3) Build filters (matches your schema)
+    // 2) Filters common to both modes
     const userId = userDoc._id;
     const userIdStr = String(userId);
-
     const ownerFilter = {
       $or: [
         { athleteId: userId },
@@ -89,12 +90,6 @@ export async function GET(req, { params }) {
         { createdById: userIdStr },
       ],
     };
-
-    const typeRegex = new RegExp(
-      `^\\s*${escapeRegex(matchTypeName)}\\s*$`,
-      "i"
-    );
-
     const dateFilter = {};
     if (from) dateFilter.$gte = new Date(from);
     if (to) dateFilter.$lte = new Date(to);
@@ -102,12 +97,38 @@ export async function GET(req, { params }) {
       ? { matchDate: dateFilter }
       : {};
 
+    // 3) Build query
+    let matchTypeName = null;
+    let styleDoc = null;
+    const baseQuery = { ...ownerFilter, ...maybeDate };
+
+    if (!allMode) {
+      // Resolve style name (MatchReport uses matchType string)
+      if (isValidObjectId(decoded)) {
+        styleDoc = await Style.findById(decoded).select("_id styleName");
+        if (!styleDoc)
+          return NextResponse.json(
+            { error: "Style not found" },
+            { status: 404 }
+          );
+        matchTypeName = styleDoc.styleName;
+      } else {
+        const byName = await Style.findOne({
+          styleName: new RegExp(`^${escapeRegex(decoded)}$`, "i"),
+        }).select("_id styleName");
+        matchTypeName = byName ? byName.styleName : decoded;
+        if (byName) styleDoc = byName;
+      }
+      baseQuery.matchType = new RegExp(
+        `^\\s*${escapeRegex(matchTypeName)}\\s*$`,
+        "i"
+      );
+    } else {
+      matchTypeName = "All Styles";
+    }
+
     // 4) Query reports
-    const reports = await MatchReport.find({
-      ...ownerFilter,
-      matchType: typeRegex,
-      ...maybeDate,
-    })
+    const reports = await MatchReport.find(baseQuery)
       .sort({ matchDate: -1, createdAt: -1 })
       .lean();
 
@@ -125,6 +146,7 @@ export async function GET(req, { params }) {
 
     // 6) Map rows for PDF
     const matches = reports.map((r) => ({
+      ...(allMode ? { style: r.matchType || "" } : null), // include style column when "all"
       date: r.matchDate
         ? new Date(r.matchDate).toLocaleDateString("en-US")
         : "",
@@ -139,12 +161,13 @@ export async function GET(req, { params }) {
     const userName = `${userDoc.firstName} ${userDoc.lastName}`.trim();
     const element = (
       <StyleRecordPDF
-        logoUrl={logoUrl}
+        logoUrl={embeddedLogo}
         userName={userName}
         styleName={matchTypeName}
         wins={totals.wins}
         losses={totals.losses}
         matches={matches}
+        includeStyleColumn={allMode} // <-- show the Style column when /style/all
       />
     );
     const pdfBuffer = await pdf(element).toBuffer();
@@ -156,7 +179,7 @@ export async function GET(req, { params }) {
         "Content-Disposition": `${
           download ? "attachment" : "inline"
         }; filename="${encodeURIComponent(
-          `${userDoc.username}_${matchTypeName}_record.pdf`
+          `${userDoc.username}_${allMode ? "all" : matchTypeName}_record.pdf`
         )}"`,
         "Cache-Control": "no-store",
       },

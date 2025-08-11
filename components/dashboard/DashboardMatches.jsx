@@ -1,3 +1,4 @@
+// components/dashboard/DashboardMatches.jsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -19,6 +20,11 @@ const DashboardMatches = ({ user }) => {
   const [open, setOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState(null);
+
+  // resolve a default logo (used in the PDF header)
+  const logoUrl =
+    process.env.NEXT_PUBLIC_PDF_LOGO ||
+    "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png";
 
   useEffect(() => {
     if (!user?._id) return;
@@ -153,8 +159,16 @@ const DashboardMatches = ({ user }) => {
 
   const hasStyles = user?.userStyles && user.userStyles.length > 0;
 
+  // Build the "Print All" PDF link (uses the all-styles route you wired)
+  const printAllHref = (() => {
+    const qs = new URLSearchParams();
+    if (logoUrl) qs.set("logo", logoUrl);
+    return `/api/records/style/all${qs.toString() ? `?${qs.toString()}` : ""}`;
+  })();
+
   return (
-    <div>
+    <div className="px-4 md:px-6 lg:px-8">
+      {/* Header with Add + Print buttons */}
       {/* Header with Add Button */}
       <div className="flex flex-col items-start gap-4 mb-4">
         <h1 className="text-2xl font-bold">My Matches</h1>
@@ -193,7 +207,7 @@ const DashboardMatches = ({ user }) => {
             <Button
               onClick={() => {
                 setOpen(false);
-                router.push("/dashboard/styles"); // ✅ Redirect to Styles
+                router.push("/dashboard/styles");
               }}
               className="bg-ms-blue-gray hover:bg-ms-blue text-white"
             >
@@ -203,6 +217,17 @@ const DashboardMatches = ({ user }) => {
         )}
       </ModalLayout>
 
+      <div className="mb-4 flex justify-start md:justify-end">
+        <a
+          href={printAllHref}
+          target="_blank"
+          rel="noopener"
+          className="btn-white-sm"
+          title="Print all matches as a PDF"
+        >
+          Print All Matches (PDF)
+        </a>
+      </div>
       {/* Cards for Mobile */}
       <div className="block md:hidden space-y-4">
         {matchReports.length > 0 ? (

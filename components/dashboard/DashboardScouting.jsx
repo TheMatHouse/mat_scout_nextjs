@@ -144,7 +144,7 @@ const DashboardScouting = ({ user, styles, techniques }) => {
   const hasStyles = user?.userStyles && user.userStyles.length > 0;
 
   return (
-    <div>
+    <div className="px-4 md:px-6 lg:px-8">
       {/* Header */}
       <div className="flex flex-col items-start gap-4 mb-4">
         <h1 className="text-2xl font-bold">My Scouting Reports</h1>

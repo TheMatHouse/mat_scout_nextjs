@@ -33,7 +33,7 @@ const FamilyDashboard = () => {
   };
 
   return (
-    <div>
+    <div className="px-4 md:px-6 lg:px-8">
       {/* Header + Add Button */}
       <div className="flex flex-col items-start mb-4">
         <h1 className="text-2xl font-bold mb-4">My Family Members</h1>

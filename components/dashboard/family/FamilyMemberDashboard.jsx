@@ -46,7 +46,7 @@ export default function FamilyMemberDashboard({ member }) {
   };
 
   return (
-    <div>
+    <div className="px-4 md:px-6 lg:px-8">
       <div className="mb-6 border-b border-gray-300 dark:border-gray-700">
         <nav className="flex flex-wrap gap-4">
           {TABS.map((tab) => (
