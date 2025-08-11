@@ -1,11 +1,12 @@
+// components/dashboard/StyleCard.jsx
 "use client";
 
 import React, { useState } from "react";
-import { useUser } from "@/context/UserContext";
 import moment from "moment";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";
 import { GrEdit } from "react-icons/gr";
+import { useUser } from "@/context/UserContext";
 
 import {
   Dialog,
@@ -24,6 +25,7 @@ const StyleCard = ({
   userType,
   onDelete,
   member,
+  logoUrl, // optional override
 }) => {
   const router = useRouter();
   const [style, setStyle] = useState(initialStyle);
@@ -49,9 +51,7 @@ const StyleCard = ({
         if (response.ok) {
           toast.success(data.message);
           refreshUser();
-          if (onDelete) {
-            onDelete(style._id); // Inform parent immediately
-          }
+          if (onDelete) onDelete(style._id);
         } else {
           toast.error(data.message || "Failed to delete style.");
         }
@@ -60,6 +60,29 @@ const StyleCard = ({
       }
     }
   };
+
+  // Compute wins/losses based on style name mapping
+  const resultIndex =
+    style.styleName === "Judo"
+      ? 1
+      : style.styleName === "Brazilian Jiu Jitsu"
+      ? 0
+      : 2;
+  const wins = styleResults?.[resultIndex]?.Wins ?? 0;
+  const losses = styleResults?.[resultIndex]?.Losses ?? 0;
+
+  // Automatically use style name in PDF URL
+  const styleParam = style?.styleName || style?._id || "Judo";
+
+  // Resolve logo: param > env var > blank
+  const resolvedLogo = logoUrl || process.env.NEXT_PUBLIC_PDF_LOGO || "";
+
+  const qs = new URLSearchParams();
+  if (resolvedLogo) qs.set("logo", resolvedLogo);
+
+  const pdfHref = `/api/records/style/${encodeURIComponent(styleParam)}${
+    qs.toString() ? `?${qs.toString()}` : ""
+  }`;
 
   return (
     <div className="rounded-2xl border border-slate-700 bg-slate-800/80 dark:bg-slate-900/80 text-white shadow-xl backdrop-blur-md ring-1 ring-slate-700 hover:ring-2 hover:ring-[#ef233c] transition-all duration-200 transform hover:scale-[1.02]">
@@ -103,7 +126,9 @@ const StyleCard = ({
         </div>
         <div>
           <span className="font-semibold text-slate-300">Promotion Date:</span>{" "}
-          {moment.utc(style.promotionDate).format("MMMM D, YYYY")}
+          {style.promotionDate
+            ? moment.utc(style.promotionDate).format("MMMM D, YYYY")
+            : "—"}
         </div>
         <div>
           <span className="font-semibold text-slate-300">Division:</span>{" "}
@@ -129,39 +154,31 @@ const StyleCard = ({
           </span>
           <div className="ml-4 space-y-1">
             <div>
-              <strong>Wins:</strong>{" "}
-              {styleResults?.[
-                style.styleName === "Judo"
-                  ? 1
-                  : style.styleName === "Brazilian Jiu Jitsu"
-                  ? 0
-                  : 2
-              ]?.Wins ?? 0}
+              <strong>Wins:</strong> {wins}
             </div>
             <div>
-              <strong>Losses:</strong>{" "}
-              {styleResults?.[
-                style.styleName === "Judo"
-                  ? 1
-                  : style.styleName === "Brazilian Jiu Jitsu"
-                  ? 0
-                  : 2
-              ]?.Losses ?? 0}
+              <strong>Losses:</strong> {losses}
             </div>
           </div>
-        </div>
-        <div className="italic text-xs text-slate-400 pt-1">
-          View my {style.styleName} (coming soon!)
         </div>
       </div>
 
       {/* Footer */}
-      <div className="flex justify-center py-4">
+      <div className="flex justify-between items-center px-5 py-4 gap-3">
+        <a
+          href={pdfHref}
+          target="_blank"
+          rel="noopener"
+          className="btn btn-white-sm"
+        >
+          Print PDF Record
+        </a>
+
         <button
           onClick={handleDeleteStyle}
-          className="px-5 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white font-semibold shadow-md transition"
+          className="px-3 py-1.5 rounded-lg border border-red-400 text-red-400 hover:bg-red-500/10 hover:text-red-300 transition text-xs font-medium"
         >
-          Delete this style
+          Delete
         </button>
       </div>
     </div>
