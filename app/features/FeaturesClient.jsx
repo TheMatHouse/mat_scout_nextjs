@@ -134,14 +134,23 @@ export default function FeaturesClient() {
 
 function FeatureCard({ imgSrc, title, description }) {
   return (
-    <div className="relative bg-[#1c1c27] rounded-xl shadow p-6 text-center h-full overflow-hidden hover:shadow-lg transition-shadow duration-300">
+    <div
+      className="
+        group relative bg-[#1c1c27] rounded-xl shadow p-6 text-center h-full
+        overflow-hidden
+        transition duration-200
+        hover:shadow-xl transform hover:-translate-y-1
+      "
+    >
       <div className="absolute top-0 left-0 w-full h-1 bg-[#ef233c] rounded-t-xl" />
       <Image
         src={imgSrc}
         alt={title}
-        className="mx-auto h-20 w-20 mb-4"
+        className="mx-auto h-20 w-20 mb-4 transition duration-200 group-hover:scale-[1.02]"
       />
-      <h3 className="text-lg font-semibold text-white mb-2">{title}</h3>
+      <h3 className="text-lg font-semibold text-white mb-2 transition group-hover:underline underline-offset-4 decoration-2">
+        {title}
+      </h3>
       <p className="text-sm text-white/70">{description}</p>
     </div>
   );
