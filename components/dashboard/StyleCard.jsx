@@ -1,4 +1,3 @@
-// components/dashboard/StyleCard.jsx
 "use client";
 
 import React, { useState } from "react";
@@ -18,14 +17,56 @@ import {
 } from "@/components/ui/dialog";
 import StyleForm from "./forms/StyleForm";
 
+const norm = (v) =>
+  String(v ?? "")
+    .trim()
+    .toLowerCase();
+
+function getTotals({ styleResultsMap, styleResultsArray, styleName }) {
+  const key = norm(styleName);
+
+  // 1) Preferred: map keyed by normalized style
+  if (styleResultsMap && typeof styleResultsMap === "object") {
+    const row =
+      styleResultsMap[key] ||
+      styleResultsMap[styleName] ||
+      styleResultsMap[
+        Object.keys(styleResultsMap).find((k) => norm(k) === key) || ""
+      ];
+    if (row) {
+      return {
+        wins: Number(row.wins ?? row?.totals?.wins ?? row?.Wins ?? 0) || 0,
+        losses:
+          Number(row.losses ?? row?.totals?.losses ?? row?.Losses ?? 0) || 0,
+      };
+    }
+  }
+
+  // 2) Fallback: array of rows with various shapes
+  const arr = Array.isArray(styleResultsArray) ? styleResultsArray : [];
+  const hit =
+    arr.find((r) => norm(r?.styleName ?? r?.Style ?? r?.style) === key) || null;
+
+  if (hit) {
+    const t = hit.totals || hit;
+    return {
+      wins: Number(t?.wins ?? t?.Wins ?? 0) || 0,
+      losses: Number(t?.losses ?? t?.Losses ?? 0) || 0,
+    };
+  }
+
+  return { wins: 0, losses: 0 };
+}
+
 const StyleCard = ({
   style: initialStyle,
-  styleResults,
+  styleResultsMap, // ← new preferred prop
+  styleResults, // optional legacy array prop
   user,
   userType,
   onDelete,
   member,
-  logoUrl, // optional override
+  logoUrl,
 }) => {
   const router = useRouter();
   const [style, setStyle] = useState(initialStyle);
@@ -33,53 +74,42 @@ const StyleCard = ({
   const { refreshUser } = useUser();
 
   const handleDeleteStyle = async () => {
-    if (window.confirm(`Delete ${style.styleName}?`)) {
-      try {
-        const userId = member?.userId || user?._id;
+    if (!window.confirm(`Delete ${style.styleName}?`)) return;
+    try {
+      const userId = member?.userId || user?._id;
+      const endpoint =
+        userType === "family"
+          ? `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${userId}/family/${member._id}/styles/${style._id}`
+          : `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${userId}/userStyles/${style._id}`;
 
-        const endpoint =
-          userType === "family"
-            ? `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${userId}/family/${member._id}/styles/${style._id}`
-            : `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${userId}/userStyles/${style._id}`;
-
-        const response = await fetch(endpoint, {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-        });
-        const data = await response.json();
-
-        if (response.ok) {
-          toast.success(data.message);
-          refreshUser();
-          if (onDelete) onDelete(style._id);
-        } else {
-          toast.error(data.message || "Failed to delete style.");
-        }
-      } catch {
-        toast.error("Server error while deleting style.");
+      const response = await fetch(endpoint, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await response.json();
+      if (response.ok) {
+        toast.success(data.message);
+        refreshUser();
+        onDelete?.(style._id);
+      } else {
+        toast.error(data.message || "Failed to delete style.");
       }
+    } catch {
+      toast.error("Server error while deleting style.");
     }
   };
 
-  // Compute wins/losses based on style name mapping
-  const resultIndex =
-    style.styleName === "Judo"
-      ? 1
-      : style.styleName === "Brazilian Jiu Jitsu"
-      ? 0
-      : 2;
-  const wins = styleResults?.[resultIndex]?.Wins ?? 0;
-  const losses = styleResults?.[resultIndex]?.Losses ?? 0;
+  const { wins, losses } = getTotals({
+    styleResultsMap,
+    styleResultsArray: styleResults,
+    styleName: style.styleName,
+  });
 
-  // Automatically use style name in PDF URL
+  // PDF link
   const styleParam = style?.styleName || style?._id || "Judo";
-
-  // Resolve logo: param > env var > blank
   const resolvedLogo = logoUrl || process.env.NEXT_PUBLIC_PDF_LOGO || "";
-
   const qs = new URLSearchParams();
   if (resolvedLogo) qs.set("logo", resolvedLogo);
-
   const pdfHref = `/api/records/style/${encodeURIComponent(styleParam)}${
     qs.toString() ? `?${qs.toString()}` : ""
   }`;
@@ -148,6 +178,7 @@ const StyleCard = ({
           </span>{" "}
           {style.favoriteTechnique}
         </div>
+
         <div>
           <span className="font-semibold text-slate-300">
             My Record in {style.styleName}:
@@ -169,11 +200,10 @@ const StyleCard = ({
           href={pdfHref}
           target="_blank"
           rel="noopener"
-          className="btn btn-white-sm"
+          className="btn-white-sm"
         >
           Print PDF Record
         </a>
-
         <button
           onClick={handleDeleteStyle}
           className="px-3 py-1.5 rounded-lg border border-red-400 text-red-400 hover:bg-red-500/10 hover:text-red-300 transition text-xs font-medium"

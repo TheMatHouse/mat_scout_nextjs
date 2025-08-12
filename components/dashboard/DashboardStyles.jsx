@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { toast } from "react-toastify";
 import { useUser } from "@/context/UserContext";
 import { Button } from "@/components/ui/button";
@@ -8,14 +8,28 @@ import ModalLayout from "@/components/shared/ModalLayout";
 import StyleCard from "./StyleCard";
 import StyleForm from "./forms/StyleForm";
 
+const norm = (v) =>
+  String(v ?? "")
+    .trim()
+    .toLowerCase();
+const normalizeResult = (val) => {
+  const v = norm(val);
+  if (["won", "win", "w"].includes(v)) return "win";
+  if (["lost", "loss", "l"].includes(v)) return "loss";
+  if (["draw", "tie", "d"].includes(v)) return "draw";
+  return "";
+};
+
 const DashboardStyles = () => {
   const { user } = useUser();
   const [myStyles, setMyStyles] = useState([]);
+  const [matchReports, setMatchReports] = useState([]);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     if (!user?._id) return;
     fetchStyles();
+    fetchMatches();
   }, [user]);
 
   const fetchStyles = async () => {
@@ -27,6 +41,18 @@ const DashboardStyles = () => {
     } catch (err) {
       console.error("Error loading user styles:", err);
       toast.error("Could not load styles.");
+    }
+  };
+
+  const fetchMatches = async () => {
+    try {
+      const res = await fetch(`/api/dashboard/${user._id}/matchReports`);
+      if (!res.ok) throw new Error("Failed to fetch match reports");
+      const data = await res.json();
+      setMatchReports(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error loading match reports:", err);
+      toast.error("Could not load match reports.");
     }
   };
 
@@ -47,26 +73,38 @@ const DashboardStyles = () => {
     );
   };
 
-  // Compute style results for stats
-  const styleResults = [
-    { name: "Brazilian Jiu Jitsu", Wins: 0, Losses: 0 },
-    { name: "Judo", Wins: 0, Losses: 0 },
-    { name: "Wrestling", Wins: 0, Losses: 0 },
-  ];
-
-  user?.matchReports?.forEach((match) => {
-    const update = (index) => {
-      if (match.result === "Won") styleResults[index].Wins += 1;
-      else if (match.result === "Lost") styleResults[index].Losses += 1;
-    };
-
-    if (match.matchType === "Brazilian Jiu Jitsu") update(0);
-    else if (match.matchType === "Judo") update(1);
-    else if (match.matchType === "Wrestling") update(2);
-  });
+  // ✅ Compute totals from the same source as Matches page
+  const styleResultsMap = useMemo(() => {
+    const map = {}; // key: normalized style -> { wins, losses, draws }
+    for (const r of matchReports) {
+      const key = norm(r?.matchType);
+      if (!key) continue;
+      map[key] ??= {
+        styleName: r.matchType || "Unknown",
+        wins: 0,
+        losses: 0,
+        draws: 0,
+      };
+      const out = normalizeResult(r?.result);
+      if (out === "win") map[key].wins += 1;
+      else if (out === "loss") map[key].losses += 1;
+      else if (out === "draw") map[key].draws += 1;
+    }
+    // Ensure every card style exists (0s if no matches yet)
+    for (const s of myStyles) {
+      const key = norm(s?.styleName);
+      map[key] ??= {
+        styleName: s?.styleName || "Unknown",
+        wins: 0,
+        losses: 0,
+        draws: 0,
+      };
+    }
+    return map;
+  }, [matchReports, myStyles]);
 
   return (
-    <div>
+    <div className="px-4 md:px-6 lg:px-8">
       {/* Header */}
       <div className="flex flex-col items-start gap-4 mb-4">
         <h1 className="text-2xl font-bold">My Styles/Sports</h1>
@@ -98,13 +136,13 @@ const DashboardStyles = () => {
 
       {/* Style Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {myStyles.map((style, index) => (
+        {myStyles.map((style) => (
           <StyleCard
-            key={index}
+            key={style._id}
             style={style}
             user={user}
             userType="user"
-            styleResults={styleResults}
+            styleResultsMap={styleResultsMap} // ← pass map (source of truth)
             onDelete={handleDeleteStyle}
           />
         ))}

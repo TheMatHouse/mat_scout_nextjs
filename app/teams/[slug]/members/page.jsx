@@ -1,3 +1,4 @@
+// app/(teams)/team/[slug]/members/page.jsx
 "use client";
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,8 @@ import MemberRow from "@/components/teams/MemberRow";
 import Spinner from "@/components/shared/Spinner";
 import ModalLayout from "@/components/shared/ModalLayout";
 import InviteMemberForm from "@/components/teams/forms/InviteMemberForm";
+import InvitesTable from "@/components/teams/InvitesTable"; // ⬅️ now used
+import { toast } from "react-toastify";
 
 export default function MembersPage() {
   const params = useParams();
@@ -19,24 +22,50 @@ export default function MembersPage() {
 
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Invitations state
+  const [invites, setInvites] = useState([]);
+  const [invitesLoading, setInvitesLoading] = useState(true);
+
   const [inviteOpen, setInviteOpen] = useState(false);
 
+  // --- Fetch Members ---
   const fetchMembers = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/teams/${slug}/members?ts=${Date.now()}`);
+      if (!res.ok) throw new Error("Failed to load members");
       const data = await res.json();
       setMembers(data.members || []);
     } catch (err) {
       console.error("Error loading members:", err);
+      toast.error("Failed to load members.");
     } finally {
       setLoading(false);
     }
   }, [slug]);
 
+  // --- Fetch Invites (pending invitations) ---
+  const fetchInvites = useCallback(async () => {
+    setInvitesLoading(true);
+    try {
+      // If your endpoint differs, update the path below:
+      const res = await fetch(`/api/teams/${slug}/invites?ts=${Date.now()}`);
+      if (!res.ok) throw new Error("Failed to load invites");
+      const data = await res.json();
+      setInvites(Array.isArray(data.invites) ? data.invites : []);
+    } catch (err) {
+      console.error("Error loading invites:", err);
+      toast.error("Failed to load invites.");
+    } finally {
+      setInvitesLoading(false);
+    }
+  }, [slug]);
+
   useEffect(() => {
     fetchMembers();
-  }, [fetchMembers]);
+    fetchInvites();
+  }, [fetchMembers, fetchInvites]);
 
   if (loading) {
     return (
@@ -64,8 +93,51 @@ export default function MembersPage() {
     user?.email ||
     "Team Manager";
 
+  // --- Invite actions ---
+  const handleResendInvite = async (inviteId) => {
+    try {
+      // If your resend endpoint differs, update this:
+      const res = await fetch(`/api/teams/${slug}/invites/${inviteId}/resend`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || "Failed to resend invite");
+      toast.success("Invitation resent.");
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || "Could not resend invite.");
+    } finally {
+      fetchInvites();
+    }
+  };
+
+  async function parseJsonSafe(res) {
+    const text = await res.text();
+    try {
+      return { data: JSON.parse(text), raw: text };
+    } catch {
+      return { data: null, raw: text };
+    }
+  }
+
+  const handleRevokeInvite = async (inviteId) => {
+    try {
+      const res = await fetch(`/api/teams/${slug}/invites/${inviteId}/revoke`, {
+        method: "POST",
+      });
+      const { data } = await parseJsonSafe(res);
+      if (!res.ok) throw new Error(data?.message || "Failed to revoke invite");
+      toast.success(data?.message || "Invitation revoked.");
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || "Could not revoke invite.");
+    } finally {
+      fetchInvites();
+    }
+  };
+
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 space-y-8">
+    <div className="max-w-5xl mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-8">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
@@ -86,6 +158,18 @@ export default function MembersPage() {
         )}
       </div>
 
+      {/* Pending Invitations (InvitesTable) */}
+      {(isManager || isCoach) && (
+        <InvitesTable
+          slug={slug}
+          invites={invites}
+          loading={invitesLoading}
+          onResend={handleResendInvite}
+          onRevoke={handleRevokeInvite}
+        />
+      )}
+
+      {/* Pending Requests (users who applied) */}
       <section className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-5">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           Pending Requests
@@ -101,7 +185,10 @@ export default function MembersPage() {
                   member={m}
                   slug={slug}
                   isManager={isManager}
-                  onRoleChange={fetchMembers}
+                  onRoleChange={() => {
+                    fetchMembers();
+                    fetchInvites(); // in case auto-conversion from invite -> member
+                  }}
                 />
               </div>
             ))}
@@ -113,6 +200,7 @@ export default function MembersPage() {
         )}
       </section>
 
+      {/* Active Members */}
       <section className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-5">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           Active Members
@@ -147,11 +235,13 @@ export default function MembersPage() {
         description="Send an invitation to join this team."
         withCard
       >
-        {/* Invite form with team + manager name for default message */}
         <InviteMemberForm
           slug={slug}
           setOpen={setInviteOpen}
-          onSuccess={fetchMembers}
+          onSuccess={() => {
+            fetchInvites();
+            fetchMembers();
+          }}
           team={team}
           managerName={managerName}
         />

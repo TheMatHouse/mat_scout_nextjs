@@ -550,3 +550,43 @@ aside a:hover {
   background-color: #1f2937;
   color: #f3f4f6;
 }
+
+.ms-link {
+  color: var(--ms-blue);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--ms-blue); /* underline matches text */
+  font-weight: 600;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+.ms-link:hover {
+  color: var(--ms-dark-red);
+  text-decoration-color: var(--ms-dark-red);
+}
+.ms-link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ms-blue);
+  border-radius: 6px;
+}
+
+/* Dark mode */
+.dark .ms-link {
+  color: var(--ms-light-red);
+  text-decoration-color: var(--ms-light-red);
+}
+.dark .ms-link:hover {
+  color: var(--ms-light-red); /* you wanted no color change on hover */
+  text-decoration-color: var(--ms-light-red);
+}
+
+/* Optional but nice: visited state */
+.ms-link:visited {
+  opacity: 0.9; /* subtle change; keep brand color */
+}
+.dark .ms-link:visited {
+  opacity: 0.95;
+}
+.ms-link.no-underline {
+  text-decoration: none;
+}

@@ -8,6 +8,7 @@ import NotificationBell from "@/components/notifications/NotificationBell";
 import { useUser } from "@/context/UserContext";
 
 export default function Header() {
+  const { user } = useUser();
   const { loading } = useUser();
 
   // ✅ If user state is loading, render a placeholder (same height as header)
@@ -54,7 +55,7 @@ export default function Header() {
           </div>
 
           {/* Notification Bell */}
-          <NotificationBell />
+          {user && <NotificationBell />}
 
           {/* Mobile Navbar */}
           <div className="block md:hidden">

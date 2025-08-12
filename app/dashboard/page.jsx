@@ -1,6 +1,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 
+import { useEffect, useState } from "react";
 import { useUser } from "@/context/UserContext";
 import Link from "next/link";
 import { CalendarPlus, Binoculars, UserCog, Users } from "lucide-react";
@@ -8,8 +9,77 @@ import Spinner from "@/components/shared/Spinner";
 
 export default function DashboardHome() {
   const { user, loading } = useUser();
+  console.log("user ", user);
+  const [matchCount, setMatchCount] = useState(null);
+  const [scoutingCount, setScoutingCount] = useState(null);
+  const [teamCount, setTeamCount] = useState(null);
 
-  if (loading) {
+  useEffect(() => {
+    if (!user?._id) return;
+
+    // Matches
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/dashboard/${user._id}/matchReports?ts=${Date.now()}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setMatchCount(Array.isArray(data) ? data.length : 0);
+        } else {
+          setMatchCount(user.matchReports ? user.matchReports.length : 0);
+        }
+      } catch {
+        setMatchCount(user.matchReports ? user.matchReports.length : 0);
+      }
+    })();
+
+    // Scouting
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/dashboard/${user._id}/scoutingReports?ts=${Date.now()}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setScoutingCount(Array.isArray(data) ? data.length : 0);
+        } else {
+          setScoutingCount(
+            user.scoutingReports ? user.scoutingReports.length : 0
+          );
+        }
+      } catch {
+        setScoutingCount(
+          user.scoutingReports ? user.scoutingReports.length : 0
+        );
+      }
+    })();
+
+    // Teams (current user's memberships; active roles only by default)
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/teams/memberships?activeOnly=1&ts=${Date.now()}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setTeamCount(
+            typeof data?.count === "number"
+              ? data.count
+              : Array.isArray(data?.memberships)
+              ? data.memberships.length
+              : 0
+          );
+        } else {
+          setTeamCount(user.teams ? user.teams.length : 0);
+        }
+      } catch {
+        setTeamCount(user.teams ? user.teams.length : 0);
+      }
+    })();
+  }, [user?._id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (loading || !user) {
     return (
       <div className="flex flex-col justify-center items-center h-[70vh] bg-background">
         <Spinner size={64} />
@@ -19,11 +89,6 @@ export default function DashboardHome() {
       </div>
     );
   }
-  if (!user) return null; // middleware will redirect
-
-  const matchCount = user.matchReports ? user.matchReports.length : 0;
-  const scoutingCount = user.scoutingReports ? user.scoutingReports.length : 0;
-  const teamCount = user.teams ? user.teams.length : 0;
 
   return (
     <div className="max-w-7xl mx-auto px-6 md:px-12 py-10 space-y-12">
@@ -48,22 +113,22 @@ export default function DashboardHome() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         <StatCard
           title="Match Reports"
-          value={matchCount}
+          value={matchCount === null ? "—" : matchCount}
           icon={<CalendarPlus className="w-6 h-6 text-ms-blue" />}
         />
         <StatCard
           title="Scouting Reports"
-          value={scoutingCount}
+          value={scoutingCount === null ? "—" : scoutingCount}
           icon={<Binoculars className="w-6 h-6 text-ms-blue" />}
         />
         <StatCard
           title="Teams"
-          value={teamCount}
+          value={teamCount === null ? "—" : teamCount}
           icon={<Users className="w-6 h-6 text-ms-blue" />}
         />
       </div>
 
-      {/* What's Next Section */}
+      {/* What's Next */}
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-md p-6 border border-gray-200 dark:border-gray-700">
         <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">
           What's Next?
@@ -77,7 +142,7 @@ export default function DashboardHome() {
               href="/dashboard/matches"
               className="text-ms-blue dark:text-ms-light-gray hover:text-ms-dark-red"
             >
-              Log your first match report
+              Log your next match
             </Link>
           </li>
           <li>
@@ -130,14 +195,38 @@ export default function DashboardHome() {
   );
 }
 
-// ✅ Stat Card Component
 function StatCard({ title, value, icon }) {
+  const t = String(title).toLowerCase();
+
+  const href = t.includes("match")
+    ? "/dashboard/matches"
+    : t.includes("scout")
+    ? "/dashboard/scouting"
+    : t.includes("team")
+    ? "/teams"
+    : null;
+
+  const shouldLink = href && value !== "—";
+
+  const valueNode = shouldLink ? (
+    <Link
+      href={href}
+      className="underline underline-offset-4 decoration-2"
+      style={{ color: "inherit", textDecorationColor: "currentColor" }}
+      aria-label={`View ${title.toLowerCase()}`}
+    >
+      {value}
+    </Link>
+  ) : (
+    value
+  );
+
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow border border-gray-200 dark:border-gray-700 flex items-center justify-between">
       <div>
         <p className="text-sm text-gray-700 dark:text-gray-200">{title}</p>
         <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-          {value}
+          {valueNode}
         </h3>
       </div>
       {icon}
@@ -145,7 +234,6 @@ function StatCard({ title, value, icon }) {
   );
 }
 
-// ✅ Dashboard Card Component
 function DashboardCard({ href, icon, title, description }) {
   return (
     <Link

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import TrophyRed from "@/assets/images/icons/trophy-red.png"; // optional
 import TeamRed from "@/assets/images/icons/team-red.png"; // optional
+import Link from "next/link";
 
 export default function AboutClient() {
   return (
@@ -62,7 +63,12 @@ export default function AboutClient() {
           {/* Section: Join Us */}
           <section className="space-y-4">
             <h2 className="text-2xl font-semibold text-ms-light-red">
-              Join Us
+              <Link
+                href="/register"
+                className="ms-link"
+              >
+                Join us
+              </Link>
             </h2>
             <p className="text-gray-700 dark:text-white/90">
               Whether you&apos;re an athlete looking to improve, a coach seeking

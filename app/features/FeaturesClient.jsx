@@ -8,6 +8,7 @@ import MatchRed from "@/assets/images/icons/match-red.png";
 import TeamRed from "@/assets/images/icons/team-red.png";
 import TrophyRed from "@/assets/images/icons/trophy-red.png";
 import DataRed from "@/assets/images/icons/data-red.png";
+import Link from "next/link";
 
 export default function FeaturesClient() {
   useEffect(() => {
@@ -118,7 +119,13 @@ export default function FeaturesClient() {
         </section>
 
         <p className="text-center text-lg font-medium mt-10 text-gray-800 dark:text-white/90">
-          Join us at MatScout and take your grappling journey to the next level!
+          <Link
+            href="/register"
+            className="ms-link"
+          >
+            Join us
+          </Link>{" "}
+          at MatScout and take your grappling journey to the next level!
         </p>
       </div>
     </div>

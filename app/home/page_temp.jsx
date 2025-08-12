@@ -91,42 +91,69 @@ export default function HomePage() {
         <h2 className="text-3xl font-bold text-center mb-12">
           Why Choose MatScout?
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <FeatureCard
-            img="/assets/coaches.png"
-            title="Coaches"
-            description="Manage multiple teams effortlessly. Access all your athletes in one centralized location and elevate your coaching game."
-          />
-          <FeatureCard
-            img="/assets/athletes.png"
-            title="Athletes"
-            description="Keep a comprehensive record of your matches and performance. Analyze data to identify strengths and areas for improvement."
-          />
-          <FeatureCard
-            img="/assets/community.png"
-            title="Community"
-            description="Engage with a vibrant community of grapplers, share knowledge, and grow together in a secure and inspiring environment."
-          />
+
+        <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          {[
+            {
+              href: "/features#coaches",
+              img: "/assets/coaches.png",
+              title: "Coaches",
+              desc: "Manage multiple teams effortlessly. Access all your athletes in one centralized location and elevate your coaching game.",
+            },
+            {
+              href: "/features#athletes",
+              img: "/assets/athletes.png",
+              title: "Athletes",
+              desc: "Keep a comprehensive record of your matches and performance. Analyze data to identify strengths and areas for improvement.",
+            },
+            {
+              href: "/features#everyone",
+              img: "/assets/community.png",
+              title: "Everyone",
+              desc: "Engage with a vibrant community in a secure, user-friendly platform. Whether you’re seasoned or new to the sport, there’s something for you.",
+            },
+          ].map((f) => (
+            <FeatureCard
+              key={f.title}
+              {...f}
+            />
+          ))}
         </div>
       </section>
     </div>
   );
 }
 
-function FeatureCard({ img, title, description }) {
+function FeatureCard({ href, img, title, desc }) {
   return (
-    <div className="bg-[var(--color-card)] rounded-2xl shadow-md p-6 flex flex-col items-center text-center">
-      <div className="relative w-full h-[200px] mb-4">
+    <Link
+      href={href}
+      className="group bg-white dark:bg-zinc-900 rounded-lg shadow-lg p-4 hover:shadow-xl transition transform hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--ms-light-red)]"
+    >
+      <div className="relative">
+        {/* top accent bar */}
+        <div className="absolute top-0 left-0 w-full h-2 bg-[var(--ms-light-red)] rounded-t-md" />
         <Image
           src={img}
-          alt={title}
-          fill
-          sizes="(max-width: 768px) 100vw, (max-width: 1024px) 33vw, 300px"
-          className="object-contain"
+          alt={`${title} Image`}
+          width={800}
+          height={450}
+          className="w-full h-auto object-cover rounded-t-md mb-4"
+          priority={false}
         />
       </div>
-      <h3 className="text-xl font-semibold mb-2">{title}</h3>
-      <p className="text-sm text-muted-foreground">{description}</p>
-    </div>
+
+      <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 group-hover:underline transition">
+        {title}
+      </h3>
+
+      <p className="text-gray-700 dark:text-gray-300 text-base leading-relaxed mb-4">
+        {desc}
+      </p>
+
+      <div className="text-sm font-medium text-[var(--ms-light-red)] flex items-center justify-end transition group-hover:translate-x-1">
+        Learn more →
+      </div>
+    </Link>
   );
 }

@@ -1,37 +1,50 @@
 "use client";
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import Link from "next/link";
+
 import { useUser } from "@/context/UserContext";
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+
 import FacebookIcon from "@/components/icons/FacebookIcon";
 import GoogleIcon from "@/components/icons/GoogleIcon";
-import Link from "next/link";
 
 export default function LoginForm({ redirect = "/dashboard" }) {
   const router = useRouter();
   const { refreshUser } = useUser();
-  const [form, setForm] = useState({ email: "", password: "" });
+
+  const form = useForm({
+    defaultValues: { email: "", password: "" },
+    mode: "onTouched",
+  });
+
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const onSubmit = async (values) => {
     setError("");
     setLoading(true);
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify(values),
         headers: { "Content-Type": "application/json" },
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Login failed.");
+      if (!res.ok) throw new Error(data?.error || "Login failed.");
 
       await refreshUser();
-      router.replace(redirect); // ← honor redirect
+      router.replace(redirect);
     } catch (err) {
       setError(err.message || "Login failed. Please try again.");
     } finally {
@@ -55,53 +68,77 @@ export default function LoginForm({ redirect = "/dashboard" }) {
 
         {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
 
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-6"
-        >
-          <div>
-            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-              Email
-            </label>
-            <input
-              type="email"
-              name="email"
-              value={form.email}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-[var(--ms-light-gray)] dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[var(--ms-blue)]"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-              Password
-            </label>
-            <input
-              type="password"
-              name="password"
-              value={form.password}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-[var(--ms-light-gray)] dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[var(--ms-blue)]"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 rounded-lg font-semibold shadow-md text-white bg-[var(--ms-blue)] hover:bg-[var(--ms-blue-gray)] transition disabled:opacity-60"
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="space-y-6"
           >
-            {loading ? "Logging in…" : "Log In"}
-          </button>
+            {/* Email */}
+            <FormField
+              control={form.control}
+              name="email"
+              rules={{
+                required: "Email is required",
+                pattern: {
+                  value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                  message: "Enter a valid email",
+                },
+              }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      type="email"
+                      placeholder="you@example.com"
+                      autoComplete="email"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          <div className="text-right mt-2">
-            <Link
-              href="/forgot-password"
-              className="text-sm text-[var(--ms-blue)] hover:underline dark:text-[var(--ms-light-gray)]"
+            {/* Password */}
+            <FormField
+              control={form.control}
+              name="password"
+              rules={{ required: "Password is required" }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      type="password"
+                      placeholder="••••••••"
+                      autoComplete="current-password"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2.5 rounded-lg font-semibold shadow-md text-white bg-[var(--ms-blue)] hover:bg-[var(--ms-blue-gray)] transition disabled:opacity-60"
             >
-              Forgot password?
-            </Link>
-          </div>
-        </form>
+              {loading ? "Logging in…" : "Log In"}
+            </button>
+
+            <div className="text-right mt-2">
+              <Link
+                href="/forgot-password"
+                className="ms-link text-sm"
+              >
+                Forgot password?
+              </Link>
+            </div>
+          </form>
+        </Form>
 
         <div className="my-6 text-center space-y-3">
           <div className="text-sm text-gray-500 dark:text-gray-400">
@@ -110,7 +147,7 @@ export default function LoginForm({ redirect = "/dashboard" }) {
           <div className="flex justify-center gap-4">
             <a
               href="/api/auth/facebook"
-              onClick={setRedirectCookie} // ← store redirect
+              onClick={setRedirectCookie}
               className="flex items-center gap-2 px-4 py-2 border rounded bg-white dark:bg-gray-800 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
             >
               <FacebookIcon className="w-4 h-4" />
@@ -118,7 +155,7 @@ export default function LoginForm({ redirect = "/dashboard" }) {
             </a>
             <a
               href="/api/auth/google"
-              onClick={setRedirectCookie} // ← store redirect
+              onClick={setRedirectCookie}
               className="flex items-center gap-2 px-4 py-2 border rounded bg-white dark:bg-gray-800 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
             >
               <GoogleIcon className="w-4 h-4" />
@@ -128,12 +165,12 @@ export default function LoginForm({ redirect = "/dashboard" }) {
         </div>
 
         <div className="text-sm text-center mt-6 text-gray-600 dark:text-[var(--ms-light-gray)]">
-          Don’t have an account?{" "}
+          Don’t have an account?
           <Link
-            href={`/register?redirect=${encodeURIComponent(redirect)}`} // ← keep redirect
-            className="text-sm text-[var(--ms-blue)] hover:underline dark:text-[var(--ms-light-gray)]"
+            href={`/register?redirect=${encodeURIComponent(redirect)}`}
+            className="ml-2 ms-link"
           >
-            <u>Create one</u>
+            Create one
           </Link>
         </div>
       </div>

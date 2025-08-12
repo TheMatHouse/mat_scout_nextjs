@@ -1,61 +1,106 @@
 "use client";
-import { useState, useEffect } from "react";
+
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import Link from "next/link";
+
 import { apiFetch } from "@/lib/apiClient";
 import { useUser } from "@/context/UserContext";
+
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import GoogleIcon from "@/components/icons/GoogleIcon";
 import FacebookIcon from "@/components/icons/FacebookIcon";
-import Link from "next/link";
 
 export default function RegisterForm({ redirect = "/dashboard" }) {
   const router = useRouter();
   const { refreshUser } = useUser();
 
-  const [form, setForm] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    password: "",
-    username: "",
+  const form = useForm({
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      username: "",
+      email: "",
+      password: "",
+    },
+    mode: "onTouched",
   });
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [usernameAvailable, setUsernameAvailable] = useState(null);
-  const [checkingUsername, setCheckingUsername] = useState(false);
 
+  // Username / Email availability
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState(null); // true | false | null
+  const [checkingEmail, setCheckingEmail] = useState(false);
+  const [emailAvailable, setEmailAvailable] = useState(null); // true | false | null
+
+  const username = form.watch("username");
+  const email = form.watch("email");
+
+  // Debounced username check
   useEffect(() => {
-    const checkUsername = async () => {
-      if (!form.username) return setUsernameAvailable(null);
+    let t;
+    const check = async () => {
+      const u = (username || "").trim();
+      if (!u) return setUsernameAvailable(null);
       setCheckingUsername(true);
       try {
         const res = await apiFetch(
-          `/api/auth/check-username?username=${encodeURIComponent(
-            form.username
-          )}`
+          `/api/auth/check-username?username=${encodeURIComponent(u)}`
         );
-        setUsernameAvailable(!!res.available);
+        setUsernameAvailable(!!res?.available);
       } catch {
         setUsernameAvailable(null);
       } finally {
         setCheckingUsername(false);
       }
     };
-    const debounce = setTimeout(checkUsername, 500);
-    return () => clearTimeout(debounce);
-  }, [form.username]);
+    t = setTimeout(check, 500);
+    return () => clearTimeout(t);
+  }, [username]);
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
+  // Debounced email check
+  useEffect(() => {
+    let t;
+    const check = async () => {
+      const e = (email || "").trim();
+      if (!e) return setEmailAvailable(null);
+      setCheckingEmail(true);
+      try {
+        const res = await apiFetch(
+          `/api/auth/check-email?email=${encodeURIComponent(e)}`
+        );
+        setEmailAvailable(!!res?.available);
+      } catch {
+        setEmailAvailable(null);
+      } finally {
+        setCheckingEmail(false);
+      }
+    };
+    t = setTimeout(check, 500);
+    return () => clearTimeout(t);
+  }, [email]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const onSubmit = async (values) => {
     setError("");
 
-    // Optional: prevent submit if username is known taken
+    // prevent submit if we *know* one is taken
     if (usernameAvailable === false) {
       setError("That username is already taken. Please choose another.");
+      return;
+    }
+    if (emailAvailable === false) {
+      setError("That email is already in use. Please use a different email.");
       return;
     }
 
@@ -63,18 +108,15 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
     try {
       const res = await apiFetch("/api/auth/register", {
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify(values),
         headers: { "Content-Type": "application/json" },
       });
 
-      if (res.error) {
+      if (res?.error) {
         setError(res.error);
       } else {
-        // If your API sets the session cookie, refresh and go to redirect
         await refreshUser();
         router.replace(redirect);
-        // If your API does NOT log the user in, use:
-        // router.replace(`/login?redirect=${encodeURIComponent(redirect)}`);
       }
     } catch (err) {
       console.error("Registration error:", err);
@@ -91,6 +133,13 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
     )}; Path=/; Max-Age=600; SameSite=Lax`;
   };
 
+  const submitDisabled =
+    loading ||
+    checkingUsername ||
+    checkingEmail ||
+    usernameAvailable === false ||
+    emailAvailable === false;
+
   return (
     <div className="max-w-md mx-auto mt-20 px-6">
       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-lg rounded-xl p-8">
@@ -100,64 +149,160 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
 
         {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
 
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-6"
-        >
-          <InputField
-            label="First Name"
-            name="firstName"
-            value={form.firstName}
-            onChange={handleChange}
-          />
-          <InputField
-            label="Last Name"
-            name="lastName"
-            value={form.lastName}
-            onChange={handleChange}
-          />
-          <InputField
-            label="Username"
-            name="username"
-            value={form.username}
-            onChange={handleChange}
-          />
-          {form.username && (
-            <p className="text-sm mt-1">
-              {checkingUsername ? (
-                <span className="text-gray-500">Checking...</span>
-              ) : usernameAvailable === null ? (
-                <span className="text-gray-500">—</span>
-              ) : usernameAvailable ? (
-                <span className="text-green-500">✓ Available</span>
-              ) : (
-                <span className="text-red-500">✕ Taken</span>
-              )}
-            </p>
-          )}
-          <InputField
-            label="Email"
-            name="email"
-            type="email"
-            value={form.email}
-            onChange={handleChange}
-          />
-          <InputField
-            label="Password"
-            name="password"
-            type="password"
-            value={form.password}
-            onChange={handleChange}
-          />
-
-          <button
-            type="submit"
-            className="w-full py-2.5 rounded-lg font-semibold shadow-md text-white bg-[var(--ms-blue)] hover:bg-[var(--ms-blue-gray)] transition"
-            disabled={loading}
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="space-y-6"
           >
-            {loading ? "Registering..." : "Sign Up"}
-          </button>
-        </form>
+            {/* First Name */}
+            <FormField
+              control={form.control}
+              name="firstName"
+              rules={{ required: "First name is required" }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>First Name</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      placeholder="Jane"
+                      autoComplete="given-name"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Last Name */}
+            <FormField
+              control={form.control}
+              name="lastName"
+              rules={{ required: "Last name is required" }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Last Name</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      placeholder="Doe"
+                      autoComplete="family-name"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Username + availability */}
+            <FormField
+              control={form.control}
+              name="username"
+              rules={{
+                required: "Username is required",
+                minLength: { value: 3, message: "At least 3 characters" },
+              }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Username</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      placeholder="janedoe"
+                      autoComplete="username"
+                    />
+                  </FormControl>
+                  <div className="mt-1 text-sm">
+                    {field.value ? (
+                      checkingUsername ? (
+                        <span className="text-gray-500">Checking…</span>
+                      ) : usernameAvailable === null ? (
+                        <span className="text-gray-500">—</span>
+                      ) : usernameAvailable ? (
+                        <span className="text-green-600">✓ Available</span>
+                      ) : (
+                        <span className="text-red-600">✕ Taken</span>
+                      )
+                    ) : null}
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Email + availability */}
+            <FormField
+              control={form.control}
+              name="email"
+              rules={{
+                required: "Email is required",
+                pattern: {
+                  value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                  message: "Enter a valid email",
+                },
+              }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      type="email"
+                      placeholder="jane@example.com"
+                      autoComplete="email"
+                    />
+                  </FormControl>
+                  <div className="mt-1 text-sm">
+                    {field.value ? (
+                      checkingEmail ? (
+                        <span className="text-gray-500">Checking…</span>
+                      ) : emailAvailable === null ? (
+                        <span className="text-gray-500">—</span>
+                      ) : emailAvailable ? (
+                        <span className="text-green-600">✓ Available</span>
+                      ) : (
+                        <span className="text-red-600">✕ Already in use</span>
+                      )
+                    ) : null}
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Password */}
+            <FormField
+              control={form.control}
+              name="password"
+              rules={{
+                required: "Password is required",
+                minLength: { value: 6, message: "At least 6 characters" },
+              }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      type="password"
+                      placeholder="••••••••"
+                      autoComplete="new-password"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <button
+              type="submit"
+              className="w-full py-2.5 rounded-lg font-semibold shadow-md text-white bg-[var(--ms-blue)] hover:bg-[var(--ms-blue-gray)] transition disabled:opacity-60"
+              disabled={submitDisabled}
+            >
+              {loading ? "Registering..." : "Sign Up"}
+            </button>
+          </form>
+        </Form>
 
         <div className="my-6 text-center space-y-3">
           <div className="text-sm text-gray-500 dark:text-gray-400">
@@ -184,33 +329,15 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
         </div>
 
         <div className="text-sm text-center mt-6 text-gray-600 dark:text-gray-400">
-          Already have an account?{" "}
+          Already have an account?
           <Link
             href={`/login?redirect=${encodeURIComponent(redirect)}`}
-            className="text-[var(--ms-blue)] hover:underline"
+            className="ml-2 ms-link"
           >
             Log in
           </Link>
         </div>
       </div>
-    </div>
-  );
-}
-
-function InputField({ label, name, value, onChange, type = "text" }) {
-  return (
-    <div>
-      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-        {label}
-      </label>
-      <input
-        type={type}
-        name={name}
-        value={value}
-        onChange={onChange}
-        required
-        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-[var(--ms-light-gray)] dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[var(--ms-blue)]"
-      />
     </div>
   );
 }
