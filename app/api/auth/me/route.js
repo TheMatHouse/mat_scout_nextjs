@@ -1,3 +1,4 @@
+// app/api/auth/me/route.js
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import { connectDB } from "@/lib/mongo";
@@ -7,11 +8,15 @@ import "@/models/matchReportModel";
 import "@/models/scoutingReportModel";
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
-    const cookieStore = cookies(); // no await
+    const cookieStore = await cookies(); // ✅ must await
     const token =
-      cookieStore.get("token")?.value || cookieStore.get("authToken")?.value;
+      cookieStore.get("token")?.value ||
+      cookieStore.get("authToken")?.value ||
+      null;
 
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -27,8 +32,9 @@ export async function GET() {
         { error: "Invalid or expired token" },
         { status: 401 }
       );
-      // clear bad token
+      // clear bad cookies (both names, just in case)
       res.cookies.set("token", "", { path: "/", maxAge: 0 });
+      res.cookies.set("authToken", "", { path: "/", maxAge: 0 });
       return res;
     }
 
@@ -42,8 +48,8 @@ export async function GET() {
 
     if (!user) {
       const res = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      // clear stale token that points to a missing user
       res.cookies.set("token", "", { path: "/", maxAge: 0 });
+      res.cookies.set("authToken", "", { path: "/", maxAge: 0 });
       return res;
     }
 
@@ -67,11 +73,9 @@ export async function GET() {
     return NextResponse.json({ user });
   } catch (err) {
     console.error("🔥 /api/auth/me error:", err?.message || err);
-    const res = NextResponse.json(
+    return NextResponse.json(
       { error: "Something went wrong" },
       { status: 500 }
     );
-    // defensive: clear token on server error only if you prefer
-    return res;
   }
 }
