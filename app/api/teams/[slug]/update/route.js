@@ -1,54 +1,101 @@
+// app/api/teams/[slug]/updates/route.js
+export const dynamic = "force-dynamic";
+
+import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
-import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
+import TeamUpdate from "@/models/teamUpdateModel";
+import { getCurrentUserFromCookies } from "@/lib/auth-server";
 
-export async function PATCH(request, context) {
+async function loadTeam(slug) {
   await connectDB();
+  const team = await Team.findOne({ teamSlug: slug })
+    .select("_id teamSlug teamName user")
+    .lean();
+  return team;
+}
 
-  const { slug } = await context.params;
-  const currentUser = await getCurrentUserFromCookies();
+function isManagerOrCoach(membership, team, meId) {
+  if (!membership && !team) return false;
+  if (String(team.user) === String(meId)) return true; // owner
+  const role = String(membership?.role || "").toLowerCase();
+  return role === "manager" || role === "coach";
+}
 
-  if (!currentUser) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-
-  const team = await Team.findOne({ teamSlug: slug });
-  if (!team) {
-    return new Response("Team not found", { status: 404 });
-  }
-
-  const member = await TeamMember.findOne({
-    teamId: team._id,
-    userId: currentUser._id,
-  });
-
-  // ✅ Only allow "manager" role to update
-  if (!member || member.role !== "manager") {
-    return new Response("Forbidden", { status: 403 });
-  }
-
+// GET /api/teams/[slug]/updates  -> list latest
+export async function GET(_req, { params }) {
   try {
-    const body = await request.json();
+    const { slug } = await params;
+    const team = await loadTeam(slug);
+    if (!team)
+      return NextResponse.json({ error: "Team not found" }, { status: 404 });
 
-    const fieldsToUpdate = {
-      info: body.info || "",
-      email: body.email || "",
-      phone: body.phone || "",
-      address: body.address || "",
-      address2: body.address2 || "",
-      city: body.city || "",
-      state: body.state || "",
-      postalCode: body.postalCode || "",
-      country: body.country || "",
-    };
+    const updates = await TeamUpdate.find({ teamId: team._id })
+      .sort({ createdAt: -1 })
+      .populate("createdBy", "firstName lastName username email")
+      .lean();
 
-    Object.assign(team, fieldsToUpdate);
-    await team.save();
+    return NextResponse.json({ updates }, { status: 200 });
+  } catch (err) {
+    console.error("GET updates failed:", err);
+    return NextResponse.json(
+      { error: "Failed to load updates" },
+      { status: 500 }
+    );
+  }
+}
 
-    return Response.json({ success: true, team });
-  } catch (error) {
-    console.error("Error updating team:", error);
-    return new Response("Internal Server Error", { status: 500 });
+// POST /api/teams/[slug]/updates  -> create new
+export async function POST(req, { params }) {
+  try {
+    const me = await getCurrentUserFromCookies();
+    if (!me)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { slug } = await params;
+    const team = await loadTeam(slug);
+    if (!team)
+      return NextResponse.json({ error: "Team not found" }, { status: 404 });
+
+    const membership = await TeamMember.findOne({
+      teamId: team._id,
+      userId: me._id,
+      familyMemberId: { $exists: false },
+    }).select("role");
+
+    if (!isManagerOrCoach(membership, team, me._id)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const title = String(body.title || "").trim();
+    const text = String(body.body || "").trim();
+    if (!title || !text) {
+      return NextResponse.json(
+        { error: "Title and message are required" },
+        { status: 400 }
+      );
+    }
+
+    const update = await TeamUpdate.create({
+      teamId: team._id,
+      title,
+      body: text,
+      createdBy: me._id,
+      authorId: me._id, // back-compat
+    });
+
+    const populated = await TeamUpdate.findById(update._id)
+      .populate("createdBy", "firstName lastName username email")
+      .lean();
+
+    return NextResponse.json({ update: populated }, { status: 201 });
+  } catch (err) {
+    console.error("POST update failed:", err);
+    return NextResponse.json(
+      { error: "Failed to create update" },
+      { status: 500 }
+    );
   }
 }

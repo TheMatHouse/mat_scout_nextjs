@@ -16,30 +16,48 @@ export default function NotificationBell() {
 
   // ✅ Fetch notifications only if user is logged in
   const fetchNotifications = async () => {
-    if (!user || loading) return; // ✅ Avoid early calls
+    if (!user || loading) return;
+
     try {
-      const res = await fetch("/api/notifications", {
+      const res = await fetch(`/api/notifications?limit=20&ts=${Date.now()}`, {
         method: "GET",
         credentials: "include",
       });
 
       if (res.status === 404) {
-        // ✅ Treat as empty list instead of error
+        // treat as empty
         setNotifications([]);
         setUnreadCount(0);
         return;
       }
 
-      if (res.ok) {
-        const data = await res.json();
-        setNotifications(Array.isArray(data) ? data : []);
-        const unread = data.filter((n) => !n.viewed).length;
-        setUnreadCount(unread);
-      } else {
-        console.warn(`Notifications fetch returned ${res.status}`);
+      const text = await res.text();
+      let payload;
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = null;
       }
+
+      // Normalize both old (array) and new (object) response shapes
+      const list = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.notifications)
+        ? payload.notifications
+        : [];
+
+      setNotifications(list);
+
+      const unread =
+        typeof payload?.unreadCount === "number"
+          ? payload.unreadCount
+          : list.filter((n) => !n.viewed).length;
+
+      setUnreadCount(unread);
     } catch (err) {
       console.error("Failed to fetch notifications:", err);
+      setNotifications([]);
+      setUnreadCount(0);
     }
   };
 

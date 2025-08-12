@@ -1,4 +1,6 @@
 // app/teams/[slug]/layout.jsx
+export const dynamic = "force-dynamic";
+
 import Image from "next/image";
 import Link from "next/link";
 import { connectDB } from "@/lib/mongo";
@@ -7,8 +9,6 @@ import TeamMember from "@/models/teamMemberModel";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import TeamProviderClient from "@/components/teams/TeamProviderClient";
 import TeamTabs from "@/components/teams/TeamTabs";
-
-export const dynamic = "force-dynamic";
 
 export default async function TeamLayout({ children, params }) {
   await connectDB();
@@ -45,35 +45,47 @@ export default async function TeamLayout({ children, params }) {
     );
   }
 
-  // Current user & membership
+  // Current user & membership (count both direct and family-member memberships)
   const currentUser = await getCurrentUserFromCookies().catch(() => null);
 
   let member = null;
   if (currentUser?._id) {
+    // Do NOT exclude familyMemberId — parents with family athletes should still be “members”
     member = await TeamMember.findOne({
       teamId: teamDoc._id,
       userId: currentUser._id,
-      familyMemberId: { $exists: false },
     })
-      .select("role")
+      .select("role familyMemberId")
       .lean();
   }
 
-  const isManager = member?.role === "manager";
-  const isCoach = member?.role === "coach";
-  const isMember = isManager || member?.role === "member";
+  const role = (member?.role || "").toLowerCase();
+  const isManager = role === "manager";
+  const isCoach = role === "coach";
+  const isMember = isManager || isCoach || role === "member";
 
   // Build tabs dynamically
+  // --- tabs ---
   const tabs = [{ label: "Info", href: `/teams/${slug}` }];
-  if (isMember) tabs.push({ label: "Members", href: `/teams/${slug}/members` });
-  if (isManager || isCoach)
+
+  // All team members (member/coach/manager) can see Updates
+  if (isMember) {
+    tabs.push({ label: "Updates", href: `/teams/${slug}/updates` });
+  }
+
+  // Only coaches/managers can see Members + Scouting
+  if (isManager || isCoach) {
+    tabs.push({ label: "Members", href: `/teams/${slug}/members` });
     tabs.push({
       label: "Scouting Reports",
       href: `/teams/${slug}/scouting-reports`,
     });
-  if (isManager)
-    tabs.push({ label: "Settings", href: `/teams/${slug}/settings` });
+  }
 
+  // Only managers can see Settings
+  if (isManager) {
+    tabs.push({ label: "Settings", href: `/teams/${slug}/settings` });
+  }
   // Serialize team for client context
   const safeTeam = {
     _id: teamDoc._id?.toString(),

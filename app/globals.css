@@ -590,3 +590,77 @@ aside a:hover {
 .ms-link.no-underline {
   text-decoration: none;
 }
+
+/* -------- Base tokens (light mode) -------- */
+.ms-switch {
+  --sw-w: 42px;
+  --sw-h: 24px;
+  --sw-pad: 2px;
+
+  position: relative;
+  display: inline-block;
+  width: var(--sw-w);
+  height: var(--sw-h);
+  border-radius: 9999px;
+  cursor: pointer;
+  appearance: none;
+  outline: none;
+  border: 1px solid transparent;
+  overflow: hidden;
+  transition: background-color 0.18s ease, border-color 0.18s ease,
+    box-shadow 0.18s ease;
+
+  /* Light mode (OFF) */
+  background-color: #e5e7eb; /* slate-200 track */
+}
+
+.ms-switch::before {
+  content: "";
+  position: absolute;
+  top: var(--sw-pad);
+  left: var(--sw-pad);
+  width: calc(var(--sw-h) - var(--sw-pad) * 2);
+  height: calc(var(--sw-h) - var(--sw-pad) * 2);
+  border-radius: 9999px;
+  background-color: #ffffff; /* light thumb */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.18s ease, background-color 0.18s ease;
+}
+
+/* Light mode (ON) */
+.ms-switch[data-state="checked"] {
+  background-color: var(--ms-blue);
+}
+.ms-switch[data-state="checked"]::before {
+  transform: translateX(calc(var(--sw-w) - var(--sw-h)));
+  background-color: #ffffff;
+}
+
+/* Focus ring */
+.ms-switch:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ms-blue) 50%, white 50%);
+}
+
+/* ---------------------- DARK MODE ---------------------- */
+/* Reverse the scheme so ON has white track + ms-blue thumb */
+.dark .ms-switch {
+  background-color: #3b4255; /* darker OFF track */
+  border-color: rgba(255, 255, 255, 0.06);
+}
+.dark .ms-switch::before {
+  background-color: #cbd5e1; /* slate-300 OFF thumb */
+}
+
+/* Dark mode (ON) = reversed */
+.dark .ms-switch[data-state="checked"] {
+  background-color: #ffffff; /* white track */
+}
+.dark .ms-switch[data-state="checked"]::before {
+  transform: translateX(calc(var(--sw-w) - var(--sw-h)));
+  background-color: var(--ms-blue); /* colored thumb */
+}
+
+/* Dark focus ring tuned for contrast */
+.dark .ms-switch:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in oklab, #ffffff 70%, var(--ms-blue) 30%);
+}

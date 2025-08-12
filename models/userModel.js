@@ -131,6 +131,10 @@ const userSchema = new mongoose.Schema(
         inApp: { type: Boolean, default: true },
         email: { type: Boolean, default: true },
       },
+      teamUpdates: {
+        email: { type: Boolean, default: true },
+        inApp: { type: Boolean, default: true },
+      },
     },
   },
   {

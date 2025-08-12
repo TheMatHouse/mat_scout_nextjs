@@ -3,18 +3,19 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useTeam } from "@/context/TeamContext";
 import { useUser } from "@/context/UserContext";
 import MemberRow from "@/components/teams/MemberRow";
 import Spinner from "@/components/shared/Spinner";
 import ModalLayout from "@/components/shared/ModalLayout";
 import InviteMemberForm from "@/components/teams/forms/InviteMemberForm";
-import InvitesTable from "@/components/teams/InvitesTable"; // ⬅️ now used
+import InvitesTable from "@/components/teams/InvitesTable";
 import { toast } from "react-toastify";
 
 export default function MembersPage() {
   const params = useParams();
+  const router = useRouter();
   const slug = params.slug;
 
   const { team } = useTeam();
@@ -29,11 +30,27 @@ export default function MembersPage() {
 
   const [inviteOpen, setInviteOpen] = useState(false);
 
-  // --- Fetch Members ---
+  // helper to safely parse json for non-JSON error bodies
+  async function parseJsonSafe(res) {
+    const txt = await res.text();
+    try {
+      return { data: JSON.parse(txt), raw: txt };
+    } catch {
+      return { data: null, raw: txt };
+    }
+  }
+
+  // --- Fetch Members (manager/coach only) ---
   const fetchMembers = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/teams/${slug}/members?ts=${Date.now()}`);
+      if (res.status === 401 || res.status === 403) {
+        toast.error("You are not authorized to view team members.");
+        // Forward away immediately to the team info page
+        router.replace(`/teams/${slug}`);
+        return;
+      }
       if (!res.ok) throw new Error("Failed to load members");
       const data = await res.json();
       setMembers(data.members || []);
@@ -43,14 +60,18 @@ export default function MembersPage() {
     } finally {
       setLoading(false);
     }
-  }, [slug]);
+  }, [slug, router]);
 
-  // --- Fetch Invites (pending invitations) ---
+  // --- Fetch Invites (manager/coach only) ---
   const fetchInvites = useCallback(async () => {
     setInvitesLoading(true);
     try {
-      // If your endpoint differs, update the path below:
       const res = await fetch(`/api/teams/${slug}/invites?ts=${Date.now()}`);
+      if (res.status === 401 || res.status === 403) {
+        // Not authorized to view invites (regular members). Just bail.
+        setInvites([]);
+        return;
+      }
       if (!res.ok) throw new Error("Failed to load invites");
       const data = await res.json();
       setInvites(Array.isArray(data.invites) ? data.invites : []);
@@ -78,6 +99,7 @@ export default function MembersPage() {
     );
   }
 
+  // Determine current user's role (from returned members list)
   const currentUserMembership = members.find((m) => m.userId === user?._id);
   const isManager = currentUserMembership?.role === "manager";
   const isCoach = currentUserMembership?.role === "coach";
@@ -96,11 +118,10 @@ export default function MembersPage() {
   // --- Invite actions ---
   const handleResendInvite = async (inviteId) => {
     try {
-      // If your resend endpoint differs, update this:
       const res = await fetch(`/api/teams/${slug}/invites/${inviteId}/resend`, {
         method: "POST",
       });
-      const data = await res.json();
+      const { data } = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.message || "Failed to resend invite");
       toast.success("Invitation resent.");
     } catch (err) {
@@ -110,15 +131,6 @@ export default function MembersPage() {
       fetchInvites();
     }
   };
-
-  async function parseJsonSafe(res) {
-    const text = await res.text();
-    try {
-      return { data: JSON.parse(text), raw: text };
-    } catch {
-      return { data: null, raw: text };
-    }
-  }
 
   const handleRevokeInvite = async (inviteId) => {
     try {
@@ -158,7 +170,7 @@ export default function MembersPage() {
         )}
       </div>
 
-      {/* Pending Invitations (InvitesTable) */}
+      {/* Pending Invitations (InvitesTable) — managers/coaches only */}
       {(isManager || isCoach) && (
         <InvitesTable
           slug={slug}
@@ -169,7 +181,7 @@ export default function MembersPage() {
         />
       )}
 
-      {/* Pending Requests (users who applied) */}
+      {/* Pending Requests */}
       <section className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-5">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           Pending Requests
