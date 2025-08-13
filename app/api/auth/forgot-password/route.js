@@ -1,11 +1,13 @@
 // app/api/auth/forgot-password/route.js
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
 import crypto from "crypto";
 
-// ⬇️ new: use centralized mailer + template
-import { Mail } from "@/lib/mailer";
+// ✅ import the default Mail object (matches `export default Mail` in lib/email/mailer.js)
+import Mail from "@/lib/email/mailer";
 import { buildPasswordResetEmail } from "@/lib/email/templates/passwordReset";
 
 export async function POST(req) {
@@ -37,10 +39,10 @@ export async function POST(req) {
     // Generate token + 30-minute expiry
     const resetToken = crypto.randomBytes(32).toString("hex");
     user.resetPasswordToken = resetToken;
-    user.resetPasswordExpires = new Date(Date.now() + 30 * 60 * 1000); // Date type in schema
+    user.resetPasswordExpires = new Date(Date.now() + 30 * 60 * 1000);
     await user.save();
 
-    // Build HTML + send (transactional -> bypasses dedupe & prefs)
+    // Build HTML + send (transactional -> bypasses prefs/dedupe in your Mail policy)
     const html = buildPasswordResetEmail({ token: resetToken });
     await Mail.sendPasswordReset(user, { html });
 

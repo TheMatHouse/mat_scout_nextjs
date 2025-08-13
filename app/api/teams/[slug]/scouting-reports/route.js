@@ -12,7 +12,7 @@ import User from "@/models/userModel";
 import { createNotification } from "@/lib/createNotification";
 
 // ⬇️ new: centralized mailer + template
-import { Mail } from "@/lib/mailer";
+import { Mail } from "@/lib/email/mailer";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
 export async function POST(req, { params }) {

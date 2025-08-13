@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "clean": "rm -rf .next dist out"
+    "clean": "rm -rf .next dist out",
+    "find:unused": "next-unused"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.2",
@@ -90,7 +91,64 @@
     "eslint": "^9.31.0",
     "eslint-config-next": "15.1.4",
     "eslint-plugin-next": "^0.0.0",
+    "next-unused": "^0.0.6",
     "postcss": "^8",
     "tailwindcss": "^3.4.1"
-  }
+  },
+  "next-unused": {
+    "debug": true,
+    "alias": {
+      "@": "."
+    },
+    "include": [
+      "app",
+      "components",
+      "lib",
+      "models",
+      "hooks",
+      "context",
+      "utils"
+    ],
+    "exclude": [
+      ".next",
+      "node_modules",
+      "public",
+      "scripts",
+      "coverage",
+      "tests"
+    ],
+    "entrypoints": [
+      "app",
+      "pages"
+    ]
+  },
+  "alias": {
+    "@": "./"
+  },
+  "include": [
+    "app",
+    "components",
+    "lib",
+    "models",
+    "hooks",
+    "context",
+    "utils"
+  ],
+  "exclude": [
+    ".next",
+    "node_modules",
+    "public",
+    "scripts",
+    "coverage",
+    "tests"
+  ],
+  "entrypoints": [
+    "app/**/page.js",
+    "app/**/page.jsx",
+    "app/**/layout.js",
+    "app/**/layout.jsx",
+    "app/**/route.js",
+    "app/**/route.jsx",
+    "pages/**/*"
+  ]
 }

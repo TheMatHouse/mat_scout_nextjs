@@ -7,7 +7,7 @@ import TeamUpdate from "@/models/teamUpdateModel";
 import Notification from "@/models/notification";
 import User from "@/models/userModel";
 import { getCurrentUser } from "@/lib/auth-server";
-import { Mail } from "@/lib/mailer";
+import { Mail } from "@/lib/email/mailer";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 import mongoose from "mongoose";
 

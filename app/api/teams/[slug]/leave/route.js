@@ -9,7 +9,7 @@ import FamilyMember from "@/models/familyMemberModel";
 import { createNotification } from "@/lib/createNotification";
 
 // ⬇️ New: centralized mailer (Resend + policy)
-import { Mail } from "@/lib/mailer";
+import { Mail } from "@/lib/email/mailer";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
 export async function POST(req, context) {

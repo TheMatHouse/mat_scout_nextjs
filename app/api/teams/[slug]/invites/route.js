@@ -6,7 +6,7 @@ import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
 import TeamInvitation from "@/models/teamInvitationModel";
 import { getCurrentUser } from "@/lib/auth-server";
-import { Mail } from "@/lib/mailer";
+import { Mail } from "@/lib/email/mailer";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
 export async function POST(req, ctx) {

@@ -6,7 +6,7 @@ import { getCurrentUser } from "@/lib/auth-server";
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
 import TeamInvitation from "@/models/teamInvitationModel";
-import { Mail } from "@/lib/mailer";
+import { Mail } from "@/lib/email/mailer";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
 export const dynamic = "force-dynamic";
