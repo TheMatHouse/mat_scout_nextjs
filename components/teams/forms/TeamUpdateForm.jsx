@@ -1,11 +1,10 @@
 // components/teams/forms/TeamUpdateForm.jsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { toast } from "react-toastify";
 
-// ✅ Client-only editor (adjust the import path if your Editor lives elsewhere)
 const Editor = dynamic(() => import("@/components/shared/Editor"), {
   ssr: false,
   loading: () => (
@@ -23,6 +22,12 @@ export default function TeamUpdateForm({
   const [body, setBody] = useState(initial?.body || "");
   const [saving, setSaving] = useState(false);
 
+  // keep state in sync if a different update is opened
+  useEffect(() => {
+    setTitle(initial?.title || "");
+    setBody(initial?.body || "");
+  }, [initial]);
+
   const parseJsonMaybe = async (res) => {
     const text = await res.text();
     try {
@@ -35,7 +40,7 @@ export default function TeamUpdateForm({
   const handleSubmit = async (e) => {
     e.preventDefault();
     const t = title.trim();
-    const b = body.trim();
+    const b = (body ?? "").trim();
     if (!t || !b) {
       toast.error("Please provide a title and message.");
       return;
@@ -100,10 +105,10 @@ export default function TeamUpdateForm({
       <div className="space-y-1">
         <div className="text-sm font-medium">Message</div>
         <Editor
-          value={body}
+          text={body ?? ""}
           onChange={setBody}
-          placeholder="Write your team update..."
-          minHeight={160}
+          name="teamUpdateBody"
+          label={null}
         />
       </div>
 

@@ -110,7 +110,6 @@ export default function TeamUpdatesPage() {
     (u?.author?._id && u.author._id === user?._id) ||
     user?.isAdmin;
 
-  console.log("UPDATES ", updates);
   const stripHtml = (html) => (html || "").replace(/<[^>]+>/g, "");
 
   return (

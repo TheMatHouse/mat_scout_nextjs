@@ -5,7 +5,6 @@ import { useEffect, useRef } from "react";
 export default function Editor({ name, onChange, text, label }) {
   const editorRef = useRef(null);
 
-  // Keep editor HTML in sync with `text` without losing caret when possible
   useEffect(() => {
     if (!editorRef.current || text === undefined) return;
     if (editorRef.current.innerHTML === text) return;
@@ -31,19 +30,13 @@ export default function Editor({ name, onChange, text, label }) {
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
-      e.preventDefault();
-
-      // Shift+Enter => soft line break
+      // Only customize Shift+Enter → soft line break
       if (e.shiftKey) {
-        document.execCommand("insertHTML", false, "<br>");
+        e.preventDefault();
+        document.execCommand("insertLineBreak"); // soft break
         handleInput();
-        return;
       }
-
-      // Enter => force a real paragraph block
-      // Empty <p> shows as a blank line due to CSS below
-      document.execCommand("insertHTML", false, "<p><br /></p>");
-      handleInput();
+      // else: let the browser handle regular Enter for proper block insertion/caret
     }
   };
 
@@ -55,7 +48,6 @@ export default function Editor({ name, onChange, text, label }) {
 
   return (
     <div className="w-full space-y-2">
-      {/* Label */}
       {label && (
         <label
           htmlFor={name}
@@ -65,7 +57,6 @@ export default function Editor({ name, onChange, text, label }) {
         </label>
       )}
 
-      {/* Toolbar */}
       <div className="flex gap-2 rounded-md border border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 p-2">
         {["Bold", "Italic", "Underline"].map((style) => (
           <button
@@ -79,7 +70,6 @@ export default function Editor({ name, onChange, text, label }) {
         ))}
       </div>
 
-      {/* Editable Area */}
       <div
         contentEditable
         ref={editorRef}
@@ -94,16 +84,21 @@ export default function Editor({ name, onChange, text, label }) {
           sm:text-sm p-3 min-h-[150px]`}
       />
 
-      {/* Paragraph spacing + show empty lines */}
       <style
         jsx
         global
       >{`
-        .editor-content p,
-        .editor-content div {
+        /* Give spacing to paragraphs only to avoid double spacing */
+        .editor-content p {
           margin: 0 0 12px;
           line-height: 1.5;
         }
+        /* Remove the div margin to prevent doubled gaps when browser uses <div> */
+        .editor-content div {
+          margin: 0;
+          line-height: 1.5;
+        }
+        /* Show empty lines nicely */
         .editor-content p:empty::before,
         .editor-content div:empty::before {
           content: "\\00a0";
