@@ -1,15 +1,23 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useUser } from "@/context/UserContext";
 import Link from "next/link";
-import { CalendarPlus, Binoculars, UserCog, Users } from "lucide-react";
+import {
+  CalendarPlus,
+  Binoculars,
+  UserCog,
+  Users,
+  CheckSquare,
+  Square,
+  ChevronRight,
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import Spinner from "@/components/shared/Spinner";
 
 export default function DashboardHome() {
   const { user, loading } = useUser();
-  console.log("user ", user);
   const [matchCount, setMatchCount] = useState(null);
   const [scoutingCount, setScoutingCount] = useState(null);
   const [teamCount, setTeamCount] = useState(null);
@@ -55,7 +63,7 @@ export default function DashboardHome() {
       }
     })();
 
-    // Teams (current user's memberships; active roles only by default)
+    // Teams (active memberships)
     (async () => {
       try {
         const res = await fetch(
@@ -90,9 +98,13 @@ export default function DashboardHome() {
     );
   }
 
+  const matchReady = matchCount !== null;
+  const scoutingReady = scoutingCount !== null;
+  const teamReady = teamCount !== null;
+
   return (
     <div className="max-w-7xl mx-auto px-6 md:px-12 py-10 space-y-12">
-      {/* Hero Section */}
+      {/* Hero */}
       <div className="bg-gradient-to-r from-ms-blue to-ms-dark-red rounded-2xl p-8 text-white shadow-lg">
         <h1 className="text-4xl font-bold mb-2">
           Welcome back, {user.firstName}!
@@ -113,17 +125,17 @@ export default function DashboardHome() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         <StatCard
           title="Match Reports"
-          value={matchCount === null ? "—" : matchCount}
+          value={matchReady ? matchCount : "—"}
           icon={<CalendarPlus className="w-6 h-6 text-ms-blue" />}
         />
         <StatCard
           title="Scouting Reports"
-          value={scoutingCount === null ? "—" : scoutingCount}
+          value={scoutingReady ? scoutingCount : "—"}
           icon={<Binoculars className="w-6 h-6 text-ms-blue" />}
         />
         <StatCard
           title="Teams"
-          value={teamCount === null ? "—" : teamCount}
+          value={teamReady ? teamCount : "—"}
           icon={<Users className="w-6 h-6 text-ms-blue" />}
         />
       </div>
@@ -136,32 +148,27 @@ export default function DashboardHome() {
         <p className="text-gray-700 dark:text-gray-200 mb-4">
           Here are a few things you can do to get started:
         </p>
-        <ul className="list-disc list-inside text-gray-800 dark:text-gray-200 space-y-1">
-          <li>
-            <Link
-              href="/dashboard/matches"
-              className="text-ms-blue dark:text-ms-light-gray hover:text-ms-dark-red"
-            >
-              Log your next match
-            </Link>
-          </li>
-          <li>
-            <Link
-              href="/dashboard/scouting"
-              className="text-ms-blue dark:text-ms-light-gray hover:text-ms-dark-red"
-            >
-              Create a scouting report
-            </Link>
-          </li>
-          <li>
-            <Link
-              href="/teams"
-              className="text-ms-blue dark:text-ms-light-gray hover:text-ms-dark-red"
-            >
-              Join or create a team
-            </Link>
-          </li>
-        </ul>
+
+        <div className="space-y-2">
+          <NextStepItem
+            href="/dashboard/matches"
+            label="Log your next match"
+            checked={matchReady && Number(matchCount) > 0}
+            loading={!matchReady}
+          />
+          <NextStepItem
+            href="/dashboard/scouting"
+            label="Create a scouting report"
+            checked={scoutingReady && Number(scoutingCount) > 0}
+            loading={!scoutingReady}
+          />
+          <NextStepItem
+            href="/teams"
+            label="Join or create a team"
+            checked={teamReady && Number(teamCount) > 0}
+            loading={!teamReady}
+          />
+        </div>
       </div>
 
       {/* Navigation Cards */}
@@ -249,6 +256,77 @@ function DashboardCard({ href, icon, title, description }) {
       <p className="text-gray-700 dark:text-gray-200 text-sm leading-relaxed">
         {description}
       </p>
+    </Link>
+  );
+}
+
+/* ---------- Checklist row with animated check ---------- */
+function NextStepItem({ href, label, checked, loading }) {
+  // Track previous checked state to know if it just completed
+  const prevRef = useRef(checked);
+  useEffect(() => {
+    prevRef.current = checked;
+  }, [checked]);
+  const justCompleted = !prevRef.current && checked && !loading;
+
+  return (
+    <Link
+      href={href}
+      className={`group flex items-center gap-3 p-3 rounded-lg transition ${
+        loading ? "opacity-70" : "hover:bg-gray-50 dark:hover:bg-gray-800"
+      }`}
+      aria-label={`${label}${checked ? " (completed)" : ""}`}
+    >
+      {/* Icon */}
+      <AnimatePresence
+        mode="popLayout"
+        initial={false}
+      >
+        {checked ? (
+          <motion.span
+            key="checked"
+            className="shrink-0 text-green-600"
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.8, opacity: 0 }}
+            transition={{ duration: justCompleted ? 0.18 : 0.1 }}
+            aria-hidden="true"
+          >
+            <CheckSquare className="w-5 h-5" />
+          </motion.span>
+        ) : (
+          <motion.span
+            key="unchecked"
+            className="shrink-0 text-gray-400"
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ duration: 0.1 }}
+            aria-hidden="true"
+          >
+            <Square className="w-5 h-5" />
+          </motion.span>
+        )}
+      </AnimatePresence>
+
+      {/* Label */}
+      <span className="text-ms-blue dark:text-ms-light-gray group-hover:text-ms-dark-red">
+        {label}
+      </span>
+
+      {/* Status + chevron */}
+      <span
+        className={`ml-auto text-xs ${
+          checked ? "text-green-600 dark:text-green-400" : "text-gray-500"
+        }`}
+        aria-live="polite"
+      >
+        {loading ? "Loading…" : checked ? "Completed" : "Get started"}
+      </span>
+      <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-ms-dark-red" />
+      <span className="sr-only">
+        {checked ? "(completed)" : "(not completed yet)"}
+      </span>
     </Link>
   );
 }

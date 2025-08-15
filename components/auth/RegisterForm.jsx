@@ -7,6 +7,7 @@ import Link from "next/link";
 
 import { apiFetch } from "@/lib/apiClient";
 import { useUser } from "@/context/UserContext";
+import { sanitizeUsername, isUsernameFormatValid } from "@/lib/identifiers";
 
 import {
   Form,
@@ -47,12 +48,21 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
   const username = form.watch("username");
   const email = form.watch("email");
 
-  // Debounced username check
+  const usernameInvalid = !!username && !isUsernameFormatValid(username);
+
+  // Debounced username check (only when valid)
   useEffect(() => {
-    let t;
-    const check = async () => {
-      const u = (username || "").trim();
-      if (!u) return setUsernameAvailable(null);
+    const u = (username || "").trim();
+    if (!u) {
+      setUsernameAvailable(null);
+      return;
+    }
+    if (!isUsernameFormatValid(u)) {
+      setUsernameAvailable(null);
+      return;
+    }
+
+    const t = setTimeout(async () => {
       setCheckingUsername(true);
       try {
         const res = await apiFetch(
@@ -64,17 +74,19 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
       } finally {
         setCheckingUsername(false);
       }
-    };
-    t = setTimeout(check, 500);
+    }, 500);
+
     return () => clearTimeout(t);
   }, [username]);
 
   // Debounced email check
   useEffect(() => {
-    let t;
-    const check = async () => {
-      const e = (email || "").trim();
-      if (!e) return setEmailAvailable(null);
+    const e = (email || "").trim();
+    if (!e) {
+      setEmailAvailable(null);
+      return;
+    }
+    const t = setTimeout(async () => {
       setCheckingEmail(true);
       try {
         const res = await apiFetch(
@@ -86,15 +98,19 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
       } finally {
         setCheckingEmail(false);
       }
-    };
-    t = setTimeout(check, 500);
+    }, 500);
+
     return () => clearTimeout(t);
   }, [email]);
 
   const onSubmit = async (values) => {
     setError("");
 
-    // prevent submit if we *know* one is taken
+    // prevent submit if we *know* one is taken or invalid
+    if (usernameInvalid) {
+      setError("Username must be 3–30 chars (a–z, 0–9, - or _), not reserved.");
+      return;
+    }
     if (usernameAvailable === false) {
       setError("That username is already taken. Please choose another.");
       return;
@@ -104,11 +120,13 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
       return;
     }
 
+    const cleanUsername = sanitizeUsername(values.username);
+
     setLoading(true);
     try {
       const res = await apiFetch("/api/auth/register", {
         method: "POST",
-        body: JSON.stringify(values),
+        body: JSON.stringify({ ...values, username: cleanUsername }),
         headers: { "Content-Type": "application/json" },
       });
 
@@ -137,8 +155,15 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
     loading ||
     checkingUsername ||
     checkingEmail ||
+    usernameInvalid ||
     usernameAvailable === false ||
     emailAvailable === false;
+
+  // Prevent invalid keystrokes in username (still allows backspace/arrows/delete)
+  const preventBadUsernameInput = (e) => {
+    if (!e.data) return;
+    if (!/^[a-zA-Z0-9_-]$/.test(e.data)) e.preventDefault();
+  };
 
   return (
     <div className="max-w-md mx-auto mt-20 px-6">
@@ -194,13 +219,17 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
               )}
             />
 
-            {/* Username + availability */}
+            {/* Username + availability (URL-safe only) */}
             <FormField
               control={form.control}
               name="username"
               rules={{
                 required: "Username is required",
                 minLength: { value: 3, message: "At least 3 characters" },
+                pattern: {
+                  value: /^[a-z0-9](?:[a-z0-9_-]{1,28}[a-z0-9])?$/,
+                  message: "Use a–z, 0–9, hyphen or underscore",
+                },
               }}
               render={({ field }) => (
                 <FormItem>
@@ -210,11 +239,19 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
                       {...field}
                       placeholder="janedoe"
                       autoComplete="username"
+                      onBeforeInput={preventBadUsernameInput}
+                      onChange={(e) =>
+                        field.onChange(sanitizeUsername(e.target.value))
+                      }
                     />
                   </FormControl>
                   <div className="mt-1 text-sm">
                     {field.value ? (
-                      checkingUsername ? (
+                      usernameInvalid ? (
+                        <span className="text-red-600">
+                          Use 3–30 chars: a–z, 0–9, - or _
+                        </span>
+                      ) : checkingUsername ? (
                         <span className="text-gray-500">Checking…</span>
                       ) : usernameAvailable === null ? (
                         <span className="text-gray-500">—</span>

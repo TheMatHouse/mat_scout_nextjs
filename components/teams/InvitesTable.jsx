@@ -2,6 +2,15 @@
 import Spinner from "@/components/shared/Spinner";
 import { RefreshCw, XCircle, Shield } from "lucide-react";
 
+/** Convert any HTML to plain text (decodes entities, removes tags). */
+function htmlToText(html = "") {
+  if (!html) return "";
+  // Client component → we can use DOMParser or a throwaway div
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  return (div.textContent || div.innerText || "").trim();
+}
+
 export default function InvitesTable({
   slug,
   invites,
@@ -28,6 +37,10 @@ export default function InvitesTable({
           {invites.map((inv) => {
             const targetEmail =
               (inv.isMinor ? inv.parentEmail : inv.email) || "";
+            const preview = inv.message
+              ? htmlToText(inv.message).replace(/\s+/g, " ")
+              : "";
+
             return (
               <div
                 key={inv._id}
@@ -51,12 +64,14 @@ export default function InvitesTable({
                   <div className="text-xs text-gray-500">
                     Expires {new Date(inv.expiresAt).toLocaleDateString()}
                   </div>
-                  {inv.message && (
+
+                  {preview && (
                     <div className="text-xs text-gray-500 mt-1 italic line-clamp-2">
-                      “{inv.message}”
+                      “{preview}”
                     </div>
                   )}
                 </div>
+
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => onResend(inv._id)}
