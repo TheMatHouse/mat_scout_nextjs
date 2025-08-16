@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import moment from "moment";
@@ -25,17 +25,37 @@ import FormSelect from "@/components/shared/FormSelect";
 const MatchReportForm = ({
   athlete,
   match,
-  styles,
+  styles, // <-- may contain family member styles
   techniques,
   type,
   setOpen,
   onSuccess,
-  userType,
+  userType, // "user" | "family"
 }) => {
   const router = useRouter();
   const { refreshUser } = useUser();
 
-  // Form State
+  // ---------- Helpers: normalize styles from various shapes ----------
+  const normalizedStyles = useMemo(() => {
+    const raw =
+      (Array.isArray(styles) && styles.length ? styles : []) ||
+      athlete?.userStyles ||
+      athlete?.styles ||
+      [];
+
+    // Accept ["Judo", "BJJ"] OR [{styleName:"Judo"}, ...]
+    return raw
+      .map((s) =>
+        typeof s === "string"
+          ? { styleName: s }
+          : s && typeof s === "object"
+          ? { styleName: s.styleName || s.name || s.title || "" }
+          : null
+      )
+      .filter((s) => s && s.styleName);
+  }, [styles, athlete?.userStyles, athlete?.styles]);
+
+  // ---------- Form State ----------
   const [matchType, setMatchType] = useState(match?.matchType || "");
   const [eventName, setEventName] = useState(match?.eventName || "");
   const [matchDate, setMatchDate] = useState(
@@ -65,24 +85,24 @@ const MatchReportForm = ({
   const [isPublic, setIsPublic] = useState(match?.isPublic || false);
   const [loadedTechniques, setLoadedTechniques] = useState([]);
 
+  // If no matchType yet, preselect first available style (works for family too)
+  useEffect(() => {
+    if (!matchType && normalizedStyles.length > 0) {
+      setMatchType(normalizedStyles[0].styleName);
+    }
+  }, [normalizedStyles, matchType]);
+
+  // Techniques
   useEffect(() => {
     const fetchTechniques = async () => {
       try {
         const res = await fetch("/api/techniques");
         const data = await res.json();
-
-        if (Array.isArray(data)) {
-          setLoadedTechniques(data);
-        } else {
-          console.warn("Expected array but got:", data);
-          setLoadedTechniques([]);
-        }
-      } catch (error) {
-        console.error("Error fetching techniques:", error);
+        setLoadedTechniques(Array.isArray(data) ? data : []);
+      } catch {
         setLoadedTechniques([]);
       }
     };
-
     fetchTechniques();
   }, []);
 
@@ -117,9 +137,15 @@ const MatchReportForm = ({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!matchType) {
+      toast.error("Please choose a match type (style) first.");
+      return;
+    }
+
     const formData = new FormData(e.currentTarget);
 
-    const rawVideoInput = formData.get("videoURL").trim();
+    const rawVideoInput = formData.get("videoURL")?.trim() || "";
     let embedURL = "";
     if (rawVideoInput.includes("youtu.be")) {
       const id = rawVideoInput.split("youtu.be/")[1]?.split("?")[0];
@@ -153,11 +179,11 @@ const MatchReportForm = ({
       isPublic,
     };
 
-    const userId = athlete?.userId || athlete._id;
+    const userId = athlete?.userId || athlete?._id;
     const memberId = athlete?._id;
 
     if (userType === "family") {
-      payload.familyMemberId = memberId;
+      payload.familyMemberId = memberId; // backend can associate to family member
     } else {
       payload.athlete = athlete._id;
       payload.createdBy = athlete._id;
@@ -176,7 +202,6 @@ const MatchReportForm = ({
         : `${base}/matchReports`;
 
     try {
-      console.log("Payload being sent:", payload);
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -186,12 +211,12 @@ const MatchReportForm = ({
       const data = await res.json();
 
       if (res.ok) {
-        toast.success(data.message);
-        if (onSuccess) onSuccess();
+        toast.success(data.message || "Match report saved.");
+        onSuccess?.();
         refreshUser();
-        setOpen(false);
+        setOpen?.(false);
       } else {
-        toast.error(data.message);
+        toast.error(data.message || "Failed to save match report.");
       }
     } catch (err) {
       console.error(err);
@@ -204,22 +229,36 @@ const MatchReportForm = ({
     videoURL.includes("youtube.com/watch?v=") ||
     videoURL.includes("youtube.com/embed/");
 
-  const userStyles = athlete?.userStyles || [];
-
+  // ---------- Render ----------
   return (
     <form
       onSubmit={handleSubmit}
       className="space-y-6"
     >
+      {/* If there are no styles for this athlete/family member */}
+      {normalizedStyles.length === 0 && (
+        <div className="rounded-lg border p-4 bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+          <p className="font-semibold">No styles found for this athlete.</p>
+          <p className="text-sm">
+            Please add a style to this profile before creating a match report.
+          </p>
+        </div>
+      )}
+
       {/* Match Type */}
       <FormSelect
         label="Match Type"
-        placeholder="Select match type..."
+        placeholder={
+          normalizedStyles.length
+            ? "Select match type..."
+            : "No styles available"
+        }
         value={matchType}
         onChange={setMatchType}
-        options={userStyles.map((style) => ({
-          value: style.styleName,
-          label: style.styleName,
+        disabled={normalizedStyles.length === 0}
+        options={normalizedStyles.map((s) => ({
+          value: s.styleName,
+          label: s.styleName,
         }))}
       />
 
@@ -453,6 +492,7 @@ const MatchReportForm = ({
         <Button
           type="submit"
           className="btn btn-primary"
+          disabled={normalizedStyles.length === 0}
         >
           {match ? "Update" : "Submit"} Report
         </Button>

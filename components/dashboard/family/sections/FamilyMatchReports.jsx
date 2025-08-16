@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import moment from "moment";
 import { toast } from "react-toastify";
@@ -10,6 +10,7 @@ import PreviewReportModal from "@/components/dashboard/PreviewReportModal";
 import { Button } from "@/components/ui/button";
 import { ArrowUpDown, Eye, Edit, Trash } from "lucide-react";
 import ModalLayout from "@/components/shared/ModalLayout";
+import { normalizeStyles } from "@/lib/normalizeStyles";
 
 const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
   const router = useRouter();
@@ -18,20 +19,32 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState(null);
 
+  // ✅ Normalize styles for the *family member* from either source
+  const stylesForMember = useMemo(() => {
+    const raw = member?.styles?.length
+      ? member.styles
+      : member?.userStyles || [];
+    return normalizeStyles(raw || []);
+  }, [member?.styles, member?.userStyles]);
+
+  const hasStyles = stylesForMember.length > 0;
+
   useEffect(() => {
     if (!member?._id || !member?.userId) return;
     fetchMatches();
-  }, [member]);
+  }, [member?._id, member?.userId]);
 
   const fetchMatches = async () => {
     try {
       const res = await fetch(
-        `/api/dashboard/${member.userId}/family/${member._id}/matchReports`
+        `/api/dashboard/${member.userId}/family/${
+          member._id
+        }/matchReports?ts=${Date.now()}`
       );
       if (!res.ok) throw new Error("Failed to fetch match reports");
 
       const data = await res.json();
-      setMatchReports(data);
+      setMatchReports(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Fetch error:", err);
       toast.error("Could not load match reports.");
@@ -47,17 +60,15 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
           `/api/dashboard/${member.userId}/family/${member._id}/matchReports/${match._id}`,
           {
             method: "DELETE",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
           }
         );
         const data = await res.json();
         if (res.ok) {
-          toast.success(data.message);
+          toast.success(data.message || "Deleted.");
           fetchMatches(); // refresh after delete
         } else {
-          toast.error(data.message);
+          toast.error(data.message || "Failed to delete match report.");
         }
       } catch (err) {
         console.error(err);
@@ -113,9 +124,48 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
       meta: { className: "hidden sm:table-cell" },
     },
     { accessorKey: "result", header: "Result" },
-  ];
 
-  const hasStyles = member?.styles && member.styles.length > 0;
+    // ✅ Actions column (same controls as the user dashboard)
+    {
+      id: "actions",
+      header: "Actions",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const match = row.original;
+        return (
+          <div className="flex justify-center gap-3">
+            <button
+              onClick={() => {
+                setSelectedMatch(match);
+                setPreviewOpen(true);
+              }}
+              title="View Match Details"
+              className="icon-btn"
+            >
+              <Eye className="w-5 h-5 text-blue-500" />
+            </button>
+            <button
+              onClick={() => {
+                setSelectedMatch(match);
+                setOpen(true);
+              }}
+              title="Edit Match"
+              className="icon-btn"
+            >
+              <Edit className="w-5 h-5 text-green-500" />
+            </button>
+            <button
+              onClick={() => handleDeleteMatch(match)}
+              title="Delete Match"
+              className="icon-btn"
+            >
+              <Trash className="w-5 h-5 text-red-500" />
+            </button>
+          </div>
+        );
+      },
+    },
+  ];
 
   return (
     <div>
@@ -148,6 +198,7 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
             setOpen={setOpen}
             onSuccess={fetchMatches}
             userType="family"
+            styles={stylesForMember} // ✅ important
           />
         ) : (
           <div className="p-6 text-center">
@@ -158,9 +209,7 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
             <Button
               onClick={() => {
                 setOpen(false);
-                if (typeof onSwitchToStyles === "function") {
-                  onSwitchToStyles();
-                }
+                if (typeof onSwitchToStyles === "function") onSwitchToStyles();
               }}
               className="bg-ms-blue-gray hover:bg-ms-blue text-white"
             >

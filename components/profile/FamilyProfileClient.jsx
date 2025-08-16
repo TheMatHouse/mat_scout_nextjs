@@ -129,13 +129,6 @@ export default function FamilyProfileClient({ username, initialData }) {
             </ul>
           </div>
         )}
-
-        <Link
-          href={`/family/${member.username}/scouting-reports`}
-          className="block mt-6 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-        >
-          View Match Reports
-        </Link>
       </div>
 
       {/* Right Content */}

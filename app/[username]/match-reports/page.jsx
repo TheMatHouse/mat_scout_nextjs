@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { Eye } from "lucide-react";
 import { format } from "date-fns";
 import PreviewReportModal from "@/components/dashboard/PreviewReportModal";
+import BackToProfile from "@/components/profile/BackToProfile";
 
 export default function UserMatchReportsPage({ params }) {
   const { username } = use(params);
@@ -119,6 +120,10 @@ export default function UserMatchReportsPage({ params }) {
   return (
     <>
       <div className="p-4 md:p-6">
+        <BackToProfile
+          username={username}
+          className="mb-4"
+        />
         <h1 className="text-2xl font-bold mb-4 text-white">Match Reports</h1>
 
         <div className="mb-4 flex flex-wrap gap-4 items-center text-white">

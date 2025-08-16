@@ -1,14 +1,16 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
+import moment from "moment";
 import { ReportDataTable } from "@/components/shared/report-data-table";
 import ScoutingReportForm from "@/components/dashboard/forms/ScoutingReportForm";
 import PreviewReportModal from "@/components/dashboard/PreviewReportModal";
 import { Button } from "@/components/ui/button";
 import { ArrowUpDown, Eye, Edit, Trash } from "lucide-react";
 import ModalLayout from "@/components/shared/ModalLayout";
+import { normalizeStyles } from "@/lib/normalizeStyles";
 
 const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
   const router = useRouter();
@@ -17,19 +19,31 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
 
+  // ✅ Normalize styles for this family member
+  const stylesForMember = useMemo(() => {
+    const raw = member?.styles?.length
+      ? member.styles
+      : member?.userStyles || [];
+    return normalizeStyles(raw || []);
+  }, [member?.styles, member?.userStyles]);
+
+  const hasStyles = stylesForMember.length > 0;
+
   useEffect(() => {
-    if (!member?.userId) return;
+    if (!member?._id || !member?.userId) return;
     fetchReports();
-  }, [member]);
+  }, [member?._id, member?.userId]);
 
   const fetchReports = async () => {
     try {
       const res = await fetch(
-        `/api/dashboard/${member.userId}/family/${member._id}/scoutingReports`
+        `/api/dashboard/${member.userId}/family/${
+          member._id
+        }/scoutingReports?ts=${Date.now()}`
       );
       if (!res.ok) throw new Error("Failed to fetch scouting reports");
       const data = await res.json();
-      setScoutingReports(data);
+      setScoutingReports(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
       toast.error("Could not load scouting reports.");
@@ -38,20 +52,16 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
 
   const handleDeleteReport = async (report) => {
     if (
-      window.confirm(`This report will be permanently deleted! Are you sure?`)
+      window.confirm("This report will be permanently deleted! Are you sure?")
     ) {
       try {
-        const response = await fetch(
+        const res = await fetch(
           `/api/dashboard/${member.userId}/family/${member._id}/scoutingReports/${report._id}`,
-          {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-          }
+          { method: "DELETE", headers: { "Content-Type": "application/json" } }
         );
-        const data = await response.json();
-
-        if (response.ok) {
-          toast.success(data.message);
+        const data = await res.json();
+        if (res.ok) {
+          toast.success(data.message || "Deleted.");
           setScoutingReports((prev) =>
             prev.filter((r) => r._id !== report._id)
           );
@@ -68,7 +78,17 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
   };
 
   const columns = [
-    { accessorKey: "matchType", header: "Type" },
+    {
+      accessorKey: "matchType",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Type <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
     { accessorKey: "athleteFirstName", header: "First Name" },
     { accessorKey: "athleteLastName", header: "Last Name" },
     { accessorKey: "athleteNationalRank", header: "Nat. Rank" },
@@ -89,9 +109,48 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
       header: "Weight Class",
       meta: { className: "hidden md:table-cell" },
     },
-  ];
 
-  const hasStyles = member?.styles && member.styles.length > 0;
+    // ✅ Actions column like the matches table
+    {
+      id: "actions",
+      header: "Actions",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const report = row.original;
+        return (
+          <div className="flex justify-center gap-3">
+            <button
+              onClick={() => {
+                setSelectedReport(report);
+                setPreviewOpen(true);
+              }}
+              title="View Scouting Details"
+              className="icon-btn"
+            >
+              <Eye className="w-5 h-5 text-blue-500" />
+            </button>
+            <button
+              onClick={() => {
+                setSelectedReport(report);
+                setOpen(true);
+              }}
+              title="Edit Scouting Report"
+              className="icon-btn"
+            >
+              <Edit className="w-5 h-5 text-green-500" />
+            </button>
+            <button
+              onClick={() => handleDeleteReport(report)}
+              title="Delete Scouting Report"
+              className="icon-btn"
+            >
+              <Trash className="w-5 h-5 text-red-500" />
+            </button>
+          </div>
+        );
+      },
+    },
+  ];
 
   return (
     <div>
@@ -125,6 +184,8 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
             setOpen={setOpen}
             onSuccess={fetchReports}
             userType="family"
+            // ✅ Pass styles so the style dropdown is populated
+            styles={stylesForMember}
           />
         ) : (
           <div className="p-6 text-center">
@@ -135,9 +196,7 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
             <Button
               onClick={() => {
                 setOpen(false);
-                if (typeof onSwitchToStyles === "function") {
-                  onSwitchToStyles();
-                }
+                if (typeof onSwitchToStyles === "function") onSwitchToStyles();
               }}
               className="bg-ms-blue-gray hover:bg-ms-blue text-white"
             >

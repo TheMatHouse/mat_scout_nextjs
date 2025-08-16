@@ -128,19 +128,21 @@ export default function FamilyMemberSettings({ member }) {
     <div>
       {/* ✅ Show Public Profile link if this is the parent */}
       {currentUser && member && member.userId === currentUser._id && (
-        <div className="bg-[var(--color-card)] border border-border rounded-lg p-4 max-w-md shadow-md">
-          <h3 className="text-base font-semibold text-gray-100 mb-2">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 max-w-md shadow-md">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">
             Your Public Profile
           </h3>
+
           <div className="flex items-center justify-between gap-3">
             <Link
               href={`/family/${member.username}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-400 hover:underline text-sm break-all"
+              className="text-blue-600 dark:text-blue-400 hover:underline text-sm break-all"
             >
               {`https://matscout.com/family/${member.username}`}
             </Link>
+
             <div className="flex items-center gap-3">
               {/* ✅ Copy Button */}
               <button
@@ -150,10 +152,11 @@ export default function FamilyMemberSettings({ member }) {
                   );
                   toast.success("Profile link copied!");
                 }}
-                className="p-2 rounded-md hover:bg-gray-700 transition"
+                className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition"
                 title="Copy Link"
+                aria-label="Copy profile link"
               >
-                <Copy className="w-4 h-4 text-gray-300" />
+                <Copy className="w-4 h-4 text-gray-700 dark:text-gray-300" />
               </button>
 
               {/* ✅ Share Button */}
@@ -168,10 +171,11 @@ export default function FamilyMemberSettings({ member }) {
                     toast.info("Sharing not supported on this device");
                   }
                 }}
-                className="p-2 rounded-md hover:bg-gray-700 transition"
+                className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition"
                 title="Share"
+                aria-label="Share profile link"
               >
-                <Share className="w-4 h-4 text-gray-300" />
+                <Share className="w-4 h-4 text-gray-700 dark:text-gray-300" />
               </button>
             </div>
           </div>

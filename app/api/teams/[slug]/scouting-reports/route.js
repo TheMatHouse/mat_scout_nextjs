@@ -89,7 +89,7 @@ export async function POST(req, { params }) {
               userId: entry.athleteId,
               type: "Scouting Report",
               body: `A new scouting report was added for you in ${team.teamName}`,
-              link: `/teams/${slug}?tab=scouting-reports`,
+              link: `/teams/${slug}/scouting-reports`,
             });
 
             const recipient = await User.findById(entry.athleteId);
@@ -104,7 +104,7 @@ export async function POST(req, { params }) {
                 <p>
                   <a href="https://matscout.com/teams/${encodeURIComponent(
                     slug
-                  )}?tab=scouting-reports"
+                  )}/scouting-reports"
                     style="display:inline-block;background-color:#1a73e8;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:bold;">
                     View Scouting Reports
                   </a>
@@ -135,7 +135,7 @@ export async function POST(req, { params }) {
                 userId: familyMember.userId,
                 type: "Scouting Report",
                 body: `A new scouting report was added for ${familyMember.firstName} ${familyMember.lastName} in ${team.teamName}`,
-                link: `/teams/${slug}?tab=scouting-reports`,
+                link: `/teams/${slug}/scouting-reports`,
               });
 
               const parentUser = await User.findById(familyMember.userId);
@@ -152,7 +152,7 @@ export async function POST(req, { params }) {
                   <p>
                     <a href="https://matscout.com/teams/${encodeURIComponent(
                       slug
-                    )}?tab=scouting-reports"
+                    )}/scouting-reports"
                       style="display:inline-block;background-color:#1a73e8;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:bold;">
                       View Scouting Reports
                     </a>

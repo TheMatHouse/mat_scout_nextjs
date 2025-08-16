@@ -27,14 +27,18 @@ const StyleCard = ({ style, styleResults = {}, username, isFamily }) => {
       : `/${username}/match-reports?style=${styleSlug}`;
 
   return (
-    <div className="bg-[#0b0f1a] text-white dark:text-white rounded-2xl shadow-md overflow-hidden border border-border relative mb-6">
+    <div
+      className="rounded-2xl shadow-md overflow-hidden border relative mb-6
+                    bg-white text-gray-900 border-gray-200
+                    dark:bg-[#0b0f1a] dark:text-white dark:border-border"
+    >
       {/* Gradient top border */}
       <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
 
       {/* Title */}
       <div className="text-center px-6 pt-5">
         <h2 className="text-3xl font-bold">{styleName}</h2>
-        <hr className="my-3 border-white dark:border-white/40 w-24 mx-auto" />
+        <hr className="my-3 w-24 mx-auto border-gray-300 dark:border-white/40" />
       </div>
 
       {/* Main Content */}
@@ -75,8 +79,12 @@ const StyleCard = ({ style, styleResults = {}, username, isFamily }) => {
           )}
           <p>
             <span className="font-semibold">Record:</span>{" "}
-            <span className="text-green-500 font-bold mr-2">{wins} W</span>
-            <span className="text-red-500 font-bold mr-2">{losses} L</span>
+            <span className="text-green-600 dark:text-green-500 font-bold mr-2">
+              {wins} W
+            </span>
+            <span className="text-red-600 dark:text-red-500 font-bold mr-2">
+              {losses} L
+            </span>
             <span className="text-muted-foreground text-sm">
               ({total} {total === 1 ? "match" : "matches"})
             </span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import {
   Select,
@@ -14,18 +14,51 @@ import { toast } from "react-toastify";
 export default function MemberRow({ member, slug, isManager, onRoleChange }) {
   const [role, setRole] = useState(member.role);
 
-  // Use avatarUrl returned by API
-  const displayAvatar = member.avatarUrl;
+  // Derive safe fields (support a few shapes your API might return)
+  const username = useMemo(() => {
+    return (
+      member?.username ||
+      member?.user?.username ||
+      member?.family?.username ||
+      null
+    );
+  }, [member]);
+
+  const isFamily = useMemo(() => {
+    return (
+      member?.isFamilyMember === true ||
+      member?.type === "family" ||
+      !!member?.family
+    );
+  }, [member]);
+
+  const displayName = useMemo(() => {
+    return (
+      member?.name ||
+      [member?.firstName, member?.lastName].filter(Boolean).join(" ") ||
+      member?.user?.name ||
+      username ||
+      "Member"
+    );
+  }, [member, username]);
+
+  // Avatar (optimize Cloudinary, tolerate missing)
+  const displayAvatar =
+    member?.avatarUrl ||
+    member?.user?.avatarUrl ||
+    member?.family?.avatarUrl ||
+    "";
   const avatarSrc =
     displayAvatar && displayAvatar.startsWith("https://res.cloudinary.com/")
       ? displayAvatar.replace("/upload/", "/upload/f_auto/")
       : displayAvatar;
 
-  // ✅ Determine profile link
-  const profileLink =
-    member.isFamilyMember === true
-      ? `/family/${member.username}`
-      : `/${member.username}`;
+  // Profile href (only if we have a username)
+  const profileHref = username
+    ? isFamily
+      ? `/family/${username}`
+      : `/${username}`
+    : null;
 
   const handleChange = async (newRole) => {
     try {
@@ -38,37 +71,50 @@ export default function MemberRow({ member, slug, isManager, onRoleChange }) {
 
       setRole(newRole);
       toast.success("Membership updated");
-      onRoleChange();
+      onRoleChange && onRoleChange();
     } catch (err) {
       console.error(err);
       toast.error("Could not update role");
     }
   };
 
+  // The content we want clickable (avatar + name)
+  const Identity = (
+    <div className="flex items-center gap-3">
+      {avatarSrc ? (
+        <img
+          src={avatarSrc}
+          alt={displayName}
+          width={40}
+          height={40}
+          className="rounded-full object-cover"
+        />
+      ) : (
+        <div className="w-10 h-10 bg-gray-200 dark:bg-gray-600 rounded-full" />
+      )}
+      <span className="font-medium text-gray-900 dark:text-gray-100">
+        {displayName}
+      </span>
+    </div>
+  );
+
   return (
     <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 shadow rounded-lg">
-      {/* ✅ Avatar + Name as clickable link */}
-      <Link
-        href={profileLink}
-        className="flex items-center gap-3 hover:underline"
-      >
-        {avatarSrc ? (
-          <img
-            src={avatarSrc}
-            alt={member.name}
-            width={40}
-            height={40}
-            className="rounded-full object-cover"
-          />
-        ) : (
-          <div className="w-10 h-10 bg-gray-200 dark:bg-gray-600 rounded-full" />
-        )}
-        <span className="font-medium text-gray-900 dark:text-gray-100">
-          {member.name}
-        </span>
-      </Link>
+      {/* If we have a username, link to profile. Otherwise, plain content. */}
+      {profileHref ? (
+        <Link
+          href={profileHref}
+          className="hover:underline"
+          aria-label={`View ${displayName}'s profile`}
+          prefetch={false}
+        >
+          {Identity}
+        </Link>
+      ) : (
+        Identity
+      )}
 
-      {/* ✅ Role Dropdown */}
+      {/* Role control (managers only) */}
       {isManager ? (
         <Select
           value={role}

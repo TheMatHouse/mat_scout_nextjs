@@ -146,7 +146,7 @@ export async function PATCH(req, { params }) {
               userId: entry.athleteId,
               type: "Scouting Report",
               body: `A scouting report was shared with you in ${team.teamName}`,
-              link: `/teams/${team.teamSlug}?tab=scouting-reports`,
+              link: `/teams/${team.teamSlug}/scouting-reports`,
             });
 
             // Email (respects prefs + 24h dedupe)
@@ -162,7 +162,7 @@ export async function PATCH(req, { params }) {
                 <p>
                   <a href="https://matscout.com/teams/${encodeURIComponent(
                     team.teamSlug
-                  )}?tab=scouting-reports"
+                  )}/scouting-reports"
                     style="display:inline-block;background-color:#1a73e8;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;border-radius:4px;font-weight:bold;">
                     View Scouting Reports
                   </a>
@@ -192,7 +192,7 @@ export async function PATCH(req, { params }) {
                 userId: familyMember.userId,
                 type: "Scouting Report",
                 body: `A scouting report was shared for ${familyMember.firstName} ${familyMember.lastName} in ${team.teamName}`,
-                link: `/teams/${team.teamSlug}?tab=scouting-reports`,
+                link: `/teams/${team.teamSlug}/scouting-reports`,
               });
 
               // Email to the parent (respects prefs + 24h dedupe)
@@ -210,7 +210,7 @@ export async function PATCH(req, { params }) {
                   <p>
                     <a href="https://matscout.com/teams/${encodeURIComponent(
                       team.teamSlug
-                    )}?tab=scouting-reports"
+                    )}/scouting-reports"
                       style="display:inline-block;background-color:#1a73e8;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:bold;">
                       View Scouting Reports
                     </a>

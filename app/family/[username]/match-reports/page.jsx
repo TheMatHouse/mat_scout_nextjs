@@ -1,11 +1,13 @@
 "use client";
 export const dynamic = "force-dynamic";
+
 import { useEffect, useState, use } from "react";
 import { slugToStyleMap } from "@/lib/styleSlugMap";
 import { useSearchParams } from "next/navigation";
-import { Eye, ChevronUp, ChevronDown } from "lucide-react";
+import { Eye } from "lucide-react";
 import { format } from "date-fns";
 import PreviewReportModal from "@/components/dashboard/PreviewReportModal";
+import BackToProfile from "@/components/profile/BackToProfile";
 
 export default function FamilyMatchReportsPage({ params }) {
   const { username } = use(params);
@@ -24,6 +26,7 @@ export default function FamilyMatchReportsPage({ params }) {
   const [sortBy, setSortBy] = useState("matchDate");
   const [sortDirection, setSortDirection] = useState("desc");
 
+  // Pre-select style from ?style=judo
   useEffect(() => {
     const styleSlug = searchParams.get("style");
     if (styleSlug && slugToStyleMap[styleSlug]) {
@@ -31,6 +34,7 @@ export default function FamilyMatchReportsPage({ params }) {
     }
   }, [searchParams]);
 
+  // Fetch public family-member reports
   useEffect(() => {
     const fetchReports = async () => {
       try {
@@ -51,6 +55,7 @@ export default function FamilyMatchReportsPage({ params }) {
     if (username) fetchReports();
   }, [username]);
 
+  // Client-side filter + sort
   useEffect(() => {
     let filtered = [...reports];
 
@@ -91,21 +96,7 @@ export default function FamilyMatchReportsPage({ params }) {
     }
   };
 
-  const renderSortIcon = (field) => {
-    if (sortBy !== field) return null;
-    return sortDirection === "asc" ? (
-      <ChevronUp
-        className="inline-block ml-1"
-        size={14}
-      />
-    ) : (
-      <ChevronDown
-        className="inline-block ml-1"
-        size={14}
-      />
-    );
-  };
-
+  console.log("REPORTS ", reports);
   if (loading) {
     return (
       <div className="p-6 text-white text-center">
@@ -125,10 +116,11 @@ export default function FamilyMatchReportsPage({ params }) {
   if (filteredReports.length === 0) {
     return (
       <div className="p-6 text-white text-center">
-        <p>
-          This family member has no public match reports or none match the
-          selected filters.
-        </p>
+        <BackToProfile
+          username={username}
+          className="mb-4"
+        />
+        <p>No public match reports found for this athlete.</p>
       </div>
     );
   }
@@ -136,72 +128,73 @@ export default function FamilyMatchReportsPage({ params }) {
   return (
     <>
       <div className="p-4 md:p-6">
+        <BackToProfile
+          username={username}
+          className="mb-4"
+        />
         <h1 className="text-2xl font-bold mb-4 text-white">Match Reports</h1>
 
-        {/* Filters */}
-        <div className="flex flex-wrap gap-4 mb-4 items-center">
-          <label className="text-white">
-            Filter by Style:
+        <div className="mb-4 flex flex-wrap gap-4 items-center text-white">
+          <div>
+            <label className="mr-2 font-semibold">Filter by Style:</label>
             <select
               value={selectedStyle}
               onChange={(e) => setSelectedStyle(e.target.value)}
-              className="ml-2 p-2 border rounded bg-background text-white"
+              className="bg-background text-white border border-border rounded px-2 py-1"
             >
               <option value="All">All</option>
-              <option value="Judo">Judo</option>
-              <option value="Brazilian Jiu Jitsu">Brazilian Jiu Jitsu</option>
-              <option value="Wrestling">Wrestling</option>
+              {[...new Set(reports.map((r) => r.matchType))]
+                .filter(Boolean)
+                .map((style) => (
+                  <option
+                    key={style}
+                    value={style}
+                  >
+                    {style}
+                  </option>
+                ))}
             </select>
-          </label>
-          <label className="text-white">
-            Result:
+          </div>
+
+          <div>
+            <label className="mr-2 font-semibold">Filter by Result:</label>
             <select
               value={resultFilter}
               onChange={(e) => setResultFilter(e.target.value)}
-              className="ml-2 p-2 border rounded bg-background text-white"
+              className="bg-background text-white border border-border rounded px-2 py-1"
             >
               <option value="All">All</option>
               <option value="Won">Won</option>
               <option value="Lost">Lost</option>
             </select>
-          </label>
+          </div>
         </div>
 
-        {/* Table */}
         <div className="overflow-x-auto rounded-lg shadow-md border border-border bg-background">
           <table className="min-w-full divide-y divide-border text-sm md:text-base text-left text-white">
-            <thead className="hidden md:table-header-group bg-muted text-muted-foreground uppercase tracking-wider">
+            <thead className="bg-muted text-muted-foreground uppercase tracking-wider">
               <tr>
-                <th
-                  onClick={() => handleSort("eventName")}
-                  className="px-4 py-3 cursor-pointer"
-                >
-                  Event {renderSortIcon("eventName")}
-                </th>
-                <th
-                  onClick={() => handleSort("opponentName")}
-                  className="px-4 py-3 cursor-pointer"
-                >
-                  Opponent {renderSortIcon("opponentName")}
-                </th>
-                <th
-                  onClick={() => handleSort("result")}
-                  className="px-4 py-3 cursor-pointer"
-                >
-                  Result {renderSortIcon("result")}
-                </th>
-                <th
-                  onClick={() => handleSort("matchDate")}
-                  className="px-4 py-3 cursor-pointer"
-                >
-                  Date {renderSortIcon("matchDate")}
-                </th>
-                <th
-                  onClick={() => handleSort("matchType")}
-                  className="px-4 py-3 cursor-pointer"
-                >
-                  Style {renderSortIcon("matchType")}
-                </th>
+                {[
+                  { key: "eventName", label: "Event" },
+                  { key: "opponentName", label: "Opponent" },
+                  { key: "result", label: "Result" },
+                  { key: "matchDate", label: "Date" },
+                  { key: "matchType", label: "Style" },
+                ].map(({ key, label }) => (
+                  <th
+                    key={key}
+                    onClick={() => handleSort(key)}
+                    className="px-4 py-3 cursor-pointer hover:underline"
+                    title={`Sort by ${label}`}
+                  >
+                    {label}
+                    {sortBy === key
+                      ? sortDirection === "asc"
+                        ? " ↑"
+                        : " ↓"
+                      : " ↕"}
+                  </th>
+                ))}
                 <th className="px-4 py-3 text-center">View</th>
               </tr>
             </thead>
@@ -209,36 +202,24 @@ export default function FamilyMatchReportsPage({ params }) {
               {filteredReports.map((report) => (
                 <tr
                   key={report._id}
-                  className="block md:table-row border-b border-border hover:bg-muted transition-colors"
+                  className="border-b border-border hover:bg-muted transition-colors"
                 >
-                  <td className="block md:table-cell px-4 py-3">
-                    <span className="md:hidden font-semibold">Event: </span>
-                    {report.eventName}
-                  </td>
-                  <td className="block md:table-cell px-4 py-3">
-                    <span className="md:hidden font-semibold">Opponent: </span>
-                    {report.opponentName}
-                  </td>
-                  <td className="block md:table-cell px-4 py-3 font-semibold">
-                    <span className="md:hidden font-semibold">Result: </span>
+                  <td className="px-4 py-3">{report.eventName}</td>
+                  <td className="px-4 py-3">{report.opponentName}</td>
+                  <td className="px-4 py-3 font-semibold">
                     {report.result === "Won" ? (
                       <span className="text-green-400">Win</span>
                     ) : (
                       <span className="text-red-400">Loss</span>
                     )}
                   </td>
-                  <td className="block md:table-cell px-4 py-3">
-                    <span className="md:hidden font-semibold">Date: </span>
+                  <td className="px-4 py-3">
                     {report.matchDate
                       ? format(new Date(report.matchDate), "PPP")
                       : "N/A"}
                   </td>
-                  <td className="block md:table-cell px-4 py-3">
-                    <span className="md:hidden font-semibold">Style: </span>
-                    {report.matchType}
-                  </td>
-                  <td className="block md:table-cell px-4 py-3 text-center">
-                    <span className="md:hidden font-semibold">View: </span>
+                  <td className="px-4 py-3">{report.matchType}</td>
+                  <td className="px-4 py-3 text-center">
                     <button
                       onClick={() => {
                         setSelectedReport(report);
@@ -257,7 +238,6 @@ export default function FamilyMatchReportsPage({ params }) {
         </div>
       </div>
 
-      {/* Modal */}
       {open && selectedReport && (
         <PreviewReportModal
           previewOpen={open}
