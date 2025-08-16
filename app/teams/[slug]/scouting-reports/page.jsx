@@ -5,13 +5,14 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { Button } from "@/components/ui/button";
-import { Eye, Edit, Trash, FilePlus2, Download } from "lucide-react";
+import { Eye, Edit, Trash } from "lucide-react";
 import PreviewReportModal from "@/components/shared/PreviewReportModal";
 import ScoutingReportForm from "@/components/teams/forms/ScoutingReportForm";
 import { ReportDataTable } from "@/components/shared/report-data-table";
 import ModalLayout from "@/components/shared/ModalLayout";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import Spinner from "@/components/shared/Spinner";
 
 export default function TeamScoutingReportsPage() {
   const params = useParams();
@@ -21,6 +22,7 @@ export default function TeamScoutingReportsPage() {
   const [team, setTeam] = useState(null);
   const [reports, setReports] = useState([]);
   const [user, setUser] = useState(null);
+
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState(null);
@@ -48,6 +50,7 @@ export default function TeamScoutingReportsPage() {
   // ✅ Fetch scouting reports
   const fetchReports = async () => {
     try {
+      setLoading(true); // show spinner immediately
       const res = await fetch(
         `/api/teams/${slug}/scouting-reports?ts=${Date.now()}`
       );
@@ -58,7 +61,7 @@ export default function TeamScoutingReportsPage() {
       console.error(error);
       toast.error("Error loading scouting reports");
     } finally {
-      setLoading(false);
+      setLoading(false); // hide spinner when done
     }
   };
 
@@ -91,9 +94,7 @@ export default function TeamScoutingReportsPage() {
         `/api/teams/${slug}/scouting-reports/${report._id}`,
         {
           method: "DELETE",
-          headers: {
-            "Content-type": "application/json; charset=UTF-8",
-          },
+          headers: { "Content-type": "application/json; charset=UTF-8" },
           credentials: "include",
         }
       );
@@ -136,7 +137,6 @@ export default function TeamScoutingReportsPage() {
       bookType: "xlsx",
       type: "array",
     });
-
     const file = new Blob([excelBuffer], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
@@ -202,24 +202,33 @@ export default function TeamScoutingReportsPage() {
     },
   ];
 
+  // ✅ Full-page spinner while loading (prevents awkward blank area / no-scroll)
+  if (loading) {
+    return (
+      <div className="flex flex-col justify-center items-center h-[70vh] bg-background">
+        <Spinner size={64} />
+        <p className="text-gray-400 dark:text-gray-300 mt-2 text-lg">
+          Loading scouting reports…
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div>
-      {/* ✅ Header and Actions */}
+      {/* Header + Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
         <h1 className="text-2xl font-bold">Scouting Reports</h1>
         <div className="flex flex-wrap gap-3">
-          {/* Add Report Button */}
           <button
             className="btn-primary px-4 py-2 rounded-md"
             onClick={() => {
               setSelectedReport(null);
-              setOpen(true); // ✅ This opens your ModalLayout
+              setOpen(true);
             }}
           >
             ➕ Add Scouting Report
           </button>
-
-          {/* Export Button */}
           <button
             className="btn-secondary px-4 py-2 rounded-md"
             onClick={exportReportsToExcel}
@@ -229,7 +238,7 @@ export default function TeamScoutingReportsPage() {
         </div>
       </div>
 
-      {/* ✅ Modal for Add/Edit */}
+      {/* Modal for Add/Edit */}
       <ModalLayout
         isOpen={open}
         onClose={() => setOpen(false)}
@@ -241,14 +250,14 @@ export default function TeamScoutingReportsPage() {
           key={selectedReport?._id}
           team={team}
           user={user}
-          userStyles={user?.user.userStyles || []}
+          userStyles={user?.user?.userStyles || []}
           report={selectedReport}
           setOpen={setOpen}
           onSuccess={fetchReports}
         />
       </ModalLayout>
 
-      {/* ✅ Mobile Cards */}
+      {/* Mobile Cards */}
       <div className="grid grid-cols-1 sm:hidden gap-4 mb-6">
         {reports.length > 0 ? (
           reports.map((report) => (
@@ -306,8 +315,8 @@ export default function TeamScoutingReportsPage() {
         )}
       </div>
 
-      {/* ✅ Desktop Table */}
-      {!loading && reports.length > 0 && (
+      {/* Desktop Table */}
+      {reports.length > 0 && (
         <div className="hidden md:block overflow-x-auto">
           <div className="min-w-[800px]">
             <ReportDataTable
@@ -327,7 +336,7 @@ export default function TeamScoutingReportsPage() {
         </div>
       )}
 
-      {/* ✅ Preview Modal */}
+      {/* Preview Modal */}
       {previewOpen && selectedReport && (
         <PreviewReportModal
           previewOpen={previewOpen}
