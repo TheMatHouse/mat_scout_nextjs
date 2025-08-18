@@ -124,7 +124,7 @@ export default function TeamUpdatesPage() {
             Announcements and important info from your coaches.
           </p>
         </div>
-        {(isManagerOrCoach || user?.isAdmin) && (
+        {isManagerOrCoach && (
           <button
             className="btn btn-primary"
             onClick={() => {
