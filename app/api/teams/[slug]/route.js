@@ -1,3 +1,4 @@
+// app/api/teams/[slug]/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import Team from "@/models/teamModel";
@@ -9,26 +10,81 @@ import { createNotification } from "@/lib/createNotification";
 import { sendEmail } from "@/lib/email/email";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
+export const dynamic = "force-dynamic";
+
 // ✅ GET: Fetch team details
 export async function GET(request, ctx) {
   await connectDB();
   const { slug } = await ctx.params;
-
+  console.log("TEAM ROUTE HIT!");
   try {
-    const team = await Team.findOne({ teamSlug: slug });
-
+    const team = await Team.findOne({ teamSlug: slug }).lean();
     if (!team) {
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
     }
-
-    return NextResponse.json({ team });
+    return NextResponse.json({ team }, { status: 200 });
   } catch (error) {
     console.error("Error fetching team:", error);
     return NextResponse.json({ message: "Server error" }, { status: 500 });
   }
 }
 
-// ✅ DELETE: Delete team (only owner)
+// ✅ PATCH: Update team (owner only). Return the FULL updated document.
+export async function PATCH(req, ctx) {
+  try {
+    await connectDB();
+    const { slug } = await ctx.params;
+
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+
+    const team = await Team.findOne({ teamSlug: slug });
+    if (!team) {
+      return NextResponse.json({ message: "Team not found" }, { status: 404 });
+    }
+
+    // Owner-only (you can relax to manager later if desired)
+    if (team.user.toString() !== currentUser._id.toString()) {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
+
+    const body = await req.json();
+
+    // Only allow these fields to be updated
+    const allowed = [
+      "info",
+      "email",
+      "phone",
+      "address",
+      "address2",
+      "city",
+      "state",
+      "postalCode",
+      "country",
+      // add more allowed fields here if needed
+    ];
+    for (const k of allowed) {
+      if (Object.prototype.hasOwnProperty.call(body, k)) {
+        team[k] = body[k] ?? "";
+      }
+    }
+
+    await team.save();
+
+    // 🔁 Re-fetch to ensure we return the FULL up-to-date doc (no select restrictions)
+    const full = await Team.findById(team._id).lean();
+
+    // Return the full object directly so the client can re-hydrate context + form
+    return NextResponse.json(full, { status: 200 });
+  } catch (err) {
+    console.error("PATCH /api/teams/[slug] error:", err);
+    return NextResponse.json({ message: "Server error" }, { status: 500 });
+  }
+}
+
+// ✅ DELETE: Delete team (owner only)
 export async function DELETE(req, { params }) {
   try {
     await connectDB();
@@ -39,24 +95,22 @@ export async function DELETE(req, { params }) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // ✅ Find team
     const team = await Team.findOne({ teamSlug: slug });
     if (!team) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
     }
 
-    // ✅ Validate owner
+    // Owner-only
     if (team.user.toString() !== currentUser._id.toString()) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // ✅ Fetch all team members
+    // Notify members
     const members = await TeamMember.find({ teamId: team._id });
     const memberUserIds = members
       .map((m) => m.userId?.toString())
-      .filter((id) => id && id !== currentUser._id.toString()); // exclude owner
+      .filter((id) => id && id !== currentUser._id.toString());
 
-    // ✅ Create notifications for all members
     await Promise.all(
       memberUserIds.map((userId) =>
         createNotification({
@@ -68,7 +122,7 @@ export async function DELETE(req, { params }) {
       )
     );
 
-    // ✅ Send emails (optional but included)
+    // Best-effort email
     try {
       const users = await User.find({ _id: { $in: memberUserIds } });
       const emailPromises = users.map((u) => {
@@ -97,13 +151,9 @@ export async function DELETE(req, { params }) {
       console.error("Failed to send team deletion emails:", emailErr);
     }
 
-    // ✅ Delete team members
+    // Clean up
     await TeamMember.deleteMany({ teamId: team._id });
-
-    // ✅ Delete scouting reports
     await ScoutingReport.deleteMany({ teamId: team._id });
-
-    // ✅ Delete the team
     await Team.deleteOne({ _id: team._id });
 
     return NextResponse.json({ success: true, message: "Team deleted" });

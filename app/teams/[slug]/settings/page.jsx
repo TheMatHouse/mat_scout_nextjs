@@ -1,3 +1,4 @@
+// app/teams/[slug]/settings/page.jsx
 "use client";
 export const dynamic = "force-dynamic";
 
@@ -6,7 +7,8 @@ import { useRouter, useParams } from "next/navigation";
 import { toast } from "react-toastify";
 import { useTeam } from "@/context/TeamContext";
 import "react-phone-number-input/style.css";
-import Editor from "@/components/shared/Editor";
+
+import Editor from "@/components/shared/Editor"; // ✅ WYSIWYG back in
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -20,11 +22,10 @@ import FormField from "@/components/shared/FormField";
 import Countries from "@/assets/countries.json";
 import PhoneInput from "react-phone-number-input";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
-
 import { Settings } from "lucide-react";
 import DeleteTeamSection from "@/components/teams/DeleteTeamSection";
+import Spinner from "@/components/shared/Spinner";
 
-// ✅ PhoneInput wrapper
 const PhoneInputField = forwardRef((props, ref) => (
   <input
     ref={ref}
@@ -32,38 +33,78 @@ const PhoneInputField = forwardRef((props, ref) => (
     className="border border-gray-300 dark:border-gray-600 rounded-md p-2 w-full"
   />
 ));
+PhoneInputField.displayName = "PhoneInputField";
 
 export default function TeamSettingsPage() {
   const router = useRouter();
   const params = useParams();
-  const { team, setTeam } = useTeam();
   const teamSlug = params.slug;
+
+  const { team, setTeam } = useTeam();
 
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [hydrating, setHydrating] = useState(true);
   const [logoPreview, setLogoPreview] = useState(team?.logoURL || null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const fileInputRef = useRef();
 
+  const shapeFormFromTeam = (t) => {
+    if (!t) return null;
+    const parsed = parsePhoneNumberFromString(t.phone || "", t.country || "US");
+    return {
+      info: t.info || "",
+      email: t.email || "",
+      phone: parsed?.isValid() ? parsed.number : t.phone || "",
+      address: t.address || "",
+      address2: t.address2 || "",
+      city: t.city || "",
+      state: t.state || "",
+      postalCode: t.postalCode || "",
+      country: t.country || "US",
+    };
+  };
+
+  // Hydrate quickly from context (SSR)
   useEffect(() => {
-    if (team) {
-      const parsed = parsePhoneNumberFromString(
-        team.phone || "",
-        team.country || "US"
-      );
-      setForm({
-        info: team.info || "",
-        email: team.email || "",
-        phone: parsed?.isValid() ? parsed.number : "",
-        address: team.address || "",
-        address2: team.address2 || "",
-        city: team.city || "",
-        state: team.state || "",
-        postalCode: team.postalCode || "",
-        country: team.country || "US",
-      });
-    }
+    if (!team) return;
+    setForm(shapeFormFromTeam(team));
+    setLogoPreview(team.logoURL || null);
+    setHydrating(false);
   }, [team]);
+
+  // Helper: refetch full team from API and hydrate context + form
+  const refetchTeam = async () => {
+    try {
+      const res = await fetch(`/api/teams/${teamSlug}?ts=${Date.now()}`, {
+        credentials: "include",
+      });
+      const text = await res.text();
+      let payload = null;
+      try {
+        payload = JSON.parse(text);
+      } catch {}
+      if (!res.ok) {
+        console.warn("Team refetch failed:", res.status, text);
+        return;
+      }
+      const fetchedTeam = payload?.team ?? payload;
+      if (fetchedTeam?._id) {
+        setTeam((prev) => ({ ...(prev || {}), ...fetchedTeam }));
+        setForm(shapeFormFromTeam(fetchedTeam));
+        setLogoPreview(fetchedTeam.logoURL || null);
+      }
+    } catch (err) {
+      console.error("Refetch team failed:", err);
+    }
+  };
+
+  // Definitive refetch to ensure all fields present
+  useEffect(() => {
+    if (!teamSlug) return;
+    refetchTeam();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamSlug]);
 
   const handleLogoChange = async (e) => {
     const file = e.target.files[0];
@@ -85,7 +126,6 @@ export default function TeamSettingsPage() {
         logoURL: result.url,
         logoType: "uploaded",
       }));
-      router.refresh();
     } catch (err) {
       console.error(err);
       toast.error("Error uploading logo");
@@ -100,24 +140,55 @@ export default function TeamSettingsPage() {
   };
 
   const handlePhoneChange = (value) => {
-    setForm((prev) => ({ ...prev, phone: value }));
+    setForm((prev) => ({ ...prev, phone: value || "" }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/teams/${teamSlug}/update`, {
+      const res = await fetch(`/api/teams/${teamSlug}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-      if (!res.ok) throw new Error("Update failed");
-      const updated = await res.json();
-      setTeam((prev) => ({ ...prev, ...updated }));
+
+      const text = await res.text();
+      let payload = null;
+      try {
+        payload = JSON.parse(text);
+      } catch {}
+
+      if (!res.ok) {
+        console.error("Update failed:", res.status, text);
+        const msg = payload?.message || `Update failed (${res.status})`;
+        toast.error(msg);
+        return;
+      }
+
+      const updatedTeam = payload?.team ?? payload;
+      if (updatedTeam?._id) {
+        setTeam((prev) => ({ ...(prev || {}), ...updatedTeam }));
+        const mergedForForm = shapeFormFromTeam({
+          ...(team || {}),
+          ...updatedTeam,
+        });
+        setForm((prev) => ({ ...(prev || {}), ...(mergedForForm || {}) }));
+        if (updatedTeam.logoURL) setLogoPreview(updatedTeam.logoURL);
+      } else {
+        await refetchTeam();
+      }
+
       toast.success("Team info updated successfully!");
-      router.refresh();
+
+      // ✅ Smooth scroll to top after save
       window.scrollTo({ top: 0, behavior: "smooth" });
+
+      // If slug changed, navigate
+      if (updatedTeam?.teamSlug && updatedTeam.teamSlug !== teamSlug) {
+        router.replace(`/teams/${updatedTeam.teamSlug}/settings`);
+      }
     } catch (err) {
       console.error(err);
       toast.error("Something went wrong.");
@@ -126,11 +197,20 @@ export default function TeamSettingsPage() {
     }
   };
 
-  if (!form) return null;
+  if (hydrating || !form) {
+    return (
+      <div className="flex flex-col justify-center items-center h-[60vh] bg-background">
+        <Spinner size={64} />
+        <p className="text-gray-500 dark:text-gray-300 mt-2 text-lg">
+          Loading team settings…
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-8">
-      {/* ✅ Page Header */}
+      {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <Settings className="w-8 h-8 text-blue-600 dark:text-blue-400" />
         <div>
@@ -147,7 +227,7 @@ export default function TeamSettingsPage() {
         onSubmit={handleSubmit}
         className="space-y-8"
       >
-        {/* ✅ Logo Upload */}
+        {/* Logo */}
         <Card>
           <CardHeader>
             <CardTitle>Team Logo</CardTitle>
@@ -177,26 +257,22 @@ export default function TeamSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* ✅ Public Info */}
+        {/* Public Info (WYSIWYG) */}
         <Card>
           <CardHeader>
             <CardTitle>Public Info</CardTitle>
           </CardHeader>
           <CardContent>
-            <FormField
-              label="team description"
+            <Editor
               name="info"
-              value={form.info}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, info: e.target.value }))
-              }
-              type="textarea"
-              className="input"
+              label="team description"
+              text={form.info}
+              onChange={(val) => setForm((p) => ({ ...p, info: val }))}
             />
           </CardContent>
         </Card>
 
-        {/* ✅ Contact Details */}
+        {/* Contact */}
         <Card>
           <CardHeader>
             <CardTitle>Contact Details</CardTitle>
@@ -209,7 +285,6 @@ export default function TeamSettingsPage() {
               onChange={handleChange}
               className="input"
             />
-            {/* ✅ Phone Field (custom component) */}
             <div>
               <label className="block text-sm font-medium mb-1">Phone</label>
               <PhoneInput
@@ -223,7 +298,7 @@ export default function TeamSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* ✅ Address */}
+        {/* Address */}
         <Card>
           <CardHeader>
             <CardTitle>Address</CardTitle>
@@ -265,7 +340,6 @@ export default function TeamSettingsPage() {
                 onChange={handleChange}
                 className="input"
               />
-              {/* ✅ Country Dropdown */}
               <div>
                 <label className="block text-sm font-medium mb-1">
                   Country
@@ -295,7 +369,6 @@ export default function TeamSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* ✅ Save Button */}
         <div className="text-right">
           <Button
             type="submit"
@@ -307,7 +380,6 @@ export default function TeamSettingsPage() {
         </div>
       </form>
 
-      {/* ✅ New Danger Zone using AlertDialog */}
       {team && (
         <DeleteTeamSection
           teamSlug={team.teamSlug}
