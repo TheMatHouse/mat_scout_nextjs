@@ -12,6 +12,7 @@ import Spinner from "@/components/shared/Spinner";
 export default function AuthenticatedSidebar() {
   const { user, loading } = useUser();
   const pathname = usePathname();
+
   const [isDashboardOpen, setDashboardOpen] = useState(false);
   const [isTeamsOpen, setTeamsOpen] = useState(false);
 
@@ -20,7 +21,7 @@ export default function AuthenticatedSidebar() {
     setTeamsOpen(pathname.startsWith("/teams"));
   }, [pathname]);
 
-  // ✅ Show spinner while loading (prevents sidebar disappearing)
+  // While user context is loading, keep a stable sidebar with a spinner
   if (loading) {
     return (
       <aside className="hidden md:flex w-64 h-full bg-[hsl(222.2_47.4%_11.2%)] text-white flex-col justify-center items-center py-8 px-6">
@@ -29,7 +30,6 @@ export default function AuthenticatedSidebar() {
     );
   }
 
-  // ✅ If no user, return nothing (middleware will handle redirect)
   if (!user) return null;
 
   const mainLinks = [
@@ -37,7 +37,6 @@ export default function AuthenticatedSidebar() {
       href: "/dashboard",
       label: "Dashboard",
       icon: <LayoutDashboard size={18} />,
-      exact: true,
     },
     { href: "/teams", label: "Teams", icon: <Users size={18} /> },
     { href: `/${user.username}`, label: "Profile", icon: <User size={18} /> },
@@ -51,10 +50,19 @@ export default function AuthenticatedSidebar() {
     { href: "/dashboard/family", label: "Family" },
   ];
 
+  // ✅ New Teams IA
   const teamSubLinks = [
-    { href: "/teams", label: "My Teams" },
-    { href: "/teams/new", label: "Create Team" },
+    { href: "/teams/mine", label: "My Teams" },
+    { href: "/teams/find", label: "Find Teams" },
+    { href: "/teams/new", label: "Create Team" }, // keep /teams/new since it already exists
   ];
+
+  // Highlight logic for main links: active if you're anywhere under that section
+  const isMainActive = (href) => {
+    if (href === "/dashboard") return pathname.startsWith("/dashboard");
+    if (href === "/teams") return pathname.startsWith("/teams");
+    return pathname === href;
+  };
 
   return (
     <aside className="hidden md:flex w-64 h-full bg-[hsl(222.2_47.4%_11.2%)] text-white flex-col justify-between py-8 px-6">
@@ -65,16 +73,13 @@ export default function AuthenticatedSidebar() {
             <Link
               href={link.href}
               onClick={() => {
-                if (link.href === "/dashboard") {
+                if (link.href === "/dashboard")
                   setDashboardOpen(!isDashboardOpen);
-                }
-                if (link.href === "/teams") {
-                  setTeamsOpen(!isTeamsOpen);
-                }
+                if (link.href === "/teams") setTeamsOpen(!isTeamsOpen);
               }}
               className={cn(
                 "flex items-center gap-2 text-lg font-medium px-2 py-2 rounded-md transition hover:text-ms-light-red hover:bg-[hsl(222_47%_20%)]",
-                pathname === link.href &&
+                isMainActive(link.href) &&
                   "bg-[hsl(222_47%_25%)] text-ms-light-red font-semibold border-l-4 border-[var(--ms-light-red)]"
               )}
             >
@@ -122,7 +127,7 @@ export default function AuthenticatedSidebar() {
           </div>
         ))}
 
-        {/* ✅ Admin link for admins only */}
+        {/* Admin link for admins only */}
         {user?.isAdmin && (
           <div className="mt-6">
             <Link

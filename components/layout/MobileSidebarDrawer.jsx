@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/context/UserContext";
 import LogoutButton from "@/components/shared/LogoutButton";
-import ThemeToggle from "../shared/theme-toggle";
+import ThemeToggle from "@/components/shared/theme-toggle"; // ✅ fixed
 
 const ADMIN_LINKS = [
   { href: "/admin/dashboard", label: "Dashboard" },
@@ -48,13 +48,13 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
         {user ? (
           <>
             <nav className="space-y-4">
-              {/* Dashboard */}
               <button
                 onClick={() => setDashboardOpen(!isDashboardOpen)}
                 className={cn(
                   "block w-full text-left text-lg font-medium hover:text-ms-light-red transition",
                   pathname.startsWith("/dashboard") && "text-ms-light-red"
                 )}
+                aria-expanded={isDashboardOpen}
               >
                 Dashboard
               </button>
@@ -82,13 +82,13 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
                 </div>
               )}
 
-              {/* Teams */}
               <button
                 onClick={() => setTeamsOpen(!isTeamsOpen)}
                 className={cn(
                   "block w-full text-left text-lg font-medium hover:text-ms-light-red transition",
                   pathname.startsWith("/teams") && "text-ms-light-red"
                 )}
+                aria-expanded={isTeamsOpen}
               >
                 Teams
               </button>
@@ -105,6 +105,16 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
                     My Teams
                   </Link>
                   <Link
+                    href="/teams/find"
+                    onClick={onClose}
+                    className={cn(
+                      "block hover:text-white transition",
+                      pathname === "/teams/find" && "text-white font-semibold"
+                    )}
+                  >
+                    Find Teams
+                  </Link>
+                  <Link
                     href="/teams/new"
                     onClick={onClose}
                     className={cn(
@@ -117,7 +127,6 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
                 </div>
               )}
 
-              {/* Profile */}
               <Link
                 href={`/${user.username}`}
                 onClick={onClose}
@@ -129,7 +138,6 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
                 Profile
               </Link>
 
-              {/* Admin (only for admins) */}
               {user?.isAdmin && (
                 <>
                   <button
@@ -138,6 +146,7 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
                       "block w-full text-left text-lg font-medium hover:text-ms-light-red transition mt-2",
                       pathname.startsWith("/admin") && "text-ms-light-red"
                     )}
+                    aria-expanded={isAdminOpen}
                   >
                     Admin
                   </button>
@@ -170,8 +179,6 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
                 Social
               </Link>
               <LogoutButton className="text-red-400 hover:text-white" />
-
-              {/* Dark/Light Mode Toggle */}
               <div className="pt-4 border-t border-gray-700">
                 <ThemeToggle />
               </div>
