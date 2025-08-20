@@ -39,7 +39,7 @@ export default function TeamsLandingPage() {
       {/* Three Cards */}
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         <ActionCard
-          href="/teams"
+          href="/teams/mine"
           title="My Teams"
           description={
             myCount === null
