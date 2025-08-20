@@ -18,22 +18,22 @@ export default function NotificationDropdown({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: 50 }}
       transition={{ duration: 0.2 }}
-      className={`flex justify-between items-center px-4 py-3 group cursor-pointer ${
-        !n.viewed ? "bg-blue-50 dark:bg-gray-700" : "bg-transparent"
-      } hover:bg-gray-100 dark:hover:bg-gray-600`}
+      className={`flex justify-between items-start gap-2 px-4 py-3 group cursor-pointer ${
+        !n.viewed ? "bg-blue-50 dark:bg-gray-700/60" : "bg-transparent"
+      } hover:bg-gray-100 dark:hover:bg-gray-700`}
       onClick={() => {
-        onMarkAsRead(n._id);
+        onMarkAsRead?.(n._id);
         window.location.href = n.notificationLink;
-        onClose();
+        onClose?.();
       }}
     >
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-2 min-w-0">
         {!n.viewed && (
-          <span className="w-2 h-2 mt-2 rounded-full bg-blue-500 flex-shrink-0"></span>
+          <span className="mt-2 w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
         )}
-        <div>
+        <div className="min-w-0">
           <p
-            className={`text-sm ${
+            className={`text-sm leading-5 break-words ${
               !n.viewed
                 ? "font-semibold text-gray-900 dark:text-white"
                 : "text-gray-800 dark:text-gray-200"
@@ -41,17 +41,20 @@ export default function NotificationDropdown({
           >
             {n.notificationBody}
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
             {new Date(n.createdAt).toLocaleString()}
           </p>
         </div>
       </div>
+
       <button
         onClick={(e) => {
-          e.stopPropagation(); // prevent navigation
-          onMarkAsRead(n._id, true); // true = delete
+          e.stopPropagation();
+          onMarkAsRead?.(n._id, true); // true => delete
         }}
-        className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500"
+        className="p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500"
+        aria-label="Dismiss notification"
+        title="Dismiss"
       >
         <X size={16} />
       </button>
@@ -61,27 +64,55 @@ export default function NotificationDropdown({
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: -10 }}
+        initial={{ opacity: 0, scale: 0.96, y: -8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: -10 }}
-        transition={{ duration: 0.2, ease: "easeInOut" }}
-        className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 shadow-lg rounded-lg overflow-hidden z-50"
+        exit={{ opacity: 0, scale: 0.96, y: -8 }}
+        transition={{ duration: 0.18, ease: "easeInOut" }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Notifications"
+        className="
+          fixed z-[60]
+          left-2 right-2 sm:right-4 sm:left-auto
+          top-16 bottom-3
+          max-w-full sm:w-[420px]
+          bg-white dark:bg-gray-800
+          border border-gray-200 dark:border-gray-700
+          shadow-2xl rounded-xl
+          flex flex-col
+          overflow-hidden
+        "
       >
-        <div className="flex justify-between items-center px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-          <span className="font-semibold text-gray-800 dark:text-gray-100">
+        {/* Header */}
+        <div className="flex items-center justify-between px-3 py-2 sm:px-4 sm:py-3 border-b border-gray-200 dark:border-gray-700">
+          <span className="font-semibold text-sm sm:text-base text-gray-900 dark:text-gray-100">
             Notifications
           </span>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+            className="p-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+            aria-label="Close notifications"
+            title="Close"
           >
-            ✕
+            <X size={18} />
           </button>
         </div>
-        <div className="max-h-96 overflow-y-auto">
+
+        {/* Scroll area */}
+        <div
+          className="
+            flex-1
+            overflow-y-auto overflow-x-hidden overscroll-contain
+            pr-1 sm:pr-2 pb-2
+          "
+          style={{
+            WebkitOverflowScrolling: "touch",
+            scrollbarGutter: "stable",
+          }}
+        >
           {newNotifications.length > 0 && (
             <div>
-              <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
+              <div className="sticky top-0 z-10 bg-white/90 dark:bg-gray-800/90 backdrop-blur px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
                 New
               </div>
               <AnimatePresence>
@@ -91,8 +122,8 @@ export default function NotificationDropdown({
           )}
 
           {earlierNotifications.length > 0 && (
-            <div>
-              <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
+            <div className="mt-1">
+              <div className="sticky top-0 z-10 bg-white/90 dark:bg-gray-800/90 backdrop-blur px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
                 Earlier
               </div>
               <AnimatePresence>
@@ -102,7 +133,7 @@ export default function NotificationDropdown({
           )}
 
           {notifications.length === 0 && (
-            <div className="px-4 py-6 text-center text-gray-500 dark:text-gray-400">
+            <div className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
               No notifications
             </div>
           )}
