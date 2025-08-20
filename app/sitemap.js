@@ -1,30 +1,42 @@
+// app/sitemap.js
+export const runtime = "nodejs";
+export const revalidate = 300; // regenerate every hour (lower if you want faster pickup)
+
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
 
 export default async function sitemap() {
-  const domain = process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com";
-
-  // Connect to DB
   await connectDB();
 
-  // Get public user profiles
-  const users = await User.find({ allowPublic: true }, "username updatedAt");
+  const BASE = (
+    process.env.NEXT_PUBLIC_DOMAIN ||
+    process.env.NEXT_PUBLIC_BASE_URL ||
+    "https://matscout.com"
+  ).replace(/\/$/, ""); // strip trailing slash
 
-  // Static pages
+  // Only include users who opted into public profiles
+  const users = await User.find(
+    { allowPublic: true },
+    { username: 1, updatedAt: 1 }
+  ).lean();
+
+  // Static routes
   const staticPages = [
-    { url: `${domain}/`, lastModified: new Date() },
-    { url: `${domain}/about`, lastModified: new Date() },
-    { url: `${domain}/features`, lastModified: new Date() },
-    { url: `${domain}/contact`, lastModified: new Date() },
+    { url: `${BASE}/`, lastModified: new Date() },
+    { url: `${BASE}/about`, lastModified: new Date() },
+    { url: `${BASE}/features`, lastModified: new Date() },
+    { url: `${BASE}/contact`, lastModified: new Date() },
   ];
 
-  // User profile pages
-  const userPages = users.map((user) => ({
-    url: `${domain}/${user.username}`,
-    lastModified: user.updatedAt || new Date(),
-    changefreq: "weekly",
-    priority: 0.7,
-  }));
+  // Public user profiles
+  const userPages = users
+    .filter((u) => u.username)
+    .map((u) => ({
+      url: `${BASE}/${encodeURIComponent(u.username)}`,
+      lastModified: u.updatedAt || new Date(),
+      changefreq: "weekly",
+      priority: 0.7,
+    }));
 
   return [...staticPages, ...userPages];
 }
