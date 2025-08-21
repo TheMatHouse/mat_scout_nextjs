@@ -1,15 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useUser } from "@/context/UserContext"; // ✅ Use context instead of server call
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import StyleCard from "@/components/profile/StyleCard";
 import Spinner from "../shared/Spinner";
 
+// Cloudinary delivery helper: inject f_auto,q_auto (+ optional transforms)
+function cld(url, extra = "") {
+  if (!url || typeof url !== "string") return url;
+  if (!url.includes("/upload/")) return url; // skip non-Cloudinary URLs
+  const parts = ["f_auto", "q_auto"];
+  if (extra) parts.push(extra);
+  return url.replace("/upload/", `/upload/${parts.join(",")}/`);
+}
+
 export default function FamilyProfileClient({ username, initialData }) {
-  const { user: currentUser } = useUser(); // ✅ Current logged-in user
   const [member, setMember] = useState(initialData);
   const [loading, setLoading] = useState(!initialData);
 
@@ -38,18 +45,12 @@ export default function FamilyProfileClient({ username, initialData }) {
 
   if (!member) return notFound();
 
-  const isParent = currentUser && member.parentId === currentUser._id;
-
-  if (!member.allowPublic && !isParent) {
-    return (
-      <div className="max-w-2xl mx-auto text-center mt-20">
-        <h1 className="text-2xl font-semibold mb-4">This profile is private</h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          The owner of this profile has chosen to keep it private.
-        </p>
-      </div>
-    );
-  }
+  // Avatar (request 200x200; render 100x100 for crisp 2x)
+  const rawAvatar =
+    member.avatar ||
+    "https://res.cloudinary.com/matscout/image/upload/v1747956346/default_user_rval6s.jpg";
+  const avatarUrl =
+    cld(rawAvatar, "w_200,h_200,c_fill,g_auto,dpr_auto") || rawAvatar;
 
   const styleResults = {};
   if (Array.isArray(member?.userStyles)) {
@@ -69,22 +70,18 @@ export default function FamilyProfileClient({ username, initialData }) {
       {/* Left Sidebar */}
       <div className="md:col-span-1 bg-white dark:bg-gray-900 rounded-xl shadow border border-border p-6 text-center space-y-4 self-start">
         <Image
-          src={member.avatar || "/default-avatar.png"}
+          src={avatarUrl}
           alt={member.firstName}
           width={100}
           height={100}
-          className="rounded-full mx-auto border border-border"
+          className="rounded-full mx-auto border border-border object-cover"
+          loading="lazy"
+          sizes="100px"
         />
         <h1 className="text-xl font-bold mt-4">
           {member.firstName} {member.lastName}
         </h1>
         <p className="text-sm text-black dark:text-white">@{member.username}</p>
-
-        {isParent && !member.allowPublic && (
-          <p className="text-sm text-yellow-500 mt-2">
-            This is what the public would see if this profile were public.
-          </p>
-        )}
 
         {member.gender && (
           <p className="text-sm text-black dark:text-white">
@@ -106,26 +103,35 @@ export default function FamilyProfileClient({ username, initialData }) {
               Teams
             </h3>
             <ul className="space-y-1">
-              {member.teams.map((team) => (
-                <li
-                  key={team._id}
-                  className="flex items-center gap-2"
-                >
-                  <Image
-                    src={team.logoURL || "/default-team.png"}
-                    alt={team.teamName}
-                    width={28}
-                    height={28}
-                    className="rounded-full border border-border"
-                  />
-                  <Link
-                    href={`/teams/${team.teamSlug}`}
-                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              {member.teams.map((team) => {
+                const rawLogo = team.logoURL || "/default-team.png";
+                // Request 56x56; render 28x28 for crisp 2x
+                const logoUrl =
+                  cld(rawLogo, "w_56,h_56,c_fill,g_auto,dpr_auto") || rawLogo;
+
+                return (
+                  <li
+                    key={team._id}
+                    className="flex items-center gap-2"
                   >
-                    {team.teamName}
-                  </Link>
-                </li>
-              ))}
+                    <Image
+                      src={logoUrl}
+                      alt={team.teamName}
+                      width={28}
+                      height={28}
+                      className="rounded-full border border-border object-cover"
+                      loading="lazy"
+                      sizes="28px"
+                    />
+                    <Link
+                      href={`/teams/${team.teamSlug}`}
+                      className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      {team.teamName}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}

@@ -5,6 +5,15 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 
+// Cloudinary delivery helper: inject f_auto,q_auto (+ optional transforms)
+function cld(url, extra = "") {
+  if (!url || typeof url !== "string") return url;
+  if (!url.includes("/upload/")) return url; // skip non-Cloudinary URLs
+  const parts = ["f_auto", "q_auto"];
+  if (extra) parts.push(extra);
+  return url.replace("/upload/", `/upload/${parts.join(",")}/`);
+}
+
 export default function MyTeamsPage() {
   const [loading, setLoading] = useState(true);
   const [myTeams, setMyTeams] = useState([]);
@@ -74,11 +83,13 @@ export default function MyTeamsPage() {
               <div className="flex flex-col items-center text-center">
                 {team.logoURL ? (
                   <Image
-                    src={team.logoURL}
+                    src={cld(team.logoURL, "w_168,h_168,c_fill,g_auto")}
                     alt={`${team.teamName} logo`}
                     width={84}
                     height={84}
                     className="rounded-full object-cover mb-3"
+                    loading="lazy"
+                    sizes="(max-width: 768px) 84px, 84px"
                   />
                 ) : (
                   <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-gray-600 mb-3" />

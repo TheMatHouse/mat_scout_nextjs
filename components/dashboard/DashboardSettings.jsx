@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 
 import { useState } from "react";
 import { Pencil, Camera, Copy, Share } from "lucide-react";
@@ -10,6 +11,15 @@ import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import GoogleIcon from "@/components/icons/GoogleIcon";
 import FacebookIcon from "@/components/icons/FacebookIcon";
+
+// Cloudinary delivery helper: inject f_auto,q_auto (+ optional transforms)
+function cld(url, extra = "") {
+  if (!url || typeof url !== "string") return url;
+  if (!url.includes("/upload/")) return url; // skip non-Cloudinary URLs
+  const parts = ["f_auto", "q_auto"];
+  if (extra) parts.push(extra);
+  return url.replace("/upload/", `/upload/${parts.join(",")}/`);
+}
 
 export default function DashboardSettings({ user, refreshUser }) {
   const [open, setOpen] = useState(false);
@@ -27,14 +37,25 @@ export default function DashboardSettings({ user, refreshUser }) {
     );
   }
 
-  let avatarUrl = user.avatar;
-  if (user.avatarType === "google") avatarUrl = user.googleAvatar;
-  if (user.avatarType === "facebook") avatarUrl = user.facebookAvatar;
-  if (user.avatarType === "uploaded") avatarUrl = user.avatar;
-  if (!avatarUrl) {
-    avatarUrl =
+  // Pick the correct base avatar URL (google/facebook/uploaded/default)
+  let baseAvatarUrl = user.avatar;
+  if (user.avatarType === "google") baseAvatarUrl = user.googleAvatar;
+  if (user.avatarType === "facebook") baseAvatarUrl = user.facebookAvatar;
+  if (user.avatarType === "uploaded") baseAvatarUrl = user.avatar;
+  if (!baseAvatarUrl) {
+    // Default Cloudinary image (will benefit from f_auto,q_auto too)
+    baseAvatarUrl =
       "https://res.cloudinary.com/matscout/image/upload/v1747956346/default_user_rval6s.jpg";
   }
+
+  // For display: prefer preview (data URL), else fast Cloudinary URL
+  const displayAvatarUrl =
+    avatarPreview ||
+    cld(
+      baseAvatarUrl,
+      // request 192x192, we render 96x96 so it looks crisp on 2x screens
+      "w_192,h_192,c_fill,g_auto,dpr_auto"
+    );
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -126,11 +147,13 @@ export default function DashboardSettings({ user, refreshUser }) {
       <header className="mb-6">
         <div className="flex flex-col items-center gap-4 mb-4">
           <Image
-            src={avatarPreview || avatarUrl}
+            src={displayAvatarUrl}
             alt="User Avatar"
             width={96}
             height={96}
             className="rounded-full border object-cover w-24 h-24"
+            loading="lazy"
+            sizes="96px"
           />
 
           <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded border text-sm hover:bg-muted transition">

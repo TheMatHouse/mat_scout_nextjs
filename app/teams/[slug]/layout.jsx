@@ -10,9 +10,18 @@ import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import TeamProviderClient from "@/components/teams/TeamProviderClient";
 import TeamTabs from "@/components/teams/TeamTabs";
 
+// Cloudinary delivery helper: inject f_auto,q_auto (+ optional transforms)
+function cld(url, extra = "") {
+  if (!url || typeof url !== "string") return url;
+  if (!url.includes("/upload/")) return url; // skip non-Cloudinary URLs
+  const parts = ["f_auto", "q_auto"];
+  if (extra) parts.push(extra);
+  return url.replace("/upload/", `/upload/${parts.join(",")}/`);
+}
+
 export default async function TeamLayout({ children, params }) {
   await connectDB();
-  const { slug } = await params;
+  const { slug } = params;
 
   // Fetch team
   const teamDoc = await Team.findOne({ teamSlug: slug }).lean();
@@ -65,7 +74,6 @@ export default async function TeamLayout({ children, params }) {
   const isMember = isManager || isCoach || role === "member";
 
   // Build tabs dynamically
-  // --- tabs ---
   const tabs = [{ label: "Info", href: `/teams/${slug}` }];
 
   // All team members (member/coach/manager) can see Updates
@@ -86,6 +94,7 @@ export default async function TeamLayout({ children, params }) {
   if (isManager) {
     tabs.push({ label: "Settings", href: `/teams/${slug}/settings` });
   }
+
   // Serialize team for client context
   const safeTeam = {
     _id: teamDoc._id?.toString(),
@@ -106,11 +115,12 @@ export default async function TeamLayout({ children, params }) {
           <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white shadow-md mb-4">
             {safeTeam.logoURL ? (
               <Image
-                src={safeTeam.logoURL}
+                src={cld(safeTeam.logoURL, "w_224,h_224,c_fill,g_auto")}
                 alt={`${safeTeam.teamName} logo`}
                 width={112}
                 height={112}
                 className="object-cover"
+                loading="lazy"
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-gray-300 dark:bg-gray-600 text-gray-500">

@@ -7,6 +7,15 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
 
+// Cloudinary delivery helper: inject f_auto,q_auto (+ optional transforms)
+function cld(url, extra = "") {
+  if (!url || typeof url !== "string") return url;
+  if (!url.includes("/upload/")) return url; // skip non-Cloudinary URLs
+  const parts = ["f_auto", "q_auto"];
+  if (extra) parts.push(extra);
+  return url.replace("/upload/", `/upload/${parts.join(",")}/`);
+}
+
 export default function FindTeamsPage() {
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -230,11 +239,13 @@ function TeamCard({ team }) {
         {team.logoURL ? (
           <div className="mb-3">
             <Image
-              src={team.logoURL}
+              src={cld(team.logoURL, "w_160,h_160,c_fill,g_auto")}
               alt={`${team.teamName} logo`}
               width={80}
               height={80}
               className="rounded-full object-cover"
+              loading="lazy"
+              sizes="(max-width: 768px) 80px, 80px"
             />
           </div>
         ) : (

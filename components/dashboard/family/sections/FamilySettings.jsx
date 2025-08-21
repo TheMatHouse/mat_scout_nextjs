@@ -1,12 +1,25 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { toast } from "react-toastify";
 import FormField from "@/components/shared/FormField";
 import FormSelect from "@/components/shared/FormSelect";
 import Link from "next/link";
 import { Copy, Share } from "lucide-react";
+
+// Cloudinary delivery helper: inject f_auto,q_auto (+ optional transforms)
+function cld(url, extra = "") {
+  if (!url || typeof url !== "string") return url;
+  if (!url.includes("/upload/")) return url; // skip non-Cloudinary URLs
+  const parts = ["f_auto", "q_auto"];
+  if (extra) parts.push(extra);
+  return url.replace("/upload/", `/upload/${parts.join(",")}/`);
+}
+
+const MAX_BYTES = 5 * 1024 * 1024;
+const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export default function FamilyMemberSettings({ member }) {
   const [formData, setFormData] = useState({
@@ -63,6 +76,16 @@ export default function FamilyMemberSettings({ member }) {
     const file = e.target.files[0];
     if (!file) return;
 
+    // quick client-side guardrails
+    if (!ALLOWED.has(file.type)) {
+      toast.error("Please choose a JPEG, PNG, or WebP image.");
+      return;
+    }
+    if (file.size > MAX_BYTES) {
+      toast.error("File too large. Max 5MB.");
+      return;
+    }
+
     setUploading(true);
 
     const form = new FormData();
@@ -82,7 +105,7 @@ export default function FamilyMemberSettings({ member }) {
       if (res.ok) {
         setFormData((prev) => ({
           ...prev,
-          avatar: data.avatar || "",
+          avatar: data.avatar || "", // expect a Cloudinary secure_url
         }));
         toast.success("Avatar updated!");
       } else {
@@ -197,10 +220,14 @@ export default function FamilyMemberSettings({ member }) {
           />
           {uploading && <p className="text-sm mt-1">Uploading...</p>}
           {formData.avatar && (
-            <img
-              src={formData.avatar}
+            <Image
+              src={cld(formData.avatar, "w_192,h_192,c_fill,g_auto,dpr_auto")}
               alt="Avatar"
-              className="w-24 h-24 rounded-full mt-2 border"
+              width={96}
+              height={96}
+              className="w-24 h-24 rounded-full mt-2 border object-cover"
+              loading="lazy"
+              sizes="96px"
             />
           )}
         </div>

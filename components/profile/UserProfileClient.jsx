@@ -7,6 +7,15 @@ import StyleCard from "@/components/profile/StyleCard";
 import { notFound } from "next/navigation";
 import Spinner from "../shared/Spinner";
 
+// Cloudinary delivery helper: inject f_auto,q_auto (+ optional transforms)
+function cld(url, extra = "") {
+  if (!url || typeof url !== "string") return url;
+  if (!url.includes("/upload/")) return url; // skip non-Cloudinary URLs
+  const parts = ["f_auto", "q_auto"];
+  if (extra) parts.push(extra);
+  return url.replace("/upload/", `/upload/${parts.join(",")}/`);
+}
+
 export default function UserProfileClient({ username }) {
   const [profileUser, setProfileUser] = useState();
   const [currentUser, setCurrentUser] = useState(undefined);
@@ -86,16 +95,25 @@ export default function UserProfileClient({ username }) {
     });
   }
 
+  // Avatar (request 200x200; render 100x100 for crisp 2x)
+  const rawAvatar =
+    profileUser.avatar ||
+    "https://res.cloudinary.com/matscout/image/upload/v1747956346/default_user_rval6s.jpg";
+  const avatarUrl =
+    cld(rawAvatar, "w_200,h_200,c_fill,g_auto,dpr_auto") || rawAvatar;
+
   return (
     <section className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-4 gap-6">
       {/* Left Sidebar */}
       <div className="md:col-span-1 bg-white dark:bg-gray-900 rounded-xl shadow border border-border p-6 text-center space-y-4 self-start">
         <Image
-          src={profileUser.avatar || "/default-avatar.png"}
+          src={avatarUrl}
           alt={profileUser.firstName || "User avatar"}
           width={100}
           height={100}
-          className="rounded-full mx-auto border border-border"
+          className="rounded-full mx-auto border border-border object-cover"
+          loading="lazy"
+          sizes="100px"
         />
         <h1 className="text-xl font-bold mt-4">
           {profileUser.firstName} {profileUser.lastName}
@@ -111,26 +129,35 @@ export default function UserProfileClient({ username }) {
               Teams
             </h3>
             <ul className="space-y-1">
-              {profileUser.teams.map((team) => (
-                <li
-                  key={team._id}
-                  className="flex items-center gap-2"
-                >
-                  <Image
-                    src={team.logoURL || "/default-team.png"}
-                    alt={team.teamName}
-                    width={28}
-                    height={28}
-                    className="rounded-full border border-border"
-                  />
-                  <Link
-                    href={`/teams/${team.teamSlug}`}
-                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              {profileUser.teams.map((team) => {
+                const rawLogo = team.logoURL || "/default-team.png";
+                // Request 56x56; render 28x28 for crisp 2x
+                const logoUrl =
+                  cld(rawLogo, "w_56,h_56,c_fill,g_auto,dpr_auto") || rawLogo;
+
+                return (
+                  <li
+                    key={team._id}
+                    className="flex items-center gap-2"
                   >
-                    {team.teamName}
-                  </Link>
-                </li>
-              ))}
+                    <Image
+                      src={logoUrl}
+                      alt={team.teamName}
+                      width={28}
+                      height={28}
+                      className="rounded-full border border-border object-cover"
+                      loading="lazy"
+                      sizes="28px"
+                    />
+                    <Link
+                      href={`/teams/${team.teamSlug}`}
+                      className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      {team.teamName}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}
