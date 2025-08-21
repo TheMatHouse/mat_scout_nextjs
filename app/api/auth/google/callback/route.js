@@ -10,20 +10,25 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 export async function GET(request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const code = searchParams.get("code");
-    const returnedState = searchParams.get("state");
+    const url = new URL(request.url);
+    const code = url.searchParams.get("code");
+    const returnedState = url.searchParams.get("state");
+
+    // Compute origin and redirect_uri (env can override)
     const origin =
-      process.env.NEXT_PUBLIC_DOMAIN || new URL(request.url).origin;
+      process.env.NEXT_PUBLIC_DOMAIN?.trim() || `${url.protocol}//${url.host}`;
+    const redirectUri =
+      process.env.GOOGLE_REDIRECT_URI?.trim() ||
+      `${origin}/api/auth/google/callback`;
 
     // Verify OAuth state (CSRF)
-    const cookieStore = await cookies();
+    const cookieStore = cookies(); // no await needed
     const storedState = cookieStore.get("oauth_state_google")?.value;
     if (!code || !returnedState || returnedState !== storedState) {
-      return NextResponse.redirect(`${origin}/login?error=google`);
+      return NextResponse.redirect(`${origin}/login?error=google_state`);
     }
 
-    // 1) Exchange authorization code for access token
+    // 1) Exchange authorization code for tokens
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -32,12 +37,23 @@ export async function GET(request) {
         client_secret: process.env.GOOGLE_CLIENT_SECRET,
         code,
         grant_type: "authorization_code",
-        redirect_uri: `${origin}/api/auth/google/callback`,
+        redirect_uri: redirectUri, // MUST match what you sent in /api/auth/google
       }),
     });
+
+    if (!tokenRes.ok) {
+      const detail = await tokenRes.text();
+      return NextResponse.redirect(
+        `${origin}/login?error=google_token&detail=${encodeURIComponent(
+          detail
+        )}`
+      );
+    }
     const tokenData = await tokenRes.json();
     if (!tokenData.access_token) {
-      throw new Error("Failed to get Google access token");
+      return NextResponse.redirect(
+        `${origin}/login?error=google_no_access_token`
+      );
     }
 
     // 2) Fetch Google profile
@@ -51,7 +67,7 @@ export async function GET(request) {
 
     const emailRaw = profile?.email;
     if (!emailRaw) {
-      return NextResponse.redirect(`${origin}/login?error=google`);
+      return NextResponse.redirect(`${origin}/login?error=google_no_email`);
     }
     const email = emailRaw.toLowerCase().trim();
     const name = profile?.name || "";
@@ -62,7 +78,8 @@ export async function GET(request) {
     // 3) Find or create user
     let user = await User.findOne({ email });
     if (!user) {
-      const [firstName = "", lastName = ""] = name.split(" ");
+      const [firstName = "", ...rest] = name.split(" ");
+      const lastName = rest.join(" ");
       const username = email.split("@")[0];
 
       user = await User.create({
@@ -77,8 +94,10 @@ export async function GET(request) {
         verified: true,
       });
 
-      // Send welcome email (simple version accepts { to })
-      await sendWelcomeEmail({ to: email });
+      // Fire-and-forget welcome email (don’t block login if this fails)
+      try {
+        await sendWelcomeEmail({ to: email });
+      } catch {}
     }
 
     // 4) Create session JWT
@@ -88,17 +107,17 @@ export async function GET(request) {
       { expiresIn: "7d" }
     );
 
-    // 5) Figure out post-auth redirect
-    const postRedirect = cookieStore.get("post_auth_redirect")?.value; // e.g. /accept-invite?token=...
+    // 5) Post-auth redirect
+    const postRedirect = cookieStore.get("post_auth_redirect")?.value;
     const safeRedirect =
       postRedirect && postRedirect.startsWith("/")
         ? postRedirect
         : "/dashboard";
     const target = `${origin}${safeRedirect}`;
 
-    // 6) Build response with cookie + cleanup
-    const response = NextResponse.redirect(target);
-    response.cookies.set({
+    // 6) Set cookie + cleanup
+    const res = NextResponse.redirect(target);
+    res.cookies.set({
       name: "token",
       value: token,
       httpOnly: true,
@@ -107,17 +126,15 @@ export async function GET(request) {
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
     });
-
-    // Clear helper cookies
-    response.cookies.delete("oauth_state_google");
-    response.cookies.delete("post_auth_redirect");
+    res.cookies.delete("oauth_state_google");
+    res.cookies.delete("post_auth_redirect");
 
     console.log(`✅ Google login successful: ${email}`);
-    return response;
+    return res;
   } catch (err) {
     console.error("Google OAuth callback error:", err?.message || err);
     const origin =
-      process.env.NEXT_PUBLIC_DOMAIN || new URL(request.url).origin;
-    return NextResponse.redirect(`${origin}/login?error=google`);
+      process.env.NEXT_PUBLIC_DOMAIN?.trim() || new URL(request.url).origin;
+    return NextResponse.redirect(`${origin}/login?error=google_exception`);
   }
 }
