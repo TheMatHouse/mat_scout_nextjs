@@ -1,79 +1,64 @@
+// app/api/auth/facebook/deauth/route.js
 import { NextResponse } from "next/server";
-import axios from "axios";
+import crypto from "crypto";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
-import jwt from "jsonwebtoken";
 
-export async function GET(req) {
-  const { searchParams } = new URL(req.url);
-  const code = searchParams.get("code");
+// Verify Facebook signed_request using your App Secret
+function parseSignedRequest(signedRequest, appSecret) {
+  const [sigB64, payloadB64] = signedRequest.split(".");
+  if (!sigB64 || !payloadB64) throw new Error("Malformed signed_request");
 
-  if (!code) {
-    return NextResponse.redirect(
-      "https://matscout.com/login?error=missing_code"
-    );
-  }
+  // base64url -> base64
+  const toBase64 = (s) => s.replace(/-/g, "+").replace(/_/g, "/");
+  const sig = toBase64(sigB64);
+  const payload = toBase64(payloadB64);
 
-  const redirectUri = process.env.NEXT_PUBLIC_FACEBOOK_REDIRECT_URI;
+  // Expected HMAC-SHA256
+  const expected = crypto
+    .createHmac("sha256", appSecret)
+    .update(payload)
+    .digest("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 
+  if (sigB64 !== expected) throw new Error("Bad signature");
+
+  const json = Buffer.from(payload, "base64").toString("utf8");
+  return JSON.parse(json);
+}
+
+export async function POST(request) {
   try {
-    // Exchange code for access token
-    const tokenRes = await axios.get(
-      `https://graph.facebook.com/v22.0/oauth/access_token`,
-      {
-        params: {
-          client_id: process.env.FACEBOOK_CLIENT_ID,
-          client_secret: process.env.FACEBOOK_CLIENT_SECRET,
-          redirect_uri: redirectUri,
-          code,
-        },
-      }
-    );
+    const form = await request.formData();
+    const signed = form.get("signed_request");
+    if (!signed) {
+      return NextResponse.json(
+        { error: "missing signed_request" },
+        { status: 400 }
+      );
+    }
 
-    const accessToken = tokenRes.data.access_token;
-
-    // Get user profile
-    const userRes = await axios.get(`https://graph.facebook.com/me`, {
-      params: {
-        fields: "id,name,email,picture",
-        access_token: accessToken,
-      },
-    });
-
-    const { id: facebookId, name, email } = userRes.data;
+    const data = parseSignedRequest(signed, process.env.FACEBOOK_CLIENT_SECRET);
+    // data contains e.g. { user_id, issued_at, ... }
+    const facebookId = data?.user_id;
+    if (!facebookId) {
+      return NextResponse.json({ error: "missing user_id" }, { status: 400 });
+    }
 
     await connectDB();
 
-    let user = await User.findOne({ facebookId });
-
-    if (!user) {
-      user = await User.create({
-        facebookId,
-        name,
-        email,
-      });
-    }
-
-    // Create a JWT session
-    const token = jwt.sign(
-      { _id: user._id, email: user.email, name: user.name },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+    // Your policy: unlink or delete. Here we unlink the Facebook identity.
+    await User.updateOne(
+      { facebookId },
+      { $set: { provider: null }, $unset: { facebookId: "", avatarType: "" } }
     );
 
-    const response = NextResponse.redirect("https://matscout.com/dashboard");
-    response.cookies.set("token", token, {
-      httpOnly: true,
-      secure: true,
-      path: "/",
-      sameSite: "Lax",
-    });
-
-    return response;
+    // Facebook expects 200 OK. You can also return a JSON body.
+    return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("Facebook login error:", err.response?.data || err.message);
-    return NextResponse.redirect(
-      "https://matscout.com/login?error=facebook_login_failed"
-    );
+    console.error("Facebook deauth error:", err?.message || err);
+    return NextResponse.json({ error: "deauth_failed" }, { status: 400 });
   }
 }
