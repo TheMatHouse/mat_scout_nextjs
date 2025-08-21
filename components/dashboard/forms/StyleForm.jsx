@@ -49,6 +49,7 @@ const StyleForm = ({
     fetchStyles();
   }, []);
 
+  console.log(availableStyles);
   // Populate form if editing existing style
   useEffect(() => {
     if (style) {

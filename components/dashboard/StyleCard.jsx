@@ -79,8 +79,8 @@ const StyleCard = ({
       const userId = member?.userId || user?._id;
       const endpoint =
         userType === "family"
-          ? `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${userId}/family/${member._id}/styles/${style._id}`
-          : `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${userId}/userStyles/${style._id}`;
+          ? `/api/dashboard/${userId}/family/${member._id}/styles/${style._id}`
+          : `/api/dashboard/${userId}/userStyles/${style._id}`;
 
       const response = await fetch(endpoint, {
         method: "DELETE",

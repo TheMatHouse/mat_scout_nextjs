@@ -80,14 +80,11 @@ export default function SettingsForm({ user, onClose, refreshUser }) {
     };
 
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${user._id}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
+      const response = await fetch(`/api/dashboard/${user._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
       const data = await response.json();
       if (response.ok) {

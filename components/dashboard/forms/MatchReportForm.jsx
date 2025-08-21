@@ -191,7 +191,7 @@ const MatchReportForm = ({
     }
 
     const method = match ? "PATCH" : "POST";
-    const base = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard/${userId}`;
+    const base = `/api/dashboard/${userId}`;
     const url =
       userType === "family"
         ? match

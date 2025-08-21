@@ -170,7 +170,7 @@ const ScoutingReportForm = ({
     };
 
     const method = report ? "PATCH" : "POST";
-    const base = `${process.env.NEXT_PUBLIC_API_DOMAIN}/dashboard`;
+    const base = "/api/dashboard";
     const url =
       userType === "family"
         ? report
