@@ -1,23 +1,24 @@
 // app/robots.js
-export const dynamic = "force-dynamic";
+export const dynamic = "force-dynamic"; // ensure it's computed per-request
 
 function siteHost() {
   const site =
     process.env.SITE_URL ||
     process.env.NEXT_PUBLIC_DOMAIN ||
     "https://matscout.com";
-  // Robots “Host:” should not include protocol
-  return site.replace(/^https?:\/\//, "");
+  return site.replace(/^https?:\/\//, ""); // Host: must not include protocol
 }
 
 export default function robots() {
-  const allow = process.env.ALLOW_INDEXING === "true";
+  // IMPORTANT: bracket access avoids build-time inlining
+  const allow =
+    (process.env["ALLOW_INDEXING"] || "").trim().toLowerCase() === "true";
   const host = siteHost();
 
   if (!allow) {
     return {
       rules: [{ userAgent: "*", disallow: "/" }],
-      host, // e.g. matscout.com
+      host,
     };
   }
 
@@ -37,7 +38,7 @@ export default function robots() {
         ],
       },
     ],
-    host, // matscout.com
+    host,
     sitemap: `https://${host}/sitemap.xml`,
   };
 }
