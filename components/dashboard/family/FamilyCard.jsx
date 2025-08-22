@@ -54,7 +54,13 @@ const FamilyCard = ({ member, userId, onDelete }) => {
       className="rounded-xl shadow-md overflow-hidden p-4 text-center bg-card cursor-pointer hover:shadow-lg transition"
     >
       <Image
-        src={avatarUrl}
+        src={
+          member.avatar
+            ? `${member.avatar}${
+                member.avatar.includes("?") ? "&" : "?"
+              }f_auto,q_auto`
+            : "/default-avatar.png"
+        }
         alt={`${member.firstName} ${member.lastName}`}
         width={100}
         height={100}

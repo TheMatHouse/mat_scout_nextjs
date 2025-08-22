@@ -115,12 +115,20 @@ export default async function TeamLayout({ children, params }) {
           <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white shadow-md mb-4">
             {safeTeam.logoURL ? (
               <Image
-                src={cld(safeTeam.logoURL, "w_224,h_224,c_fill,g_auto")}
+                src={
+                  safeTeam.logoURL
+                    ? `${safeTeam.logoURL}${
+                        safeTeam.logoURL.includes("?") ? "&" : "?"
+                      }f_auto,q_auto`
+                    : "/default-team.png"
+                }
                 alt={`${safeTeam.teamName} logo`}
                 width={112}
                 height={112}
                 className="object-cover"
+                priority={false}
                 loading="lazy"
+                sizes="112px"
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-gray-300 dark:bg-gray-600 text-gray-500">

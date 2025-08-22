@@ -70,11 +70,17 @@ export default function FamilyProfileClient({ username, initialData }) {
       {/* Left Sidebar */}
       <div className="md:col-span-1 bg-white dark:bg-gray-900 rounded-xl shadow border border-border p-6 text-center space-y-4 self-start">
         <Image
-          src={avatarUrl}
+          src={
+            member.avatar
+              ? `${member.avatar}${
+                  member.avatar.includes("?") ? "&" : "?"
+                }f_auto,q_auto`
+              : "/default-avatar.png"
+          }
           alt={member.firstName}
           width={100}
           height={100}
-          className="rounded-full mx-auto border border-border object-cover"
+          className="rounded-full mx-auto border border-border"
           loading="lazy"
           sizes="100px"
         />

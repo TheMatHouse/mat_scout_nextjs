@@ -107,11 +107,17 @@ export default function UserProfileClient({ username }) {
       {/* Left Sidebar */}
       <div className="md:col-span-1 bg-white dark:bg-gray-900 rounded-xl shadow border border-border p-6 text-center space-y-4 self-start">
         <Image
-          src={avatarUrl}
+          src={
+            profileUser.avatar
+              ? `${profileUser.avatar}${
+                  profileUser.avatar.includes("?") ? "&" : "?"
+                }f_auto,q_auto`
+              : "/default-avatar.png"
+          }
           alt={profileUser.firstName || "User avatar"}
           width={100}
           height={100}
-          className="rounded-full mx-auto border border-border object-cover"
+          className="rounded-full mx-auto border border-border"
           loading="lazy"
           sizes="100px"
         />
