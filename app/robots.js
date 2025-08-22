@@ -1,23 +1,22 @@
 // app/robots.js
+export const dynamic = "force-dynamic";
+
 export default function robots() {
   const base = process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com";
   const allowIndexing = process.env.ALLOW_INDEXING === "true";
 
   if (!allowIndexing) {
-    // Staging / preview: block everything
     return {
       rules: [{ userAgent: "*", disallow: "/" }],
       host: base,
+      // no sitemap on staging/preview
     };
   }
 
-  // Production: allow public pages, block private areas
   return {
     rules: [
       { userAgent: "*", allow: "/" },
-      // hard block sensitive/private routes
       { userAgent: "*", disallow: ["/dashboard", "/admin", "/api"] },
-      // optionally keep team internals private
       {
         userAgent: "*",
         disallow: [
@@ -28,7 +27,7 @@ export default function robots() {
         ],
       },
     ],
-    sitemap: `${base}/sitemap.xml`,
     host: base,
+    sitemap: `${base}/sitemap.xml`,
   };
 }
