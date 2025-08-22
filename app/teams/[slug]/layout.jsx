@@ -19,6 +19,69 @@ function cld(url, extra = "") {
   return url.replace("/upload/", `/upload/${parts.join(",")}/`);
 }
 
+/** SEO / OG / Twitter metadata for team pages */
+export async function generateMetadata({ params }) {
+  const { slug } = params;
+  const base = process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com";
+
+  await connectDB();
+  const team = await Team.findOne({ teamSlug: slug })
+    .select("teamName teamSlug logoURL city state country")
+    .lean();
+
+  if (!team) {
+    return {
+      metadataBase: new URL(base),
+      title: "Team not found",
+      description: "This team could not be found.",
+      alternates: { canonical: `/teams/${slug}` },
+      robots: { index: false, follow: false },
+    };
+  }
+
+  const title = team.teamName;
+  const loc = [team.city, team.state, team.country].filter(Boolean).join(", ");
+  const description = loc
+    ? `${team.teamName} — ${loc} on MatScout.`
+    : `${team.teamName} on MatScout.`;
+
+  // Prefer the Cloudinary logo as OG image if present
+  let images = [
+    { url: "/og/matscout-og.png", width: 1200, height: 630, alt: "MatScout" },
+  ];
+  if (team.logoURL?.includes("res.cloudinary.com")) {
+    images = [
+      {
+        url: cld(team.logoURL, "c_fill,w_1200,h_630"),
+        width: 1200,
+        height: 630,
+        alt: `${team.teamName} logo`,
+      },
+    ];
+  }
+
+  return {
+    metadataBase: new URL(base),
+    title,
+    description,
+    alternates: { canonical: `/teams/${team.teamSlug}` },
+    openGraph: {
+      type: "website",
+      url: `/teams/${team.teamSlug}`,
+      siteName: "MatScout",
+      title,
+      description,
+      images,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: images.map((i) => i.url),
+    },
+  };
+}
+
 export default async function TeamLayout({ children, params }) {
   await connectDB();
   const { slug } = params;
@@ -115,13 +178,7 @@ export default async function TeamLayout({ children, params }) {
           <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white shadow-md mb-4">
             {safeTeam.logoURL ? (
               <Image
-                src={
-                  safeTeam.logoURL
-                    ? `${safeTeam.logoURL}${
-                        safeTeam.logoURL.includes("?") ? "&" : "?"
-                      }f_auto,q_auto`
-                    : "/default-team.png"
-                }
+                src={cld(safeTeam.logoURL, "c_fill,w_112,h_112")}
                 alt={`${safeTeam.teamName} logo`}
                 width={112}
                 height={112}

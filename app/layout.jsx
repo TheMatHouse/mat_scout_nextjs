@@ -8,6 +8,43 @@ import Footer from "@/components/layout/Footer";
 import { UserProvider } from "@/context/UserContext";
 import LayoutClient from "@/components/layout/LayoutClient";
 
+/** ---------- Default SEO / Open Graph ---------- */
+export const metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com"
+  ),
+  title: {
+    default: "MatScout",
+    template: "%s · MatScout",
+  },
+  description:
+    "MatScout helps teams manage rosters, scout opponents, and share match reports.",
+  openGraph: {
+    type: "website",
+    siteName: "MatScout",
+    url: "/",
+    title: "MatScout",
+    description: "Manage teams, scout opponents, and share match reports.",
+    images: [
+      {
+        url: "/og/matscout-og.png", // place a 1200x630 image at public/og/matscout-og.png
+        width: 1200,
+        height: 630,
+        alt: "MatScout",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "MatScout",
+    description: "Manage teams, scout opponents, and share match reports.",
+    images: ["/og/matscout-og.png"],
+  },
+  alternates: {
+    canonical: "/",
+  },
+};
+
 export const dynamic = "force-dynamic";
 
 export default function RootLayout({ children }) {
