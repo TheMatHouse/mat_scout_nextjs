@@ -1,25 +1,35 @@
 // app/robots.js
 export const dynamic = "force-dynamic";
 
-export default function robots() {
-  const base = process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com";
-  const allowIndexing = process.env.ALLOW_INDEXING === "true";
+function siteHost() {
+  const site =
+    process.env.SITE_URL ||
+    process.env.NEXT_PUBLIC_DOMAIN ||
+    "https://matscout.com";
+  // Robots “Host:” should not include protocol
+  return site.replace(/^https?:\/\//, "");
+}
 
-  if (!allowIndexing) {
+export default function robots() {
+  const allow = process.env.ALLOW_INDEXING === "true";
+  const host = siteHost();
+
+  if (!allow) {
     return {
       rules: [{ userAgent: "*", disallow: "/" }],
-      host: base,
-      // no sitemap on staging/preview
+      host, // e.g. matscout.com
     };
   }
 
   return {
     rules: [
       { userAgent: "*", allow: "/" },
-      { userAgent: "*", disallow: ["/dashboard", "/admin", "/api"] },
       {
         userAgent: "*",
         disallow: [
+          "/dashboard",
+          "/admin",
+          "/api",
           "/team",
           "/teams/*/members",
           "/teams/*/settings",
@@ -27,7 +37,7 @@ export default function robots() {
         ],
       },
     ],
-    host: base,
-    sitemap: `${base}/sitemap.xml`,
+    host, // matscout.com
+    sitemap: `https://${host}/sitemap.xml`,
   };
 }
