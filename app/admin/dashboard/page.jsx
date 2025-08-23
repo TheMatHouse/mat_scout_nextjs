@@ -2,12 +2,12 @@ import Link from "next/link";
 import {
   Users,
   Shield,
-  FileText,
+  FileText, // ⬅️ used for the top-level Reports card
   Settings,
   UserPlus,
   ClipboardList,
   Search,
-  BarChart3, // ⬅️ added
+  BarChart3, // ⬅️ used for Analytics
 } from "lucide-react";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
@@ -65,9 +65,17 @@ export default async function AdminDashboardPage() {
       icon: <Search size={24} />,
       href: "/admin/reports/scouting",
     },
+    // ⬇️ Top-level Reports hub to match your sidebar
+    {
+      label: "Reports",
+      value: "-",
+      icon: <FileText size={24} />,
+      href: "/admin/reports",
+    },
+    // ⬇️ GA4 Analytics page
     {
       label: "Analytics",
-      value: "-", // you can swap this for a metric later
+      value: "-",
       icon: <BarChart3 size={24} />,
       href: "/admin/analytics",
     },
