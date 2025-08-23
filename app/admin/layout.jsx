@@ -5,12 +5,15 @@ import { getCurrentUser } from "@/lib/auth-server";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
+import AdminAreaTag from "@/components/analytics/AdminAreaTag";
+
 const adminLinks = [
   { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/teams", label: "Teams" },
   { href: "/admin/reports", label: "Reports" },
   { href: "/admin/settings", label: "Settings" },
+  { href: "/admin/analytics", label: "Analytics" },
 ];
 
 export default async function AdminLayout({ children }) {
@@ -39,6 +42,7 @@ export default async function AdminLayout({ children }) {
 
       {/* Main content */}
       <main className="flex-1 p-4 md:p-8 bg-gray-50 dark:bg-[hsl(222_47%_8%)]">
+        <AdminAreaTag /> {/* sets internal=1 for admin sessions */}
         {children}
       </main>
     </div>
