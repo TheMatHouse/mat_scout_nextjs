@@ -37,24 +37,30 @@ const MatchReportForm = ({
 
   // ---------- Helpers: normalize styles from various shapes ----------
   const normalizedStyles = useMemo(() => {
-    const raw =
-      (Array.isArray(styles) && styles.length ? styles : []) ||
-      athlete?.userStyles ||
-      athlete?.styles ||
-      [];
+    // Only keep arrays that actually have items; otherwise fall through
+    const pick = (arr) =>
+      Array.isArray(arr) && arr.length > 0 ? arr : undefined;
 
-    // Accept ["Judo", "BJJ"] OR [{styleName:"Judo"}, ...]
+    const raw =
+      pick(styles) ?? pick(athlete?.userStyles) ?? pick(athlete?.styles) ?? [];
+
     return raw
-      .map((s) =>
-        typeof s === "string"
-          ? { styleName: s }
-          : s && typeof s === "object"
-          ? { styleName: s.styleName || s.name || s.title || "" }
-          : null
-      )
-      .filter((s) => s && s.styleName);
+      .map((s) => {
+        if (typeof s === "string") {
+          const name = s.trim();
+          return name ? { styleName: name } : null;
+        }
+        if (s && typeof s === "object") {
+          const name = s.styleName || s.name || s.title || s.style || "";
+          return name ? { styleName: name } : null;
+        }
+        return null;
+      })
+      .filter(Boolean);
   }, [styles, athlete?.userStyles, athlete?.styles]);
 
+  console.log(athlete?.userStyles);
+  console.log("normalized styles ", normalizedStyles);
   // ---------- Form State ----------
   const [matchType, setMatchType] = useState(match?.matchType || "");
   const [eventName, setEventName] = useState(match?.eventName || "");
