@@ -7,6 +7,7 @@ import {
   UserPlus,
   ClipboardList,
   Search,
+  BarChart3, // ⬅️ added
 } from "lucide-react";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
@@ -63,6 +64,12 @@ export default async function AdminDashboardPage() {
       value: scoutingReportCount.toString(),
       icon: <Search size={24} />,
       href: "/admin/reports/scouting",
+    },
+    {
+      label: "Analytics",
+      value: "-", // you can swap this for a metric later
+      icon: <BarChart3 size={24} />,
+      href: "/admin/analytics",
     },
     {
       label: "Settings",
