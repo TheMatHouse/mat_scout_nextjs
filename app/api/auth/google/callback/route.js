@@ -7,25 +7,41 @@ import { cookies } from "next/headers";
 import { sendWelcomeEmail } from "@/lib/email/sendWelcomeEmail";
 
 const JWT_SECRET = process.env.JWT_SECRET;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request) {
   try {
+    if (!JWT_SECRET || !GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+      console.error("Missing envs for Google OAuth/JWT");
+      const origin = new URL(request.url).origin;
+      return NextResponse.redirect(`${origin}/login?error=server_env`);
+    }
+
     const url = new URL(request.url);
     const code = url.searchParams.get("code");
     const returnedState = url.searchParams.get("state");
 
-    // Compute origin and redirect_uri (env can override)
-    const origin =
-      process.env.NEXT_PUBLIC_DOMAIN?.trim() || `${url.protocol}//${url.host}`;
-    const redirectUri =
+    const origin = (
+      process.env.NEXT_PUBLIC_DOMAIN?.trim() || `${url.protocol}//${url.host}`
+    ) // e.g. http://localhost:3000
+      .replace(/\/+$/, "");
+    const redirectUri = (
       process.env.GOOGLE_REDIRECT_URI?.trim() ||
-      `${origin}/api/auth/google/callback`;
+      `${origin}/api/auth/google/callback`
+    ).replace(/\/+$/, "");
 
-    // Verify OAuth state (CSRF)
-    const cookieStore = cookies(); // no await needed
-    const storedState = cookieStore.get("oauth_state_google")?.value;
+    // ✅ cookies() must be awaited in your runtime
+    const cookieStore = await cookies();
+    const storedState = cookieStore.get("oauth_state_google")?.value || null;
+
     if (!code || !returnedState || returnedState !== storedState) {
-      return NextResponse.redirect(`${origin}/login?error=google_state`);
+      // Clear the state cookie to avoid stickiness
+      const bad = NextResponse.redirect(`${origin}/login?error=google_state`);
+      bad.cookies.set("oauth_state_google", "", { path: "/", maxAge: 0 });
+      return bad;
     }
 
     // 1) Exchange authorization code for tokens
@@ -33,11 +49,11 @@ export async function GET(request) {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        client_id: process.env.GOOGLE_CLIENT_ID,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
         code,
         grant_type: "authorization_code",
-        redirect_uri: redirectUri, // MUST match what you sent in /api/auth/google
+        redirect_uri: redirectUri,
       }),
     });
 
@@ -49,6 +65,7 @@ export async function GET(request) {
         )}`
       );
     }
+
     const tokenData = await tokenRes.json();
     if (!tokenData.access_token) {
       return NextResponse.redirect(
@@ -63,6 +80,9 @@ export async function GET(request) {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },
       }
     );
+    if (!userRes.ok) {
+      return NextResponse.redirect(`${origin}/login?error=google_userinfo`);
+    }
     const profile = await userRes.json();
 
     const emailRaw = profile?.email;
@@ -70,8 +90,8 @@ export async function GET(request) {
       return NextResponse.redirect(`${origin}/login?error=google_no_email`);
     }
     const email = emailRaw.toLowerCase().trim();
-    const name = profile?.name || "";
-    const picture = profile?.picture;
+    const name = (profile?.name || "").trim();
+    const picture = profile?.picture || "";
 
     await connectDB();
 
@@ -91,18 +111,20 @@ export async function GET(request) {
         avatar: picture,
         avatarType: "google",
         provider: "google",
-        verified: true,
+        isVerified: true, // ⬅️ use consistent field name
       });
 
-      // Fire-and-forget welcome email (don’t block login if this fails)
+      // Fire-and-forget welcome email
       try {
         await sendWelcomeEmail({ to: email });
-      } catch {}
+      } catch (e) {
+        console.warn("Welcome email failed (non-blocking):", e?.message || e);
+      }
     }
 
     // 4) Create session JWT
     const token = jwt.sign(
-      { userId: user._id, isAdmin: user.isAdmin || false },
+      { userId: user._id, email: user.email, isAdmin: !!user.isAdmin },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
@@ -122,12 +144,12 @@ export async function GET(request) {
       value: token,
       httpOnly: true,
       path: "/",
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: 60 * 60 * 24 * 7, // 7 days
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
     });
-    res.cookies.delete("oauth_state_google");
-    res.cookies.delete("post_auth_redirect");
+    res.cookies.set("oauth_state_google", "", { path: "/", maxAge: 0 });
+    res.cookies.set("post_auth_redirect", "", { path: "/", maxAge: 0 });
 
     console.log(`✅ Google login successful: ${email}`);
     return res;

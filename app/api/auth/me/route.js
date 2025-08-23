@@ -12,27 +12,34 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const cookieStore = await cookies(); // ✅ must await
+    await connectDB();
+
+    const cookieStore = await cookies(); // your runtime requires await
     const token =
       cookieStore.get("token")?.value ||
       cookieStore.get("authToken")?.value ||
       null;
 
+    // No token = not logged in
     if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ user: null }, { status: 200 });
     }
 
-    await connectDB();
+    // Verify JWT defensively
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      // Missing secret? Treat as logged out and clear cookie.
+      const res = NextResponse.json({ user: null }, { status: 200 });
+      res.cookies.set("token", "", { path: "/", maxAge: 0 });
+      res.cookies.set("authToken", "", { path: "/", maxAge: 0 });
+      return res;
+    }
 
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
+      decoded = jwt.verify(token, secret);
     } catch {
-      const res = NextResponse.json(
-        { error: "Invalid or expired token" },
-        { status: 401 }
-      );
-      // clear bad cookies (both names, just in case)
+      const res = NextResponse.json({ user: null }, { status: 200 });
       res.cookies.set("token", "", { path: "/", maxAge: 0 });
       res.cookies.set("authToken", "", { path: "/", maxAge: 0 });
       return res;
@@ -40,42 +47,44 @@ export async function GET() {
 
     const userId = decoded.userId || decoded._id;
 
+    // Load user as a plain object
     let user = await User.findById(userId)
       .select("-password")
       .populate("userStyles")
       .populate("matchReports")
-      .populate("scoutingReports");
+      .populate("scoutingReports")
+      .lean();
 
     if (!user) {
-      const res = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      const res = NextResponse.json({ user: null }, { status: 200 });
       res.cookies.set("token", "", { path: "/", maxAge: 0 });
       res.cookies.set("authToken", "", { path: "/", maxAge: 0 });
       return res;
     }
 
-    // Populate familyMembers.userStyles if present
-    if (user.familyMembers?.length) {
-      const familyWithStyles = await Promise.all(
+    // Populate familyMembers.userStyles safely
+    if (Array.isArray(user.familyMembers) && user.familyMembers.length) {
+      const populatedFamily = await Promise.all(
         user.familyMembers.map(async (member) => {
-          const populatedStyles = await UserStyle.find({
-            _id: { $in: member.userStyles || [] },
-          });
-          return {
-            ...member.toObject(),
-            userStyles: populatedStyles,
-          };
+          const styleIds = Array.isArray(member?.userStyles)
+            ? member.userStyles
+            : [];
+          let populatedStyles = [];
+          if (styleIds.length) {
+            populatedStyles = await UserStyle.find({
+              _id: { $in: styleIds },
+            }).lean();
+          }
+          return { ...member, userStyles: populatedStyles };
         })
       );
-      user = user.toObject();
-      user.familyMembers = familyWithStyles;
+      user.familyMembers = populatedFamily;
     }
 
-    return NextResponse.json({ user });
+    return NextResponse.json({ user }, { status: 200 });
   } catch (err) {
     console.error("🔥 /api/auth/me error:", err?.message || err);
-    return NextResponse.json(
-      { error: "Something went wrong" },
-      { status: 500 }
-    );
+    // Fail-safe: never block UI; treat as logged-out on unexpected errors
+    return NextResponse.json({ user: null }, { status: 200 });
   }
 }
