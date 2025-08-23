@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import moment from "moment";
 import { useUser } from "@/context/UserContext";
+import { matchReportCreated } from "@/lib/analytics/adminEvents";
 
 import {
   Card,
@@ -219,6 +220,7 @@ const MatchReportForm = ({
       if (res.ok) {
         toast.success(data.message || "Match report saved.");
         onSuccess?.();
+        matchReportCreated({ style: matchType, userType, isPublic });
         refreshUser();
         setOpen?.(false);
       } else {

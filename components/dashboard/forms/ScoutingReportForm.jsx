@@ -10,6 +10,7 @@ import TechniqueTagInput from "@/components/shared/TechniqueTagInput";
 import FormField from "@/components/shared/FormField";
 import FormSelect from "@/components/shared/FormSelect";
 import { useUser } from "@/context/UserContext";
+import { scoutingReportCreated } from "@/lib/analytics/adminEvents";
 
 const ScoutingReportForm = ({
   athlete,
@@ -190,6 +191,14 @@ const ScoutingReportForm = ({
       const data = await res.json();
 
       if (!res.ok) {
+        scoutingReportCreated({
+          style: matchType || "(none)",
+          opponentName: opponentName || "(unknown)",
+          userType: userType || "user", // "user" | "family"
+          tagsCount: Array.isArray(selectedTags) ? selectedTags.length : 0,
+          rating: typeof rating !== "undefined" ? rating : "",
+          isPublic: !!isPublic,
+        });
         toast.error(data.message || "Something went wrong");
         return;
       }

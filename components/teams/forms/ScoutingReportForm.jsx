@@ -9,6 +9,7 @@ import Countries from "@/assets/countries.json";
 import Editor from "@/components/shared/Editor";
 import TechniqueTagInput from "@/components/shared/TechniqueTagInput";
 import Spinner from "@/components/shared/Spinner";
+import { teamScoutingReportCreated } from "@/lib/analytics/adminEvents";
 
 // ✅ Shared Form Components
 import FormField from "@/components/shared/FormField";
@@ -230,7 +231,13 @@ const TeamScoutingReportForm = ({
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
-
+      teamScoutingReportCreated({
+        teamName: team?.name || "(unknown)",
+        competitionLevel: level || "",
+        opponentsCount: Array.isArray(opponents) ? opponents.length : 0,
+        tagsCount: Array.isArray(selectedTags) ? selectedTags.length : 0,
+        isPublic: !!isPublic,
+      });
       toast.success(data.message);
       setOpen(false);
       onSuccess?.();

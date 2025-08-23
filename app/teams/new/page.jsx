@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle, XCircle } from "lucide-react";
 import { toast } from "react-toastify";
 import FormField from "@/components/shared/FormField";
+import { adminTeamCreated } from "@/lib/analytics/adminEvents";
 
 export default function CreateTeamPage() {
   const [teamName, setTeamName] = useState("");
@@ -66,6 +67,7 @@ export default function CreateTeamPage() {
 
     if (res.ok) {
       const { team } = await res.json();
+      adminTeamCreated({ method: "manual" });
       router.push(`/teams/${team.teamSlug}`);
     } else {
       toast.error(

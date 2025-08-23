@@ -5,6 +5,7 @@ import { toast } from "react-toastify";
 import FormField from "@/components/shared/FormField";
 import FormSelect from "@/components/shared/FormSelect";
 import Editor from "@/components/shared/Editor";
+import { adminInviteSent } from "@/lib/analytics/adminEvents";
 
 export default function InviteMemberForm({
   slug,
@@ -96,6 +97,7 @@ export default function InviteMemberForm({
       if (!res.ok) throw new Error(data.error || "Failed to send invite.");
 
       toast.success("Invite sent!");
+      adminInviteSent({ role: newRole });
       setOpen(false);
       onSuccess?.();
     } catch (err) {

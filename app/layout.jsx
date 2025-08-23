@@ -8,6 +8,9 @@ import Footer from "@/components/layout/Footer";
 import { UserProvider } from "@/context/UserContext";
 import LayoutClient from "@/components/layout/LayoutClient";
 
+import GAProvider from "@/components/analytics/GAProvider";
+import RouteTracker from "@/components/analytics/RouteTracker";
+
 /** ---------- Default SEO / Open Graph ---------- */
 export const metadata = {
   metadataBase: new URL(
@@ -27,7 +30,7 @@ export const metadata = {
     description: "Manage teams, scout opponents, and share match reports.",
     images: [
       {
-        url: "/og/matscout-og.png", // place a 1200x630 image at public/og/matscout-og.png
+        url: "/og/matscout-og.png",
         width: 1200,
         height: 630,
         alt: "MatScout",
@@ -86,6 +89,10 @@ export default function RootLayout({ children }) {
       </head>
 
       <body className="font-sans flex flex-col min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
+        {/* 🔹 GA4: load script + track SPA route changes (site-wide) */}
+        <GAProvider />
+        <RouteTracker />
+
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
@@ -96,13 +103,8 @@ export default function RootLayout({ children }) {
             autoClose={5000}
           />
           <UserProvider>
-            {/* ✅ Header stays static */}
             <Header />
-
-            {/* ✅ Client-side wrapper for sidebar + query params */}
             <LayoutClient>{children}</LayoutClient>
-
-            {/* ✅ Footer stays static */}
             <Footer />
           </UserProvider>
         </ThemeProvider>
