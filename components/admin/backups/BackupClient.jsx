@@ -3,9 +3,21 @@
 import { useState } from "react";
 import { toast } from "react-toastify";
 
+function fmtBytes(n) {
+  if (n < 1024) return n + " B";
+  const units = ["KB", "MB", "GB", "TB"];
+  let i = -1;
+  do {
+    n /= 1024;
+    i++;
+  } while (n >= 1024 && i < units.length - 1);
+  return `${n.toFixed(1)} ${units[i]}`;
+}
+
 export default function BackupClient({ serverSaveEnabled }) {
   const [loading, setLoading] = useState(false);
   const [includeSensitive, setIncludeSensitive] = useState(false);
+  const [pruning, setPruning] = useState(false);
 
   const download = () => {
     const qs = includeSensitive ? "?includeSensitive=true" : "";
@@ -30,11 +42,69 @@ export default function BackupClient({ serverSaveEnabled }) {
         toast.error(data?.error || "Save failed");
         return;
       }
-      toast.success(`Saved backup (${data.bytes} bytes) to: ${data.path}`);
+      toast.success(`Saved backup (${fmtBytes(data.bytes)}) to:\n${data.path}`);
     } catch (e) {
       toast.error(e?.message || "Save failed");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const pruneOld = async () => {
+    const input = prompt(
+      "Prune backups older than how many days? (default 30)",
+      "30"
+    );
+    if (input === null) return; // cancelled
+    const days = Math.max(1, parseInt(input, 10) || 30);
+
+    setPruning(true);
+    try {
+      // Dry run first
+      const res1 = await fetch(
+        `/api/admin/backup/prune?days=${days}&dryRun=true`,
+        { method: "POST" }
+      );
+      const data1 = await res1.json().catch(() => ({}));
+      if (!res1.ok || data1?.error) {
+        toast.error(data1?.error || "Dry run failed");
+        return;
+      }
+
+      const totalBytes = (data1.deleted || []).reduce(
+        (sum, d) => sum + (d.bytes || 0),
+        0
+      );
+      const msg = `${data1.deletedCount} file(s) would be deleted (${fmtBytes(
+        totalBytes
+      )}). Continue?`;
+      const go = confirm(msg);
+      if (!go) {
+        toast.info("Prune canceled.");
+        return;
+      }
+
+      // Execute prune
+      const res2 = await fetch(`/api/admin/backup/prune?days=${days}`, {
+        method: "POST",
+      });
+      const data2 = await res2.json().catch(() => ({}));
+      if (!res2.ok || data2?.error) {
+        toast.error(data2?.error || "Prune failed");
+        return;
+      }
+
+      const totalBytes2 = (data2.deleted || []).reduce(
+        (sum, d) => sum + (d.bytes || 0),
+        0
+      );
+      toast.success(
+        `Pruned ${data2.deletedCount} file(s), freed ${fmtBytes(totalBytes2)}.`
+      );
+    } catch (e) {
+      toast.error(e?.message || "Prune failed");
+    } finally {
+      setPruning(false);
     }
   };
 
@@ -52,8 +122,7 @@ export default function BackupClient({ serverSaveEnabled }) {
           htmlFor="sens"
           className="text-sm"
         >
-          Include sensitive fields (e.g., password hashes). Only enable for full
-          recovery archives you will store securely.
+          Include sensitive fields (password hashes). Only for secure archives.
         </label>
       </div>
 
@@ -74,26 +143,26 @@ export default function BackupClient({ serverSaveEnabled }) {
           ].join(" ")}
           title={
             serverSaveEnabled
-              ? "Write gzipped JSON to the server folder (BACKUP_DIR)"
-              : "Set BACKUP_DIR in your environment to enable"
+              ? "Write gzipped JSON to the server (BACKUP_DIR)"
+              : "Set BACKUP_DIR to enable"
           }
         >
           {loading ? "Saving…" : "Save to server folder"}
         </button>
+
+        <button
+          onClick={pruneOld}
+          disabled={pruning}
+          className="px-4 py-2 rounded border"
+          title="Delete old backups by age"
+        >
+          {pruning ? "Pruning…" : "Prune old backups"}
+        </button>
       </div>
 
-      {!serverSaveEnabled && (
-        <p className="text-xs text-gray-500">
-          To enable server saves, set <code>BACKUP_DIR</code> to a writable path
-          (e.g., <code>/var/backups/matscout</code>) on a persistent server.
-          Serverless hosts typically can’t persist files between requests.
-        </p>
-      )}
-
       <div className="text-xs text-gray-500">
-        Collections included: users, teams, familyMembers, teamMembers (if
-        present), matchReports, scoutingReports, contactThreads, userStyles,
-        notifications, teamUpdates, techniques, videos.
+        Server saves require <code>BACKUP_DIR</code>. Default retention is{" "}
+        <code>BACKUP_RETENTION_DAYS=30</code>, but you can override per-run.
       </div>
     </div>
   );
