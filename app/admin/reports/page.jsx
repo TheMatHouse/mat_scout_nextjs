@@ -25,12 +25,11 @@ function dateRangeDays(start, end) {
   return out;
 }
 
-/** fill missing dates with zeros */
-function fillSeries(rows, key = "date", valueKeys = ["count"]) {
-  const today = new Date();
-  const start = new Date();
-  start.setDate(today.getDate() - 29);
-  const days = dateRangeDays(start, today);
+/** fill missing dates with zeros over last N days */
+function fillSeries(rows, daysBack, key = "date", valueKeys = ["count"]) {
+  const end = new Date();
+  const start = new Date(end.getTime() - (daysBack - 1) * 86400000);
+  const days = dateRangeDays(start, end);
   const map = new Map(rows.map((r) => [r[key], r]));
   return days.map((day) => {
     const r = map.get(day) || {};
@@ -42,18 +41,21 @@ function fillSeries(rows, key = "date", valueKeys = ["count"]) {
 
 export const dynamic = "force-dynamic";
 
-export default async function ReportsPage() {
+export default async function ReportsPage({ searchParams }) {
   await connectDB();
 
-  const now = new Date();
-  const since7 = new Date(now.getTime() - 7 * 86400000);
-  const since30 = new Date(now.getTime() - 30 * 86400000);
-  const since90 = new Date(now.getTime() - 90 * 86400000);
+  // --- range selector (7 / 30 / 90) ---
+  const sp = await searchParams; // ⬅️ IMPORTANT: await the promise
+  const rawRange = parseInt(sp?.range, 10);
+  const rangeDays = [7, 30, 90].includes(rawRange) ? rawRange : 30;
 
-  // --- Series: Match & Scouting reports per day (last 30) ---
+  const since = (days) => new Date(Date.now() - days * 86400000);
+  const sinceRange = since(rangeDays);
+
+  // --- Series: Match & Scouting reports per day (range) ---
   const [matchByDayAgg, scoutByDayAgg] = await Promise.all([
     MatchReport.aggregate([
-      { $match: { createdAt: { $gte: since30 } } },
+      { $match: { createdAt: { $gte: sinceRange } } },
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
@@ -65,7 +67,7 @@ export default async function ReportsPage() {
       { $sort: { date: 1 } },
     ]),
     ScoutingReport.aggregate([
-      { $match: { createdAt: { $gte: since30 } } },
+      { $match: { createdAt: { $gte: sinceRange } } },
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
@@ -77,19 +79,24 @@ export default async function ReportsPage() {
     ]),
   ]);
 
-  const matchSeries = fillSeries(matchByDayAgg, "date", ["count", "public"]);
-  const scoutSeries = fillSeries(scoutByDayAgg, "date", ["count"]);
-
-  // --- KPIs: 7d new users / match reports / scouting reports ---
-  const [newUsers7, newMatches7, newScouts7, totalTeams] = await Promise.all([
-    User.countDocuments({ createdAt: { $gte: since7 } }),
-    MatchReport.countDocuments({ createdAt: { $gte: since7 } }),
-    ScoutingReport.countDocuments({ createdAt: { $gte: since7 } }),
-    Team.countDocuments(),
+  const matchSeries = fillSeries(matchByDayAgg, rangeDays, "date", [
+    "count",
+    "public",
   ]);
+  const scoutSeries = fillSeries(scoutByDayAgg, rangeDays, "date", ["count"]);
 
-  // --- Win/Loss by style (rename 'style' -> 'styleName' to avoid React 'style' prop collision) ---
+  // --- KPIs over range ---
+  const [newUsersRange, newMatchesRange, newScoutsRange, totalTeams] =
+    await Promise.all([
+      User.countDocuments({ createdAt: { $gte: sinceRange } }),
+      MatchReport.countDocuments({ createdAt: { $gte: sinceRange } }),
+      ScoutingReport.countDocuments({ createdAt: { $gte: sinceRange } }),
+      Team.countDocuments(),
+    ]);
+
+  // --- Win/Loss by style (rename field to styleName) ---
   const winLossByStyle = await MatchReport.aggregate([
+    { $match: { createdAt: { $gte: sinceRange } } },
     {
       $group: {
         _id: "$matchType",
@@ -101,7 +108,7 @@ export default async function ReportsPage() {
     {
       $project: {
         _id: 0,
-        styleName: { $ifNull: ["$_id", "(none)"] }, // <-- renamed here
+        styleName: { $ifNull: ["$_id", "(none)"] },
         total: 1,
         wins: 1,
         losses: 1,
@@ -114,46 +121,42 @@ export default async function ReportsPage() {
     { $limit: 12 },
   ]);
 
-  // --- Most-scouted opponents (90d) ---
-  const topOpponents = await ScoutingReport.aggregate([
-    {
-      $match: {
-        createdAt: { $gte: since90 },
-        opponentName: { $exists: true, $ne: "" },
-      },
-    },
-    { $group: { _id: "$opponentName", reports: { $sum: 1 } } },
-    { $project: { _id: 0, opponent: "$_id", reports: 1 } },
-    { $sort: { reports: -1 } },
-    { $limit: 10 },
-  ]);
-
-  // --- Top technique tags from scouting (90d) ---
-  const topTags = await ScoutingReport.aggregate([
-    {
-      $project: {
-        tags: {
-          $concatArrays: [
-            { $ifNull: ["$opponentAttacks", []] },
-            { $ifNull: ["$athleteAttacks", []] },
-          ],
+  // --- Most-scouted opponents & top tags (range) ---
+  const [topOpponents, topTags] = await Promise.all([
+    ScoutingReport.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: sinceRange },
+          opponentName: { $exists: true, $ne: "" },
         },
       },
-    },
-    { $unwind: "$tags" },
-    {
-      $group: {
-        _id: { $toLower: "$tags" },
-        c: { $sum: 1 },
+      { $group: { _id: "$opponentName", reports: { $sum: 1 } } },
+      { $project: { _id: 0, opponent: "$_id", reports: 1 } },
+      { $sort: { reports: -1 } },
+      { $limit: 15 },
+    ]),
+    ScoutingReport.aggregate([
+      { $match: { createdAt: { $gte: sinceRange } } },
+      {
+        $project: {
+          tags: {
+            $concatArrays: [
+              { $ifNull: ["$opponentAttacks", []] },
+              { $ifNull: ["$athleteAttacks", []] },
+            ],
+          },
+        },
       },
-    },
-    { $project: { _id: 0, tag: "$_id", count: "$c" } },
-    { $sort: { count: -1 } },
-    { $limit: 12 },
+      { $unwind: "$tags" },
+      { $group: { _id: { $toLower: "$tags" }, c: { $sum: 1 } } },
+      { $project: { _id: 0, tag: "$_id", count: "$c" } },
+      { $sort: { count: -1 } },
+      { $limit: 15 },
+    ]),
   ]);
 
-  // --- Mini Funnel A: Sign-up → First report within 7 days (among new users in last 30d) ---
-  const newUsers30 = await User.find({ createdAt: { $gte: since30 } })
+  // --- Mini Funnel A: Sign-up → First report within 7 days (among signups in range) ---
+  const newUsersInRange = await User.find({ createdAt: { $gte: sinceRange } })
     .select("_id createdAt")
     .lean();
 
@@ -164,19 +167,17 @@ export default async function ReportsPage() {
     firstMatchByUser.map((x) => [String(x._id), x.firstReportAt])
   );
 
-  let funnelA_step1 = newUsers30.length;
-  let funnelA_step2 = 0;
+  let fA_step1 = newUsersInRange.length;
+  let fA_step2 = 0;
   const diffs = [];
-  for (const u of newUsers30) {
+  for (const u of newUsersInRange) {
     const f = firstMap.get(String(u._id));
     if (!f) continue;
     const days = Math.max(0, (f - u.createdAt) / 86400000);
     diffs.push(days);
-    if (days <= 7) funnelA_step2++;
+    if (days <= 7) fA_step2++;
   }
-  const funnelA_conv = funnelA_step1
-    ? Math.round((funnelA_step2 / funnelA_step1) * 100)
-    : 0;
+  const fA_conv = fA_step1 ? Math.round((fA_step2 / fA_step1) * 100) : 0;
   const medianDays =
     diffs.length > 0
       ? diffs.sort((a, b) => a - b)[Math.floor(diffs.length / 2)]
@@ -190,48 +191,39 @@ export default async function ReportsPage() {
   const authorsWithReports = await MatchReport.distinct("createdBy", {
     createdBy: { $in: styleUserIds },
   });
-
-  const funnelB_step1 = styleUserIds.length;
-  const funnelB_step2 = authorsWithReports.length;
-  const funnelB_conv = funnelB_step1
-    ? Math.round((funnelB_step2 / funnelB_step1) * 100)
-    : 0;
+  const fB_step1 = styleUserIds.length;
+  const fB_step2 = authorsWithReports.length;
+  const fB_conv = fB_step1 ? Math.round((fB_step2 / fB_step1) * 100) : 0;
 
   const data = {
+    rangeDays,
     kpis: {
-      newUsers7,
-      newMatches7,
-      newScouts7,
+      newUsers7: newUsersRange, // label kept for UI consistency
+      newMatches7: newMatchesRange,
+      newScouts7: newScoutsRange,
       totalTeams,
-      pctWithin7: funnelA_conv,
+      pctWithin7: fA_conv,
       medianDays,
     },
-    series: {
-      matchSeries,
-      scoutSeries,
-    },
-    tables: {
-      winLossByStyle,
-      topOpponents,
-      topTags,
-    },
+    series: { matchSeries, scoutSeries },
+    tables: { winLossByStyle, topOpponents, topTags },
     funnels: {
       signupToFirstReport: {
         title: "Sign-up → First report (≤7d)",
         steps: [
-          { label: "New sign-ups (30d)", count: funnelA_step1 },
-          { label: "First report ≤7d", count: funnelA_step2 },
+          { label: `New sign-ups (${rangeDays}d)`, count: fA_step1 },
+          { label: "First report ≤7d", count: fA_step2 },
         ],
-        conversion: funnelA_conv,
+        conversion: fA_conv,
         medianDays,
       },
       styleToMatchReport: {
         title: "Added style → Created match report",
         steps: [
-          { label: "Users with ≥1 style", count: funnelB_step1 },
-          { label: "Users with ≥1 match report", count: funnelB_step2 },
+          { label: "Users with ≥1 style (lifetime)", count: fB_step1 },
+          { label: "Users with ≥1 match report", count: fB_step2 },
         ],
-        conversion: funnelB_conv,
+        conversion: fB_conv,
       },
     },
   };

@@ -1,4 +1,3 @@
-// components/admin/reports/ReportsDashboard.jsx
 "use client";
 
 import {
@@ -13,10 +12,13 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 export default function ReportsDashboard({ data }) {
   const {
+    rangeDays,
     kpis: {
       newUsers7,
       newMatches7,
@@ -32,20 +34,23 @@ export default function ReportsDashboard({ data }) {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-3xl font-bold">Reports</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Reports</h1>
+        <RangeTabs current={rangeDays} />
+      </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
         <KPI
-          title="New Users (7d)"
+          title={`New Users (${rangeDays}d)`}
           value={newUsers7}
         />
         <KPI
-          title="Match Reports (7d)"
+          title={`Match Reports (${rangeDays}d)`}
           value={newMatches7}
         />
         <KPI
-          title="Scouting Reports (7d)"
+          title={`Scouting Reports (${rangeDays}d)`}
           value={newScouts7}
         />
         <KPI
@@ -66,7 +71,7 @@ export default function ReportsDashboard({ data }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Match Reports (Last 30 days)</CardTitle>
+            <CardTitle>Match Reports (Last {rangeDays} days)</CardTitle>
           </CardHeader>
           <CardContent className="h-72">
             <ResponsiveContainer
@@ -99,7 +104,7 @@ export default function ReportsDashboard({ data }) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Scouting Reports (Last 30 days)</CardTitle>
+            <CardTitle>Scouting Reports (Last {rangeDays} days)</CardTitle>
           </CardHeader>
           <CardContent className="h-72">
             <ResponsiveContainer
@@ -161,7 +166,6 @@ export default function ReportsDashboard({ data }) {
           >
             <BarChart data={winLossByStyle}>
               <CartesianGrid strokeDasharray="3 3" />
-              {/* use styleName (not "style") to avoid React prop collision */}
               <XAxis
                 dataKey="styleName"
                 tick={{ fontSize: 12 }}
@@ -180,7 +184,7 @@ export default function ReportsDashboard({ data }) {
             </BarChart>
           </ResponsiveContainer>
 
-          {/* Short, scrollable summary list */}
+          {/* Compact scrollable summary */}
           <div className="mt-3 max-h-40 overflow-y-auto pr-2">
             <ul className="text-sm grid grid-cols-1 md:grid-cols-2 gap-2">
               {winLossByStyle?.map((row) => (
@@ -203,8 +207,21 @@ export default function ReportsDashboard({ data }) {
       {/* Top Opponents & Top Tags */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <CardHeader>
-            <CardTitle>Most-Scouted Opponents (90d)</CardTitle>
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle>Most-Scouted Opponents ({rangeDays}d)</CardTitle>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                downloadCSV(
+                  topOpponents,
+                  ["opponent", "reports"],
+                  "top_opponents.csv"
+                )
+              }
+            >
+              Export CSV
+            </Button>
           </CardHeader>
           <CardContent className="h-80">
             <ResponsiveContainer
@@ -213,7 +230,6 @@ export default function ReportsDashboard({ data }) {
             >
               <BarChart data={topOpponents}>
                 <CartesianGrid strokeDasharray="3 3" />
-                {/* ⬇️ show labels on axis (rotated) instead of a long list */}
                 <XAxis
                   dataKey="opponent"
                   interval={0}
@@ -234,8 +250,17 @@ export default function ReportsDashboard({ data }) {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Top Technique Tags (90d)</CardTitle>
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle>Top Technique Tags ({rangeDays}d)</CardTitle>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                downloadCSV(topTags, ["tag", "count"], "top_tags.csv")
+              }
+            >
+              Export CSV
+            </Button>
           </CardHeader>
           <CardContent className="h-80">
             <ResponsiveContainer
@@ -244,7 +269,6 @@ export default function ReportsDashboard({ data }) {
             >
               <BarChart data={topTags}>
                 <CartesianGrid strokeDasharray="3 3" />
-                {/* ⬇️ show labels on axis (rotated) instead of a long list */}
                 <XAxis
                   dataKey="tag"
                   interval={0}
@@ -268,6 +292,7 @@ export default function ReportsDashboard({ data }) {
   );
 }
 
+/* ---------- UI bits ---------- */
 function KPI({ title, value }) {
   return (
     <Card>
@@ -293,7 +318,6 @@ function Funnel({ title, steps = [], footer }) {
       <div className="text-lg font-semibold mb-3">{title}</div>
 
       <div className="space-y-3">
-        {/* Step 1 */}
         <div>
           <div className="flex justify-between text-sm mb-1">
             <span className="text-gray-600 dark:text-gray-300">
@@ -303,8 +327,6 @@ function Funnel({ title, steps = [], footer }) {
           </div>
           <div className="h-3 bg-gray-200 dark:bg-gray-800 rounded-full" />
         </div>
-
-        {/* Step 2 */}
         <div>
           <div className="flex justify-between text-sm mb-1">
             <span className="text-gray-600 dark:text-gray-300">
@@ -326,4 +348,64 @@ function Funnel({ title, steps = [], footer }) {
       </div>
     </div>
   );
+}
+
+function RangeTabs({ current }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+
+  const setRange = (d) => {
+    const next = new URLSearchParams(params?.toString() || "");
+    next.set("range", String(d));
+    router.push(`${pathname}?${next.toString()}`);
+  };
+
+  const Tab = ({ d }) => (
+    <button
+      onClick={() => setRange(d)}
+      className={[
+        "px-3 py-1 rounded-md border text-sm",
+        d === current
+          ? "bg-[var(--ms-light-red)] text-white border-transparent"
+          : "bg-transparent border-gray-600 text-gray-200 hover:bg-gray-800",
+      ].join(" ")}
+    >
+      {d}d
+    </button>
+  );
+
+  return (
+    <div className="flex gap-2">
+      <Tab d={7} />
+      <Tab d={30} />
+      <Tab d={90} />
+    </div>
+  );
+}
+
+/* ---------- CSV helpers ---------- */
+function toCSV(rows, headers) {
+  const escape = (v) =>
+    String(v ?? "")
+      .replace(/"/g, '""')
+      .replace(/\n/g, " ");
+  const header = headers.join(",");
+  const body = rows
+    .map((r) => headers.map((h) => `"${escape(r[h])}"`).join(","))
+    .join("\n");
+  return `${header}\n${body}`;
+}
+
+function downloadCSV(rows, headers, filename) {
+  try {
+    const csv = toCSV(rows || [], headers);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch {}
 }
