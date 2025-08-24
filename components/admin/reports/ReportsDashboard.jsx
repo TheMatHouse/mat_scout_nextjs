@@ -1,3 +1,4 @@
+// components/admin/reports/ReportsDashboard.jsx
 "use client";
 
 import {
@@ -16,8 +17,15 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
+/**
+ * Reports dashboard: charts, funnels, tables, exports, and deep-links.
+ * Assumes server `fillSeries` outputs `null` for zero days so lines don't draw on y=0.
+ */
 export default function ReportsDashboard({ data }) {
+  const router = useRouter();
+
   const {
+    generatedAt,
     rangeDays,
     kpis: {
       newUsers7,
@@ -32,10 +40,58 @@ export default function ReportsDashboard({ data }) {
     funnels,
   } = data || {};
 
+  const lastUpdatedLocal = generatedAt
+    ? new Date(generatedAt).toLocaleString()
+    : "";
+
+  // --- Deep-link helpers ---
+  const goToMatchesForStyle = (styleName) => {
+    if (!styleName) return;
+    router.push(
+      `/admin/reports/matches?style=${encodeURIComponent(styleName)}`
+    );
+  };
+  const goToScoutingForOpponent = (opponent) => {
+    if (!opponent) return;
+    router.push(
+      `/admin/reports/scouting?opponent=${encodeURIComponent(opponent)}`
+    );
+  };
+  const goToScoutingForTag = (tag) => {
+    if (!tag) return;
+    router.push(`/admin/reports/scouting?tag=${encodeURIComponent(tag)}`);
+  };
+
+  // Recharts passes the clicked bar's payload in the arg
+  const onStyleBarClick = (arg) => {
+    const styleName = arg?.payload?.styleName;
+    goToMatchesForStyle(styleName);
+  };
+  const onOpponentBarClick = (arg) => {
+    const opponent = arg?.payload?.opponent;
+    goToScoutingForOpponent(opponent);
+  };
+  const onTagBarClick = (arg) => {
+    const tag = arg?.payload?.tag;
+    goToScoutingForTag(tag);
+  };
+
+  // Only render "Public" line if there is at least one non-null point
+  const hasPublic =
+    Array.isArray(matchSeries) && matchSeries.some((d) => (d.public ?? 0) > 0);
+
   return (
     <div className="space-y-8">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Reports</h1>
+        <div>
+          <h1 className="text-3xl font-bold">Reports</h1>
+          {lastUpdatedLocal && (
+            <p className="text-xs text-gray-500 mt-1">
+              Last updated: {lastUpdatedLocal} (cached up to 60s)
+            </p>
+          )}
+        </div>
         <RangeTabs current={rangeDays} />
       </div>
 
@@ -73,32 +129,45 @@ export default function ReportsDashboard({ data }) {
           <CardHeader>
             <CardTitle>Match Reports (Last {rangeDays} days)</CardTitle>
           </CardHeader>
-          <CardContent className="h-72">
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-            >
-              <LineChart data={matchSeries}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 12 }}
-                />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="count"
-                  name="Total"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="public"
-                  name="Public"
-                />
-              </LineChart>
-            </ResponsiveContainer>
+          <CardContent>
+            <div className="h-72">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
+                <LineChart data={matchSeries}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 12 }}
+                  />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="count"
+                    name="Total"
+                    connectNulls={false}
+                    strokeWidth={2}
+                    dot={{ r: 2 }}
+                    activeDot={{ r: 4 }}
+                  />
+                  {hasPublic && (
+                    <Line
+                      type="monotone"
+                      dataKey="public"
+                      name="Public"
+                      connectNulls={false}
+                      strokeWidth={2}
+                      strokeDasharray="4 3"
+                      dot={{ r: 0 }}
+                      activeDot={{ r: 3 }}
+                    />
+                  )}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
 
@@ -106,27 +175,33 @@ export default function ReportsDashboard({ data }) {
           <CardHeader>
             <CardTitle>Scouting Reports (Last {rangeDays} days)</CardTitle>
           </CardHeader>
-          <CardContent className="h-72">
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-            >
-              <LineChart data={scoutSeries}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 12 }}
-                />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="count"
-                  name="Total"
-                />
-              </LineChart>
-            </ResponsiveContainer>
+          <CardContent>
+            <div className="h-72">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
+                <LineChart data={scoutSeries}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 12 }}
+                  />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="count"
+                    name="Total"
+                    connectNulls={false}
+                    strokeWidth={2}
+                    dot={{ r: 2 }}
+                    activeDot={{ r: 4 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -156,50 +231,79 @@ export default function ReportsDashboard({ data }) {
 
       {/* Win/Loss by Style */}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex-row items-center justify-between">
           <CardTitle>Win / Loss by Style</CardTitle>
-        </CardHeader>
-        <CardContent className="h-80">
-          <ResponsiveContainer
-            width="100%"
-            height="100%"
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              downloadCSV(
+                winLossByStyle,
+                ["styleName", "wins", "losses", "total", "winRate"],
+                "win_loss_by_style.csv"
+              )
+            }
           >
-            <BarChart data={winLossByStyle}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="styleName"
-                tick={{ fontSize: 12 }}
-              />
-              <YAxis allowDecimals={false} />
-              <Tooltip />
-              <Legend />
-              <Bar
-                dataKey="wins"
-                name="Wins"
-              />
-              <Bar
-                dataKey="losses"
-                name="Losses"
-              />
-            </BarChart>
-          </ResponsiveContainer>
+            Export CSV
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {/* Chart gets its own fixed height; summary sits below with padding */}
+          <div className="h-72">
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
+              <BarChart
+                data={winLossByStyle}
+                margin={{ top: 8, right: 8, left: 0, bottom: 16 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="styleName"
+                  tick={{ fontSize: 12 }}
+                  interval={0}
+                  tickMargin={10}
+                />
+                <YAxis allowDecimals={false} />
+                <Tooltip />
+                <Legend />
+                <Bar
+                  dataKey="wins"
+                  name="Wins"
+                  onClick={onStyleBarClick}
+                  style={{ cursor: "pointer" }}
+                />
+                <Bar
+                  dataKey="losses"
+                  name="Losses"
+                  onClick={onStyleBarClick}
+                  style={{ cursor: "pointer" }}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
 
-          {/* Compact scrollable summary */}
-          <div className="mt-3 max-h-40 overflow-y-auto pr-2">
-            <ul className="text-sm grid grid-cols-1 md:grid-cols-2 gap-2">
-              {winLossByStyle?.map((row) => (
-                <li
-                  key={row.styleName}
-                  className="flex justify-between"
-                >
-                  <span className="truncate pr-2">{row.styleName}</span>
-                  <span className="text-gray-600 dark:text-gray-300">
-                    {row.wins}/{row.total} wins (
-                    {Math.round((row.winRate || 0) * 100)}%)
-                  </span>
-                </li>
-              ))}
-            </ul>
+          {/* Inline, wrapable summary pairs */}
+          <div className="mt-3 text-sm">
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              {winLossByStyle?.map((row) => {
+                const pct = Math.round((row.winRate || 0) * 100);
+                return (
+                  <button
+                    key={row.styleName}
+                    onClick={() => goToMatchesForStyle(row.styleName)}
+                    className="inline-flex items-center gap-2 hover:underline"
+                    title="View matches with this style"
+                  >
+                    <span className="font-medium">{row.styleName}</span>
+                    <span className="text-gray-600 dark:text-gray-300">
+                      {row.wins}/{row.total} wins ({pct}%)
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -243,6 +347,8 @@ export default function ReportsDashboard({ data }) {
                 <Bar
                   dataKey="reports"
                   name="Reports"
+                  onClick={onOpponentBarClick}
+                  style={{ cursor: "pointer" }}
                 />
               </BarChart>
             </ResponsiveContainer>
@@ -282,6 +388,8 @@ export default function ReportsDashboard({ data }) {
                 <Bar
                   dataKey="count"
                   name="Mentions"
+                  onClick={onTagBarClick}
+                  style={{ cursor: "pointer" }}
                 />
               </BarChart>
             </ResponsiveContainer>
@@ -292,7 +400,8 @@ export default function ReportsDashboard({ data }) {
   );
 }
 
-/* ---------- UI bits ---------- */
+/* ======================= UI bits ======================= */
+
 function KPI({ title, value }) {
   return (
     <Card>
@@ -318,6 +427,7 @@ function Funnel({ title, steps = [], footer }) {
       <div className="text-lg font-semibold mb-3">{title}</div>
 
       <div className="space-y-3">
+        {/* Step 1 */}
         <div>
           <div className="flex justify-between text-sm mb-1">
             <span className="text-gray-600 dark:text-gray-300">
@@ -327,6 +437,8 @@ function Funnel({ title, steps = [], footer }) {
           </div>
           <div className="h-3 bg-gray-200 dark:bg-gray-800 rounded-full" />
         </div>
+
+        {/* Step 2 */}
         <div>
           <div className="flex justify-between text-sm mb-1">
             <span className="text-gray-600 dark:text-gray-300">
@@ -358,40 +470,49 @@ function RangeTabs({ current }) {
   const setRange = (d) => {
     const next = new URLSearchParams(params?.toString() || "");
     next.set("range", String(d));
+    // Reset page on range switch if present in current view
+    next.delete("page");
     router.push(`${pathname}?${next.toString()}`);
   };
 
-  const Tab = ({ d }) => (
-    <button
-      onClick={() => setRange(d)}
-      className={[
-        "px-3 py-1 rounded-md border text-sm",
-        d === current
-          ? "bg-[var(--ms-light-red)] text-white border-transparent"
-          : "bg-transparent border-gray-600 text-gray-200 hover:bg-gray-800",
-      ].join(" ")}
-    >
-      {d}d
-    </button>
-  );
+  const Opt = ({ d }) => {
+    const active = d === current;
+    return (
+      <button
+        onClick={() => setRange(d)}
+        className={[
+          "px-3 py-1 rounded-md border text-sm",
+          active
+            ? "bg-[var(--ms-light-red)] text-white border-transparent"
+            : "bg-transparent border-gray-600 text-gray-200 hover:bg-gray-800",
+        ].join(" ")}
+        aria-pressed={active}
+      >
+        {d}d
+      </button>
+    );
+  };
 
   return (
     <div className="flex gap-2">
-      <Tab d={7} />
-      <Tab d={30} />
-      <Tab d={90} />
+      <Opt d={7} />
+      <Opt d={30} />
+      <Opt d={90} />
+      <Opt d={180} />
+      <Opt d={365} />
     </div>
   );
 }
 
-/* ---------- CSV helpers ---------- */
+/* ======================= CSV helpers ======================= */
+
 function toCSV(rows, headers) {
   const escape = (v) =>
     String(v ?? "")
       .replace(/"/g, '""')
       .replace(/\n/g, " ");
   const header = headers.join(",");
-  const body = rows
+  const body = (rows || [])
     .map((r) => headers.map((h) => `"${escape(r[h])}"`).join(","))
     .join("\n");
   return `${header}\n${body}`;
@@ -399,7 +520,7 @@ function toCSV(rows, headers) {
 
 function downloadCSV(rows, headers, filename) {
   try {
-    const csv = toCSV(rows || [], headers);
+    const csv = toCSV(rows, headers);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -407,5 +528,7 @@ function downloadCSV(rows, headers, filename) {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-  } catch {}
+  } catch {
+    // no-op
+  }
 }

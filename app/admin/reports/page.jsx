@@ -6,6 +6,10 @@ import MatchReport from "@/models/matchReportModel";
 import ScoutingReport from "@/models/scoutingReportModel";
 import ReportsDashboard from "@/components/admin/reports/ReportsDashboard";
 
+/** ---------- small in-memory cache (per server instance) ---------- */
+const CACHE_TTL_MS = 60_000; // 60s
+const cache = new Map(); // key -> { ts, data }
+
 /** helper: yyyy-mm-dd */
 function dstr(d) {
   const yyyy = d.getFullYear();
@@ -25,7 +29,7 @@ function dateRangeDays(start, end) {
   return out;
 }
 
-/** fill missing dates with zeros over last N days */
+/** fill missing dates over last N days (zeros become null so lines don't sit on the x-axis) */
 function fillSeries(rows, daysBack, key = "date", valueKeys = ["count"]) {
   const end = new Date();
   const start = new Date(end.getTime() - (daysBack - 1) * 86400000);
@@ -34,25 +38,31 @@ function fillSeries(rows, daysBack, key = "date", valueKeys = ["count"]) {
   return days.map((day) => {
     const r = map.get(day) || {};
     const filled = { date: day };
-    for (const k of valueKeys) filled[k] = Number(r[k] || 0);
+    for (const k of valueKeys) {
+      const v = Number(r[k] ?? 0);
+      filled[k] = v === 0 ? null : v; // ⬅️ key change: null instead of 0
+    }
     return filled;
   });
 }
 
-export const dynamic = "force-dynamic";
-
 export default async function ReportsPage({ searchParams }) {
   await connectDB();
 
-  // --- range selector (7 / 30 / 90) ---
-  const sp = await searchParams; // ⬅️ IMPORTANT: await the promise
+  const sp = await searchParams;
   const rawRange = parseInt(sp?.range, 10);
-  const rangeDays = [7, 30, 90].includes(rawRange) ? rawRange : 30;
+  const allowed = [7, 30, 90, 180, 365];
+  const rangeDays = allowed.includes(rawRange) ? rawRange : 30;
+
+  const key = `range:${rangeDays}`;
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.ts < CACHE_TTL_MS) {
+    return <ReportsDashboard data={hit.data} />;
+  }
 
   const since = (days) => new Date(Date.now() - days * 86400000);
   const sinceRange = since(rangeDays);
 
-  // --- Series: Match & Scouting reports per day (range) ---
   const [matchByDayAgg, scoutByDayAgg] = await Promise.all([
     MatchReport.aggregate([
       { $match: { createdAt: { $gte: sinceRange } } },
@@ -85,7 +95,6 @@ export default async function ReportsPage({ searchParams }) {
   ]);
   const scoutSeries = fillSeries(scoutByDayAgg, rangeDays, "date", ["count"]);
 
-  // --- KPIs over range ---
   const [newUsersRange, newMatchesRange, newScoutsRange, totalTeams] =
     await Promise.all([
       User.countDocuments({ createdAt: { $gte: sinceRange } }),
@@ -94,7 +103,6 @@ export default async function ReportsPage({ searchParams }) {
       Team.countDocuments(),
     ]);
 
-  // --- Win/Loss by style (rename field to styleName) ---
   const winLossByStyle = await MatchReport.aggregate([
     { $match: { createdAt: { $gte: sinceRange } } },
     {
@@ -118,10 +126,9 @@ export default async function ReportsPage({ searchParams }) {
       },
     },
     { $sort: { total: -1 } },
-    { $limit: 12 },
+    { $limit: 20 },
   ]);
 
-  // --- Most-scouted opponents & top tags (range) ---
   const [topOpponents, topTags] = await Promise.all([
     ScoutingReport.aggregate([
       {
@@ -133,7 +140,7 @@ export default async function ReportsPage({ searchParams }) {
       { $group: { _id: "$opponentName", reports: { $sum: 1 } } },
       { $project: { _id: 0, opponent: "$_id", reports: 1 } },
       { $sort: { reports: -1 } },
-      { $limit: 15 },
+      { $limit: 20 },
     ]),
     ScoutingReport.aggregate([
       { $match: { createdAt: { $gte: sinceRange } } },
@@ -151,11 +158,10 @@ export default async function ReportsPage({ searchParams }) {
       { $group: { _id: { $toLower: "$tags" }, c: { $sum: 1 } } },
       { $project: { _id: 0, tag: "$_id", count: "$c" } },
       { $sort: { count: -1 } },
-      { $limit: 15 },
+      { $limit: 20 },
     ]),
   ]);
 
-  // --- Mini Funnel A: Sign-up → First report within 7 days (among signups in range) ---
   const newUsersInRange = await User.find({ createdAt: { $gte: sinceRange } })
     .select("_id createdAt")
     .lean();
@@ -183,7 +189,6 @@ export default async function ReportsPage({ searchParams }) {
       ? diffs.sort((a, b) => a - b)[Math.floor(diffs.length / 2)]
       : 0;
 
-  // --- Mini Funnel B: Added style → Created any match report (lifetime) ---
   const usersWithStyle = await User.find({ "userStyles.0": { $exists: true } })
     .select("_id")
     .lean();
@@ -196,9 +201,10 @@ export default async function ReportsPage({ searchParams }) {
   const fB_conv = fB_step1 ? Math.round((fB_step2 / fB_step1) * 100) : 0;
 
   const data = {
+    generatedAt: new Date().toISOString(),
     rangeDays,
     kpis: {
-      newUsers7: newUsersRange, // label kept for UI consistency
+      newUsers7: newUsersRange,
       newMatches7: newMatchesRange,
       newScouts7: newScoutsRange,
       totalTeams,
@@ -228,5 +234,8 @@ export default async function ReportsPage({ searchParams }) {
     },
   };
 
-  return <ReportsDashboard data={JSON.parse(JSON.stringify(data))} />;
+  const serializable = JSON.parse(JSON.stringify(data));
+  cache.set(key, { ts: Date.now(), data: serializable });
+
+  return <ReportsDashboard data={serializable} />;
 }
