@@ -1,3 +1,4 @@
+// components/admin/reports/ReportsDashboard.jsx
 "use client";
 
 import {
@@ -179,7 +180,7 @@ export default function ReportsDashboard({ data }) {
             </BarChart>
           </ResponsiveContainer>
 
-          {/* Scrollable list to prevent pushing under footer */}
+          {/* Short, scrollable summary list */}
           <div className="mt-3 max-h-40 overflow-y-auto pr-2">
             <ul className="text-sm grid grid-cols-1 md:grid-cols-2 gap-2">
               {winLossByStyle?.map((row) => (
@@ -212,10 +213,14 @@ export default function ReportsDashboard({ data }) {
             >
               <BarChart data={topOpponents}>
                 <CartesianGrid strokeDasharray="3 3" />
+                {/* ⬇️ show labels on axis (rotated) instead of a long list */}
                 <XAxis
                   dataKey="opponent"
-                  tick={{ fontSize: 12 }}
-                  hide
+                  interval={0}
+                  angle={-25}
+                  textAnchor="end"
+                  height={60}
+                  tick={{ fontSize: 11 }}
                 />
                 <YAxis allowDecimals={false} />
                 <Tooltip />
@@ -225,21 +230,6 @@ export default function ReportsDashboard({ data }) {
                 />
               </BarChart>
             </ResponsiveContainer>
-
-            {/* Scrollable list */}
-            <div className="mt-3 max-h-40 overflow-y-auto pr-2">
-              <ol className="text-sm space-y-1">
-                {topOpponents?.map((o) => (
-                  <li
-                    key={o.opponent}
-                    className="truncate"
-                  >
-                    {o.opponent} —{" "}
-                    <span className="font-mono">{o.reports}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
           </CardContent>
         </Card>
 
@@ -254,9 +244,14 @@ export default function ReportsDashboard({ data }) {
             >
               <BarChart data={topTags}>
                 <CartesianGrid strokeDasharray="3 3" />
+                {/* ⬇️ show labels on axis (rotated) instead of a long list */}
                 <XAxis
                   dataKey="tag"
-                  hide
+                  interval={0}
+                  angle={-25}
+                  textAnchor="end"
+                  height={60}
+                  tick={{ fontSize: 11 }}
                 />
                 <YAxis allowDecimals={false} />
                 <Tooltip />
@@ -266,20 +261,6 @@ export default function ReportsDashboard({ data }) {
                 />
               </BarChart>
             </ResponsiveContainer>
-
-            {/* Scrollable list */}
-            <div className="mt-3 max-h-40 overflow-y-auto pr-2">
-              <ol className="text-sm space-y-1">
-                {topTags?.map((t) => (
-                  <li
-                    key={t.tag}
-                    className="truncate"
-                  >
-                    {t.tag} — <span className="font-mono">{t.count}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
           </CardContent>
         </Card>
       </div>
