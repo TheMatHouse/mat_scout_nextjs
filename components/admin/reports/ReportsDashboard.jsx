@@ -19,7 +19,6 @@ import { Button } from "@/components/ui/button";
 
 /**
  * Reports dashboard: charts, funnels, tables, exports, and deep-links.
- * Assumes server `fillSeries` outputs `null` for zero days so lines don't draw on y=0.
  */
 export default function ReportsDashboard({ data }) {
   const router = useRouter();
@@ -35,8 +34,8 @@ export default function ReportsDashboard({ data }) {
       pctWithin7,
       medianDays,
     },
-    series: { matchSeries, scoutSeries },
-    tables: { winLossByStyle, topOpponents, topTags },
+    series: { matchSeries = [], scoutSeries = [] },
+    tables: { winLossByStyle = [], topOpponents = [], topTags = [] },
     funnels,
   } = data || {};
 
@@ -44,41 +43,37 @@ export default function ReportsDashboard({ data }) {
     ? new Date(generatedAt).toLocaleString()
     : "";
 
+  // --- Transform series so we get a thin baseline for Total, and no double baseline for Public ---
+  const matchSeriesForChart = matchSeries.map((d) => ({
+    ...d,
+    count: d.count ?? 0, // draw zeros -> thin baseline
+    public: (d.public ?? 0) > 0 ? d.public : null, // hide public when zero so it doesn't overlap baseline
+  }));
+  const scoutSeriesForChart = scoutSeries.map((d) => ({
+    ...d,
+    count: d.count ?? 0, // thin baseline
+  }));
+  const hasPublic = matchSeries.some((d) => (d.public ?? 0) > 0);
+
   // --- Deep-link helpers ---
-  const goToMatchesForStyle = (styleName) => {
-    if (!styleName) return;
+  const goToMatchesForStyle = (styleName) =>
+    styleName &&
     router.push(
       `/admin/reports/matches?style=${encodeURIComponent(styleName)}`
     );
-  };
-  const goToScoutingForOpponent = (opponent) => {
-    if (!opponent) return;
+  const goToScoutingForOpponent = (opponent) =>
+    opponent &&
     router.push(
       `/admin/reports/scouting?opponent=${encodeURIComponent(opponent)}`
     );
-  };
-  const goToScoutingForTag = (tag) => {
-    if (!tag) return;
+  const goToScoutingForTag = (tag) =>
+    tag &&
     router.push(`/admin/reports/scouting?tag=${encodeURIComponent(tag)}`);
-  };
 
-  // Recharts passes the clicked bar's payload in the arg
-  const onStyleBarClick = (arg) => {
-    const styleName = arg?.payload?.styleName;
-    goToMatchesForStyle(styleName);
-  };
-  const onOpponentBarClick = (arg) => {
-    const opponent = arg?.payload?.opponent;
-    goToScoutingForOpponent(opponent);
-  };
-  const onTagBarClick = (arg) => {
-    const tag = arg?.payload?.tag;
-    goToScoutingForTag(tag);
-  };
-
-  // Only render "Public" line if there is at least one non-null point
-  const hasPublic =
-    Array.isArray(matchSeries) && matchSeries.some((d) => (d.public ?? 0) > 0);
+  const onStyleBarClick = (arg) => goToMatchesForStyle(arg?.payload?.styleName);
+  const onOpponentBarClick = (arg) =>
+    goToScoutingForOpponent(arg?.payload?.opponent);
+  const onTagBarClick = (arg) => goToScoutingForTag(arg?.payload?.tag);
 
   return (
     <div className="space-y-8">
@@ -135,7 +130,7 @@ export default function ReportsDashboard({ data }) {
                 width="100%"
                 height="100%"
               >
-                <LineChart data={matchSeries}>
+                <LineChart data={matchSeriesForChart}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="date"
@@ -158,6 +153,7 @@ export default function ReportsDashboard({ data }) {
                       type="monotone"
                       dataKey="public"
                       name="Public"
+                      // public is null when zero, so it won't sit on baseline
                       connectNulls={false}
                       strokeWidth={2}
                       strokeDasharray="4 3"
@@ -181,7 +177,7 @@ export default function ReportsDashboard({ data }) {
                 width="100%"
                 height="100%"
               >
-                <LineChart data={scoutSeries}>
+                <LineChart data={scoutSeriesForChart}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="date"
@@ -248,7 +244,6 @@ export default function ReportsDashboard({ data }) {
           </Button>
         </CardHeader>
         <CardContent>
-          {/* Chart gets its own fixed height; summary sits below with padding */}
           <div className="h-72">
             <ResponsiveContainer
               width="100%"
@@ -287,7 +282,7 @@ export default function ReportsDashboard({ data }) {
           {/* Inline, wrapable summary pairs */}
           <div className="mt-3 text-sm">
             <div className="flex flex-wrap gap-x-6 gap-y-2">
-              {winLossByStyle?.map((row) => {
+              {winLossByStyle.map((row) => {
                 const pct = Math.round((row.winRate || 0) * 100);
                 return (
                   <button
@@ -427,7 +422,6 @@ function Funnel({ title, steps = [], footer }) {
       <div className="text-lg font-semibold mb-3">{title}</div>
 
       <div className="space-y-3">
-        {/* Step 1 */}
         <div>
           <div className="flex justify-between text-sm mb-1">
             <span className="text-gray-600 dark:text-gray-300">
@@ -437,8 +431,6 @@ function Funnel({ title, steps = [], footer }) {
           </div>
           <div className="h-3 bg-gray-200 dark:bg-gray-800 rounded-full" />
         </div>
-
-        {/* Step 2 */}
         <div>
           <div className="flex justify-between text-sm mb-1">
             <span className="text-gray-600 dark:text-gray-300">
@@ -470,7 +462,6 @@ function RangeTabs({ current }) {
   const setRange = (d) => {
     const next = new URLSearchParams(params?.toString() || "");
     next.set("range", String(d));
-    // Reset page on range switch if present in current view
     next.delete("page");
     router.push(`${pathname}?${next.toString()}`);
   };
