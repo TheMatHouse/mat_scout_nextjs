@@ -1,4 +1,3 @@
-// components/admin/reports/ReportsDashboard.jsx
 "use client";
 
 import {
@@ -161,7 +160,7 @@ export default function ReportsDashboard({ data }) {
           >
             <BarChart data={winLossByStyle}>
               <CartesianGrid strokeDasharray="3 3" />
-              {/* ⬇️ use styleName, not style */}
+              {/* use styleName (not "style") to avoid React prop collision */}
               <XAxis
                 dataKey="styleName"
                 tick={{ fontSize: 12 }}
@@ -179,20 +178,24 @@ export default function ReportsDashboard({ data }) {
               />
             </BarChart>
           </ResponsiveContainer>
-          <ul className="mt-3 text-sm grid grid-cols-1 md:grid-cols-2 gap-2">
-            {winLossByStyle?.map((row) => (
-              <li
-                key={row.styleName}
-                className="flex justify-between"
-              >
-                <span className="truncate pr-2">{row.styleName}</span>
-                <span className="text-gray-600 dark:text-gray-300">
-                  {row.wins}/{row.total} wins (
-                  {Math.round((row.winRate || 0) * 100)}%)
-                </span>
-              </li>
-            ))}
-          </ul>
+
+          {/* Scrollable list to prevent pushing under footer */}
+          <div className="mt-3 max-h-40 overflow-y-auto pr-2">
+            <ul className="text-sm grid grid-cols-1 md:grid-cols-2 gap-2">
+              {winLossByStyle?.map((row) => (
+                <li
+                  key={row.styleName}
+                  className="flex justify-between"
+                >
+                  <span className="truncate pr-2">{row.styleName}</span>
+                  <span className="text-gray-600 dark:text-gray-300">
+                    {row.wins}/{row.total} wins (
+                    {Math.round((row.winRate || 0) * 100)}%)
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </CardContent>
       </Card>
 
@@ -222,16 +225,21 @@ export default function ReportsDashboard({ data }) {
                 />
               </BarChart>
             </ResponsiveContainer>
-            <ol className="mt-3 text-sm space-y-1">
-              {topOpponents?.map((o) => (
-                <li
-                  key={o.opponent}
-                  className="truncate"
-                >
-                  {o.opponent} — <span className="font-mono">{o.reports}</span>
-                </li>
-              ))}
-            </ol>
+
+            {/* Scrollable list */}
+            <div className="mt-3 max-h-40 overflow-y-auto pr-2">
+              <ol className="text-sm space-y-1">
+                {topOpponents?.map((o) => (
+                  <li
+                    key={o.opponent}
+                    className="truncate"
+                  >
+                    {o.opponent} —{" "}
+                    <span className="font-mono">{o.reports}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
           </CardContent>
         </Card>
 
@@ -258,16 +266,20 @@ export default function ReportsDashboard({ data }) {
                 />
               </BarChart>
             </ResponsiveContainer>
-            <ol className="mt-3 text-sm space-y-1">
-              {topTags?.map((t) => (
-                <li
-                  key={t.tag}
-                  className="truncate"
-                >
-                  {t.tag} — <span className="font-mono">{t.count}</span>
-                </li>
-              ))}
-            </ol>
+
+            {/* Scrollable list */}
+            <div className="mt-3 max-h-40 overflow-y-auto pr-2">
+              <ol className="text-sm space-y-1">
+                {topTags?.map((t) => (
+                  <li
+                    key={t.tag}
+                    className="truncate"
+                  >
+                    {t.tag} — <span className="font-mono">{t.count}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
           </CardContent>
         </Card>
       </div>

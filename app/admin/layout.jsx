@@ -27,7 +27,7 @@ export default async function AdminLayout({ children }) {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 p-4 md:p-8 bg-gray-50 dark:bg-[hsl(222_47%_8%)]">
+      <main className="flex-1 p-4 md:p-8 pb-28 bg-gray-50 dark:bg-[hsl(222_47%_8%)]">
         <AdminAreaTag /> {/* sets internal=1 for admin sessions */}
         {children}
       </main>
