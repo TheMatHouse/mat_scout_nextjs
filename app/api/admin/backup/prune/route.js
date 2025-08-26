@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth-server";
 import fs from "fs";
 import fsp from "fs/promises";
 import path from "path";
+import { sendBackupNotification } from "@/lib/backup/notify";
 
 function ok(json, status = 200) {
   return NextResponse.json(json, { status });
@@ -39,9 +40,7 @@ export async function POST(req) {
     const days = toNumber(url.searchParams.get("days"), envDays);
     const dir = process.env.BACKUP_DIR || "";
 
-    if (!dir) {
-      return ok({ error: "BACKUP_DIR is not set on the server." }, 400);
-    }
+    if (!dir) return ok({ error: "BACKUP_DIR is not set on the server." }, 400);
 
     try {
       await fsp.access(dir, fs.constants.R_OK | fs.constants.W_OK);
@@ -72,7 +71,7 @@ export async function POST(req) {
         } else {
           try {
             await fsp.unlink(f.file);
-            // also remove sidecar checksum if present (future-proof)
+            // also remove sidecar checksum if present
             const sha = f.file.replace(/\.json\.gz$/, ".json.gz.sha256");
             try {
               await fsp.unlink(sha);
@@ -91,7 +90,7 @@ export async function POST(req) {
       }
     }
 
-    return ok({
+    const result = {
       ok: true,
       dryRun,
       retentionDays: days,
@@ -101,9 +100,34 @@ export async function POST(req) {
       keptCount: kept.length,
       deleted,
       errors,
-    });
+      freedBytes: deleted.reduce((s, d) => s + (d.bytes || 0), 0),
+    };
+
+    // notify only on real prune (not dry-run)
+    if (!dryRun) {
+      sendBackupNotification({
+        event: "prune",
+        ok: true,
+        details: {
+          retentionDays: days,
+          examined,
+          deletedCount: result.deletedCount,
+          keptCount: result.keptCount,
+          freedBytes: result.freedBytes,
+          dir,
+        },
+      }).catch(() => {});
+    }
+
+    return ok(result);
   } catch (err) {
     console.error("Prune error:", err);
+    // failure notify
+    sendBackupNotification({
+      event: "prune",
+      ok: false,
+      details: { error: err?.message || String(err) },
+    }).catch(() => {});
     return ok({ error: "Server error" }, 500);
   }
 }

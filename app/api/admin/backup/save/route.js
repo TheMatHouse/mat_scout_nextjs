@@ -9,6 +9,7 @@ import fs from "fs";
 import fsp from "fs/promises";
 import path from "path";
 import { sha256Hex, encryptAesGcm } from "@/lib/backup/integrity";
+import { sendBackupNotification } from "@/lib/backup/notify";
 
 function ok(json, status = 200) {
   return NextResponse.json(json, { status });
@@ -70,15 +71,22 @@ export async function POST(req) {
         "utf8"
       );
 
-      return ok({
-        ok: true,
+      const payload = {
         encrypted: true,
         includeSensitive,
         path: fileEnc,
-        pathMeta: fileMeta,
         bytes: ciphertext.length,
         sha256: sha,
-      });
+      };
+
+      // fire-and-forget notify
+      sendBackupNotification({
+        event: "save",
+        ok: true,
+        details: payload,
+      }).catch(() => {});
+
+      return ok({ ok: true, ...payload });
     }
 
     // 2b) PLAINTEXT write: .json.gz + .sha256
@@ -89,16 +97,30 @@ export async function POST(req) {
     const sha = sha256Hex(gz);
     await fsp.writeFile(fileSha, `${sha}  ${path.basename(file)}\n`, "utf8");
 
-    return ok({
-      ok: true,
+    const payload = {
       encrypted: false,
       includeSensitive,
       path: file,
       bytes: gz.length,
       sha256: sha,
-    });
+    };
+
+    // fire-and-forget notify
+    sendBackupNotification({
+      event: "save",
+      ok: true,
+      details: payload,
+    }).catch(() => {});
+
+    return ok({ ok: true, ...payload });
   } catch (err) {
     console.error("Save backup error:", err);
+    // failure notify (non-blocking)
+    sendBackupNotification({
+      event: "save",
+      ok: false,
+      details: { error: err?.message || String(err) },
+    }).catch(() => {});
     return ok({ error: err?.message || "Server error" }, 500);
   }
 }

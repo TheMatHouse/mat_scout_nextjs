@@ -9,6 +9,7 @@ import {
   parseBackupJSON,
 } from "@/lib/backup/restore";
 import zlib from "zlib";
+import { sendBackupNotification } from "@/lib/backup/notify";
 
 /** Gate restore behind an env switch. Put RESTORE_ENABLE=true ONLY on staging. */
 function isRestoreEnabled() {
@@ -28,9 +29,6 @@ export async function POST(req) {
       return ok({ error: "Restore is disabled on this environment." }, 403);
     }
 
-    // We expect multipart form-data with:
-    // - file: the .json.gz backup (plaintext)
-    // (Advanced: you could add support for .enc + .meta.json here later)
     const form = await req.formData();
     const file = form.get("file");
     const dryRun = (form.get("dryRun") || "").toString() === "true";
@@ -42,13 +40,12 @@ export async function POST(req) {
       );
     }
 
-    // Read and gunzip
     const buf = Buffer.from(await file.arrayBuffer());
     let json;
     try {
       const plain = zlib.gunzipSync(buf);
       json = JSON.parse(plain.toString("utf8"));
-    } catch (e) {
+    } catch {
       return ok(
         { error: "Failed to read backup. Expected a .json.gz file." },
         400
@@ -62,11 +59,34 @@ export async function POST(req) {
       return ok(preview, 200);
     }
 
-    // Apply restore (wipe-and-seed)
     const result = await applyRestore(data);
+
+    // success notify
+    const totals = (result?.results || []).reduce(
+      (acc, r) => {
+        if (r?.inserted) acc.inserted += r.inserted;
+        return acc;
+      },
+      { inserted: 0 }
+    );
+
+    sendBackupNotification({
+      event: "restore",
+      ok: true,
+      details: {
+        collectionsUpdated: (result?.results || []).length,
+        totalInserted: totals.inserted,
+      },
+    }).catch(() => {});
+
     return ok(result, 200);
   } catch (err) {
     console.error("Restore error:", err);
+    sendBackupNotification({
+      event: "restore",
+      ok: false,
+      details: { error: err?.message || String(err) },
+    }).catch(() => {});
     return ok({ error: err?.message || "Server error" }, 500);
   }
 }
