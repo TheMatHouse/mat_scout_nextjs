@@ -5,13 +5,13 @@ import { toast } from "react-toastify";
 
 function fmtBytes(n) {
   if (n < 1024) return n + " B";
-  const units = ["KB", "MB", "GB", "TB"];
+  const u = ["KB", "MB", "GB", "TB"];
   let i = -1;
   do {
     n /= 1024;
     i++;
-  } while (n >= 1024 && i < units.length - 1);
-  return `${n.toFixed(1)} ${units[i]}`;
+  } while (n >= 1024 && i < u.length - 1);
+  return `${n.toFixed(1)} ${u[i]}`;
 }
 
 export default function BackupClient({ serverSaveEnabled }) {
@@ -21,9 +21,8 @@ export default function BackupClient({ serverSaveEnabled }) {
 
   const download = () => {
     const qs = includeSensitive ? "?includeSensitive=true" : "";
-    const url = `/api/admin/backup/download${qs}`;
     const a = document.createElement("a");
-    a.href = url;
+    a.href = `/api/admin/backup/download${qs}`;
     a.rel = "noopener";
     document.body.appendChild(a);
     a.click();
@@ -42,7 +41,13 @@ export default function BackupClient({ serverSaveEnabled }) {
         toast.error(data?.error || "Save failed");
         return;
       }
-      toast.success(`Saved backup (${fmtBytes(data.bytes)}) to:\n${data.path}`);
+      const size = data.bytes ? fmtBytes(data.bytes) : "unknown size";
+      const sha = data.sha256 ? `\nsha256: ${data.sha256}` : "";
+      toast.success(
+        `${
+          data.encrypted ? "Saved ENCRYPTED backup" : "Saved backup"
+        } (${size})\n${data.path}${sha}`
+      );
     } catch (e) {
       toast.error(e?.message || "Save failed");
     } finally {
@@ -55,47 +60,43 @@ export default function BackupClient({ serverSaveEnabled }) {
       "Prune backups older than how many days? (default 30)",
       "30"
     );
-    if (input === null) return; // cancelled
+    if (input === null) return;
     const days = Math.max(1, parseInt(input, 10) || 30);
 
     setPruning(true);
     try {
-      // Dry run first
       const res1 = await fetch(
         `/api/admin/backup/prune?days=${days}&dryRun=true`,
         { method: "POST" }
       );
       const data1 = await res1.json().catch(() => ({}));
-      if (!res1.ok || data1?.error) {
-        toast.error(data1?.error || "Dry run failed");
-        return;
-      }
+      if (!res1.ok || data1?.error)
+        return toast.error(data1?.error || "Dry run failed");
 
       const totalBytes = (data1.deleted || []).reduce(
-        (sum, d) => sum + (d.bytes || 0),
+        (s, d) => s + (d.bytes || 0),
         0
       );
-      const msg = `${data1.deletedCount} file(s) would be deleted (${fmtBytes(
-        totalBytes
-      )}). Continue?`;
-      const go = confirm(msg);
-      if (!go) {
+      if (
+        !confirm(
+          `${data1.deletedCount} file(s) would be deleted (${fmtBytes(
+            totalBytes
+          )}). Continue?`
+        )
+      ) {
         toast.info("Prune canceled.");
         return;
       }
 
-      // Execute prune
       const res2 = await fetch(`/api/admin/backup/prune?days=${days}`, {
         method: "POST",
       });
       const data2 = await res2.json().catch(() => ({}));
-      if (!res2.ok || data2?.error) {
-        toast.error(data2?.error || "Prune failed");
-        return;
-      }
+      if (!res2.ok || data2?.error)
+        return toast.error(data2?.error || "Prune failed");
 
       const totalBytes2 = (data2.deleted || []).reduce(
-        (sum, d) => sum + (d.bytes || 0),
+        (s, d) => s + (d.bytes || 0),
         0
       );
       toast.success(
@@ -143,7 +144,7 @@ export default function BackupClient({ serverSaveEnabled }) {
           ].join(" ")}
           title={
             serverSaveEnabled
-              ? "Write gzipped JSON to the server (BACKUP_DIR)"
+              ? "Write backup to BACKUP_DIR"
               : "Set BACKUP_DIR to enable"
           }
         >
@@ -154,15 +155,15 @@ export default function BackupClient({ serverSaveEnabled }) {
           onClick={pruneOld}
           disabled={pruning}
           className="px-4 py-2 rounded border"
-          title="Delete old backups by age"
         >
           {pruning ? "Pruning…" : "Prune old backups"}
         </button>
       </div>
 
       <div className="text-xs text-gray-500">
-        Server saves require <code>BACKUP_DIR</code>. Default retention is{" "}
-        <code>BACKUP_RETENTION_DAYS=30</code>, but you can override per-run.
+        Server saves now create a <code>.sha256</code> file. Set{" "}
+        <code>BACKUP_ENCRYPTION_PASSPHRASE</code> to store encrypted{" "}
+        <code>.enc</code> files.
       </div>
     </div>
   );
