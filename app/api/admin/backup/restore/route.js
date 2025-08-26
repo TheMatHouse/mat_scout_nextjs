@@ -9,13 +9,16 @@ import {
   parseBackupJSON,
 } from "@/lib/backup/restore";
 import zlib from "zlib";
-import { sendBackupNotification } from "@/lib/backup/notify";
+import * as Notify from "@/lib/backup/notify";
+const notify =
+  typeof Notify.sendBackupNotification === "function"
+    ? Notify.sendBackupNotification
+    : async () => {};
 
 /** Gate restore behind an env switch. Put RESTORE_ENABLE=true ONLY on staging. */
 function isRestoreEnabled() {
   return String(process.env.RESTORE_ENABLE).toLowerCase() === "true";
 }
-
 function ok(json, status = 200) {
   return NextResponse.json(json, { status });
 }
@@ -24,10 +27,8 @@ export async function POST(req) {
   try {
     const user = await getCurrentUser();
     if (!user || !user.isAdmin) return ok({ error: "Unauthorized" }, 401);
-
-    if (!isRestoreEnabled()) {
+    if (!isRestoreEnabled())
       return ok({ error: "Restore is disabled on this environment." }, 403);
-    }
 
     const form = await req.formData();
     const file = form.get("file");
@@ -60,17 +61,12 @@ export async function POST(req) {
     }
 
     const result = await applyRestore(data);
-
-    // success notify
     const totals = (result?.results || []).reduce(
-      (acc, r) => {
-        if (r?.inserted) acc.inserted += r.inserted;
-        return acc;
-      },
+      (acc, r) => ((acc.inserted += r?.inserted || 0), acc),
       { inserted: 0 }
     );
 
-    sendBackupNotification({
+    notify({
       event: "restore",
       ok: true,
       details: {
@@ -82,7 +78,7 @@ export async function POST(req) {
     return ok(result, 200);
   } catch (err) {
     console.error("Restore error:", err);
-    sendBackupNotification({
+    notify({
       event: "restore",
       ok: false,
       details: { error: err?.message || String(err) },

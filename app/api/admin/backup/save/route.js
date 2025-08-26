@@ -9,7 +9,11 @@ import fs from "fs";
 import fsp from "fs/promises";
 import path from "path";
 import { sha256Hex, encryptAesGcm } from "@/lib/backup/integrity";
-import { sendBackupNotification } from "@/lib/backup/notify";
+import * as Notify from "@/lib/backup/notify";
+const notify =
+  typeof Notify.sendBackupNotification === "function"
+    ? Notify.sendBackupNotification
+    : async () => {};
 
 function ok(json, status = 200) {
   return NextResponse.json(json, { status });
@@ -41,9 +45,8 @@ export async function POST(req) {
 
     const pass = process.env.BACKUP_ENCRYPTION_PASSPHRASE?.trim();
     if (pass) {
-      // 2a) ENCRYPTED write: .enc + .meta.json + .sha256
+      // ENCRYPTED: .enc + .meta.json + .sha256
       const { ciphertext, salt, iv, tag } = encryptAesGcm(gz, pass);
-
       const fileEnc = path.join(dir, `${base}.enc`);
       const fileMeta = `${fileEnc}.meta.json`;
       const fileSha = `${fileEnc}.sha256`;
@@ -72,6 +75,7 @@ export async function POST(req) {
       );
 
       const payload = {
+        ok: true,
         encrypted: true,
         includeSensitive,
         path: fileEnc,
@@ -79,17 +83,11 @@ export async function POST(req) {
         sha256: sha,
       };
 
-      // fire-and-forget notify
-      sendBackupNotification({
-        event: "save",
-        ok: true,
-        details: payload,
-      }).catch(() => {});
-
-      return ok({ ok: true, ...payload });
+      notify({ event: "save", ok: true, details: payload }).catch(() => {});
+      return ok(payload);
     }
 
-    // 2b) PLAINTEXT write: .json.gz + .sha256
+    // PLAINTEXT: .json.gz + .sha256
     const file = path.join(dir, base);
     const fileSha = `${file}.sha256`;
 
@@ -98,6 +96,7 @@ export async function POST(req) {
     await fsp.writeFile(fileSha, `${sha}  ${path.basename(file)}\n`, "utf8");
 
     const payload = {
+      ok: true,
       encrypted: false,
       includeSensitive,
       path: file,
@@ -105,18 +104,11 @@ export async function POST(req) {
       sha256: sha,
     };
 
-    // fire-and-forget notify
-    sendBackupNotification({
-      event: "save",
-      ok: true,
-      details: payload,
-    }).catch(() => {});
-
-    return ok({ ok: true, ...payload });
+    notify({ event: "save", ok: true, details: payload }).catch(() => {});
+    return ok(payload);
   } catch (err) {
     console.error("Save backup error:", err);
-    // failure notify (non-blocking)
-    sendBackupNotification({
+    notify({
       event: "save",
       ok: false,
       details: { error: err?.message || String(err) },
