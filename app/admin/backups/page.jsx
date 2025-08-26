@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth-server";
 import BackupClient from "@/components/admin/backups/BackupClient";
 import RestoreClient from "@/components/admin/backups/RestoreClient";
+import ServerBackupsList from "@/components/admin/backups/ServerBackupsList";
 
 export default async function AdminBackupsPage() {
   const user = await getCurrentUser();
@@ -13,17 +14,20 @@ export default async function AdminBackupsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold mb-2">Backups</h1>
+      <h1 className="text-3xl font-bold">Backups</h1>
       <p className="text-gray-600 dark:text-gray-300">
-        Download backups, save to the server, prune old archives, and (on
-        staging) restore from a backup.
+        Download backups, save to the server, prune old archives, restore
+        (staging), and manage existing server backups.
       </p>
 
-      {/* Existing backup controls */}
+      {/* Create backups (download/save/prune) */}
       <BackupClient serverSaveEnabled={serverSaveEnabled} />
 
-      {/* NEW: Restore controls */}
+      {/* Restore (staging only) */}
       <RestoreClient />
+
+      {/* List server backups */}
+      <ServerBackupsList />
     </div>
   );
 }
