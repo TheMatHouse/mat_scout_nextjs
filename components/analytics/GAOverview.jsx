@@ -1,210 +1,265 @@
+// components/analytics/GAOverview.jsx
 "use client";
 
-import { useEffect, useState } from "react";
-import { toast } from "react-toastify";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { useEffect, useMemo, useState } from "react";
 
-function fmtDate(yyyymmdd) {
-  if (!yyyymmdd || yyyymmdd.length !== 8) return yyyymmdd || "";
-  const m = yyyymmdd.slice(4, 6),
-    d = yyyymmdd.slice(6, 8);
-  return `${m}/${d}`;
+const RANGES = [
+  { label: "Last 7d", value: "7d" },
+  { label: "Last 28d", value: "28d" },
+  { label: "Last 90d", value: "90d" },
+];
+
+// Safely parse JSON, even if the response is empty or text/html.
+async function safeJson(res) {
+  // If not ok, try to read text for error message; still return an object.
+  const contentType = res.headers.get("content-type") || "";
+  const contentLength = Number(res.headers.get("content-length") || "0");
+
+  // Some runtimes don't set content-length for chunked responses. Read text defensively.
+  const raw = await res.text(); // always read the body exactly once
+
+  if (!res.ok) {
+    // If server included JSON, try to parse it for a better error; otherwise use raw
+    try {
+      const parsed = raw ? JSON.parse(raw) : null;
+      return {
+        ok: false,
+        status: res.status,
+        error: parsed?.error || parsed?.message || raw || `HTTP ${res.status}`,
+        data: null,
+      };
+    } catch {
+      return {
+        ok: false,
+        status: res.status,
+        error: raw || `HTTP ${res.status}`,
+        data: null,
+      };
+    }
+  }
+
+  // OK response: if empty, normalize to {}
+  if (!raw || contentLength === 0) {
+    return { ok: true, status: res.status, data: {}, error: null };
+  }
+
+  // If not JSON, return as text in a data wrapper (don’t crash UI)
+  if (!contentType.includes("application/json")) {
+    return { ok: true, status: res.status, data: { _raw: raw }, error: null };
+  }
+
+  // Parse JSON safely
+  try {
+    return { ok: true, status: res.status, data: JSON.parse(raw), error: null };
+  } catch (e) {
+    return {
+      ok: false,
+      status: res.status,
+      error: `Bad JSON from server: ${e?.message || e}`,
+      data: null,
+    };
+  }
 }
 
-export default function GAOverview({ initialDays = 7 }) {
-  const [days, setDays] = useState(initialDays);
-  const [loading, setLoading] = useState(false);
+export default function GAOverview() {
+  const [range, setRange] = useState("7d");
   const [data, setData] = useState(null);
-  const [errText, setErrText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState(null);
 
-  const load = async (d) => {
-    setLoading(true);
-    setErrText("");
-    try {
-      const res = await fetch(`/api/admin/analytics/summary?days=${d}`, {
-        cache: "no-store",
-      });
-      const json = await res.json();
-      if (!res.ok || json?.error) {
-        setErrText(json?.error || "Failed to load analytics");
-        setData(null);
-      } else {
-        setData(json);
-      }
-    } catch (e) {
-      setErrText(e?.message || "Failed to load analytics");
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const endpoint = useMemo(
+    () => `/api/analytics/summary?range=${encodeURIComponent(range)}`,
+    [range]
+  );
 
   useEffect(() => {
-    load(days);
-  }, []); // initial
+    let cancelled = false;
 
-  const k = data?.kpis;
+    const load = async () => {
+      setLoading(true);
+      setErr(null);
+      try {
+        const res = await fetch(endpoint, { cache: "no-store" });
+        const payload = await safeJson(res);
+
+        if (cancelled) return;
+
+        if (!payload.ok) {
+          setErr(payload.error || "Failed to load analytics.");
+          setData(null);
+        } else {
+          // Normalize shape to avoid "undefined" pathing
+          const d = payload.data || {};
+          setData({
+            summary: d.summary || null,
+            topPages: d.topPages || [],
+            topEvents: d.topEvents || [],
+            _raw: d._raw, // present if server responded with text/html
+          });
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setErr(e?.message || "Network error loading analytics.");
+          setData(null);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [endpoint]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Google Analytics</h2>
-        <div className="ml-auto flex items-center gap-2">
-          {[7, 28, 90].map((d) => (
+        <div className="flex gap-2">
+          {RANGES.map((r) => (
             <button
-              key={d}
-              onClick={() => {
-                setDays(d);
-                load(d);
-              }}
+              key={r.value}
+              onClick={() => setRange(r.value)}
               className={`px-3 py-1 rounded border ${
-                days === d ? "bg-gray-200 dark:bg-gray-800" : ""
+                range === r.value
+                  ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900"
+                  : "bg-white dark:bg-gray-800"
               }`}
             >
-              Last {d}d
+              {r.label}
             </button>
           ))}
         </div>
       </div>
 
-      {errText ? (
-        <div className="rounded border p-4 text-sm text-red-600 dark:text-red-400">
-          {errText}
+      {loading && (
+        <div className="rounded border p-4">Loading GA4 summary…</div>
+      )}
+
+      {err && (
+        <div className="rounded border border-red-300 bg-red-50 p-4 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+          <div className="font-medium mb-1">Analytics error</div>
+          <div className="text-sm">{String(err)}</div>
+          <div className="text-xs mt-2 opacity-70">
+            Tip: Ensure GA property ID, credentials, and scopes are correct. The
+            API may return 204 No Content when there’s no data for the selected
+            period.
+          </div>
         </div>
-      ) : !data ? (
-        <div className="rounded border p-4 text-sm text-gray-600 dark:text-gray-300">
-          {loading ? "Loading…" : "No analytics yet."}
+      )}
+
+      {!loading && !err && data && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Summary */}
+          <div className="rounded border p-4">
+            <h3 className="font-medium mb-3">Summary</h3>
+            {!data.summary && (
+              <div className="text-sm text-gray-500">No summary data.</div>
+            )}
+            {data.summary && (
+              <ul className="text-sm space-y-2">
+                <li className="flex justify-between">
+                  <span>Total Users</span>
+                  <span className="font-semibold">{data.summary.users}</span>
+                </li>
+                <li className="flex justify-between">
+                  <span>Sessions</span>
+                  <span className="font-semibold">{data.summary.sessions}</span>
+                </li>
+                <li className="flex justify-between">
+                  <span>Avg. Engagement (s)</span>
+                  <span className="font-semibold">
+                    {data.summary.avgEngagementSeconds}
+                  </span>
+                </li>
+              </ul>
+            )}
+          </div>
+
+          {/* Top Pages */}
+          <div className="rounded border p-4">
+            <h3 className="font-medium mb-3">Top Pages</h3>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left">
+                  <th className="p-2">Page</th>
+                  <th className="p-2 w-24 text-right">Views</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data.topPages || []).map((r, i) => (
+                  <tr
+                    key={`${r.page || "row"}-${i}`}
+                    className="border-t"
+                  >
+                    <td className="p-2 truncate max-w-[340px]">{r.page}</td>
+                    <td className="p-2 text-right">{r.views}</td>
+                  </tr>
+                ))}
+                {(data.topPages || []).length === 0 && (
+                  <tr>
+                    <td
+                      className="p-2 text-gray-500"
+                      colSpan={2}
+                    >
+                      No data
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Top Events */}
+          <div className="rounded border p-4 lg:col-span-2">
+            <h3 className="font-medium mb-3">Top Events</h3>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left">
+                  <th className="p-2">Event</th>
+                  <th className="p-2 w-24 text-right">Count</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data.topEvents || []).map((r, i) => (
+                  <tr
+                    key={`${r.event || "evt"}-${i}`}
+                    className="border-t"
+                  >
+                    <td className="p-2">{r.event}</td>
+                    <td className="p-2 text-right">{r.count}</td>
+                  </tr>
+                ))}
+                {(data.topEvents || []).length === 0 && (
+                  <tr>
+                    <td
+                      className="p-2 text-gray-500"
+                      colSpan={2}
+                    >
+                      No data
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+
+            {/* If server sent raw (e.g., HTML error page), show a hint for debugging */}
+            {data._raw && (
+              <pre className="mt-3 whitespace-pre-wrap break-words text-xs opacity-70 p-2 rounded border">
+                {_shorten(data._raw)}
+              </pre>
+            )}
+          </div>
         </div>
-      ) : (
-        <>
-          {/* KPIs */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="rounded border p-4 bg-white dark:bg-gray-900">
-              <div className="text-sm text-gray-500">Users</div>
-              <div className="text-2xl font-bold">{k?.totalUsers ?? 0}</div>
-            </div>
-            <div className="rounded border p-4 bg-white dark:bg-gray-900">
-              <div className="text-sm text-gray-500">Sessions</div>
-              <div className="text-2xl font-bold">{k?.sessions ?? 0}</div>
-            </div>
-            <div className="rounded border p-4 bg-white dark:bg-gray-900">
-              <div className="text-sm text-gray-500">Views</div>
-              <div className="text-2xl font-bold">{k?.views ?? 0}</div>
-            </div>
-            <div className="rounded border p-4 bg-white dark:bg-gray-900">
-              <div className="text-sm text-gray-500">Events</div>
-              <div className="text-2xl font-bold">{k?.eventCount ?? 0}</div>
-            </div>
-          </div>
-
-          {/* Sessions per day */}
-          <div className="rounded border p-4 bg-white dark:bg-gray-900">
-            <div className="text-sm mb-2 text-gray-600">Sessions per day</div>
-            <div style={{ width: "100%", height: 260 }}>
-              <ResponsiveContainer>
-                <LineChart
-                  data={(data.timeseries || []).map((r) => ({
-                    ...r,
-                    label: fmtDate(r.date),
-                  }))}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="label" />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="sessions"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Top pages & events */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="rounded border p-4 bg-white dark:bg-gray-900">
-              <div className="text-sm mb-2 text-gray-600">
-                Top pages (views)
-              </div>
-              <table className="min-w-[400px] w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-800">
-                  <tr>
-                    <th className="text-left p-2">Path</th>
-                    <th className="text-right p-2">Views</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(data.topPages || []).map((p) => (
-                    <tr
-                      key={p.path}
-                      className="border-t dark:border-gray-800"
-                    >
-                      <td className="p-2 font-mono truncate max-w-[320px]">
-                        {p.path}
-                      </td>
-                      <td className="p-2 text-right">{p.views}</td>
-                    </tr>
-                  ))}
-                  {(data.topPages || []).length === 0 && (
-                    <tr>
-                      <td
-                        className="p-2 text-gray-500"
-                        colSpan={2}
-                      >
-                        No data
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="rounded border p-4 bg-white dark:bg-gray-900">
-              <div className="text-sm mb-2 text-gray-600">Top events</div>
-              <table className="min-w-[320px] w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-800">
-                  <tr>
-                    <th className="text-left p-2">Event</th>
-                    <th className="text-right p-2">Count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(data.topEvents || []).map((e) => (
-                    <tr
-                      key={e.event}
-                      className="border-t dark:border-gray-800"
-                    >
-                      <td className="p-2">{e.event}</td>
-                      <td className="p-2 text-right">{e.count}</td>
-                    </tr>
-                  ))}
-                  {(data.topEvents || []).length === 0 && (
-                    <tr>
-                      <td
-                        className="p-2 text-gray-500"
-                        colSpan={2}
-                      >
-                        No data
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
       )}
     </div>
   );
+}
+
+// Trim long raw text blobs so the UI doesn’t explode
+function _shorten(s, max = 1200) {
+  if (!s) return "";
+  return s.length > max ? s.slice(0, max) + "… (truncated)" : s;
 }
