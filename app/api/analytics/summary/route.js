@@ -1,17 +1,125 @@
 // app/api/analytics/summary/route.js
-export async function GET(req) {
-  try {
-    const url = new URL(req.url);
-    const range = url.searchParams.get("range") || "7d";
-    const debug = url.searchParams.get("debug") === "1";
+export const runtime = "nodejs";
 
+import { NextResponse } from "next/server";
+import { BetaAnalyticsDataClient } from "@google-analytics/data";
+
+// cache the client across invocations
+let _client;
+
+/**
+ * Prefer Application Default Credentials via GOOGLE_APPLICATION_CREDENTIALS.
+ * Fallback to explicit env creds (GA_CLIENT_EMAIL + GA_PRIVATE_KEY).
+ */
+function getGAClient() {
+  if (_client) return _client;
+
+  // If GOOGLE_APPLICATION_CREDENTIALS is set, let ADC load the JSON file.
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    _client = new BetaAnalyticsDataClient();
+    _client.__authMode = "adc-file";
+    return _client;
+  }
+
+  // Fallback: explicit env variables
+  const clientEmail = process.env.GA_CLIENT_EMAIL;
+  let privateKey = process.env.GA_PRIVATE_KEY || "";
+
+  if (!clientEmail || !privateKey) {
+    throw new Error(
+      "Missing GA credentials. Set GOOGLE_APPLICATION_CREDENTIALS to your JSON file, or provide GA_CLIENT_EMAIL and GA_PRIVATE_KEY."
+    );
+  }
+
+  // tolerate \n-escaped keys and stray CRs
+  if (privateKey.includes("\\n")) privateKey = privateKey.replace(/\\n/g, "\n");
+  privateKey = privateKey.replace(/\r/g, "").trim();
+
+  _client = new BetaAnalyticsDataClient({
+    credentials: { client_email: clientEmail, private_key: privateKey },
+  });
+  _client.__authMode = "env-creds";
+  return _client;
+}
+
+function resolveDateRange(range) {
+  const now = new Date();
+  const end = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  );
+  const days = range === "90d" ? 90 : range === "28d" ? 28 : 7;
+  const start = new Date(end);
+  start.setUTCDate(end.getUTCDate() - (days - 1));
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  return { startDate: fmt(start), endDate: fmt(end) };
+}
+
+async function fetchSummary(client, propertyId, range) {
+  const { startDate, endDate } = resolveDateRange(range);
+  const [resp] = await client.runReport({
+    property: `properties/${propertyId}`,
+    dateRanges: [{ startDate, endDate }],
+    metrics: [
+      { name: "totalUsers" },
+      { name: "sessions" },
+      { name: "userEngagementDuration" },
+    ],
+  });
+
+  const row = resp.rows?.[0]?.metricValues || [];
+  const users = Number(row[0]?.value || 0);
+  const sessions = Number(row[1]?.value || 0);
+  const eng = Number(row[2]?.value || 0);
+
+  return {
+    users,
+    sessions,
+    avgEngagementSeconds: sessions ? Math.round(eng / sessions) : 0,
+  };
+}
+
+async function fetchTopPages(client, propertyId, range) {
+  const { startDate, endDate } = resolveDateRange(range);
+  const [resp] = await client.runReport({
+    property: `properties/${propertyId}`,
+    dateRanges: [{ startDate, endDate }],
+    dimensions: [{ name: "pagePath" }],
+    metrics: [{ name: "screenPageViews" }],
+    orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
+    limit: "10",
+  });
+
+  return (resp.rows || []).map((r) => ({
+    page: r.dimensionValues?.[0]?.value || "(unknown)",
+    views: Number(r.metricValues?.[0]?.value || 0),
+  }));
+}
+
+async function fetchTopEvents(client, propertyId, range) {
+  const { startDate, endDate } = resolveDateRange(range);
+  const [resp] = await client.runReport({
+    property: `properties/${propertyId}`,
+    dateRanges: [{ startDate, endDate }],
+    dimensions: [{ name: "eventName" }],
+    metrics: [{ name: "eventCount" }],
+    orderBys: [{ metric: { metricName: "eventCount" }, desc: true }],
+    limit: "10",
+  });
+
+  return (resp.rows || []).map((r) => ({
+    event: r.dimensionValues?.[0]?.value || "(unknown)",
+    count: Number(r.metricValues?.[0]?.value || 0),
+  }));
+}
+
+export async function GET(req) {
+  const url = new URL(req.url);
+  const range = url.searchParams.get("range") || "7d";
+  const debug = url.searchParams.get("debug") === "1";
+
+  try {
     const propertyId = process.env.GA_PROPERTY_ID;
-    if (!propertyId) {
-      return NextResponse.json(
-        { error: "GA_PROPERTY_ID env var is missing." },
-        { status: 500 }
-      );
-    }
+    if (!propertyId) throw new Error("GA_PROPERTY_ID is missing");
 
     const client = getGAClient();
 
@@ -37,15 +145,19 @@ export async function GET(req) {
           summaryError: e1?.message,
           pagesError: e2?.message,
           eventsError: e3?.message,
+          hasPropertyId: !!process.env.GA_PROPERTY_ID,
           hasClientEmail: !!process.env.GA_CLIENT_EMAIL,
           hasPrivateKey: !!process.env.GA_PRIVATE_KEY,
-          propertyId,
+          hasGacFile: !!process.env.GOOGLE_APPLICATION_CREDENTIALS,
+          authMode: _client?.__authMode || "unknown",
+          propertyId: process.env.GA_PROPERTY_ID,
         },
       }),
     });
   } catch (err) {
-    const message =
-      err?.errors?.[0]?.message || err?.message || "Analytics error.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: err?.message || String(err) },
+      { status: 500 }
+    );
   }
 }
