@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic";
 
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth-server";
-import AdminAreaTag from "@/components/analytics/AdminAreaTag";
 import AdminSidebarNav from "@/components/admin/layout/AdminSidebarNav";
 
 const adminLinks = [
@@ -29,7 +28,6 @@ export default async function AdminLayout({ children }) {
 
       {/* Main content */}
       <main className="flex-1 p-4 md:p-8 pb-28 bg-gray-50 dark:bg-[hsl(222_47%_8%)]">
-        <AdminAreaTag /> {/* sets internal=1 for admin sessions */}
         {children}
       </main>
     </div>

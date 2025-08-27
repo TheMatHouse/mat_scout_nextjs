@@ -8,8 +8,8 @@ import Footer from "@/components/layout/Footer";
 import { UserProvider } from "@/context/UserContext";
 import LayoutClient from "@/components/layout/LayoutClient";
 
-import GAProvider from "@/components/analytics/GAProvider";
-import RouteTracker from "@/components/analytics/RouteTracker";
+// ⬇️ NEW: first-party analytics beacon
+import AnalyticsBeacon from "@/components/analytics/AnalyticsBeacon";
 
 /** ---------- Default SEO / Open Graph ---------- */
 export const metadata = {
@@ -89,9 +89,8 @@ export default function RootLayout({ children }) {
       </head>
 
       <body className="font-sans flex flex-col min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
-        {/* 🔹 GA4: load script + track SPA route changes (site-wide) */}
-        <GAProvider />
-        <RouteTracker />
+        {/* 🔹 First-party analytics: send beacons on initial load & route changes */}
+        <AnalyticsBeacon />
 
         <ThemeProvider
           attribute="class"
