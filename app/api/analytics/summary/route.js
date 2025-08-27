@@ -8,38 +8,38 @@ import { BetaAnalyticsDataClient } from "@google-analytics/data";
 let _client;
 
 /**
- * Prefer Application Default Credentials via GOOGLE_APPLICATION_CREDENTIALS.
- * Fallback to explicit env creds (GA_CLIENT_EMAIL + GA_PRIVATE_KEY).
+ * Prefer explicit ENV credentials (GA_CLIENT_EMAIL + GA_PRIVATE_KEY).
+ * Fall back to GOOGLE_APPLICATION_CREDENTIALS (JSON file) if env creds are absent.
+ * This avoids filesystem permission issues when env creds are available.
  */
 function getGAClient() {
   if (_client) return _client;
 
-  // If GOOGLE_APPLICATION_CREDENTIALS is set, let ADC load the JSON file.
+  const clientEmail = process.env.GA_CLIENT_EMAIL;
+  let privateKey = process.env.GA_PRIVATE_KEY || "";
+
+  if (clientEmail && privateKey) {
+    // tolerate \n-escaped keys and stray CRs
+    if (privateKey.includes("\\n"))
+      privateKey = privateKey.replace(/\\n/g, "\n");
+    privateKey = privateKey.replace(/\r/g, "").trim();
+
+    _client = new BetaAnalyticsDataClient({
+      credentials: { client_email: clientEmail, private_key: privateKey },
+    });
+    _client.__authMode = "env-creds";
+    return _client;
+  }
+
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    _client = new BetaAnalyticsDataClient();
+    _client = new BetaAnalyticsDataClient(); // let ADC read the JSON file
     _client.__authMode = "adc-file";
     return _client;
   }
 
-  // Fallback: explicit env variables
-  const clientEmail = process.env.GA_CLIENT_EMAIL;
-  let privateKey = process.env.GA_PRIVATE_KEY || "";
-
-  if (!clientEmail || !privateKey) {
-    throw new Error(
-      "Missing GA credentials. Set GOOGLE_APPLICATION_CREDENTIALS to your JSON file, or provide GA_CLIENT_EMAIL and GA_PRIVATE_KEY."
-    );
-  }
-
-  // tolerate \n-escaped keys and stray CRs
-  if (privateKey.includes("\\n")) privateKey = privateKey.replace(/\\n/g, "\n");
-  privateKey = privateKey.replace(/\r/g, "").trim();
-
-  _client = new BetaAnalyticsDataClient({
-    credentials: { client_email: clientEmail, private_key: privateKey },
-  });
-  _client.__authMode = "env-creds";
-  return _client;
+  throw new Error(
+    "Missing GA credentials. Provide GA_CLIENT_EMAIL + GA_PRIVATE_KEY or set GOOGLE_APPLICATION_CREDENTIALS."
+  );
 }
 
 function resolveDateRange(range) {
