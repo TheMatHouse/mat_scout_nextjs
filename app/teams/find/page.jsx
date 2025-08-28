@@ -6,14 +6,23 @@ import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
+import FormField from "@/components/shared/FormField"; // ← adjust path if yours differs
 
-// Cloudinary delivery helper: inject f_auto,q_auto (+ optional transforms)
+/* Cloudinary helper */
 function cld(url, extra = "") {
   if (!url || typeof url !== "string") return url;
   if (!url.includes("/upload/")) return url; // skip non-Cloudinary URLs
   const parts = ["f_auto", "q_auto"];
   if (extra) parts.push(extra);
   return url.replace("/upload/", `/upload/${parts.join(",")}/`);
+}
+function initials(name = "") {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase() || "")
+    .join("");
 }
 
 export default function FindTeamsPage() {
@@ -26,21 +35,30 @@ export default function FindTeamsPage() {
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
-  const [country, setCountry] = useState("");
+  const [country, setCountry] = useState(""); // ISO-3 only
 
   const fetchTeams = async (pageNumber = 1) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
-        name,
-        city,
-        state,
-        country,
-        page: pageNumber.toString(),
+        name: name.trim(),
+        city: city.trim(),
+        state: state.trim(),
+        page: String(pageNumber),
         limit: "9",
       });
 
-      const res = await fetch(`/api/teams?${params.toString()}`);
+      // Only send country if it's a valid ISO-3 code
+      const c = country.trim().toUpperCase();
+      if (/^[A-Z]{3}$/.test(c)) {
+        params.set("country", c);
+      } else {
+        params.delete("country");
+      }
+
+      const res = await fetch(`/api/teams?${params.toString()}`, {
+        cache: "no-store",
+      });
       const data = await res.json();
 
       setTeams(Array.isArray(data.teams) ? data.teams : []);
@@ -69,8 +87,9 @@ export default function FindTeamsPage() {
     fetchTeams(1);
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter") fetchTeams(1);
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    fetchTeams(1);
   };
 
   const handlePageChange = (newPage) => {
@@ -107,55 +126,66 @@ export default function FindTeamsPage() {
 
       {/* Filters */}
       <div className="bg-white dark:bg-gray-900 shadow-md rounded-2xl p-6 border border-gray-200 dark:border-gray-700">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <input
-            type="text"
-            placeholder="Team Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-          />
-          <input
-            type="text"
-            placeholder="City"
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-          />
-          <input
-            type="text"
-            placeholder="State"
-            value={state}
-            onChange={(e) => setState(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-          />
-          <input
-            type="text"
-            placeholder="Country"
-            value={country}
-            onChange={(e) => setCountry(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-          />
-        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <FormField
+              label="Team Name"
+              name="teamName"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Team Name"
+            />
+            <FormField
+              label="City"
+              name="city"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="City"
+            />
+            <FormField
+              label="State/Region"
+              name="state"
+              value={state}
+              onChange={(e) => setState(e.target.value)}
+              placeholder="Name or code"
+            />
+            <div>
+              <FormField
+                label="Country (ISO-3)"
+                name="country"
+                value={country}
+                onChange={(e) => {
+                  const code = (e.target.value || "")
+                    .replace(/[^A-Za-z]/g, "")
+                    .toUpperCase()
+                    .slice(0, 3);
+                  setCountry(code);
+                }}
+                placeholder="e.g., USA / MEX / CAN / GBR"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Use a 3-letter country code (e.g., <code>USA</code>,{" "}
+                <code>MEX</code>, <code>CAN</code>, <code>GBR</code>).
+              </p>
+            </div>
+          </div>
 
-        <div className="flex gap-3 mt-4">
-          <Button
-            onClick={() => fetchTeams(1)}
-            className="btn btn-primary"
-          >
-            Search
-          </Button>
-          <Button
-            onClick={clearFilters}
-            className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg"
-          >
-            Clear Filters
-          </Button>
-        </div>
+          <div className="flex gap-3 mt-4">
+            <Button
+              type="submit"
+              className="btn btn-primary"
+            >
+              Search
+            </Button>
+            <Button
+              type="button"
+              onClick={clearFilters}
+              className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg"
+            >
+              Clear Filters
+            </Button>
+          </div>
+        </form>
       </div>
 
       {/* Results */}
@@ -169,7 +199,7 @@ export default function FindTeamsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
               {teams.map((team) => (
                 <TeamCard
-                  key={team._id}
+                  key={team._id || team.teamSlug}
                   team={team}
                 />
               ))}
@@ -226,7 +256,11 @@ export default function FindTeamsPage() {
 }
 
 function TeamCard({ team }) {
-  const location = [team.city, team.state, team.country]
+  const location = [
+    team.city,
+    team.state || team.region,
+    team.country || team.countryCode,
+  ]
     .filter(Boolean)
     .join(", ");
 
@@ -265,13 +299,4 @@ function TeamCard({ team }) {
       </div>
     </Link>
   );
-}
-
-function initials(name = "") {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((s) => s[0]?.toUpperCase() || "")
-    .join("");
 }

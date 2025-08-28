@@ -1,9 +1,10 @@
+// app/teams/[slug]/page.jsx
 import { connectDB } from "@/lib/mongo";
 import Team from "@/models/teamModel";
 import TeamPageClient from "@/components/teams/TeamPageClient";
 
 export async function generateMetadata({ params }) {
-  const { slug } = await params; // ✅ Await params
+  const { slug } = await params; // ✅ await params
   await connectDB();
   const team = await Team.findOne({ teamSlug: slug });
 
@@ -45,7 +46,7 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function TeamPage({ params }) {
-  const { slug } = await params; // ✅ Await params
+  const { slug } = await params; // ✅ await params
   await connectDB();
   const team = await Team.findOne({ teamSlug: slug });
 

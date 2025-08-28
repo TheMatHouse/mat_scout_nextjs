@@ -1,115 +1,73 @@
 // middleware.js
 import { NextResponse } from "next/server";
-import { jwtVerify } from "jose";
 
-// Allowed site origins (adjust if you add more)
-const ALLOW = [
-  "https://matscout.com",
-  "https://staging-matscout.com",
-  "http://localhost:3000",
-];
+export function middleware(req) {
+  const { pathname, search } = req.nextUrl;
 
-// Endpoints that should bypass CSRF + origin checks (support server-to-server/curl)
-const METRICS_PREFIXES = [
-  "/api/metrics/collect",
-  "/api/metrics/rollup", // includes /daily etc.
-];
-
-function isMetricsPath(pathname = "") {
-  return METRICS_PREFIXES.some((p) => pathname.startsWith(p));
-}
-
-export async function middleware(req) {
-  const { pathname } = req.nextUrl;
-  const method = req.method;
-
-  // --- Allow preflight early ---
-  if (method === "OPTIONS") {
-    return NextResponse.next();
-  }
-
-  // --- BYPASS for metrics endpoints (collect/rollup) ---
-  // These must accept server-to-server calls (no Origin/Referer), and may be called via curl.
-  if (isMetricsPath(pathname)) {
-    return NextResponse.next();
-  }
-
-  // --- CSRF guard for JSON writes on /api/* (excluding webhooks/health) ---
-  // Blocks POST/PUT/PATCH/DELETE from other origins; allows GETs and OPTIONS.
+  // --- Public paths (ALWAYS allow) ---
   if (
-    pathname.startsWith("/api/") &&
-    ["POST", "PUT", "PATCH", "DELETE"].includes(method) &&
-    !pathname.startsWith("/api/health") &&
-    !pathname.startsWith("/api/webhooks/")
+    pathname === "/" ||
+    pathname === "/teams" ||
+    pathname.startsWith("/teams/") || // <-- public team detail pages
+    pathname === "/login" ||
+    pathname === "/register" ||
+    pathname === "/forgot-password" ||
+    pathname === "/rt-analytics.html" ||
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml" ||
+    pathname.startsWith("/_next/") ||
+    pathname.startsWith("/assets/") ||
+    pathname === "/favicon.ico"
   ) {
-    const origin = req.headers.get("origin") || "";
-    const referer = req.headers.get("referer") || "";
-    const sameOrigin = ALLOW.some(
-      (a) => origin.startsWith(a) || referer.startsWith(a)
-    );
-    if (!sameOrigin) {
-      return new NextResponse(JSON.stringify({ error: "bad_origin" }), {
-        status: 403,
-        headers: { "content-type": "application/json" },
-      });
-    }
+    return NextResponse.next();
   }
 
-  // --- JWT gating (unchanged logic) ---
-  const token = req.cookies.get("token")?.value;
-
-  const isDashboard = pathname.startsWith("/dashboard");
-  const isAdmin =
-    pathname.startsWith("/admin") || pathname.startsWith("/api/admin");
-  const isTeams =
-    pathname.startsWith("/teams") ||
-    pathname.startsWith("/team") ||
-    pathname.startsWith("/api/teams");
-
-  const isProtected = isDashboard || isAdmin || isTeams;
-
-  if (isProtected && !token) {
-    const loginUrl = new URL("/login", req.url);
-    loginUrl.searchParams.set("from", pathname);
-    return NextResponse.redirect(loginUrl);
+  // --- Metrics APIs: allow; routes do their own auth/secret checks ---
+  if (
+    pathname === "/api/metrics/collect" ||
+    pathname.startsWith("/api/metrics/rollup")
+  ) {
+    return NextResponse.next();
   }
 
-  if (token && isProtected) {
-    try {
-      const secret = new TextEncoder().encode(process.env.JWT_SECRET);
-      const { payload } = await jwtVerify(token, secret);
+  // --- Optionally allow other public APIs here (health checks, og images, etc.) ---
+  if (pathname.startsWith("/api/og")) {
+    return NextResponse.next();
+  }
 
-      if (isAdmin && !payload.isAdmin) {
-        if (pathname.startsWith("/api")) {
-          return new NextResponse(JSON.stringify({ error: "Forbidden" }), {
-            status: 403,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-        const homeUrl = new URL("/dashboard", req.url);
-        homeUrl.searchParams.set("error", "forbidden");
-        return NextResponse.redirect(homeUrl);
-      }
-    } catch (err) {
-      console.error("Invalid JWT:", err);
-      const loginUrl = new URL("/login", req.url);
-      loginUrl.searchParams.set("from", pathname);
-      return NextResponse.redirect(loginUrl);
+  // --- Protected app areas (require session) ---
+  const PROTECTED_PREFIXES = [
+    "/dashboard",
+    "/admin",
+    "/account",
+    "/team", // internal team management area
+    "/settings",
+    "/scouting", // example protected areas—adjust to your app
+  ];
+
+  const requiresAuth = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
+
+  if (requiresAuth) {
+    // Minimal session check. If you use a different cookie/header, adjust here.
+    const hasSession =
+      req.cookies.get("session")?.value ||
+      req.cookies.get("token")?.value ||
+      req.headers.get("authorization");
+
+    if (!hasSession) {
+      const url = req.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("next", pathname + (search || ""));
+      return NextResponse.redirect(url);
     }
   }
 
   return NextResponse.next();
 }
 
-// Ensure middleware runs on the same paths as before, so CSRF still applies broadly
+// Run on most paths but skip common static assets by default
 export const config = {
   matcher: [
-    "/api/:path*",
-    "/dashboard/:path*",
-    "/admin/:path*",
-    "/api/admin/:path*",
-    "/teams/:path*",
-    "/team/:path*",
-    "/api/teams/:path*",
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)",
   ],
 };

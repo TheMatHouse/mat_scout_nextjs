@@ -14,6 +14,63 @@ function cld(url, extra = "") {
   return url.replace("/upload/", `/upload/${parts.join(",")}/`);
 }
 
+// Normalize API responses into a single array of teams, de-duped by slug
+function normalizeTeams(payload) {
+  let items = [];
+
+  if (Array.isArray(payload?.myTeams)) {
+    items = payload.myTeams;
+  } else {
+    const buckets = [];
+    if (Array.isArray(payload?.ownedTeams)) buckets.push(...payload.ownedTeams);
+    if (Array.isArray(payload?.memberTeams))
+      buckets.push(...payload.memberTeams);
+    if (Array.isArray(payload?.teams)) buckets.push(...payload.teams);
+    if (buckets.length) items = buckets;
+  }
+
+  if (!items.length && Array.isArray(payload)) items = payload;
+
+  // De-dupe by teamSlug (fallback to _id), prefer one that carries a role
+  const bySlug = new Map();
+  for (const t of items) {
+    const key = t?.teamSlug || t?.slug || t?._id || Math.random().toString(36);
+    const cur = bySlug.get(key);
+    if (!cur) {
+      bySlug.set(key, t);
+    } else if (!cur?.role && t?.role) {
+      bySlug.set(key, t);
+    }
+  }
+
+  const out = Array.from(bySlug.values());
+  out.sort((a, b) => (a?.teamName || "").localeCompare(b?.teamName || ""));
+  return out;
+}
+
+// Friendly label for role
+function toRoleLabel(team) {
+  const raw =
+    team?.role ||
+    team?.memberRole ||
+    team?.myRole ||
+    team?.membershipRole ||
+    "";
+
+  const r = String(raw).trim().toLowerCase();
+
+  if (["manager", "owner", "admin"].includes(r)) return "Manager";
+  if (r === "coach") return "Coach";
+  if (r === "member") return "Member";
+
+  // Sometimes APIs use booleans/flags—fall back gracefully
+  if (team?.isManager || team?.isOwner || team?.isAdmin) return "Manager";
+  if (team?.isCoach) return "Coach";
+  if (team?.isMember) return "Member";
+
+  return ""; // unknown → hide line
+}
+
 export default function MyTeamsPage() {
   const [loading, setLoading] = useState(true);
   const [myTeams, setMyTeams] = useState([]);
@@ -21,11 +78,10 @@ export default function MyTeamsPage() {
   useEffect(() => {
     (async () => {
       try {
-        // Reuse existing API that returns { myTeams: [...] }
-        const res = await fetch(`/api/teams?limit=0`);
+        const res = await fetch(`/api/teams?limit=0`, { cache: "no-store" });
         const data = await res.json();
-        setMyTeams(Array.isArray(data?.myTeams) ? data.myTeams : []);
-      } catch (e) {
+        setMyTeams(normalizeTeams(data));
+      } catch {
         setMyTeams([]);
       } finally {
         setLoading(false);
@@ -65,7 +121,7 @@ export default function MyTeamsPage() {
             or{" "}
             <Link
               className="text-blue-600 dark:text-blue-400 underline"
-              href="/teams/create"
+              href="/teams/new"
             >
               create one
             </Link>
@@ -74,42 +130,59 @@ export default function MyTeamsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {myTeams.map((team) => (
-            <Link
-              key={team._id}
-              href={`/teams/${team.teamSlug}`}
-              className="group block rounded-2xl border border-border bg-white dark:bg-gray-800 p-5 shadow hover:shadow-lg transition"
-            >
-              <div className="flex flex-col items-center text-center">
-                {team.logoURL ? (
-                  <Image
-                    src={cld(team.logoURL, "w_168,h_168,c_fill,g_auto")}
-                    alt={`${team.teamName} logo`}
-                    width={84}
-                    height={84}
-                    className="rounded-full object-cover mb-3"
-                    loading="lazy"
-                    sizes="(max-width: 768px) 84px, 84px"
-                  />
-                ) : (
-                  <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-gray-600 mb-3" />
-                )}
-                <h3 className="text-lg font-bold">{team.teamName}</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  {[team.city, team.state, team.country]
-                    .filter(Boolean)
-                    .join(", ")}
-                </p>
+          {myTeams.map((team) => {
+            const name = team.teamName || team.teamSlug || "Team";
+            const loc = [team.city, team.state, team.country]
+              .filter(Boolean)
+              .join(", ");
+            const initials = (name || "T").slice(0, 2).toUpperCase();
+            const roleLabel = toRoleLabel(team);
 
-                {/* Role pill */}
-                {team.role && (
-                  <span className="mt-3 inline-block text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200">
-                    {team.role}
+            return (
+              <Link
+                key={team._id || team.teamSlug}
+                href={`/teams/${team.teamSlug}`}
+                className="group block rounded-2xl border border-border bg-white dark:bg-gray-800 p-5 shadow hover:shadow-lg transition"
+              >
+                <div className="flex flex-col items-center text-center">
+                  {team.logoURL ? (
+                    <Image
+                      src={cld(team.logoURL, "w_168,h_168,c_fill,g_auto")}
+                      alt={`${name} logo`}
+                      width={84}
+                      height={84}
+                      className="rounded-full object-cover mb-3"
+                      loading="lazy"
+                      sizes="84px"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-gray-600 mb-3 flex items-center justify-center text-sm font-semibold text-gray-600 dark:text-gray-300">
+                      {initials}
+                    </div>
+                  )}
+
+                  <h3 className="text-lg font-bold">{name}</h3>
+
+                  {/* My Role under the team name */}
+                  {roleLabel && (
+                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                      {roleLabel}
+                    </p>
+                  )}
+
+                  {loc ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      {loc}
+                    </p>
+                  ) : null}
+
+                  <span className="mt-3 text-sm text-blue-600 dark:text-blue-400">
+                    View team →
                   </span>
-                )}
-              </div>
-            </Link>
-          ))}
+                </div>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

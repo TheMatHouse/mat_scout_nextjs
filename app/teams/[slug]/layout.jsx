@@ -9,6 +9,7 @@ import TeamMember from "@/models/teamMemberModel";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import TeamProviderClient from "@/components/teams/TeamProviderClient";
 import TeamTabs from "@/components/teams/TeamTabs";
+import ShareMenu from "@/components/shared/ShareMenu";
 
 // Cloudinary delivery helper: inject f_auto,q_auto (+ optional transforms)
 function cld(url, extra = "") {
@@ -21,7 +22,7 @@ function cld(url, extra = "") {
 
 /** SEO / OG / Twitter metadata for team pages */
 export async function generateMetadata({ params }) {
-  const { slug } = params;
+  const { slug } = await params; // ✅ await params
   const base = process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com";
 
   await connectDB();
@@ -84,7 +85,8 @@ export async function generateMetadata({ params }) {
 
 export default async function TeamLayout({ children, params }) {
   await connectDB();
-  const { slug } = params;
+  const { slug } = await params; // ✅ await params
+  const base = process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com";
 
   // Fetch team
   const teamDoc = await Team.findOne({ teamSlug: slug }).lean();
@@ -120,31 +122,51 @@ export default async function TeamLayout({ children, params }) {
   // Current user & membership (count both direct and family-member memberships)
   const currentUser = await getCurrentUserFromCookies().catch(() => null);
 
-  let member = null;
-  if (currentUser?._id) {
-    // Do NOT exclude familyMemberId — parents with family athletes should still be “members”
-    member = await TeamMember.findOne({
+  // Determine role
+  let normalizedRole = null;
+
+  // Treat the team owner as a manager/admin (even if no TeamMember row exists)
+  const isOwner =
+    currentUser?._id &&
+    teamDoc.user &&
+    String(teamDoc.user) === String(currentUser._id);
+
+  if (isOwner) {
+    normalizedRole = "manager"; // owner has full manager capabilities
+  } else if (currentUser?._id) {
+    const membership = await TeamMember.findOne({
       teamId: teamDoc._id,
       userId: currentUser._id,
     })
       .select("role familyMemberId")
       .lean();
+
+    if (membership?.role) {
+      normalizedRole = String(membership.role).toLowerCase();
+    }
   }
 
-  const role = (member?.role || "").toLowerCase();
-  const isManager = role === "manager";
-  const isCoach = role === "coach";
-  const isMember = isManager || isCoach || role === "member";
+  // Recognize common synonyms
+  const isManager =
+    normalizedRole === "manager" ||
+    normalizedRole === "owner" ||
+    normalizedRole === "admin";
+
+  const isCoach = normalizedRole === "coach";
+
+  const isMember =
+    isManager ||
+    isCoach ||
+    normalizedRole === "member" ||
+    normalizedRole === "player";
 
   // Build tabs dynamically
   const tabs = [{ label: "Info", href: `/teams/${slug}` }];
 
-  // All team members (member/coach/manager) can see Updates
   if (isMember) {
     tabs.push({ label: "Updates", href: `/teams/${slug}/updates` });
   }
 
-  // Only coaches/managers can see Members + Scouting
   if (isManager || isCoach) {
     tabs.push({ label: "Members", href: `/teams/${slug}/members` });
     tabs.push({
@@ -153,7 +175,6 @@ export default async function TeamLayout({ children, params }) {
     });
   }
 
-  // Only managers can see Settings
   if (isManager) {
     tabs.push({ label: "Settings", href: `/teams/${slug}/settings` });
   }
@@ -169,6 +190,18 @@ export default async function TeamLayout({ children, params }) {
     state: teamDoc.state || "",
     country: teamDoc.country || "",
   };
+
+  // Absolute URL for sharing
+  const shareUrl = `${base}/teams/${safeTeam.teamSlug}`;
+  const shareTitle = `${safeTeam.teamName} on MatScout`;
+  const shareText = [
+    safeTeam.teamName,
+    safeTeam.city,
+    safeTeam.state,
+    safeTeam.country,
+  ]
+    .filter(Boolean)
+    .join(" • ");
 
   return (
     <TeamProviderClient team={safeTeam}>
@@ -206,10 +239,15 @@ export default async function TeamLayout({ children, params }) {
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs + Share */}
       <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-4 px-4 md:px-0">
           <TeamTabs tabs={tabs} />
+          <ShareMenu
+            url={shareUrl}
+            title={shareTitle}
+            text={shareText}
+          />
         </div>
       </div>
 
