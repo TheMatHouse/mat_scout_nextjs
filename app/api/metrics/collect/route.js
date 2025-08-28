@@ -7,16 +7,18 @@ import AnalyticsEvent from "@/models/analyticsEvent";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Optional: set to a long random string server-side
-const ACCEPT_SECRET = process.env.ANALYTICS_ACCEPT_SECRET;
+// Only enforced in PROD if set
+const ACCEPT_SECRET = process.env.ANALYTICS_ACCEPT_SECRET || null;
 
-// allow both prod and staging domains
-const ALLOWED_HOSTS = new Set([
+const PROD_ALLOWED_HOSTS = new Set([
   "matscout.com",
   "www.matscout.com",
   "staging-matscout.com",
   "www.staging-matscout.com",
-  "localhost:3000",
+  "matscout.com:443",
+  "www.matscout.com:443",
+  "staging-matscout.com:443",
+  "www.staging-matscout.com:443",
 ]);
 
 const BOT_REGEX =
@@ -35,24 +37,30 @@ function dateOnlyUTC(d = new Date()) {
 }
 
 export async function POST(req) {
+  const nodeEnv = process.env.NODE_ENV;
+  const dev = nodeEnv !== "production";
+  const url = new URL(req.url);
+  const host = req.headers.get("host") || url.host || "";
+
   try {
-    const url = new URL(req.url);
-    const host = req.headers.get("host") || url.host || "";
-    if (!ALLOWED_HOSTS.has(host)) {
-      // silently ignore; avoid becoming a public endpoint
-      return NextResponse.json({ ok: false }, { status: 204 });
+    // ✅ allow localhost explicitly (helps if dev isn’t detected)
+    const isLocal =
+      host.startsWith("localhost:") || host.startsWith("127.0.0.1:");
+    if (!isLocal && nodeEnv === "production" && !PROD_ALLOWED_HOSTS.has(host)) {
+      return NextResponse.json({ error: "bad_origin" }, { status: 403 });
     }
 
-    if (ACCEPT_SECRET) {
+    // Secret check (prod only, if set)
+    if (!isLocal && nodeEnv === "production" && ACCEPT_SECRET) {
       const provided = req.headers.get("x-analytics-secret");
       if (provided !== ACCEPT_SECRET) {
-        return NextResponse.json({ ok: false }, { status: 204 });
+        return NextResponse.json({ ok: false }, { status: 403 });
       }
     }
 
     const ua = (req.headers.get("user-agent") || "").slice(0, 512);
     if (BOT_REGEX.test(ua)) {
-      return NextResponse.json({ ok: true }, { status: 204 });
+      return new Response(null, { status: 204 });
     }
 
     const ip =
@@ -60,25 +68,22 @@ export async function POST(req) {
       req.headers.get("x-real-ip") ||
       "";
 
-    // Parse body
     const body = await req.json().catch(() => ({}));
     const now = new Date();
     const eventTs = body?.ts ? new Date(body.ts) : now;
 
-    // Build anonymized identifiers (no IP stored)
     const daySalt = dateOnlyUTC(now).toISOString().slice(0, 10);
     const visitor = shortHash(`${ip}:${ua}:${daySalt}`);
     const ipHash = ip ? shortHash(ip) : "";
 
-    // Normalize fields
     const path = (body?.path || "").slice(0, 512);
     const referrer = (body?.referrer || "").slice(0, 512);
     const utm = body?.utm || {};
     const perf = body?.perf || {};
 
-    // Ignore admin pages to avoid self-noise
+    // Ignore admin/dashboard traffic
     if (path.startsWith("/admin") || path.startsWith("/dashboard")) {
-      return NextResponse.json({ ok: true }, { status: 204 });
+      return new Response(null, { status: 204 });
     }
 
     await connectDB();
@@ -102,10 +107,10 @@ export async function POST(req) {
       day: dateOnlyUTC(eventTs),
     });
 
-    return NextResponse.json({ ok: true }, { status: 204 });
-  } catch {
-    // Don't leak errors; respond no-content to be resilient
-    return NextResponse.json({ ok: false }, { status: 204 });
+    return new Response(null, { status: 204 });
+  } catch (e) {
+    console.error("metrics/collect error", e);
+    return NextResponse.json({ ok: false, error: true }, { status: 500 });
   }
 }
 
