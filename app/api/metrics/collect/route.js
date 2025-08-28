@@ -1,4 +1,4 @@
-// app/api/analytics/collect/route.js
+// app/api/metrics/collect/route.js
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { connectDB } from "@/lib/mongo";
