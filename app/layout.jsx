@@ -12,12 +12,14 @@ import LayoutClient from "@/components/layout/LayoutClient";
 import AnalyticsBeacon from "@/components/analytics/AnalyticsBeacon";
 
 /** ---------- Default SEO / Open Graph ---------- */
+const DOMAIN = process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com";
+const HOME_URL = `${DOMAIN}/`;
+const OG_IMAGE = `${DOMAIN}/og/matscout-og.png`;
+
 export const metadata = {
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com"
-  ),
+  metadataBase: new URL(DOMAIN),
   title: {
-    default: "MatScout",
+    default: "MatScout — Track. Scout. Compete.",
     template: "%s · MatScout",
   },
   description:
@@ -25,26 +27,27 @@ export const metadata = {
   openGraph: {
     type: "website",
     siteName: "MatScout",
-    url: "/",
-    title: "MatScout",
+    url: HOME_URL, // absolute
+    title: "MatScout — Track. Scout. Compete.",
     description: "Manage teams, scout opponents, and share match reports.",
     images: [
       {
-        url: "/og/matscout-og.png",
+        url: OG_IMAGE, // absolute
         width: 1200,
         height: 630,
         alt: "MatScout",
       },
     ],
+    locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "MatScout",
+    title: "MatScout — Track. Scout. Compete.",
     description: "Manage teams, scout opponents, and share match reports.",
-    images: ["/og/matscout-og.png"],
+    images: [OG_IMAGE], // absolute
   },
   alternates: {
-    canonical: "/",
+    canonical: HOME_URL, // absolute
   },
 };
 
