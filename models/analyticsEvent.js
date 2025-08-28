@@ -9,7 +9,8 @@ import mongoose from "mongoose";
  */
 const AnalyticsEventSchema = new mongoose.Schema(
   {
-    ts: { type: Date, default: Date.now, index: true },
+    // ⬇️ removed "index: true" here; we will create a TTL index instead
+    ts: { type: Date, default: Date.now },
 
     // page info
     path: { type: String, index: true },
@@ -43,6 +44,16 @@ const AnalyticsEventSchema = new mongoose.Schema(
 
 // helpful compound for "top pages in time range"
 AnalyticsEventSchema.index({ path: 1, ts: 1 });
+
+/**
+ * TTL index: auto-delete raw events after 30 days (2,592,000 seconds) based on "ts".
+ * IMPORTANT: we name it "ts_1" to match the default, but we must drop any existing ts_1
+ * non-TTL index first (see instructions below).
+ */
+AnalyticsEventSchema.index(
+  { ts: 1 },
+  { expireAfterSeconds: 2_592_000, name: "ts_1" }
+);
 
 export default mongoose.models.AnalyticsEvent ||
   mongoose.model("AnalyticsEvent", AnalyticsEventSchema);
