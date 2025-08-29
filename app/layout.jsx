@@ -1,3 +1,4 @@
+// app/layout.jsx
 import "@/app/globals.css";
 import { ThemeProvider } from "next-themes";
 import { ToastContainer } from "react-toastify";
@@ -8,18 +9,16 @@ import Footer from "@/components/layout/Footer";
 import { UserProvider } from "@/context/UserContext";
 import LayoutClient from "@/components/layout/LayoutClient";
 
-// ⬇️ NEW: first-party analytics beacon
+// ⬇️ first-party analytics beacon
 import AnalyticsBeacon from "@/components/analytics/AnalyticsBeacon";
 
 /** ---------- Default SEO / Open Graph ---------- */
-const DOMAIN = process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com";
-const HOME_URL = `${DOMAIN}/`;
-const OG_IMAGE = `${DOMAIN}/og/matscout-og.png`;
-
 export const metadata = {
-  metadataBase: new URL(DOMAIN),
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com"
+  ),
   title: {
-    default: "MatScout — Track. Scout. Compete.",
+    default: "MatScout",
     template: "%s · MatScout",
   },
   description:
@@ -27,33 +26,38 @@ export const metadata = {
   openGraph: {
     type: "website",
     siteName: "MatScout",
-    url: HOME_URL, // absolute
-    title: "MatScout — Track. Scout. Compete.",
+    url: "/",
+    title: "MatScout",
     description: "Manage teams, scout opponents, and share match reports.",
     images: [
       {
-        url: OG_IMAGE, // absolute
+        url: "/og/matscout-og.png",
         width: 1200,
         height: 630,
         alt: "MatScout",
       },
     ],
-    locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "MatScout — Track. Scout. Compete.",
+    title: "MatScout",
     description: "Manage teams, scout opponents, and share match reports.",
-    images: [OG_IMAGE], // absolute
+    images: ["/og/matscout-og.png"],
   },
   alternates: {
-    canonical: HOME_URL, // absolute
+    canonical: "/",
   },
 };
 
 export const dynamic = "force-dynamic";
 
 export default function RootLayout({ children }) {
+  // Use either NEXT_PUBLIC_FACEBOOK_APP_ID (preferred) or fall back to FACEBOOK_CLIENT_ID if set
+  const FB_APP_ID =
+    process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
+    process.env.FACEBOOK_CLIENT_ID ||
+    "";
+
   return (
     <html
       lang="en"
@@ -70,6 +74,7 @@ export default function RootLayout({ children }) {
           href="https://res.cloudinary.com"
           crossOrigin=""
         />
+
         {/* Optional: avatars from Google & Facebook */}
         <link
           rel="dns-prefetch"
@@ -89,6 +94,14 @@ export default function RootLayout({ children }) {
           href="https://graph.facebook.com"
           crossOrigin=""
         />
+
+        {/* ✅ Add fb:app_id so Facebook Sharing Debugger stops warning */}
+        {FB_APP_ID ? (
+          <meta
+            property="fb:app_id"
+            content={FB_APP_ID}
+          />
+        ) : null}
       </head>
 
       <body className="font-sans flex flex-col min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
