@@ -47,6 +47,9 @@ export const metadata = {
   alternates: {
     canonical: "/",
   },
+  other: {
+    "fb:app_id": process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "",
+  },
 };
 
 export const dynamic = "force-dynamic";
