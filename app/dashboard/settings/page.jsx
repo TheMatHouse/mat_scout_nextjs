@@ -23,6 +23,7 @@ export default function SettingsPage() {
     }
   }, [loading, user, refreshUser]); // 👈 include refreshUser in deps
 
+  console.log("USER ", user);
   if (loading) {
     return (
       <div className="flex flex-col justify-center items-center h-[70vh] bg-background">

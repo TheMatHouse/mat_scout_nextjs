@@ -22,6 +22,7 @@ export default function DashboardHome() {
   const [scoutingCount, setScoutingCount] = useState(null);
   const [teamCount, setTeamCount] = useState(null);
 
+  console.log("USER ", user);
   useEffect(() => {
     if (!user?._id) return;
 
