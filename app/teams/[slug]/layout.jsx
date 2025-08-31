@@ -22,18 +22,18 @@ function cld(url, extra = "") {
 
 /** SEO / OG / Twitter metadata for team pages */
 export async function generateMetadata({ params }) {
-  const { slug } = await params; // keep your await style
-  const base = process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com";
+  const { slug } = await params;
+  const BASE = process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com";
+  const FALLBACK = new URL("/default-og.png", BASE).toString();
 
   await connectDB();
   const team = await Team.findOne({ teamSlug: slug })
     .select("teamName teamSlug logoURL city state country")
     .lean();
 
-  // 404 / not found
   if (!team) {
     return {
-      metadataBase: new URL(base),
+      metadataBase: new URL(BASE),
       title: "Team not found",
       description: "This team could not be found.",
       alternates: { canonical: `/teams/${slug}` },
@@ -43,15 +43,13 @@ export async function generateMetadata({ params }) {
         url: `/teams/${slug}`,
         title: "Team not found",
         description: "This team could not be found.",
-        images: [
-          { url: "/default-og.png", width: 1200, height: 630, alt: "MatScout" },
-        ],
+        images: [{ url: FALLBACK, width: 1200, height: 630, alt: "MatScout" }],
       },
       twitter: {
         card: "summary_large_image",
         title: "Team not found",
         description: "This team could not be found.",
-        images: ["/default-og.png"],
+        images: [FALLBACK],
       },
       other: { "fb:app_id": process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "" },
     };
@@ -63,23 +61,20 @@ export async function generateMetadata({ params }) {
     ? `${team.teamName} — ${loc} on MatScout.`
     : `${team.teamName} on MatScout.`;
 
-  // OG image: team logo via Cloudinary if available; else fallback
-  let images = [
-    { url: "/default-og.png", width: 1200, height: 630, alt: "MatScout" },
-  ];
-  if (team.logoURL?.includes("res.cloudinary.com")) {
-    images = [
-      {
-        url: cld(team.logoURL, "c_fill,w_1200,h_630"),
-        width: 1200,
-        height: 630,
-        alt: `${team.teamName} logo`,
-      },
-    ];
-  }
+  // Prefer Cloudinary logo if present; otherwise fallback image.
+  const images = team.logoURL?.includes("res.cloudinary.com")
+    ? [
+        {
+          url: cld(team.logoURL, "c_fill,w_1200,h_630"),
+          width: 1200,
+          height: 630,
+          alt: `${team.teamName} logo`,
+        },
+      ]
+    : [{ url: FALLBACK, width: 1200, height: 630, alt: "MatScout" }];
 
   return {
-    metadataBase: new URL(base),
+    metadataBase: new URL(BASE),
     title,
     description,
     alternates: { canonical: `/teams/${team.teamSlug}` },

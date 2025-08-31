@@ -13,14 +13,12 @@ import LayoutClient from "@/components/layout/LayoutClient";
 import AnalyticsBeacon from "@/components/analytics/AnalyticsBeacon";
 
 /** ---------- Default SEO / Open Graph ---------- */
+const BASE = process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com";
+const OG_IMAGE = new URL("/default-og.png", BASE).toString();
+
 export const metadata = {
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com"
-  ),
-  title: {
-    default: "MatScout",
-    template: "%s · MatScout",
-  },
+  metadataBase: new URL(BASE),
+  title: { default: "MatScout", template: "%s · MatScout" },
   description:
     "MatScout helps teams manage rosters, scout opponents, and share match reports.",
   openGraph: {
@@ -29,22 +27,16 @@ export const metadata = {
     url: "/",
     title: "MatScout",
     description: "Manage teams, scout opponents, and share match reports.",
-    images: [
-      {
-        url: "/default-og.png", // file must exist in /public
-        width: 1200,
-        height: 630,
-        alt: "MatScout",
-      },
-    ],
+    images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: "MatScout" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "MatScout",
     description: "Manage teams, scout opponents, and share match reports.",
-    images: ["/default-og.png"],
+    images: [OG_IMAGE],
   },
   alternates: { canonical: "/" },
+  // keep or remove; FB uses the property tag we added in app/head.jsx
   other: { "fb:app_id": process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "" },
 };
 
