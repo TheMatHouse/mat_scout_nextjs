@@ -42,10 +42,7 @@ export const dynamic = "force-dynamic";
 
 export default function RootLayout({ children }) {
   // Use either NEXT_PUBLIC_FACEBOOK_APP_ID (preferred) or fall back to FACEBOOK_CLIENT_ID if set
-  const FB_APP_ID =
-    process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
-    process.env.FACEBOOK_CLIENT_ID ||
-    "";
+  const FB_APP_ID = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
 
   return (
     <html
@@ -53,7 +50,7 @@ export default function RootLayout({ children }) {
       suppressHydrationWarning
     >
       <head>
-        {/* Perf preconnects */}
+        {/* preconnects… */}
         <link
           rel="dns-prefetch"
           href="https://res.cloudinary.com"
@@ -82,17 +79,16 @@ export default function RootLayout({ children }) {
           crossOrigin=""
         />
 
-        {/* Universal tags that FB must see on every page */}
+        {/* Only these two, universally */}
         <meta
           property="og:type"
           content="website"
         />
-        {FB_APP_ID ? (
-          <meta
-            property="fb:app_id"
-            content={FB_APP_ID}
-          />
-        ) : null}
+
+        <meta
+          property="fb:app_id"
+          content={FB_APP_ID}
+        />
       </head>
 
       <body className="font-sans flex flex-col min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
