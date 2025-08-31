@@ -29,7 +29,6 @@ function absUrl(path = "/") {
 }
 const DEFAULT_OG = absUrl("/default-og.png");
 
-/** Centralized Metadata (no fb:app_id here—FB needs property=) */
 export async function generateMetadata() {
   const base = new URL(SITE_URL);
   const baseTitle = "MatScout";
@@ -59,23 +58,26 @@ export async function generateMetadata() {
 }
 
 export default function RootLayout({ children }) {
+  const FB_APP_ID =
+    process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
+    process.env.NEXT_PUBLIC_FB_APP_ID ||
+    process.env.FB_APP_ID ||
+    "";
+
   return (
     <html
       lang="en"
       suppressHydrationWarning
     >
       <head>
-        {/* === HARD PROOF TAGS — if these don't appear in live HTML, you're not serving this build === */}
-        {/* build-check: matscout-root-2025-08-30-1 */}
-        <meta
-          property="fb:app_id"
-          content="YOUR_REAL_FACEBOOK_APP_ID_HERE"
-        />
-        {/* optional: force og:type inline too (harmless) */}
-        <meta
-          property="og:type"
-          content="website"
-        />
+        {/* Force the correct Open Graph form */}
+        {FB_APP_ID ? (
+          <meta
+            key="fb-app-id"
+            property="fb:app_id"
+            content={FB_APP_ID}
+          />
+        ) : null}
       </head>
       <body className="font-sans flex flex-col min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
         <AnalyticsBeacon />
