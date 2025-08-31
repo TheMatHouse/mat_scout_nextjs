@@ -2,90 +2,123 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const revalidate = 0; // don't cache this route's HTML result
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-const WIDTH = 1200;
-const HEIGHT = 630;
+const W = 1200;
+const H = 630;
+
+// ArrayBuffer -> base64 (Edge-safe)
+function abToBase64(ab) {
+  const bytes = new Uint8Array(ab);
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+
+// Fetch a URL and return a data: URL (or null on failure)
+async function toDataUrl(url) {
+  try {
+    const r = await fetch(url, {
+      cache: "no-store",
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; MatScoutOG/1.0)" },
+    });
+    if (!r.ok) return null;
+    const ct = (r.headers.get("content-type") || "").split(";")[0];
+    if (!ct.startsWith("image/")) return null;
+    const b64 = abToBase64(await r.arrayBuffer());
+    return `data:${ct};base64,${b64}`;
+  } catch {
+    return null;
+  }
+}
 
 export async function GET(req) {
-  const url = new URL(req.url);
-  const params = url.searchParams;
+  const { searchParams, origin } = new URL(req.url);
+  const name = searchParams.get("name") || "MatScout";
+  const avatar = searchParams.get("avatar") || "";
 
-  const type = params.get("type") || "team";
-  const name = params.get("name") || "MatScout";
-  const avatar = params.get("avatar");
+  // Default OG is *always* the background
+  const defaultOgHttp = new URL("/default-og.png", origin).toString();
+  const defaultBg = (await toDataUrl(defaultOgHttp)) || defaultOgHttp;
 
-  // Same fallback the homepage uses
-  const defaultOG = new URL("/default-og.png", url.origin).toString();
+  // Optional team logo to overlay; if it fails, we just don't show it
+  const avatarDataUrl = avatar ? await toDataUrl(avatar) : null;
 
-  // Try to use the provided avatar; if it's not a valid image, use default
-  let avatarSrc = defaultOG;
-
-  if (avatar) {
-    try {
-      const head = await fetch(avatar, {
-        method: "HEAD",
-        cache: "no-store",
-        headers: { "User-Agent": "facebookexternalhit/1.1" }, // emulate FB
-      });
-      const ct = head.headers.get("content-type") || "";
-      if (head.ok && ct.startsWith("image/")) {
-        avatarSrc = avatar;
-      }
-    } catch {
-      // keep default
-    }
-  }
-
-  const element = (
-    <div
-      style={{
-        width: WIDTH,
-        height: HEIGHT,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#0b2545",
-        color: "#fff",
-        position: "relative",
-      }}
-    >
-      {/* background image */}
-      <img
-        src={avatarSrc}
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          opacity: 0.25,
-        }}
-      />
-      {/* overlay text */}
+  return new ImageResponse(
+    (
       <div
         style={{
-          padding: "32px 48px",
-          background: "rgba(0,0,0,0.35)",
-          borderRadius: 16,
+          width: W,
+          height: H,
+          position: "relative",
           display: "flex",
-          flexDirection: "column",
-          gap: 8,
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#fff",
         }}
       >
-        <div style={{ fontSize: 52, fontWeight: 800, lineHeight: 1.1 }}>
+        {/* Always show default OG as the background */}
+        <img
+          src={defaultBg}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+          }}
+        />
+
+        {/* Optional, tasteful overlay of team logo */}
+        {avatarDataUrl ? (
+          <div
+            style={{
+              position: "absolute",
+              right: 48,
+              bottom: 48,
+              width: 160,
+              height: 160,
+              borderRadius: 9999,
+              overflow: "hidden",
+              background: "rgba(0,0,0,.25)",
+              boxShadow: "0 6px 18px rgba(0,0,0,.35)",
+              padding: 8,
+            }}
+          >
+            <img
+              src={avatarDataUrl}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                borderRadius: 9999,
+              }}
+            />
+          </div>
+        ) : null}
+
+        {/* Subtle text badge (kept minimal) */}
+        <div
+          style={{
+            position: "absolute",
+            left: 48,
+            bottom: 48,
+            padding: "10px 14px",
+            fontSize: 22,
+            fontWeight: 700,
+            background: "rgba(0,0,0,.35)",
+            borderRadius: 10,
+          }}
+        >
           {name}
         </div>
-        <div style={{ fontSize: 28, opacity: 0.9 }}>
-          {type === "team" ? "Team • MatScout" : "MatScout"}
-        </div>
       </div>
-    </div>
+    ),
+    {
+      width: W,
+      height: H,
+      headers: { "Cache-Control": "public, max-age=31536000, immutable" },
+    }
   );
-
-  const res = new ImageResponse(element, { width: WIDTH, height: HEIGHT });
-  // Cache the *image* aggressively; bust with a query param when you update
-  res.headers.set("Cache-Control", "public, max-age=31536000, immutable");
-  return res;
 }
