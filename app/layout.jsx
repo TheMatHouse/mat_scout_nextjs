@@ -36,8 +36,6 @@ export const metadata = {
     images: [OG_IMAGE],
   },
   alternates: { canonical: "/" },
-  // keep or remove; FB uses the property tag we added in app/head.jsx
-  other: { "fb:app_id": process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "" },
 };
 
 export const dynamic = "force-dynamic";
@@ -84,7 +82,7 @@ export default function RootLayout({ children }) {
           crossOrigin=""
         />
 
-        {/* Only the universal tags here */}
+        {/* Universal OG tags that FB must see on every page */}
         <meta
           property="og:type"
           content="website"

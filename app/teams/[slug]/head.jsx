@@ -1,4 +1,3 @@
-// app/teams/[slug]/head.jsx
 export default function Head() {
   const FB_APP_ID =
     process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
