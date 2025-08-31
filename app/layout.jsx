@@ -12,16 +12,14 @@ import AnalyticsBeacon from "@/components/analytics/AnalyticsBeacon";
 
 export const dynamic = "force-dynamic";
 
-/** ---------- Helpers ---------- */
+/** Helpers */
 function stripTrailingSlash(url) {
   return url ? url.replace(/\/+$/, "") : url;
 }
-
 const SITE_URL =
   stripTrailingSlash(process.env.NEXT_PUBLIC_BASE_URL) ||
   stripTrailingSlash(process.env.NEXT_PUBLIC_DOMAIN) ||
   "https://matscout.com";
-
 function absUrl(path = "/") {
   try {
     return new URL(path, SITE_URL).toString();
@@ -29,10 +27,9 @@ function absUrl(path = "/") {
     return SITE_URL;
   }
 }
-
 const DEFAULT_OG = absUrl("/default-og.png");
 
-/** ---------- Centralized Metadata (no fb:app_id here) ---------- */
+/** Centralized Metadata (no fb:app_id here—FB needs property=) */
 export async function generateMetadata() {
   const base = new URL(SITE_URL);
   const baseTitle = "MatScout";
@@ -62,26 +59,23 @@ export async function generateMetadata() {
 }
 
 export default function RootLayout({ children }) {
-  // Emit fb:app_id via <head> so it uses property= (FB requires this)
-  const FB_APP_ID =
-    process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
-    process.env.NEXT_PUBLIC_FB_APP_ID ||
-    process.env.FB_APP_ID ||
-    "";
-
   return (
     <html
       lang="en"
       suppressHydrationWarning
     >
       <head>
-        {/* Only add if present, and always with property= */}
-        {FB_APP_ID ? (
-          <meta
-            property="fb:app_id"
-            content={FB_APP_ID}
-          />
-        ) : null}
+        {/* === HARD PROOF TAGS — if these don't appear in live HTML, you're not serving this build === */}
+        {/* build-check: matscout-root-2025-08-30-1 */}
+        <meta
+          property="fb:app_id"
+          content="YOUR_REAL_FACEBOOK_APP_ID_HERE"
+        />
+        {/* optional: force og:type inline too (harmless) */}
+        <meta
+          property="og:type"
+          content="website"
+        />
       </head>
       <body className="font-sans flex flex-col min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
         <AnalyticsBeacon />
