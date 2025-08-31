@@ -20,77 +20,15 @@ function cld(url, extra = "") {
   return url.replace("/upload/", `/upload/${parts.join(",")}/`);
 }
 
-/** SEO / OG / Twitter metadata for team pages */
-export async function generateMetadata({ params }) {
-  const { slug } = await params;
-  const BASE = process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com";
-  const CANONICAL = `${BASE}/teams/${slug}`;
-  const FALLBACK = new URL("/default-og.png?v=4", BASE).toString(); // cache-bust
-
-  await connectDB();
-  const team = await Team.findOne({ teamSlug: slug })
-    .select("teamName teamSlug city state country")
-    .lean();
-
-  if (!team) {
-    return {
-      metadataBase: new URL(BASE),
-      title: "Team not found",
-      description: "This team could not be found.",
-      alternates: { canonical: CANONICAL },
-      robots: { index: false, follow: false },
-      openGraph: {
-        type: "website",
-        url: CANONICAL,
-        siteName: "MatScout",
-        title: "Team not found",
-        description: "This team could not be found.",
-        images: [{ url: FALLBACK, width: 1200, height: 630, alt: "MatScout" }],
-      },
-      twitter: {
-        card: "summary_large_image",
-        title: "Team not found",
-        description: "This team could not be found.",
-        images: [FALLBACK],
-      },
-    };
-  }
-
-  const loc = [team.city, team.state, team.country].filter(Boolean).join(", ");
-  const title = team.teamName;
-  const description = loc
-    ? `${team.teamName} — ${loc} on MatScout.`
-    : `${team.teamName} on MatScout.`;
-
-  // Use the SAME branded OG image as the homepage
-  const images = [{ url: FALLBACK, width: 1200, height: 630, alt: "MatScout" }];
-
-  return {
-    metadataBase: new URL(BASE),
-    title,
-    description,
-    alternates: { canonical: `${BASE}/teams/${team.teamSlug}` },
-    openGraph: {
-      type: "website",
-      url: `${BASE}/teams/${team.teamSlug}`,
-      siteName: "MatScout",
-      title,
-      description,
-      images,
-    },
-    twitter: {
-      card: "summary_large_image",
-      title,
-      description,
-      images: [FALLBACK],
-    },
-  };
-}
-
 export default async function TeamLayout({ children, params }) {
   await connectDB();
-  const { slug } = await params; // ✅ await params
-  const base = process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com";
+  const { slug } = await params; // keep your pattern
+
+  const base = (
+    process.env.NEXT_PUBLIC_BASE_URL ||
+    process.env.NEXT_PUBLIC_DOMAIN ||
+    "https://matscout.com"
+  ).replace(/\/+$/, "");
 
   // Fetch team
   const teamDoc = await Team.findOne({ teamSlug: slug }).lean();
@@ -123,20 +61,19 @@ export default async function TeamLayout({ children, params }) {
     );
   }
 
-  // Current user & membership (count both direct and family-member memberships)
+  // Current user & membership
   const currentUser = await getCurrentUserFromCookies().catch(() => null);
 
   // Determine role
   let normalizedRole = null;
 
-  // Treat the team owner as a manager/admin (even if no TeamMember row exists)
   const isOwner =
     currentUser?._id &&
     teamDoc.user &&
     String(teamDoc.user) === String(currentUser._id);
 
   if (isOwner) {
-    normalizedRole = "manager"; // owner has full manager capabilities
+    normalizedRole = "manager";
   } else if (currentUser?._id) {
     const membership = await TeamMember.findOne({
       teamId: teamDoc._id,
@@ -150,7 +87,6 @@ export default async function TeamLayout({ children, params }) {
     }
   }
 
-  // Recognize common synonyms
   const isManager =
     normalizedRole === "manager" ||
     normalizedRole === "owner" ||
@@ -166,11 +102,7 @@ export default async function TeamLayout({ children, params }) {
 
   // Build tabs dynamically
   const tabs = [{ label: "Info", href: `/teams/${slug}` }];
-
-  if (isMember) {
-    tabs.push({ label: "Updates", href: `/teams/${slug}/updates` });
-  }
-
+  if (isMember) tabs.push({ label: "Updates", href: `/teams/${slug}/updates` });
   if (isManager || isCoach) {
     tabs.push({ label: "Members", href: `/teams/${slug}/members` });
     tabs.push({
@@ -178,12 +110,10 @@ export default async function TeamLayout({ children, params }) {
       href: `/teams/${slug}/scouting-reports`,
     });
   }
-
-  if (isManager) {
+  if (isManager)
     tabs.push({ label: "Settings", href: `/teams/${slug}/settings` });
-  }
 
-  // Serialize team for client context
+  // Serialize for client
   const safeTeam = {
     _id: teamDoc._id?.toString(),
     teamSlug: teamDoc.teamSlug,

@@ -12,87 +12,89 @@ import LayoutClient from "@/components/layout/LayoutClient";
 // ⬇️ first-party analytics beacon
 import AnalyticsBeacon from "@/components/analytics/AnalyticsBeacon";
 
-/** ---------- Default SEO / Open Graph ---------- */
-const BASE = process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com";
-const OG_IMAGE = new URL("/default-og.png", BASE).toString();
-
-export const metadata = {
-  metadataBase: new URL(BASE),
-  title: { default: "MatScout", template: "%s · MatScout" },
-  description:
-    "MatScout helps teams manage rosters, scout opponents, and share match reports.",
-  openGraph: {
-    type: "website",
-    siteName: "MatScout",
-    url: "/",
-    title: "MatScout",
-    description: "Manage teams, scout opponents, and share match reports.",
-    images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: "MatScout" }],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "MatScout",
-    description: "Manage teams, scout opponents, and share match reports.",
-    images: [OG_IMAGE],
-  },
-  alternates: { canonical: "/" },
-};
-
+// Keep pages dynamic if you rely on per-request headers/cookies
 export const dynamic = "force-dynamic";
 
-export default function RootLayout({ children }) {
-  // Use either NEXT_PUBLIC_FACEBOOK_APP_ID (preferred) or fall back to FACEBOOK_CLIENT_ID if set
-  const FB_APP_ID = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
+/** ---------- Helpers ---------- */
+function stripTrailingSlash(url) {
+  return url ? url.replace(/\/+$/, "") : url;
+}
 
+const SITE_URL =
+  stripTrailingSlash(process.env.NEXT_PUBLIC_BASE_URL) ||
+  stripTrailingSlash(process.env.NEXT_PUBLIC_DOMAIN) ||
+  "https://matscout.com";
+
+function absUrl(path = "/") {
+  try {
+    return new URL(path, SITE_URL).toString();
+  } catch {
+    return SITE_URL;
+  }
+}
+
+const DEFAULT_OG = absUrl("/default-og.png");
+
+/** ---------- Centralized Metadata ---------- */
+export async function generateMetadata() {
+  // Prefer a single env name in production. Keep both for safety during transition.
+  const FB_APP_ID =
+    process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
+    process.env.NEXT_PUBLIC_FB_APP_ID ||
+    process.env.FB_APP_ID ||
+    "";
+
+  const base = new URL(SITE_URL);
+
+  const baseTitle = "MatScout";
+  const baseDesc =
+    "MatScout helps teams manage rosters, scout opponents, and share match reports.";
+
+  return {
+    metadataBase: base,
+    title: { default: baseTitle, template: "%s · MatScout" },
+    description: baseDesc,
+
+    openGraph: {
+      type: "website",
+      siteName: "MatScout",
+      url: absUrl("/"),
+      title: baseTitle,
+      description: baseDesc,
+      images: [
+        {
+          url: DEFAULT_OG,
+          width: 1200,
+          height: 630,
+          alt: "MatScout",
+        },
+      ],
+    },
+
+    twitter: {
+      card: "summary_large_image",
+      title: baseTitle,
+      description: baseDesc,
+      images: [DEFAULT_OG],
+    },
+
+    alternates: {
+      canonical: absUrl("/"),
+    },
+
+    // Emit fb:app_id only if present to avoid "missing/undefined" issues
+    ...(FB_APP_ID ? { other: { "fb:app_id": FB_APP_ID } } : {}),
+  };
+}
+
+export default function RootLayout({ children }) {
   return (
     <html
       lang="en"
       suppressHydrationWarning
     >
-      <head>
-        {/* preconnects… */}
-        <link
-          rel="dns-prefetch"
-          href="https://res.cloudinary.com"
-        />
-        <link
-          rel="preconnect"
-          href="https://res.cloudinary.com"
-          crossOrigin=""
-        />
-        <link
-          rel="dns-prefetch"
-          href="https://lh3.googleusercontent.com"
-        />
-        <link
-          rel="preconnect"
-          href="https://lh3.googleusercontent.com"
-          crossOrigin=""
-        />
-        <link
-          rel="dns-prefetch"
-          href="https://graph.facebook.com"
-        />
-        <link
-          rel="preconnect"
-          href="https://graph.facebook.com"
-          crossOrigin=""
-        />
-
-        {/* Only these two, universally */}
-        <meta
-          property="og:type"
-          content="website"
-        />
-
-        <meta
-          property="fb:app_id"
-          content={FB_APP_ID}
-        />
-      </head>
-
+      {/* No manual <meta> tags. Next will render everything from generateMetadata(). */}
       <body className="font-sans flex flex-col min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
-        {/* 🔹 First-party analytics: send beacons on initial load & route changes */}
         <AnalyticsBeacon />
 
         <ThemeProvider
