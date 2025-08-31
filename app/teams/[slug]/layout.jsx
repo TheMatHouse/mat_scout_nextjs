@@ -25,7 +25,7 @@ export async function generateMetadata({ params }) {
   const { slug } = await params;
   const BASE = process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com";
   const CANONICAL = `${BASE}/teams/${slug}`;
-  const FALLBACK = new URL("/default-og.png?v=2", BASE).toString(); // cache-bust
+  const FALLBACK = new URL("/default-og.png?v=3", BASE).toString(); // cache-bust
 
   await connectDB();
   const team = await Team.findOne({ teamSlug: slug })
@@ -62,7 +62,7 @@ export async function generateMetadata({ params }) {
     ? `${team.teamName} — ${loc} on MatScout.`
     : `${team.teamName} on MatScout.`;
 
-  // Use the SAME branded OG image as the homepage to avoid weird crops
+  // Use the SAME branded OG image as the homepage to avoid odd crops
   const images = [{ url: FALLBACK, width: 1200, height: 630, alt: "MatScout" }];
 
   return {

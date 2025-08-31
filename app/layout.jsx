@@ -82,7 +82,7 @@ export default function RootLayout({ children }) {
           crossOrigin=""
         />
 
-        {/* Universal OG tags that FB must see on every page */}
+        {/* Universal tags that FB must see on every page */}
         <meta
           property="og:type"
           content="website"
