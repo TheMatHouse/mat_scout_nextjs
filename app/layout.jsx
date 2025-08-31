@@ -84,37 +84,11 @@ export default function RootLayout({ children }) {
           crossOrigin=""
         />
 
-        {/* -- explicit Open Graph for the homepage -- */}
+        {/* Only the universal tags here */}
         <meta
           property="og:type"
           content="website"
         />
-        <meta
-          property="og:title"
-          content="MatScout – Your Ultimate Grappling Hub"
-        />
-        <meta
-          property="og:description"
-          content="Track, scout, and manage grappling athletes across Judo, BJJ, and Wrestling with MatScout."
-        />
-        <meta
-          property="og:url"
-          content={BASE}
-        />
-        <meta
-          property="og:image"
-          content={OG_IMAGE}
-        />
-        <meta
-          property="og:image:width"
-          content="1200"
-        />
-        <meta
-          property="og:image:height"
-          content="630"
-        />
-
-        {/* Facebook App ID (must be set via env) */}
         {FB_APP_ID ? (
           <meta
             property="fb:app_id"

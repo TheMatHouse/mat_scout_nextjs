@@ -24,11 +24,12 @@ function cld(url, extra = "") {
 export async function generateMetadata({ params }) {
   const { slug } = await params;
   const BASE = process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com";
-  const FALLBACK = new URL("/default-og.png?v=1", BASE).toString();
+  const CANONICAL = `${BASE}/teams/${slug}`;
+  const FALLBACK = new URL("/default-og.png?v=1", BASE).toString(); // cache-bust
 
   await connectDB();
   const team = await Team.findOne({ teamSlug: slug })
-    .select("teamName teamSlug logoURL city state country")
+    .select("teamName teamSlug city state country")
     .lean();
 
   if (!team) {
@@ -36,11 +37,12 @@ export async function generateMetadata({ params }) {
       metadataBase: new URL(BASE),
       title: "Team not found",
       description: "This team could not be found.",
-      alternates: { canonical: `/teams/${slug}` },
+      alternates: { canonical: CANONICAL },
       robots: { index: false, follow: false },
       openGraph: {
         type: "website",
-        url: `/teams/${slug}`,
+        url: CANONICAL,
+        siteName: "MatScout",
         title: "Team not found",
         description: "This team could not be found.",
         images: [{ url: FALLBACK, width: 1200, height: 630, alt: "MatScout" }],
@@ -61,26 +63,17 @@ export async function generateMetadata({ params }) {
     ? `${team.teamName} — ${loc} on MatScout.`
     : `${team.teamName} on MatScout.`;
 
-  // Prefer Cloudinary logo if present; otherwise fallback image.
-  const images = team.logoURL?.includes("res.cloudinary.com")
-    ? [
-        {
-          url: cld(team.logoURL, "c_fill,w_1200,h_630"),
-          width: 1200,
-          height: 630,
-          alt: `${team.teamName} logo`,
-        },
-      ]
-    : [{ url: FALLBACK, width: 1200, height: 630, alt: "MatScout" }];
+  // Use the same branded OG image everywhere (matches homepage)
+  const images = [{ url: FALLBACK, width: 1200, height: 630, alt: "MatScout" }];
 
   return {
     metadataBase: new URL(BASE),
     title,
     description,
-    alternates: { canonical: `/teams/${team.teamSlug}` },
+    alternates: { canonical: `${BASE}/teams/${team.teamSlug}` },
     openGraph: {
       type: "website",
-      url: `/teams/${team.teamSlug}`,
+      url: `${BASE}/teams/${team.teamSlug}`,
       siteName: "MatScout",
       title,
       description,
@@ -90,7 +83,7 @@ export async function generateMetadata({ params }) {
       card: "summary_large_image",
       title,
       description,
-      images: images.map((i) => i.url),
+      images: [FALLBACK],
     },
     other: { "fb:app_id": process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "" },
   };
