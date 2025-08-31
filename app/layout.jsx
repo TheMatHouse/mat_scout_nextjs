@@ -55,7 +55,7 @@ export default function RootLayout({ children }) {
       suppressHydrationWarning
     >
       <head>
-        {/* Speed up first image bytes */}
+        {/* Perf preconnects */}
         <link
           rel="dns-prefetch"
           href="https://res.cloudinary.com"
@@ -65,8 +65,6 @@ export default function RootLayout({ children }) {
           href="https://res.cloudinary.com"
           crossOrigin=""
         />
-
-        {/* Optional: avatars from Google & Facebook */}
         <link
           rel="dns-prefetch"
           href="https://lh3.googleusercontent.com"
@@ -86,7 +84,37 @@ export default function RootLayout({ children }) {
           crossOrigin=""
         />
 
-        {/* ✅ Add fb:app_id so Facebook Sharing Debugger stops warning */}
+        {/* -- explicit Open Graph for the homepage -- */}
+        <meta
+          property="og:type"
+          content="website"
+        />
+        <meta
+          property="og:title"
+          content="MatScout – Your Ultimate Grappling Hub"
+        />
+        <meta
+          property="og:description"
+          content="Track, scout, and manage grappling athletes across Judo, BJJ, and Wrestling with MatScout."
+        />
+        <meta
+          property="og:url"
+          content={BASE}
+        />
+        <meta
+          property="og:image"
+          content={OG_IMAGE}
+        />
+        <meta
+          property="og:image:width"
+          content="1200"
+        />
+        <meta
+          property="og:image:height"
+          content="630"
+        />
+
+        {/* Facebook App ID (must be set via env) */}
         {FB_APP_ID ? (
           <meta
             property="fb:app_id"

@@ -24,7 +24,7 @@ function cld(url, extra = "") {
 export async function generateMetadata({ params }) {
   const { slug } = await params;
   const BASE = process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com";
-  const FALLBACK = new URL("/default-og.png", BASE).toString();
+  const FALLBACK = new URL("/default-og.png?v=1", BASE).toString();
 
   await connectDB();
   const team = await Team.findOne({ teamSlug: slug })
