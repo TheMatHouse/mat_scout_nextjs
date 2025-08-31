@@ -80,6 +80,9 @@ export async function generateMetadata({ params }) {
       description,
       images: images.map((i) => i.url),
     },
+    other: {
+      "fb:app_id": process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "",
+    },
   };
 }
 

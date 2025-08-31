@@ -10,6 +10,13 @@ import { useUser } from "@/context/UserContext";
 export default function Header() {
   const { user } = useUser();
   const { loading } = useUser();
+  const FB_APP_ID = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "";
+  return FB_APP_ID ? (
+    <meta
+      property="fb:app_id"
+      content={FB_APP_ID}
+    />
+  ) : null;
 
   // ✅ If user state is loading, render a placeholder (same height as header)
   if (loading) {
