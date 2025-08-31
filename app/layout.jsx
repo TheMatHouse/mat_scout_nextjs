@@ -8,11 +8,8 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { UserProvider } from "@/context/UserContext";
 import LayoutClient from "@/components/layout/LayoutClient";
-
-// ⬇️ first-party analytics beacon
 import AnalyticsBeacon from "@/components/analytics/AnalyticsBeacon";
 
-// Keep pages dynamic if you rely on per-request headers/cookies
 export const dynamic = "force-dynamic";
 
 /** ---------- Helpers ---------- */
@@ -35,17 +32,9 @@ function absUrl(path = "/") {
 
 const DEFAULT_OG = absUrl("/default-og.png");
 
-/** ---------- Centralized Metadata ---------- */
+/** ---------- Centralized Metadata (no fb:app_id here) ---------- */
 export async function generateMetadata() {
-  // Prefer a single env name in production. Keep both for safety during transition.
-  const FB_APP_ID =
-    process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
-    process.env.NEXT_PUBLIC_FB_APP_ID ||
-    process.env.FB_APP_ID ||
-    "";
-
   const base = new URL(SITE_URL);
-
   const baseTitle = "MatScout";
   const baseDesc =
     "MatScout helps teams manage rosters, scout opponents, and share match reports.";
@@ -54,49 +43,48 @@ export async function generateMetadata() {
     metadataBase: base,
     title: { default: baseTitle, template: "%s · MatScout" },
     description: baseDesc,
-
     openGraph: {
       type: "website",
       siteName: "MatScout",
       url: absUrl("/"),
       title: baseTitle,
       description: baseDesc,
-      images: [
-        {
-          url: DEFAULT_OG,
-          width: 1200,
-          height: 630,
-          alt: "MatScout",
-        },
-      ],
+      images: [{ url: DEFAULT_OG, width: 1200, height: 630, alt: "MatScout" }],
     },
-
     twitter: {
       card: "summary_large_image",
       title: baseTitle,
       description: baseDesc,
       images: [DEFAULT_OG],
     },
-
-    alternates: {
-      canonical: absUrl("/"),
-    },
-
-    // Emit fb:app_id only if present to avoid "missing/undefined" issues
-    ...(FB_APP_ID ? { other: { "fb:app_id": FB_APP_ID } } : {}),
+    alternates: { canonical: absUrl("/") },
   };
 }
 
 export default function RootLayout({ children }) {
+  // Emit fb:app_id via <head> so it uses property= (FB requires this)
+  const FB_APP_ID =
+    process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
+    process.env.NEXT_PUBLIC_FB_APP_ID ||
+    process.env.FB_APP_ID ||
+    "";
+
   return (
     <html
       lang="en"
       suppressHydrationWarning
     >
-      {/* No manual <meta> tags. Next will render everything from generateMetadata(). */}
+      <head>
+        {/* Only add if present, and always with property= */}
+        {FB_APP_ID ? (
+          <meta
+            property="fb:app_id"
+            content={FB_APP_ID}
+          />
+        ) : null}
+      </head>
       <body className="font-sans flex flex-col min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
         <AnalyticsBeacon />
-
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
