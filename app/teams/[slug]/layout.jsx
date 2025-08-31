@@ -22,7 +22,7 @@ function cld(url, extra = "") {
 
 /** SEO / OG / Twitter metadata for team pages */
 export async function generateMetadata({ params }) {
-  const { slug } = await params; // ✅ await params
+  const { slug } = await params; // keep your await style
   const base = process.env.NEXT_PUBLIC_DOMAIN || "https://matscout.com";
 
   await connectDB();
@@ -30,6 +30,7 @@ export async function generateMetadata({ params }) {
     .select("teamName teamSlug logoURL city state country")
     .lean();
 
+  // 404 / not found
   if (!team) {
     return {
       metadataBase: new URL(base),
@@ -37,18 +38,34 @@ export async function generateMetadata({ params }) {
       description: "This team could not be found.",
       alternates: { canonical: `/teams/${slug}` },
       robots: { index: false, follow: false },
+      openGraph: {
+        type: "website",
+        url: `/teams/${slug}`,
+        title: "Team not found",
+        description: "This team could not be found.",
+        images: [
+          { url: "/default-og.png", width: 1200, height: 630, alt: "MatScout" },
+        ],
+      },
+      twitter: {
+        card: "summary_large_image",
+        title: "Team not found",
+        description: "This team could not be found.",
+        images: ["/default-og.png"],
+      },
+      other: { "fb:app_id": process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "" },
     };
   }
 
-  const title = team.teamName;
   const loc = [team.city, team.state, team.country].filter(Boolean).join(", ");
+  const title = team.teamName;
   const description = loc
     ? `${team.teamName} — ${loc} on MatScout.`
     : `${team.teamName} on MatScout.`;
 
-  // Prefer the Cloudinary logo as OG image if present
+  // OG image: team logo via Cloudinary if available; else fallback
   let images = [
-    { url: "/og/matscout-og.png", width: 1200, height: 630, alt: "MatScout" },
+    { url: "/default-og.png", width: 1200, height: 630, alt: "MatScout" },
   ];
   if (team.logoURL?.includes("res.cloudinary.com")) {
     images = [
@@ -80,9 +97,7 @@ export async function generateMetadata({ params }) {
       description,
       images: images.map((i) => i.url),
     },
-    other: {
-      "fb:app_id": process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "",
-    },
+    other: { "fb:app_id": process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "" },
   };
 }
 

@@ -31,7 +31,7 @@ export const metadata = {
     description: "Manage teams, scout opponents, and share match reports.",
     images: [
       {
-        url: "/og/matscout-og.png",
+        url: "/default-og.png", // file must exist in /public
         width: 1200,
         height: 630,
         alt: "MatScout",
@@ -42,14 +42,10 @@ export const metadata = {
     card: "summary_large_image",
     title: "MatScout",
     description: "Manage teams, scout opponents, and share match reports.",
-    images: ["/og/matscout-og.png"],
+    images: ["/default-og.png"],
   },
-  alternates: {
-    canonical: "/",
-  },
-  other: {
-    "fb:app_id": process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "",
-  },
+  alternates: { canonical: "/" },
+  other: { "fb:app_id": process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "" },
 };
 
 export const dynamic = "force-dynamic";
