@@ -1,30 +1,50 @@
-// app/api/dashboard/[userId]/family/[memberId]/scoutingReports/[scoutingReportId]/route.js
-
 import { NextResponse } from "next/server";
+import { Types } from "mongoose";
 import { connectDB } from "@/lib/mongo";
 import ScoutingReport from "@/models/scoutingReportModel";
 import Video from "@/models/videoModel";
-import User from "@/models/userModel";
-import { Types } from "mongoose";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
-// PATCH: Update a family member's scouting report
-export async function PATCH(req, context) {
-  let body;
+export const dynamic = "force-dynamic";
+
+const isValid = (id) => !!id && Types.ObjectId.isValid(id);
+
+// ---------- PATCH: Update a family member's scouting report ----------
+export async function PATCH(req, { params }) {
+  await connectDB();
+
+  const { userId, memberId, scoutingReportId } = params || {};
+  const currentUser = await getCurrentUserFromCookies();
+
+  // Authn/Authz + param checks
+  if (!currentUser || String(currentUser._id) !== String(userId)) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+  if (!isValid(userId) || !isValid(memberId) || !isValid(scoutingReportId)) {
+    return NextResponse.json({ message: "Invalid ID(s)" }, { status: 400 });
+  }
 
   try {
-    const { userId, memberId, scoutingReportId } = await context.params;
-    body = await req.json();
-    await connectDB();
+    const body = await req.json();
 
-    const report = await ScoutingReport.findOne({
+    // Build a filter that matches BOTH historical and current shapes
+    const filter = {
       _id: scoutingReportId,
       createdById: userId,
-      athleteId: memberId,
-      athleteType: "family",
-    });
+      $or: [
+        // Preferred: top-level fields present
+        { athleteId: memberId, athleteType: "family" },
+        // Historical: reportFor array used
+        {
+          reportFor: {
+            $elemMatch: { athleteId: memberId, athleteType: "family" },
+          },
+        },
+      ],
+    };
 
+    const report = await ScoutingReport.findOne(filter);
     if (!report) {
       return NextResponse.json(
         { message: "Scouting report not found" },
@@ -48,10 +68,11 @@ export async function PATCH(req, context) {
       athleteAttacks,
       athleteAttackNotes,
       accessList,
+
       updatedVideos = [],
       newVideos = [],
       deletedVideos = [],
-    } = body;
+    } = body || {};
 
     Object.assign(report, {
       athleteFirstName,
@@ -68,52 +89,61 @@ export async function PATCH(req, context) {
       athleteAttacks,
       athleteAttackNotes,
       accessList,
+      updatedAt: new Date(),
     });
 
-    // ✅ Use centralized saveUnknownTechniques
-    await saveUnknownTechniques(
-      Array.isArray(athleteAttacks) ? athleteAttacks : []
-    );
+    // Ensure techniques exist (created unapproved if missing)
+    if (Array.isArray(athleteAttacks)) {
+      await saveUnknownTechniques(athleteAttacks);
+    }
 
     // Update existing videos
-    for (const video of updatedVideos) {
-      await Video.findByIdAndUpdate(video._id, {
-        $set: {
-          title: video.title,
-          notes: video.notes,
-          url: video.url,
-        },
-      });
+    if (Array.isArray(updatedVideos) && updatedVideos.length) {
+      await Promise.all(
+        updatedVideos
+          .filter((v) => v?._id && isValid(v._id))
+          .map((v) =>
+            Video.findByIdAndUpdate(v._id, {
+              $set: {
+                title: v.title || "",
+                notes: v.notes || "",
+                url: v.url || "",
+              },
+            })
+          )
+      );
     }
 
-    // Add new videos
-    const newVideoIds = [];
-    for (const video of newVideos) {
-      const newVid = await Video.create({
-        ...video,
-        scoutingReport: report._id,
-        createdBy: userId,
-      });
-      newVideoIds.push(newVid._id);
-    }
-
-    // Remove deleted videos
-    if (deletedVideos?.length) {
+    // Delete removed videos
+    if (Array.isArray(deletedVideos) && deletedVideos.length) {
       await Video.deleteMany({ _id: { $in: deletedVideos } });
-      report.videos = report.videos.filter(
+      report.videos = (report.videos || []).filter(
         (vidId) => !deletedVideos.includes(String(vidId))
       );
     }
 
-    // Merge videos
-    report.videos = [...report.videos, ...newVideoIds];
+    // Add new videos
+    if (Array.isArray(newVideos) && newVideos.length) {
+      const created = await Video.insertMany(
+        newVideos.map((v) => ({
+          title: v.title || "",
+          notes: v.notes || "",
+          url: v.url || "",
+          // keep consistent with your existing Video schema link field:
+          scoutingReport: report._id,
+          createdBy: userId,
+        }))
+      );
+      report.videos = [...(report.videos || []), ...created.map((v) => v._id)];
+    }
+
     await report.save();
 
     return NextResponse.json({
       message: "Family scouting report updated successfully.",
     });
   } catch (err) {
-    console.error("PATCH error:", err);
+    console.error("PATCH family scouting error:", err);
     return NextResponse.json(
       { message: "Server error: " + err.message },
       { status: 500 }
@@ -121,45 +151,60 @@ export async function PATCH(req, context) {
   }
 }
 
-// DELETE: Delete all scouting reports + videos for a family member by user
-export async function DELETE(req, context) {
+// ---------- DELETE: Delete ONE scouting report (and its videos) ----------
+export async function DELETE(_req, { params }) {
   await connectDB();
 
-  const { userId, memberId } = await context.params;
+  const { userId, memberId, scoutingReportId } = params || {};
   const currentUser = await getCurrentUserFromCookies();
 
   if (!currentUser || String(currentUser._id) !== String(userId)) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
-
-  if (!Types.ObjectId.isValid(memberId)) {
-    return NextResponse.json({ message: "Invalid member ID" }, { status: 400 });
+  if (!isValid(userId) || !isValid(memberId) || !isValid(scoutingReportId)) {
+    return NextResponse.json({ message: "Invalid ID(s)" }, { status: 400 });
   }
 
   try {
-    const reports = await ScoutingReport.find({
+    // Same dual-shape filter
+    const filter = {
+      _id: scoutingReportId,
       createdById: userId,
-      athleteId: memberId,
-      athleteType: "family",
-    });
+      $or: [
+        { athleteId: memberId, athleteType: "family" },
+        {
+          reportFor: {
+            $elemMatch: { athleteId: memberId, athleteType: "family" },
+          },
+        },
+      ],
+    };
 
-    const reportIds = reports.map((r) => r._id);
+    const report = await ScoutingReport.findOne(filter);
+    if (!report) {
+      return NextResponse.json(
+        { message: "Scouting report not found" },
+        { status: 404 }
+      );
+    }
 
-    const deletedVideos = await Video.deleteMany({
-      scoutingReport: { $in: reportIds },
-    });
+    // Delete associated videos that reference this report
+    if (Array.isArray(report.videos) && report.videos.length) {
+      await Video.deleteMany({ _id: { $in: report.videos } });
+    }
+    // If your Video schema also stores a direct link, you can optionally:
+    // await Video.deleteMany({ scoutingReport: report._id });
 
-    const deletedReports = await ScoutingReport.deleteMany({
-      _id: { $in: reportIds },
-    });
+    await ScoutingReport.deleteOne({ _id: report._id });
 
-    return NextResponse.json({
-      message: `Deleted ${deletedReports.deletedCount} report(s) and ${deletedVideos.deletedCount} video(s).`,
-    });
-  } catch (err) {
-    console.error("DELETE family scoutingReports error:", err);
     return NextResponse.json(
-      { message: "Server error while deleting reports and videos" },
+      { message: "Scouting report deleted" },
+      { status: 200 }
+    );
+  } catch (err) {
+    console.error("DELETE family scouting error:", err);
+    return NextResponse.json(
+      { message: "Server error while deleting report" },
       { status: 500 }
     );
   }

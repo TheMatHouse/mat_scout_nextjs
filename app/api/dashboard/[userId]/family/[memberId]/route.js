@@ -1,28 +1,29 @@
 // app/api/dashboard/[userId]/family/[memberId]/route.js
 import { NextResponse } from "next/server";
+import { Types } from "mongoose";
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import FamilyMember from "@/models/familyMemberModel";
-import { Types } from "mongoose";
+// ✅ Register UserStyle in this module so populate works
+import "@/models/userStyleModel";
+// (optional) only if you actually delete Cloudinary avatars in DELETE
+import { v2 as cloudinary } from "cloudinary";
 
 export const dynamic = "force-dynamic";
+const isValidId = (id) => !!id && Types.ObjectId.isValid(id);
 
-export async function GET(req, context) {
+// GET one family member (must belong to the logged-in user)
+export async function GET(_req, { params }) {
   await connectDB();
 
-  const { userId, memberId } = await context.params;
-  const currentUser = await getCurrentUserFromCookies();
+  const { userId, memberId } = params || {};
+  if (!isValidId(userId) || !isValidId(memberId)) {
+    return NextResponse.json({ error: "Invalid ID(s)" }, { status: 400 });
+  }
 
-  if (
-    !currentUser ||
-    currentUser._id.toString() !== userId ||
-    !Types.ObjectId.isValid(userId) ||
-    !Types.ObjectId.isValid(memberId)
-  ) {
-    return NextResponse.json(
-      { error: "Unauthorized or invalid ID" },
-      { status: 401 }
-    );
+  const currentUser = await getCurrentUserFromCookies();
+  if (!currentUser || String(currentUser._id) !== String(userId)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
@@ -30,7 +31,7 @@ export async function GET(req, context) {
       _id: memberId,
       userId: currentUser._id,
     })
-      .populate("userStyles")
+      .populate({ path: "userStyles", model: "UserStyle" })
       .lean();
 
     if (!member) {
@@ -40,7 +41,12 @@ export async function GET(req, context) {
       );
     }
 
-    return NextResponse.json(member);
+    // include userId as string for client-side checks
+    return NextResponse.json({
+      ...member,
+      _id: member._id.toString(),
+      userId: member.userId.toString(),
+    });
   } catch (err) {
     console.error("GET family member error:", err);
     return NextResponse.json(
@@ -50,61 +56,38 @@ export async function GET(req, context) {
   }
 }
 
-export async function PATCH(req, context) {
+export async function PATCH(req, { params }) {
   await connectDB();
 
-  const { userId, memberId } = await context.params;
-  const currentUser = await getCurrentUserFromCookies();
-
-  if (
-    !currentUser ||
-    currentUser._id.toString() !== userId ||
-    !Types.ObjectId.isValid(userId) ||
-    !Types.ObjectId.isValid(memberId)
-  ) {
-    return NextResponse.json(
-      { error: "Unauthorized or invalid ID" },
-      { status: 401 }
-    );
+  const { userId, memberId } = params || {};
+  if (!isValidId(userId) || !isValidId(memberId)) {
+    return NextResponse.json({ error: "Invalid ID(s)" }, { status: 400 });
   }
 
-  try {
-    const updates = await req.json();
-
-    const member = await FamilyMember.findOneAndUpdate(
-      {
-        userId: currentUser._id,
-        _id: memberId,
-      },
-      updates,
-      { new: true }
-    );
-
-    if (!member) {
-      return NextResponse.json(
-        { error: "Family member not found" },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json(member);
-  } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-}
-
-export async function DELETE(request, context) {
-  const { userId, memberId } = await context.params;
-  await connectDB();
-
   const currentUser = await getCurrentUserFromCookies();
-
-  if (!currentUser || currentUser._id.toString() !== userId) {
+  if (!currentUser || String(currentUser._id) !== String(userId)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const member = await FamilyMember.findById(memberId);
+    const updates = await req.json();
+    const allowed = [
+      "firstName",
+      "lastName",
+      "birthDate",
+      "avatar",
+      "avatarId",
+      "notes",
+    ];
+    const $set = {};
+    for (const k of allowed) if (k in updates) $set[k] = updates[k];
+
+    const member = await FamilyMember.findOneAndUpdate(
+      { _id: memberId, userId: currentUser._id },
+      { $set },
+      { new: true }
+    ).lean();
+
     if (!member) {
       return NextResponse.json(
         { error: "Family member not found" },
@@ -112,20 +95,57 @@ export async function DELETE(request, context) {
       );
     }
 
-    // 🧹 Delete avatar from Cloudinary if it's a custom upload
+    return NextResponse.json({
+      ...member,
+      _id: member._id.toString(),
+      userId: member.userId.toString(),
+    });
+  } catch (err) {
+    console.error("PATCH family member error:", err);
+    return NextResponse.json(
+      { error: "Failed to update family member" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(_req, { params }) {
+  await connectDB();
+
+  const { userId, memberId } = params || {};
+  if (!isValidId(userId) || !isValidId(memberId)) {
+    return NextResponse.json({ error: "Invalid ID(s)" }, { status: 400 });
+  }
+
+  const currentUser = await getCurrentUserFromCookies();
+  if (!currentUser || String(currentUser._id) !== String(userId)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const member = await FamilyMember.findOne({
+      _id: memberId,
+      userId: currentUser._id,
+    });
+    if (!member) {
+      return NextResponse.json(
+        { error: "Family member not found" },
+        { status: 404 }
+      );
+    }
+
     if (member.avatarId) {
       try {
         await cloudinary.uploader.destroy(member.avatarId);
-      } catch (cloudErr) {
-        console.warn("Cloudinary delete failed:", cloudErr);
+      } catch (e) {
+        console.warn("Cloudinary delete failed:", e?.message || e);
       }
     }
 
-    await FamilyMember.findByIdAndDelete(memberId);
-
+    await FamilyMember.deleteOne({ _id: member._id });
     return NextResponse.json({ message: "Family member deleted successfully" });
   } catch (err) {
-    console.error("DELETE error:", err);
+    console.error("DELETE family member error:", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
