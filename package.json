@@ -11,7 +11,8 @@
     "start": "next start",
     "lint": "next lint",
     "clean": "rm -rf .next dist out",
-    "find:unused": "next-unused"
+    "find:unused": "next-unused",
+    "migrate:techniques": "node scripts/migrateTechniques.mjs"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.2",
