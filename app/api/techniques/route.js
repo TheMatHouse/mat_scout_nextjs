@@ -1,53 +1,56 @@
-"use server";
+// app/api/techniques/route.js
 import { NextResponse } from "next/server";
 import Technique from "@/models/techniquesModel";
 import { connectDB } from "@/lib/mongo";
 
-export const GET = async (request) => {
+export const dynamic = "force-dynamic"; // avoid caching while iterating
+
+export async function GET() {
   try {
     await connectDB();
-    const techniques = await Technique.find({ approved: true });
+    // If you really need the approved gate, keep { approved: true }
+    // Otherwise use {} to return all techniques:
+    const docs = await Technique.find({ approved: true }, { name: 1 }).lean();
 
-    if (techniques.length > 0) {
-      return new NextResponse(JSON.stringify(techniques), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } else {
-      return new NextResponse(
-        JSON.stringify({ message: "No approved techniques found" }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
-    }
+    // IMPORTANT: Always return an array (even empty), never a message object
+    return NextResponse.json(Array.isArray(docs) ? docs : []);
   } catch (error) {
-    return new NextResponse(
-      JSON.stringify({
-        message: "Error fetching techniques",
-        error: error.message,
-      }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+    console.error("[GET /api/techniques] error:", error);
+    return NextResponse.json(
+      { error: "Error fetching techniques" },
+      { status: 500 }
     );
   }
-};
+}
 
-export const POST = async (request) => {
+export async function POST(request) {
   try {
     await connectDB();
-    const body = await request.json();
-    const { name } = body;
+    const { name } = await request.json();
 
-    const existing = await Technique.findOne({ name });
-    if (existing) {
-      return new NextResponse("Technique already exists", { status: 200 });
+    if (!name || !String(name).trim()) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
-    const newTechnique = new Technique({ name });
-    await newTechnique.save();
+    const existing = await Technique.findOne({ name: name.trim() });
+    if (existing) {
+      // keep 200 if you rely on it; 409 is more standard:
+      return NextResponse.json(
+        { ok: true, message: "Technique already exists" },
+        { status: 200 }
+      );
+    }
 
-    return new NextResponse(JSON.stringify(newTechnique), { status: 201 });
-  } catch (error) {
-    return new NextResponse("Error adding technique: " + error.message, {
-      status: 500,
+    const newTechnique = await Technique.create({
+      name: name.trim(),
+      approved: true,
     });
+    return NextResponse.json(newTechnique, { status: 201 });
+  } catch (error) {
+    console.error("[POST /api/techniques] error:", error);
+    return NextResponse.json(
+      { error: "Error adding technique", detail: error.message },
+      { status: 500 }
+    );
   }
-};
+}

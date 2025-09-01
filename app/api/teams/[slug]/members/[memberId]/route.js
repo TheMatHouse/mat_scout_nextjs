@@ -1,4 +1,6 @@
-// app/api/team/members/[memberId]/route.js
+// app/api/teams/[slug]/members/[memberId]/route.js
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import Team from "@/models/teamModel";
@@ -8,47 +10,58 @@ import User from "@/models/userModel";
 import FamilyMember from "@/models/familyMemberModel";
 import { createNotification } from "@/lib/createNotification";
 
-// ⬇️ new: centralized mailer (Resend + policy)
+// Optional: your mailer bits — keep as-is if you already had them
 import { Mail } from "@/lib/email/mailer";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
 export async function PATCH(request, { params }) {
   await connectDB();
 
-  const user = await getCurrentUser();
-  if (!user) {
+  const actor = await getCurrentUser();
+  if (!actor)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
 
-  const { slug, memberId } = params;
+  const { slug, memberId } = await params; // await required in Next 15
 
   const team = await Team.findOne({ teamSlug: slug });
-  if (!team) {
+  if (!team)
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
-  }
 
-  // Ensure current user is a manager on this team
-  const actingMembership = await TeamMember.findOne({
+  // Determine acting role (owner without TeamMember row is still staff)
+  const isOwner = String(team.user) === String(actor._id);
+  const actingLink = await TeamMember.findOne({
     teamId: team._id,
-    userId: user._id,
-  });
-  if (!actingMembership || actingMembership.role !== "manager") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+    userId: actor._id,
+  })
+    .select("role")
+    .lean();
 
-  const body = await request.json();
-  const { role } = body;
+  const actingRole = (
+    actingLink?.role || (isOwner ? "owner" : "")
+  ).toLowerCase();
+  const canEdit = ["owner", "manager", "coach"].includes(actingRole);
+  if (!canEdit)
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const { role } = await request.json();
   const allowedRoles = ["pending", "member", "coach", "manager", "declined"];
   if (!allowedRoles.includes(role)) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
   }
 
-  const teamMember = await TeamMember.findById(memberId);
-  if (!teamMember) {
+  const tm = await TeamMember.findById(memberId);
+  if (!tm)
     return NextResponse.json({ error: "Member not found" }, { status: 404 });
+
+  const prevRole = tm.role;
+
+  // Get recipient (user) for notifications/mail
+  const recipientUser = tm.userId ? await User.findById(tm.userId) : null;
+  if (!recipientUser) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const prevRole = teamMember.role;
+  // Notification copy
   const isDeclined = role === "declined";
   const isApproval =
     prevRole === "pending" && !isDeclined && role !== "pending";
@@ -58,26 +71,7 @@ export async function PATCH(request, { params }) {
     role !== "pending" &&
     prevRole !== role;
 
-  // Fetch the owning user (email recipient)
-  const requester = await User.findById(teamMember.userId);
-  if (!requester) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
-  }
-
-  // Build recipient display name (family member if applicable)
-  let recipientName = requester.firstName || requester.username;
-  let relatedUserId = requester._id.toString();
-
-  if (teamMember.familyMemberId) {
-    const family = await FamilyMember.findById(teamMember.familyMemberId);
-    if (family) {
-      recipientName = `${family.firstName} ${family.lastName}`.trim();
-      relatedUserId = family._id.toString();
-    }
-  }
-
-  // In-app notification text
-  const notifBody = isDeclined
+  const notifText = isDeclined
     ? `Your request to join ${team.teamName} was denied`
     : isApproval
     ? `Your request to join ${team.teamName} was approved as ${role}`
@@ -85,107 +79,76 @@ export async function PATCH(request, { params }) {
     ? `Your role in ${team.teamName} was updated to ${role}`
     : `Your status in ${team.teamName} is now ${role}`;
 
-  // Create in-app notification
   try {
     await createNotification({
-      userId: requester._id,
+      userId: recipientUser._id,
       type: isDeclined || isApproval ? "Join Request" : "Role Update",
-      body: notifBody,
+      body: notifText,
       link: `/teams/${slug}`,
     });
-  } catch (notifErr) {
-    console.error("❌ Failed to create role/join notification:", notifErr);
+  } catch (e) {
+    console.error("Notification failed:", e);
   }
 
-  // Prepare email (subject + message vary by scenario)
-  const subject = isDeclined
-    ? `Your request to join ${team.teamName} was denied`
-    : isApproval
-    ? `You're approved to join ${team.teamName} as ${role}`
-    : isRoleChangeAfterApproval
-    ? `Your role in ${team.teamName} was updated to ${role}`
-    : `Your status in ${team.teamName} changed to ${role}`;
-
-  const message = (() => {
-    if (isDeclined) {
-      return `
-        <p>Hi ${recipientName},</p>
-        <p>Your request to join <strong>${team.teamName}</strong> has been <strong>denied</strong>.</p>
-        <p>If you think this was a mistake, please contact the team's manager or coach.</p>
-      `;
-    }
-    if (isApproval) {
-      return `
-        <p>Hi ${recipientName},</p>
-        <p>Your request to join <strong>${team.teamName}</strong> has been <strong>approved</strong>.</p>
-        <p>Your role on the team is: <strong>${role}</strong>.</p>
-        <p>You can view your team here after signing in.</p>
-      `;
-    }
-    if (isRoleChangeAfterApproval) {
-      return `
-        <p>Hi ${recipientName},</p>
-        <p>Your role in <strong>${team.teamName}</strong> has been updated to <strong>${role}</strong>.</p>
-      `;
-    }
-    return `
-      <p>Hi ${recipientName},</p>
-      <p>Your status in <strong>${team.teamName}</strong> is now <strong>${role}</strong>.</p>
-    `;
-  })();
-
-  const html = baseEmailTemplate({
-    title: isDeclined
-      ? "Join Request Denied"
-      : isApproval
-      ? "Join Request Approved"
-      : "Team Role Update",
-    message,
-    logoUrl:
-      "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png",
-  });
-
-  // Email: respect user prefs + 24h dedupe using policy
+  // Optional email
   try {
-    const emailType =
-      isDeclined || isApproval
-        ? Mail.kinds.JOIN_REQUEST
-        : Mail.kinds.TEAM_UPDATE;
+    const subject = isDeclined
+      ? `Your request to join ${team.teamName} was denied`
+      : isApproval
+      ? `You're approved to join ${team.teamName} as ${role}`
+      : isRoleChangeAfterApproval
+      ? `Your role in ${team.teamName} was updated to ${role}`
+      : `Your status in ${team.teamName} changed to ${role}`;
+
+    const html = baseEmailTemplate({
+      title: isDeclined
+        ? "Join Request Denied"
+        : isApproval
+        ? "Join Request Approved"
+        : "Team Role Update",
+      message: `<p>${notifText}</p>`,
+      logoUrl:
+        "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png",
+    });
 
     const result = await Mail.sendEmail({
-      type: emailType,
-      toUser: requester,
+      type:
+        isDeclined || isApproval
+          ? Mail.kinds.JOIN_REQUEST
+          : Mail.kinds.TEAM_UPDATE,
+      toUser: recipientUser,
       subject,
       html,
-      relatedUserId, // drives dedupe
-      teamId: team._id.toString(), // drives dedupe
+      relatedUserId: tm.familyMemberId
+        ? String(tm.familyMemberId)
+        : String(recipientUser._id),
+      teamId: String(team._id),
     });
 
     if (!result.sent) {
-      // reasons: "user_pref_opt_out" | "rate_limited_24h" | "missing_recipient"
       console.warn(
         "Member status email skipped:",
-        requester.email,
+        recipientUser.email,
         result.reason
       );
     }
-  } catch (err) {
-    console.error("❌ Failed to send member status email:", err);
+  } catch (e) {
+    console.error("Email failed:", e);
   }
 
-  // Persist the change
   if (isDeclined) {
     await TeamMember.deleteOne({ _id: memberId });
     return NextResponse.json({ success: true }, { status: 200 });
-  } else {
-    const updated = await TeamMember.findByIdAndUpdate(
-      memberId,
-      { role },
-      { new: true }
-    );
-    return NextResponse.json(
-      { success: true, member: { id: memberId, role: updated.role } },
-      { status: 200 }
-    );
   }
+
+  const updated = await TeamMember.findByIdAndUpdate(
+    memberId,
+    { role },
+    { new: true }
+  );
+
+  return NextResponse.json(
+    { success: true, member: { id: String(updated._id), role: updated.role } },
+    { status: 200 }
+  );
 }

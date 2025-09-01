@@ -6,6 +6,7 @@ import Link from "next/link";
 import { connectDB } from "@/lib/mongo";
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
+import User from "@/models/userModel";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import TeamProviderClient from "@/components/teams/TeamProviderClient";
 import TeamTabs from "@/components/teams/TeamTabs";
@@ -22,7 +23,7 @@ function cld(url, extra = "") {
 
 export default async function TeamLayout({ children, params }) {
   await connectDB();
-  const { slug } = await params; // keep your pattern
+  const { slug } = await params; // Next 15 pattern
 
   const base = (
     process.env.NEXT_PUBLIC_BASE_URL ||
@@ -73,11 +74,12 @@ export default async function TeamLayout({ children, params }) {
     String(teamDoc.user) === String(currentUser._id);
 
   if (isOwner) {
-    normalizedRole = "manager";
+    normalizedRole = "manager"; // treat owner as manager for UI auth
   } else if (currentUser?._id) {
     const membership = await TeamMember.findOne({
       teamId: teamDoc._id,
       userId: currentUser._id,
+      familyMemberId: null,
     })
       .select("role familyMemberId")
       .lean();
@@ -95,25 +97,32 @@ export default async function TeamLayout({ children, params }) {
   const isCoach = normalizedRole === "coach";
 
   const isMember =
+    isOwner ||
     isManager ||
     isCoach ||
     normalizedRole === "member" ||
     normalizedRole === "player";
 
-  // Build tabs dynamically
+  // Build tabs
   const tabs = [{ label: "Info", href: `/teams/${slug}` }];
-  if (isMember) tabs.push({ label: "Updates", href: `/teams/${slug}/updates` });
+
+  if (isMember) {
+    tabs.push({ label: "Updates", href: `/teams/${slug}/updates` });
+    tabs.push({ label: "Members", href: `/teams/${slug}/members` }); // visible to all members
+  }
+
   if (isManager || isCoach) {
-    tabs.push({ label: "Members", href: `/teams/${slug}/members` });
     tabs.push({
       label: "Scouting Reports",
       href: `/teams/${slug}/scouting-reports`,
     });
   }
-  if (isManager)
-    tabs.push({ label: "Settings", href: `/teams/${slug}/settings` });
 
-  // Serialize for client
+  if (isManager) {
+    tabs.push({ label: "Settings", href: `/teams/${slug}/settings` });
+  }
+
+  // Serialize minimal team for client context
   const safeTeam = {
     _id: teamDoc._id?.toString(),
     teamSlug: teamDoc.teamSlug,
@@ -124,6 +133,44 @@ export default async function TeamLayout({ children, params }) {
     state: teamDoc.state || "",
     country: teamDoc.country || "",
   };
+
+  // --- Managers list (owner + manager-role members) ---
+  const managerLinks = await TeamMember.find({
+    teamId: teamDoc._id,
+    role: "manager",
+    familyMemberId: null,
+  })
+    .select("userId")
+    .lean();
+
+  // collect unique userIds for managers
+  const managerUserIds = Array.from(
+    new Set(
+      [
+        ...managerLinks.map((l) => l.userId?.toString()).filter(Boolean),
+        teamDoc.user?.toString?.(), // include owner
+      ].filter(Boolean)
+    )
+  );
+
+  const managerUsers =
+    managerUserIds.length > 0
+      ? await User.find({ _id: { $in: managerUserIds } })
+          .select("firstName lastName username")
+          .lean()
+      : [];
+
+  const managerRows = managerUsers
+    .map((u) => ({
+      id: u._id?.toString(),
+      name:
+        [u.firstName, u.lastName].filter(Boolean).join(" ") ||
+        u.username ||
+        "User",
+      username: u.username || null,
+    }))
+    // sort by last, then first (best-effort)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   // Absolute URL for sharing
   const shareUrl = `${base}/teams/${safeTeam.teamSlug}`;
@@ -163,11 +210,35 @@ export default async function TeamLayout({ children, params }) {
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
             {safeTeam.teamName}
           </h1>
+
           {(safeTeam.city || safeTeam.country) && (
             <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
               {[safeTeam.city, safeTeam.state, safeTeam.country]
                 .filter(Boolean)
                 .join(", ")}
+            </p>
+          )}
+
+          {managerRows.length > 0 && (
+            <p className="text-gray-600 dark:text-gray-300 mt-1 text-sm">
+              <span className="font-medium">
+                Manager{managerRows.length > 1 ? "s" : ""}:
+              </span>{" "}
+              {managerRows.map((m, i) => (
+                <span key={m.id}>
+                  {m.username ? (
+                    <Link
+                      href={`/family/${encodeURIComponent(m.username)}`}
+                      className="hover:underline"
+                    >
+                      {m.name}
+                    </Link>
+                  ) : (
+                    m.name
+                  )}
+                  {i < managerRows.length - 1 ? ", " : ""}
+                </span>
+              ))}
             </p>
           )}
         </div>

@@ -1,3 +1,4 @@
+// components/dashboard/forms/MatchReportForm.jsx
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -7,26 +8,19 @@ import moment from "moment";
 import { useUser } from "@/context/UserContext";
 import { matchReportCreated } from "@/lib/analytics/adminEvents";
 
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Countries from "@/assets/countries.json";
 import Editor from "../../shared/Editor";
 import TechniqueTagInput from "../../shared/TechniqueTagInput";
 
-// ✅ Shared Form Components
+// Shared form inputs
 import FormField from "@/components/shared/FormField";
 import FormSelect from "@/components/shared/FormSelect";
 
 const MatchReportForm = ({
   athlete,
   match,
-  styles, // <-- may contain family member styles
+  styles, // <-- styles passed in (fresh from API)
   techniques,
   type,
   setOpen,
@@ -36,12 +30,10 @@ const MatchReportForm = ({
   const router = useRouter();
   const { refreshUser } = useUser();
 
-  // ---------- Helpers: normalize styles from various shapes ----------
+  // ---------- Normalize styles from various shapes ----------
   const normalizedStyles = useMemo(() => {
-    // Only keep arrays that actually have items; otherwise fall through
     const pick = (arr) =>
       Array.isArray(arr) && arr.length > 0 ? arr : undefined;
-
     const raw =
       pick(styles) ?? pick(athlete?.userStyles) ?? pick(athlete?.styles) ?? [];
 
@@ -60,8 +52,6 @@ const MatchReportForm = ({
       .filter(Boolean);
   }, [styles, athlete?.userStyles, athlete?.styles]);
 
-  console.log(athlete?.userStyles);
-  console.log("normalized styles ", normalizedStyles);
   // ---------- Form State ----------
   const [matchType, setMatchType] = useState(match?.matchType || "");
   const [eventName, setEventName] = useState(match?.eventName || "");
@@ -92,7 +82,7 @@ const MatchReportForm = ({
   const [isPublic, setIsPublic] = useState(match?.isPublic || false);
   const [loadedTechniques, setLoadedTechniques] = useState([]);
 
-  // If no matchType yet, preselect first available style (works for family too)
+  // If no matchType yet (new report), preselect first available style
   useEffect(() => {
     if (!matchType && normalizedStyles.length > 0) {
       setMatchType(normalizedStyles[0].styleName);
@@ -190,7 +180,7 @@ const MatchReportForm = ({
     const memberId = athlete?._id;
 
     if (userType === "family") {
-      payload.familyMemberId = memberId; // backend can associate to family member
+      payload.familyMemberId = memberId;
     } else {
       payload.athlete = athlete._id;
       payload.createdBy = athlete._id;

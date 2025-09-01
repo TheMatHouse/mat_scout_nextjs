@@ -1,73 +1,71 @@
-import { connectDB } from "@/lib/mongo";
-import User from "@/models/userModel";
-import Team from "@/models/teamModel";
-import TeamMember from "@/models/teamMemberModel";
-import FamilyMember from "@/models/familyMemberModel";
-import "@/models/matchReportModel";
-import "@/models/userStyleModel";
-import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+// app/api/users/[username]/route.js
+export const dynamic = "force-dynamic";
 
-export async function GET(request, { params }) {
-  const { username } = await params;
-  console.log("HIT ME");
+import { NextResponse } from "next/server";
+import { connectDB } from "@/lib/mongo";
+import { getCurrentUser } from "@/lib/auth-server";
+
+import User from "@/models/userModel";
+// Side-effect imports to register refs used by populate:
+import "@/models/userStyleModel";
+import "@/models/matchReportModel";
+
+function sanitizeUser(doc) {
+  if (!doc) return null;
+  const u = { ...doc };
+  delete u.password;
+  delete u.resetToken;
+  delete u.resetTokenExpiry;
+  delete u.verificationToken;
+  delete u.verificationTokenExpiry;
+  return u;
+}
+
+export async function GET(_req, { params }) {
   try {
     await connectDB();
 
-    const user = await User.findOne({ username })
+    const { username } = await params;
+
+    // Find user and populate referenced docs safely
+    const found = await User.findOne({ username })
       .populate("userStyles")
       .populate("matchReports")
-      .populate("scoutingReports")
       .lean();
 
-    console.log("user ", user);
-    if (!user) {
+    if (!found) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const cookiesList = await cookies();
-    const currentUserId = cookiesList.get("userId")?.value;
+    const me = await getCurrentUser().catch(() => null);
+    const isOwner = !!me?._id && String(me._id) === String(found._id);
 
-    // Continue even if profile is private — let frontend decide how to display
-    const memberships = await TeamMember.find({ userId: user._id })
-      .select("teamId role")
-      .lean();
-
-    const teamIds = memberships.map((m) => m.teamId);
-
-    const teams = await Team.find({ _id: { $in: teamIds } })
-      .select("teamName teamSlug logoURL")
-      .lean();
-
-    const teamsWithRoles = teams.map((team) => {
-      const match = memberships.find(
-        (m) => m.teamId.toString() === team._id.toString()
+    // Respect privacy: if not owner and not public, don't 404—return a private marker
+    if (!isOwner && !found.allowPublic) {
+      return NextResponse.json(
+        {
+          private: true,
+          username: found.username,
+          displayName:
+            [found.firstName, found.lastName].filter(Boolean).join(" ") ||
+            found.username,
+        },
+        { status: 200 }
       );
-      return {
-        ...team,
-        role: match?.role || "member",
-      };
-    });
+    }
 
-    const familyMembers = await FamilyMember.find({ userId: user._id })
-      .select("firstName lastName avatar gender username")
-
-      .lean();
-
-    // Attach additional data
-    user.teams = teamsWithRoles;
-    user.familyMembers = familyMembers;
-
-    // Sanitize sensitive info
-    delete user.password;
-    delete user.tempPassword;
-    delete user.lastLogin;
-    delete user.scoutingReports;
-
-    // ✅ Return user and isMyProfile flag so frontend can decide what to show
-    return NextResponse.json({ user });
+    return NextResponse.json(
+      { user: sanitizeUser(found) },
+      {
+        status: 200,
+        headers: {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+        },
+      }
+    );
   } catch (err) {
-    console.error("🔥 Error in /api/users/[username]:", err.message);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    console.error("GET /api/users/[username] failed:", err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

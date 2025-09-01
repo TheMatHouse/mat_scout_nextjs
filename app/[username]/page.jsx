@@ -1,8 +1,14 @@
-import { connectDB } from "@/lib/mongo";
-import User from "@/models/userModel";
-import UserProfileClient from "@/components/profile/UserProfileClient";
+// app/[username]/page.jsx
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
+
+import { connectDB } from "@/lib/mongo";
+import User from "@/models/userModel";
+// Ensure referenced schemas are registered for populate on this page too:
+import "@/models/userStyleModel";
+import "@/models/matchReportModel";
+
+import UserProfileClient from "@/components/profile/UserProfileClient";
 
 export async function generateMetadata({ params }) {
   const { username } = await params;
@@ -17,11 +23,15 @@ export async function generateMetadata({ params }) {
     };
   }
 
-  const title = `${member.firstName} ${member.lastName} | MatScout`;
-  const description = `View ${member.firstName}'s grappling profile on MatScout.`;
+  const title =
+    `${member.firstName || ""} ${member.lastName || ""}`.trim() ||
+    member.username;
+  const description = `View ${
+    member.firstName || member.username
+  }'s grappling profile on MatScout.`;
 
   return {
-    title,
+    title: `${title} | MatScout`,
     description,
   };
 }
@@ -31,27 +41,31 @@ export default async function UserProfilePage({ params }) {
 
   await connectDB();
 
-  const user = await User.findOne({ username })
-    .populate("userStyles")
-    .populate("matchReports")
-    .lean();
+  // Fetch minimal doc here just to decide visibility & 404
+  const user = await User.findOne({ username }).lean();
 
   if (!user) {
-    notFound(); // ✅ Real 404 if user not found
+    // ✅ Only 404 if user truly doesn't exist
+    notFound();
   }
 
-  // ✅ Determine logged-in user
+  // Determine if viewer is the owner
   const token = (await cookies()).get("token")?.value;
   let isMyProfile = false;
   if (token) {
-    const payload = JSON.parse(
-      Buffer.from(token.split(".")[1], "base64").toString()
-    );
-    if (payload?.userId === user._id.toString()) {
-      isMyProfile = true;
+    try {
+      const payload = JSON.parse(
+        Buffer.from(token.split(".")[1], "base64").toString()
+      );
+      if (payload?.userId === String(user._id)) {
+        isMyProfile = true;
+      }
+    } catch {
+      // ignore bad/expired token
     }
   }
 
+  // If private and not owner, render the private message (no 404)
   if (!isMyProfile && !user.allowPublic) {
     return (
       <div className="w-full flex justify-center py-20">
@@ -62,9 +76,6 @@ export default async function UserProfilePage({ params }) {
     );
   }
 
-  return (
-    <UserProfileClient
-      username={username}
-    />
-  );
+  // Let the client component fetch the rich profile data via the API route
+  return <UserProfileClient username={username} />;
 }

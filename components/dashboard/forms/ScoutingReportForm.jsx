@@ -1,22 +1,61 @@
+// components/dashboard/forms/ScoutingReportForm.jsx
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
+import { useUser } from "@/context/UserContext";
+import { scoutingReportCreated } from "@/lib/analytics/adminEvents";
+
 import { Button } from "@/components/ui/button";
 import Countries from "@/assets/countries.json";
 import Editor from "../../shared/Editor";
-import TechniqueTagInput from "@/components/shared/TechniqueTagInput";
+import TechniqueTagInput from "../../shared/TechniqueTagInput";
 import FormField from "@/components/shared/FormField";
 import FormSelect from "@/components/shared/FormSelect";
-import { useUser } from "@/context/UserContext";
-import { scoutingReportCreated } from "@/lib/analytics/adminEvents";
+
+const canon = (s) =>
+  (s || "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+// Normalize a variety of technique shapes into {label, value}
+const normalizeTechniques = (arr) => {
+  const seen = new Set();
+  const out = [];
+  (Array.isArray(arr) ? arr : []).forEach((t, i) => {
+    let label = "";
+    if (typeof t === "string") {
+      label = t.trim();
+    } else if (t && typeof t === "object") {
+      label = String(
+        t?.name ??
+          t?.label ??
+          t?.title ??
+          t?.technique ??
+          t?.techniqueName ??
+          ""
+      ).trim();
+    }
+    if (!label) return;
+    const c = canon(label);
+    if (seen.has(c)) return;
+    seen.add(c);
+    out.push({ label, value: t?._id ?? t?.id ?? c ?? i });
+  });
+  return out;
+};
 
 const ScoutingReportForm = ({
   athlete,
   report,
-  styles,
-  userType,
+  styles, // fresh from API (like Matches)
+  techniques, // prefer parent-supplied techniques
+  userType, // "user" | "family"
   setOpen,
   onSuccess,
 }) => {
@@ -24,11 +63,28 @@ const ScoutingReportForm = ({
   const { user } = useUser();
   const userId = user?._id;
 
-  const newVideosRef = useRef([]);
-  const deletedVideoIdsRef = useRef([]);
-  const [, forceRerender] = useState(0); // Force re-render for refs
+  // Normalize styles
+  const normalizedStyles = useMemo(() => {
+    const pick = (arr) =>
+      Array.isArray(arr) && arr.length > 0 ? arr : undefined;
+    const raw =
+      pick(styles) ?? pick(athlete?.userStyles) ?? pick(athlete?.styles) ?? [];
+    return raw
+      .map((s) => {
+        if (typeof s === "string") {
+          const name = s.trim();
+          return name ? { styleName: name } : null;
+        }
+        if (s && typeof s === "object") {
+          const name = s.styleName || s.name || s.title || s.style || "";
+          return name ? { styleName: name } : null;
+        }
+        return null;
+      })
+      .filter(Boolean);
+  }, [styles, athlete?.userStyles, athlete?.styles]);
 
-  // === State ===
+  // ---------- Form State ----------
   const [matchType, setMatchType] = useState(report?.matchType || "");
   const [athleteFirstName, setAthleteFirstName] = useState(
     report?.athleteFirstName || ""
@@ -56,36 +112,58 @@ const ScoutingReportForm = ({
     report?.athleteAttackNotes || ""
   );
   const [accessList, setAccessList] = useState(report?.accessList || []);
+
+  // Techniques
   const [loadedTechniques, setLoadedTechniques] = useState([]);
   const [athleteSelected, setAthleteSelected] = useState(
     report?.athleteAttacks?.map((item, i) => ({ value: i, label: item })) || []
   );
+
   const [videos, setVideos] = useState(report?.videos || []);
   const [newVideos, setNewVideos] = useState([]);
 
-  // === Fetch techniques ===
+  // Prefer parent-provided techniques; otherwise fetch
   useEffect(() => {
-    const fetchTechniques = async () => {
+    const fromProps = normalizeTechniques(techniques);
+    if (fromProps.length) {
+      setLoadedTechniques(fromProps);
+      return;
+    }
+
+    // Fallback: fetch from API
+    (async () => {
       try {
-        const res = await fetch("/api/techniques");
+        const res = await fetch("/api/techniques", {
+          headers: { accept: "application/json" },
+          cache: "no-store",
+        });
         const data = await res.json();
-        if (Array.isArray(data)) {
-          setLoadedTechniques(data);
-        } else {
-          setLoadedTechniques([]);
-        }
-      } catch (error) {
-        console.error("Error fetching techniques:", error);
+        const arr = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.techniques)
+          ? data.techniques
+          : Array.isArray(data?.items)
+          ? data.items
+          : Array.isArray(data?.data)
+          ? data.data
+          : Array.isArray(data?.results)
+          ? data.results
+          : [];
+        setLoadedTechniques(normalizeTechniques(arr));
+      } catch {
         setLoadedTechniques([]);
       }
-    };
-    fetchTechniques();
-  }, []);
+    })();
+  }, [techniques]);
 
-  const suggestions = loadedTechniques.map((t, i) => ({
-    value: i,
-    label: t.name,
-  }));
+  // Suggestions for the input (sorted)
+  const suggestions = useMemo(
+    () =>
+      [...loadedTechniques].sort((a, b) =>
+        a.label.localeCompare(b.label, undefined, { sensitivity: "base" })
+      ),
+    [loadedTechniques]
+  );
 
   const onAthleteAdd = useCallback(
     (tag) => setAthleteSelected((prev) => [...prev, tag]),
@@ -96,56 +174,27 @@ const ScoutingReportForm = ({
     []
   );
 
-  // === Video management ===
-  const updateVideoField = (index, field, value, isNew = false) => {
-    if (isNew) {
-      setNewVideos((prev) =>
-        prev.map((vid, i) => (i === index ? { ...vid, [field]: value } : vid))
-      );
-    } else {
-      setVideos((prev) =>
-        prev.map((vid, i) => (i === index ? { ...vid, [field]: value } : vid))
-      );
+  // If no matchType yet (new report), preselect first available style
+  useEffect(() => {
+    if (!matchType && normalizedStyles.length > 0) {
+      setMatchType(normalizedStyles[0].styleName);
     }
-  };
+  }, [normalizedStyles, matchType]);
 
-  const addNewVideo = () => {
-    const newVideo = { title: "", notes: "", url: "" };
-    setNewVideos((prev) => [...prev, newVideo]);
-    newVideosRef.current.push(newVideo);
-  };
-
-  const deleteVideo = async (videoId) => {
-    deletedVideoIdsRef.current.push(videoId);
-    setVideos((prev) => prev.filter((v) => v._id !== videoId));
-  };
-
-  const handleVideoChange = (index, field, value, type = "existing") => {
-    if (type === "existing") {
-      const updated = [...videos];
-      if (!updated[index]) return;
-      updated[index][field] = value;
-      setVideos(updated);
-    } else {
-      const updated = [...newVideosRef.current];
-      if (!updated[index]) return;
-      updated[index][field] = value;
-      newVideosRef.current = updated;
-      forceRerender((n) => n + 1);
-    }
-  };
-
+  // YouTube helpers
   const extractYouTubeID = (url) => {
     if (!url || typeof url !== "string") return null;
     const match = url.match(/(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/);
     return match ? match[1] : null;
   };
 
-  const userStyles = athlete?.userStyles || [];
-
-  // === Submit ===
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!matchType) {
+      toast.error("Please choose a match type (style) first.");
+      return;
+    }
 
     const payload = {
       reportFor: [{ athleteId: athlete._id, athleteType: userType }],
@@ -166,8 +215,8 @@ const ScoutingReportForm = ({
       athleteAttackNotes,
       accessList,
       updatedVideos: videos.filter((v) => v._id),
-      newVideos: newVideosRef.current,
-      deletedVideos: deletedVideoIdsRef.current || [],
+      newVideos,
+      deletedVideos: [],
     };
 
     const method = report ? "PATCH" : "POST";
@@ -190,26 +239,24 @@ const ScoutingReportForm = ({
 
       const data = await res.json();
 
-      if (!res.ok) {
-        scoutingReportCreated({
-          style: matchType || "(none)",
-          opponentName: opponentName || "(unknown)",
-          userType: userType || "user", // "user" | "family"
-          tagsCount: Array.isArray(selectedTags) ? selectedTags.length : 0,
-          rating: typeof rating !== "undefined" ? rating : "",
-          isPublic: !!isPublic,
-        });
-        toast.error(data.message || "Something went wrong");
-        return;
-      }
+      if (res.ok) {
+        toast.success(data.message || "Scouting report saved.");
+        onSuccess?.();
 
-      toast.success(data.message);
-      setOpen(false);
-      onSuccess?.();
-      router.refresh();
+        scoutingReportCreated({
+          style: matchType,
+          userType,
+          hasVideos: (videos?.length || 0) + (newVideos?.length || 0) > 0,
+        });
+
+        setOpen?.(false);
+        router.refresh();
+      } else {
+        toast.error(data.message || "Failed to save scouting report.");
+      }
     } catch (err) {
       console.error(err);
-      toast.error("An error occurred while saving the report.");
+      toast.error("An error occurred while saving the scouting report.");
     }
   };
 
@@ -218,15 +265,30 @@ const ScoutingReportForm = ({
       onSubmit={handleSubmit}
       className="space-y-6"
     >
-      {/* Match Type */}
+      {/* No styles gate */}
+      {normalizedStyles.length === 0 && (
+        <div className="rounded-lg border p-4 bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+          <p className="font-semibold">No styles found for this athlete.</p>
+          <p className="text-sm">
+            Please add a style to this profile before creating a scouting
+            report.
+          </p>
+        </div>
+      )}
+
       <FormSelect
         label="Match Type"
+        placeholder={
+          normalizedStyles.length
+            ? "Select match type..."
+            : "No styles available"
+        }
         value={matchType}
         onChange={setMatchType}
-        placeholder="Select match type..."
-        options={userStyles.map((style) => ({
-          value: style.styleName,
-          label: style.styleName,
+        disabled={normalizedStyles.length === 0}
+        options={normalizedStyles.map((s) => ({
+          value: s.styleName,
+          label: s.styleName,
         }))}
       />
 
@@ -318,7 +380,7 @@ const ScoutingReportForm = ({
         onDelete={onAthleteDelete}
       />
 
-      {/* Attack Notes */}
+      {/* Notes */}
       <Editor
         name="athleteAttackNotes"
         text={athleteAttackNotes}
@@ -329,76 +391,38 @@ const ScoutingReportForm = ({
       {/* Videos */}
       <div className="mt-6">
         <h3 className="text-lg font-semibold mb-2">Videos</h3>
-        {videos.map((vid, index) => (
-          <div
-            key={vid._id || index}
-            className="bg-muted p-4 rounded-lg mb-4"
-          >
-            <FormField
-              label="Video Title"
-              value={vid.title}
-              onChange={(e) => updateVideoField(index, "title", e.target.value)}
-            />
-            <Editor
-              name="notes"
-              text={vid.notes}
-              onChange={(val) => handleVideoChange(index, "notes", val, "new")}
-              label="Video Notes"
-            />
-            <FormField
-              label="YouTube URL"
-              value={vid.url}
-              onChange={(e) => updateVideoField(index, "url", e.target.value)}
-            />
-            {extractYouTubeID(vid.url) && (
-              <iframe
-                className="mt-3 w-full h-52"
-                src={`https://www.youtube.com/embed/${extractYouTubeID(
-                  vid.url
-                )}`}
-                allowFullScreen
-              />
-            )}
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={() => deleteVideo(vid._id)}
-              className="mt-2"
-            >
-              Delete
-            </Button>
-          </div>
-        ))}
 
-        {newVideos.map((vid, index) => (
+        {newVideos.map((vid, idx) => (
           <div
-            key={index}
+            key={idx}
             className="bg-muted p-4 rounded-lg mb-4"
           >
             <FormField
               label="Video Title"
-              value={vid.title}
+              value={vid.title || ""}
               onChange={(e) => {
-                const updatedVideos = [...newVideos];
-                updatedVideos[index].title = e.target.value;
-                setNewVideos(updatedVideos);
-                newVideosRef.current[index].title = e.target.value;
+                const next = [...newVideos];
+                next[idx] = { ...(next[idx] || {}), title: e.target.value };
+                setNewVideos(next);
               }}
             />
             <Editor
-              name="notes"
-              text={vid.notes}
-              onChange={(val) => handleVideoChange(index, "notes", val, "new")}
+              name={`notes_${idx}`}
+              text={vid.notes || ""}
+              onChange={(val) => {
+                const next = [...newVideos];
+                next[idx] = { ...(next[idx] || {}), notes: val };
+                setNewVideos(next);
+              }}
               label="Video Notes"
             />
             <FormField
               label="YouTube URL"
-              value={vid.url}
+              value={vid.url || ""}
               onChange={(e) => {
-                const updatedVideos = [...newVideos];
-                updatedVideos[index].url = e.target.value;
-                setNewVideos(updatedVideos);
-                newVideosRef.current[index].url = e.target.value;
+                const next = [...newVideos];
+                next[idx] = { ...(next[idx] || {}), url: e.target.value };
+                setNewVideos(next);
               }}
             />
             {extractYouTubeID(vid.url) && (
@@ -415,19 +439,24 @@ const ScoutingReportForm = ({
 
         <Button
           type="button"
-          onClick={addNewVideo}
           variant="outline"
+          onClick={() =>
+            setNewVideos((prev) => [...prev, { title: "", notes: "", url: "" }])
+          }
         >
-          ➕ Add {videos.length + newVideos.length ? "Another" : "a"} Video
+          ➕ Add {newVideos.length ? "Another" : "a"} Video
         </Button>
       </div>
 
-      <Button
-        type="submit"
-        className="btn btn-primary mt-4"
-      >
-        {report ? "Update" : "Submit"} Report
-      </Button>
+      <div className="pt-4">
+        <Button
+          type="submit"
+          className="btn btn-primary"
+          disabled={normalizedStyles.length === 0}
+        >
+          {report ? "Update" : "Submit"} Report
+        </Button>
+      </div>
     </form>
   );
 };

@@ -21,44 +21,68 @@ export default function TeamPageClient({ slug, initialData }) {
   const [loading, setLoading] = useState(!initialData);
   const [buttonLoading, setButtonLoading] = useState(false);
 
+  // Normalize id from API shape (id) or legacy (_id)
+  const userId = user?.id || user?._id || null;
+
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
       try {
         if (!initialData) {
-          const teamRes = await fetch(`/api/teams/${slug}`);
+          const teamRes = await fetch(`/api/teams/${slug}`, {
+            cache: "no-store",
+          });
           const teamData = await teamRes.json();
-          setTeam(teamData?.team || null);
+          if (!cancelled) setTeam(teamData?.team || null);
         }
 
         if (user) {
-          const resM = await fetch(`/api/teams/${slug}/membership`);
+          const resM = await fetch(`/api/teams/${slug}/membership`, {
+            cache: "no-store",
+          });
           const dataM = await resM.json();
-          setMemberships(
-            Array.isArray(dataM.memberships) ? dataM.memberships : []
-          );
+          if (!cancelled) {
+            setMemberships(
+              Array.isArray(dataM.memberships) ? dataM.memberships : []
+            );
+          }
 
-          const resF = await fetch(`/api/family`);
+          const resF = await fetch(`/api/family`, { cache: "no-store" });
           const dataF = await resF.json();
-          setFamily(
-            Array.isArray(dataF.familyMembers) ? dataF.familyMembers : []
-          );
+          if (!cancelled) {
+            setFamily(
+              Array.isArray(dataF.familyMembers) ? dataF.familyMembers : []
+            );
+          }
         }
       } catch (err) {
         console.error("Error loading team/memberships/family:", err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     load();
+
+    return () => {
+      cancelled = true;
+    };
   }, [slug, user, initialData]);
 
-  const userMember = useMemo(
-    () =>
-      memberships.find(
-        (m) => !m.familyMemberId && String(m.userId) === String(user?._id)
-      ),
-    [memberships, user?._id]
-  );
+  const userMembership = useMemo(() => {
+    if (!userId) return undefined;
+    return memberships.find(
+      (m) => !m.familyMemberId && String(m.userId) === String(userId)
+    );
+  }, [memberships, userId]);
+
+  const refreshMemberships = async () => {
+    const resM = await fetch(`/api/teams/${slug}/membership`, {
+      cache: "no-store",
+    });
+    const dataM = await resM.json();
+    setMemberships(Array.isArray(dataM.memberships) ? dataM.memberships : []);
+  };
 
   const handleJoin = async (familyMemberId = null) => {
     try {
@@ -66,12 +90,27 @@ export default function TeamPageClient({ slug, initialData }) {
       const res = await fetch(`/api/teams/${slug}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        cache: "no-store",
         body: JSON.stringify(familyMemberId ? { familyMemberId } : {}),
       });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result?.error || "Join failed");
+
+      let result;
+      try {
+        result = await res.json();
+      } catch {}
+
+      if (!res.ok) {
+        const msg = result?.error || "";
+        if (res.status === 409 || /pending|already|exists/i.test(msg)) {
+          toast.info("You already have a request to join this team.");
+        } else {
+          toast.error(msg || "Failed to join team.");
+        }
+        return;
+      }
+
       toast.success("Join request submitted");
-      refreshMemberships();
+      await refreshMemberships();
     } catch (err) {
       console.error("Join error:", err);
       toast.error("Failed to join team.");
@@ -82,24 +121,26 @@ export default function TeamPageClient({ slug, initialData }) {
 
   const handleLeave = async ({ membershipId }) => {
     try {
+      setButtonLoading(true);
       const res = await fetch(`/api/teams/${slug}/leave`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        cache: "no-store",
         body: JSON.stringify({ membershipId }),
       });
-      if (!res.ok) throw new Error("Leave failed");
+      let result;
+      try {
+        result = await res.json();
+      } catch {}
+      if (!res.ok) throw new Error(result?.error || "Leave failed");
       toast.success("Left the team");
-      refreshMemberships();
+      await refreshMemberships();
     } catch (err) {
       console.error("Leave error:", err);
       toast.error("Failed to leave team.");
+    } finally {
+      setButtonLoading(false);
     }
-  };
-
-  const refreshMemberships = async () => {
-    const resM = await fetch(`/api/teams/${slug}/membership`);
-    const dataM = await resM.json();
-    setMemberships(Array.isArray(dataM.memberships) ? dataM.memberships : []);
   };
 
   if (loading) {
@@ -132,6 +173,10 @@ export default function TeamPageClient({ slug, initialData }) {
   const createdOn = team.createdAt
     ? new Date(team.createdAt).toLocaleDateString()
     : "—";
+
+  const roleLabel = (r) => (r ? r.charAt(0).toUpperCase() + r.slice(1) : "—");
+  const userRole = (userMembership?.role || "").toLowerCase();
+  const cannotLeave = userRole === "manager" || userRole === "owner";
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
@@ -196,31 +241,52 @@ export default function TeamPageClient({ slug, initialData }) {
               <h2 className="text-xl font-semibold">Your Membership</h2>
 
               {user ? (
-                userMember ? (
-                  <>
-                    <p className="text-sm">
-                      Role:{" "}
-                      <span className="inline-flex items-center px-2 py-0.5 rounded bg-muted text-muted-foreground">
-                        {userMember.role}
-                      </span>
-                    </p>
-                    <button
-                      onClick={() =>
-                        handleLeave({ membershipId: userMember._id })
-                      }
-                      disabled={buttonLoading || userMember.role === "manager"}
-                      className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
-                      title={
-                        userMember.role === "manager"
-                          ? "Managers cannot leave"
-                          : "Leave team"
-                      }
-                    >
-                      <LogOut className="w-4 h-4" />
-                      Leave Team
-                    </button>
-                  </>
+                userMembership ? (
+                  // You have SOME membership record
+                  userRole === "pending" ? (
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        Your join request is <strong>Pending</strong>.
+                      </p>
+                      <button
+                        onClick={() =>
+                          handleLeave({ membershipId: userMembership._id })
+                        }
+                        disabled={buttonLoading}
+                        className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-yellow-600 px-4 py-2 text-sm font-semibold text-white hover:bg-yellow-700 disabled:opacity-60"
+                        title="Withdraw your request"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        Withdraw Request
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm">
+                        Role:{" "}
+                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-muted text-muted-foreground">
+                          {roleLabel(userMembership.role)}
+                        </span>
+                      </p>
+                      <button
+                        onClick={() =>
+                          handleLeave({ membershipId: userMembership._id })
+                        }
+                        disabled={buttonLoading || cannotLeave}
+                        className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                        title={
+                          cannotLeave
+                            ? "Managers/Owners cannot leave"
+                            : "Leave team"
+                        }
+                      >
+                        <LogOut className="w-4 h-4" />
+                        Leave Team
+                      </button>
+                    </>
+                  )
                 ) : (
+                  // No membership for this user yet
                   <>
                     <p className="text-sm text-muted-foreground">
                       You’re not a member yet.
@@ -255,6 +321,7 @@ export default function TeamPageClient({ slug, initialData }) {
                       (m) => String(m.familyMemberId) === String(fm._id)
                     );
 
+                    const mRole = (m?.role || "").toLowerCase();
                     let status = "Not a member";
                     let button = (
                       <button
@@ -267,7 +334,7 @@ export default function TeamPageClient({ slug, initialData }) {
                       </button>
                     );
 
-                    if (m?.role === "pending") {
+                    if (mRole === "pending") {
                       status = "Pending";
                       button = (
                         <button
@@ -279,9 +346,9 @@ export default function TeamPageClient({ slug, initialData }) {
                         </button>
                       );
                     } else if (
-                      ["member", "manager", "coach"].includes(m?.role)
+                      ["member", "manager", "owner", "coach"].includes(mRole)
                     ) {
-                      status = m.role[0].toUpperCase() + m.role.slice(1);
+                      status = roleLabel(mRole);
                       button = (
                         <button
                           onClick={() => handleLeave({ membershipId: m._id })}

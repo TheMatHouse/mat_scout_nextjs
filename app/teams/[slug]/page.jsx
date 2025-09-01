@@ -3,8 +3,8 @@ import { connectDB } from "@/lib/mongo";
 import Team from "@/models/teamModel";
 import TeamPageClient from "@/components/teams/TeamPageClient";
 
-function strip(u) {
-  return u ? u.replace(/\/+$/, "") : u;
+function strip(url) {
+  return url ? url.replace(/\/+$/, "") : url;
 }
 const SITE_URL =
   strip(process.env.NEXT_PUBLIC_BASE_URL) ||
@@ -20,11 +20,11 @@ function absUrl(path = "/") {
 }
 
 export async function generateMetadata({ params }) {
-  const { slug } = params;
+  const { slug } = await params; // ✅ must await in Next 15
   await connectDB();
   const team = await Team.findOne({ teamSlug: slug });
 
-  const DEFAULT_OG = absUrl("/default-og.png");
+  const defaultOG = absUrl("/default-og.png");
 
   if (!team) {
     const title = "Team Not Found · MatScout";
@@ -40,21 +40,13 @@ export async function generateMetadata({ params }) {
         siteName: "MatScout",
         title,
         description,
-        images: [
-          {
-            url: DEFAULT_OG,
-            secureUrl: DEFAULT_OG,
-            width: 1200,
-            height: 630,
-            alt: "MatScout",
-          },
-        ],
+        images: [{ url: defaultOG, width: 1200, height: 630, alt: "MatScout" }],
       },
       twitter: {
         card: "summary_large_image",
         title,
         description,
-        images: [DEFAULT_OG], // Twitter uses just the default
+        images: [defaultOG],
       },
     };
   }
@@ -62,37 +54,8 @@ export async function generateMetadata({ params }) {
   const title = `${team.teamName} · MatScout`;
   const description = `Discover ${team.teamName}'s profile on MatScout.`;
 
-  const logo = team.logoURL
-    ? team.logoURL.startsWith("http")
-      ? team.logoURL
-      : absUrl(team.logoURL)
-    : "";
-
-  // Build optional second image from /api/og (default remains first)
-  const images = [
-    {
-      url: DEFAULT_OG,
-      secureUrl: DEFAULT_OG,
-      width: 1200,
-      height: 630,
-      alt: "MatScout",
-    },
-  ];
-
-  if (logo) {
-    const og = new URL("/api/og", SITE_URL);
-    og.searchParams.set("type", "team");
-    og.searchParams.set("name", team.teamName || "MatScout");
-    og.searchParams.set("avatar", logo);
-    // lightweight cache-buster if the logo changes:
-    if (team.logoId) og.searchParams.set("v", team.logoId);
-    images.push({
-      url: og.toString(),
-      width: 1200,
-      height: 630,
-      alt: `${team.teamName} on MatScout`,
-    });
-  }
+  // Always use default OG now (per your new rule)
+  const ogUrl = defaultOG;
 
   return {
     title,
@@ -104,19 +67,26 @@ export async function generateMetadata({ params }) {
       title,
       description,
       url: absUrl(`/teams/${slug}`),
-      images,
+      images: [
+        {
+          url: ogUrl,
+          width: 1200,
+          height: 630,
+          alt: `${team.teamName} on MatScout`,
+        },
+      ],
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
-      images: [DEFAULT_OG], // force the default on Twitter
+      images: [ogUrl],
     },
   };
 }
 
 export default async function TeamPage({ params }) {
-  const { slug } = params;
+  const { slug } = await params; // ✅ must await in Next 15
   await connectDB();
   const team = await Team.findOne({ teamSlug: slug });
 

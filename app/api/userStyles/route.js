@@ -1,58 +1,84 @@
-"use server";
+// app/api/userStyles/route.js
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
-import { Types } from "mongoose";
-import UserStyle from "@/models/userStyleModel";
 import { connectDB } from "@/lib/mongo";
-import User from "@/models/userModel";
-import Style from "@/models/styleModel";
+import { getCurrentUser } from "@/lib/auth-server";
+import UserStyle from "@/models/userStyleModel";
+import FamilyMember from "@/models/familyMemberModel";
 
-export const GET = async (request) => {
-  try {
-    await connectDB();
-    const UserStyles = await UserStyle.find();
-    if (UserStyles) {
-      return new NextResponse(JSON.stringify(UserStyles), { status: 200 });
-    } else {
-      return new NextResponse("No styles found", { status: 404 });
-    }
-  } catch (error) {
-    return new NextResponse("Error fetching users " + error.message, {
-      status: 500,
-    });
+function json(data, status = 200) {
+  return new NextResponse(JSON.stringify(data), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+}
+
+export async function GET(request) {
+  await connectDB();
+  const me = await getCurrentUser();
+  if (!me) return json({ error: "Unauthorized" }, 401);
+
+  const { searchParams } = new URL(request.url);
+  const familyMemberId = searchParams.get("familyMemberId");
+
+  const query = { userId: me._id };
+  if (familyMemberId) {
+    query.familyMemberId = familyMemberId;
   }
-};
 
-export const POST = async (request) => {
-  const body = await request.json();
-  const { userId, styleId } = body;
+  const styles = await UserStyle.find(query).lean();
+  return json({ styles });
+}
 
+export async function POST(request) {
+  await connectDB();
+  const me = await getCurrentUser();
+  if (!me) return json({ error: "Unauthorized" }, 401);
+
+  let body;
   try {
-    if (!userId || !Types.ObjectId.isValid(userId)) {
-      return new NextResponse(
-        JSON.stringify({ message: "Invalid or missing user id" })
-      );
-    }
+    body = await request.json();
+  } catch {
+    return json({ error: "Invalid JSON" }, 400);
+  }
 
-    if (!styleId || !Types.ObjectId.isValid(styleId)) {
-      return new NextResponse(
-        JSON.stringify({ message: "Invalid or missing style id" })
-      );
-    }
+  const {
+    styleName,
+    rank,
+    division,
+    weightClass,
+    grip,
+    favoriteTechnique,
+    promotionDate,
+    familyMemberId, // optional
+  } = body || {};
 
-    await connectDB();
-    const userExists = await User.findById(userId);
+  if (!styleName) return json({ error: "Style name is required" }, 400);
 
-    if (!userExists) {
-      return new NextResponse(JSON.stringify({ message: "User nout found" }));
-    }
+  // If creating for a family member, verify the family member belongs to this user.
+  if (familyMemberId) {
+    const fam = await FamilyMember.findOne({
+      _id: familyMemberId,
+      userId: me._id,
+    }).lean();
+    if (!fam) return json({ error: "Invalid family member" }, 403);
+  }
 
-    const styleExists = await Style.findById(styleId);
+  const created = await UserStyle.create({
+    styleName,
+    rank: rank || "",
+    division: division || "",
+    weightClass: weightClass || "",
+    grip: grip || "",
+    favoriteTechnique: favoriteTechnique || "",
+    promotionDate: promotionDate ? new Date(promotionDate) : undefined,
+    userId: me._id,
+    familyMemberId: familyMemberId || null,
+  });
 
-    if (!styleExists) {
-      return new NextResponse(JSON.stringify({ message: "Style nout found" }));
-    }
-  } catch (error) {}
-  return new NextResponse(JSON.stringify("Connected"), { status: 200 });
-  //   const newStyle = new User(body);
-  //   await newStyle.save();
-};
+  return json({ message: "Style saved", createdStyle: created });
+}

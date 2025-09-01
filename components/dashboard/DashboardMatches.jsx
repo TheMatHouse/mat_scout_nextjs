@@ -1,7 +1,7 @@
 // components/dashboard/DashboardMatches.jsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import moment from "moment";
 import { toast } from "react-toastify";
@@ -13,13 +13,20 @@ import PreviewReportModal from "./PreviewReportModal";
 import { Button } from "@/components/ui/button";
 import { ArrowUpDown, Eye, Edit, Trash } from "lucide-react";
 import ModalLayout from "@/components/shared/ModalLayout";
+import Spinner from "@/components/shared/Spinner";
 
 const DashboardMatches = ({ user }) => {
   const router = useRouter();
   const [matchReports, setMatchReports] = useState([]);
+
+  // Modal state
   const [open, setOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState(null);
+
+  // Styles-for-form state
+  const [stylesLoading, setStylesLoading] = useState(false);
+  const [stylesForForm, setStylesForForm] = useState([]);
 
   // resolve a default logo (used in the PDF header)
   const logoUrl =
@@ -42,6 +49,26 @@ const DashboardMatches = ({ user }) => {
       toast.error("Could not load match reports.");
     }
   };
+
+  // Fetch the current user's styles specifically for the form (fresh, not from user object)
+  const loadStylesForModal = useCallback(async () => {
+    if (!user?._id) {
+      setStylesForForm([]);
+      return;
+    }
+    setStylesLoading(true);
+    try {
+      const res = await fetch(`/api/dashboard/${user._id}/userStyles`);
+      if (!res.ok) throw new Error("Failed to load styles");
+      const data = await res.json();
+      setStylesForForm(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error("Failed to load styles:", e);
+      setStylesForForm([]);
+    } finally {
+      setStylesLoading(false);
+    }
+  }, [user?._id]);
 
   const handleDeleteMatch = async (match) => {
     if (
@@ -135,9 +162,10 @@ const DashboardMatches = ({ user }) => {
               <Eye className="w-5 h-5 text-blue-500" />
             </button>
             <button
-              onClick={() => {
+              onClick={async () => {
                 setSelectedMatch(match);
                 setOpen(true);
+                await loadStylesForModal();
               }}
               title="Edit Match"
               className="icon-btn"
@@ -157,9 +185,6 @@ const DashboardMatches = ({ user }) => {
     },
   ];
 
-  const hasStyles = user?.userStyles && user.userStyles.length > 0;
-
-  // Build the "Print All" PDF link (uses the all-styles route you wired)
   const printAllHref = (() => {
     const qs = new URLSearchParams();
     if (logoUrl) qs.set("logo", logoUrl);
@@ -168,15 +193,15 @@ const DashboardMatches = ({ user }) => {
 
   return (
     <div className="px-4 md:px-6 lg:px-8">
-      {/* Header with Add + Print buttons */}
       {/* Header with Add Button */}
       <div className="flex flex-col items-start gap-4 mb-4">
         <h1 className="text-2xl font-bold">My Matches</h1>
         <Button
           className="btn btn-primary"
-          onClick={() => {
+          onClick={async () => {
             setSelectedMatch(null);
             setOpen(true);
+            await loadStylesForModal();
           }}
         >
           Add Match Report
@@ -191,9 +216,14 @@ const DashboardMatches = ({ user }) => {
         description="Fill out all match details below."
         withCard={true}
       >
-        {hasStyles ? (
+        {stylesLoading ? (
+          <div className="flex items-center justify-center py-10">
+            <Spinner size={40} />
+          </div>
+        ) : stylesForForm.length > 0 ? (
           <MatchReportForm
             athlete={user}
+            styles={stylesForForm}
             match={selectedMatch}
             setOpen={setOpen}
             onSuccess={fetchMatches}
@@ -228,6 +258,7 @@ const DashboardMatches = ({ user }) => {
           Print All Matches (PDF)
         </a>
       </div>
+
       {/* Cards for Mobile */}
       <div className="block md:hidden space-y-4">
         {matchReports.length > 0 ? (
@@ -269,9 +300,10 @@ const DashboardMatches = ({ user }) => {
                   <Eye size={18} />
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     setSelectedMatch(match);
                     setOpen(true);
+                    await loadStylesForModal();
                   }}
                   title="Edit"
                   className="icon-btn"
@@ -303,9 +335,10 @@ const DashboardMatches = ({ user }) => {
               setSelectedMatch(match);
               setPreviewOpen(true);
             }}
-            onEdit={(match) => {
+            onEdit={async (match) => {
               setSelectedMatch(match);
               setOpen(true);
+              await loadStylesForModal();
             }}
             onDelete={(match) => handleDeleteMatch(match)}
           />
