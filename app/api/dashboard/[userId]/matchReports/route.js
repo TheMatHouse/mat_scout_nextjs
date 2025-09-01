@@ -1,30 +1,48 @@
-"use server";
-
+// app/api/dashboard/[userId]/matchReports/route.js
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import { connectDB } from "@/lib/mongo";
 import MatchReport from "@/models/matchReportModel";
 import User from "@/models/userModel";
-import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
+import { ensureTechniques } from "@/lib/ensureTechniques";
 
-// GET - Return match reports for a specific user
-export async function GET(request, context) {
+export const dynamic = "force-dynamic";
+
+// ---------- Helpers ----------
+function normalizeYouTubeUrl(url) {
+  if (!url) return "";
+  try {
+    const short = url.match(/youtu\.be\/([\w-]+)/)?.[1];
+    const norm = url.match(/[?&]v=([\w-]+)/)?.[1];
+    const id = short || norm;
+    return id ? `https://www.youtube.com/watch?v=${id}` : url;
+  } catch {
+    return url;
+  }
+}
+
+const cleanList = (arr) => [
+  ...new Set((arr || []).map((s) => String(s || "").trim()).filter(Boolean)),
+];
+
+const asLower = (arr) => arr.map((s) => s.toLowerCase());
+
+// ---------- GET: all match reports for a user ----------
+export async function GET(_request, context) {
   await connectDB();
-  const { userId } = await context.params;
+  const { userId } = context.params || {};
 
   try {
     if (!userId || !Types.ObjectId.isValid(userId)) {
-      return new NextResponse(
-        JSON.stringify({ message: "Invalid or missing user ID" }),
+      return NextResponse.json(
+        { message: "Invalid or missing user ID" },
         { status: 400 }
       );
     }
 
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).lean();
     if (!user) {
-      return new NextResponse(JSON.stringify({ message: "User not found" }), {
-        status: 404,
-      });
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
     }
 
     const matchReports = await MatchReport.find({
@@ -32,35 +50,31 @@ export async function GET(request, context) {
       athleteType: "user",
     }).sort({ matchDate: -1 });
 
-    return new NextResponse(JSON.stringify(matchReports), { status: 200 });
+    return NextResponse.json(matchReports, { status: 200 });
   } catch (error) {
-    return new NextResponse(
-      JSON.stringify({
-        message: "Error getting match reports: " + error.message,
-      }),
+    return NextResponse.json(
+      { message: "Error getting match reports", error: error.message },
       { status: 500 }
     );
   }
 }
 
-// POST - Create a new match report for a user
+// ---------- POST: create a new match report ----------
 export async function POST(request, context) {
   await connectDB();
-  const { userId } = await context.params;
+  const { userId } = context.params || {};
 
   try {
     if (!userId || !Types.ObjectId.isValid(userId)) {
-      return new NextResponse(
-        JSON.stringify({ message: "Invalid or missing user ID" }),
+      return NextResponse.json(
+        { message: "Invalid or missing user ID" },
         { status: 400 }
       );
     }
 
     const user = await User.findById(userId);
     if (!user) {
-      return new NextResponse(JSON.stringify({ message: "User not found" }), {
-        status: 404,
-      });
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
     }
 
     const body = await request.json();
@@ -84,11 +98,17 @@ export async function POST(request, context) {
       isPublic,
       videoTitle,
       videoURL,
-    } = body;
+    } = body || {};
 
-    // Save any unknown techniques
-    await saveUnknownTechniques(opponentAttacks);
-    await saveUnknownTechniques(athleteAttacks);
+    // Clean & normalize attacks for report storage (lowercase)
+    const oppAttacksClean = asLower(cleanList(opponentAttacks));
+    const athAttacksClean = asLower(cleanList(athleteAttacks));
+
+    // Ensure any typed techniques exist (create if missing; no dup if unapproved exists)
+    await ensureTechniques([
+      ...cleanList(opponentAttacks),
+      ...cleanList(athleteAttacks),
+    ]);
 
     const newMatchReport = await MatchReport.create({
       athleteId: user._id,
@@ -105,9 +125,9 @@ export async function POST(request, context) {
       opponentRank,
       opponentCountry,
       opponentGrip,
-      opponentAttacks,
+      opponentAttacks: oppAttacksClean,
       opponentAttackNotes,
-      athleteAttacks,
+      athleteAttacks: athAttacksClean,
       athleteAttackNotes,
       result,
       score,
@@ -115,39 +135,26 @@ export async function POST(request, context) {
         videoTitle: videoTitle || "",
         videoURL: normalizeYouTubeUrl(videoURL || ""),
       },
-      isPublic,
+      isPublic: !!isPublic,
     });
 
-    user.matchReports = user.matchReports || [];
-    user.matchReports.push(newMatchReport._id);
-    await user.save();
+    // Link the report to the user
+    await User.findByIdAndUpdate(user._id, {
+      $addToSet: { matchReports: newMatchReport._id },
+    });
 
-    return new NextResponse(
-      JSON.stringify({
-        status: 201,
+    return NextResponse.json(
+      {
         message: "Match report created successfully",
         matchReportId: newMatchReport._id,
-      }),
+      },
       { status: 201 }
     );
   } catch (error) {
     console.error("Match report creation error:", error);
-    return new NextResponse(
-      JSON.stringify({ message: "Server error: " + error.message }),
+    return NextResponse.json(
+      { message: "Server error", error: error.message },
       { status: 500 }
     );
-  }
-}
-
-// Optional helper to normalize YouTube share URLs
-function normalizeYouTubeUrl(url) {
-  if (!url) return "";
-  try {
-    const shortMatch = url.match(/youtu\.be\/([\w-]+)/);
-    const normalMatch = url.match(/v=([\w-]+)/);
-    const id = shortMatch?.[1] || normalMatch?.[1];
-    return id ? `https://www.youtube.com/watch?v=${id}` : url;
-  } catch {
-    return url;
   }
 }
