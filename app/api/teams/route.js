@@ -10,7 +10,7 @@ import Team from "@/models/teamModel";
 /* ------------------------- helpers ------------------------- */
 function normText(s) {
   return String(s ?? "")
-    .replace(/\u00a0/g, " ") // non-breaking space → normal
+    .replace(/\u00a0/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -27,12 +27,10 @@ function buildTokenOR(fields, token) {
   const rx = rxContains(token);
   return { $or: fields.map((f) => ({ [f]: rx })) };
 }
-
 /** Build a country-agnostic filter from query params. */
 function buildFilter({ name, city, state, country }) {
   const and = [];
 
-  // --- Name: split into tokens; each token must match name or slug
   const nameNorm = normText(name);
   if (nameNorm) {
     const tokens = nameNorm.split(" ").filter(Boolean);
@@ -40,39 +38,43 @@ function buildFilter({ name, city, state, country }) {
     tokens.forEach((t) => and.push(buildTokenOR(nameFields, t)));
   }
 
-  // --- City: substring, case-insensitive
   const cityNorm = normText(city);
   if (cityNorm) and.push({ city: rxContains(cityNorm) });
 
-  // --- State/Region: country-agnostic; match name or code across common fields
   const stateNorm = normText(state);
   if (stateNorm) {
     const rx = rxContains(stateNorm);
     and.push({
       $or: [
-        { state: rx }, // free-text state name stored here
-        { stateCode: rx }, // optional short code if you store it
-        { region: rx }, // some orgs prefer "region"
-        { regionCode: rx }, // optional short code
+        { state: rx },
+        { stateCode: rx },
+        { region: rx },
+        { regionCode: rx },
       ],
     });
   }
 
-  // --- Country: ISO-3 code ONLY (e.g., USA, MEX, CAN, GBR). Ignore anything else.
   const countryCode = normText(country).toUpperCase();
   if (/^[A-Z]{3}$/.test(countryCode)) {
     and.push({
-      $or: [
-        { countryCode: countryCode }, // canonical (recommended)
-        { country: rxEqualsCaseI(countryCode) }, // legacy exact (e.g., "USA")
-      ],
+      $or: [{ countryCode }, { country: rxEqualsCaseI(countryCode) }],
     });
   }
 
   return and.length ? { $and: and } : {};
 }
 
-/* ------------------------- handler ------------------------- */
+// simple, dependency-free slugify
+function toSlug(str = "") {
+  return String(str)
+    .trim()
+    .toLowerCase()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "");
+}
+
+/* ------------------------- GET: list/search ------------------------- */
 export async function GET(req) {
   await connectDB();
 
@@ -102,7 +104,6 @@ export async function GET(req) {
   // Mode B: Public listing/search (used by /teams/find)
   const filter = buildFilter({ name, city, state, country });
 
-  // If filters present and limit=0, default to a safe page size
   if (hasFilters && limit === 0) limit = 12;
 
   const total = await Team.countDocuments(filter);
@@ -121,4 +122,88 @@ export async function GET(req) {
     { teams, page, limit, total, totalPages },
     { headers: { "Cache-Control": "no-store" } }
   );
+}
+
+/* ------------------------- POST: create team ------------------------- */
+export async function POST(req) {
+  try {
+    await connectDB();
+
+    const user = await getCurrentUserFromCookies().catch(() => null);
+    if (!user?._id) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+
+    let body = {};
+    try {
+      body = await req.json();
+    } catch {
+      /* ignore bad JSON */
+    }
+
+    const {
+      teamName,
+      logoURL = null,
+      email = "",
+      phone = "",
+      address = "",
+      address2 = "",
+      city = "",
+      state = "",
+      postalCode = "",
+      country = "",
+      countryCode = "",
+      stateCode = "",
+      region = "",
+      regionCode = "",
+      info = "",
+    } = body || {};
+
+    if (!teamName || !String(teamName).trim()) {
+      return NextResponse.json(
+        { message: "Team name is required." },
+        { status: 400 }
+      );
+    }
+
+    // generate a unique slug
+    const base = toSlug(teamName);
+    let slug = base || `team-${Date.now()}`;
+    let n = 1;
+    // ensure uniqueness (case-sensitive unique in DB)
+    // if you want case-insensitive, adjust to use a regex check
+    while (await Team.exists({ teamSlug: slug })) {
+      slug = `${base}-${++n}`;
+    }
+
+    const created = await Team.create({
+      teamName: String(teamName).trim(),
+      teamSlug: slug,
+      user: user._id, // owner
+      logoURL,
+      email,
+      phone,
+      address,
+      address2,
+      city,
+      state,
+      postalCode,
+      country,
+      countryCode,
+      stateCode,
+      region,
+      regionCode,
+      info,
+    });
+
+    const team = await Team.findById(created._id).lean();
+
+    return NextResponse.json({ team }, { status: 201 });
+  } catch (err) {
+    console.error("POST /api/teams error:", err);
+    return NextResponse.json(
+      { message: "Server error creating team" },
+      { status: 500 }
+    );
+  }
 }
