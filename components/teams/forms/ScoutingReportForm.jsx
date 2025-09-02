@@ -1,3 +1,4 @@
+// components/teams/forms/ScoutingReportForm.jsx
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -5,75 +6,167 @@ import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 
 import { Button } from "@/components/ui/button";
-import Countries from "@/assets/countries.json";
+import CountriesRaw from "@/assets/countries.json";
 import Editor from "@/components/shared/Editor";
 import TechniqueTagInput from "@/components/shared/TechniqueTagInput";
 import Spinner from "@/components/shared/Spinner";
-import { teamScoutingReportCreated } from "@/lib/analytics/adminEvents";
 
-// ✅ Shared Form Components
+// Shared form inputs
 import FormField from "@/components/shared/FormField";
 import FormSelect from "@/components/shared/FormSelect";
 import FormMultiSelect from "@/components/shared/FormMultiSelect";
 
-const TeamScoutingReportForm = ({
+const sortByLabel = (arr) =>
+  [...arr].sort((a, b) =>
+    String(a?.label ?? "").localeCompare(String(b?.label ?? ""), undefined, {
+      sensitivity: "base",
+    })
+  );
+
+const sortByName = (arr) =>
+  [...arr].sort((a, b) =>
+    String(a?.name ?? "").localeCompare(String(b?.name ?? ""), undefined, {
+      sensitivity: "base",
+    })
+  );
+
+export default function TeamScoutingReportForm({
   team,
   report,
   user,
-  userStyles,
   onSuccess,
   setOpen,
-}) => {
+}) {
   const router = useRouter();
   const teamSlug = team?.teamSlug || "";
 
-  // Refs
+  // Refs to manage “new videos” (not yet saved)
   const newVideosRef = useRef([]);
   const deletedVideoIdsRef = useRef([]);
+  const [, forceRerender] = useState(0); // trigger rerenders when touching refs
 
-  // Dummy state to force rerender when using refs
-  const [, forceRerender] = useState(0);
-
-  // Loading & data
+  // Loading + fetched lists
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [members, setMembers] = useState([]);
-
-  // Core form state
-  const [matchType, setMatchType] = useState(report?.matchType || "");
-  const [athleteFirstName, setAthleteFirstName] = useState(
-    report?.athleteFirstName || ""
-  );
-  const [athleteLastName, setAthleteLastName] = useState(
-    report?.athleteLastName || ""
-  );
-  const [athleteNationalRank, setAthleteNationalRank] = useState(
-    report?.athleteNationalRank || ""
-  );
-  const [athleteWorldRank, setAthleteWorldRank] = useState(
-    report?.athleteWorldRank || ""
-  );
-  const [division, setDivision] = useState(report?.division || "");
-  const [weightCategory, setWeightCategory] = useState(
-    report?.weightCategory || ""
-  );
-  const [athleteClub, setAthleteClub] = useState(report?.athleteClub || "");
-  const [athleteCountry, setAthleteCountry] = useState(
-    report?.athleteCountry || ""
-  );
-  const [athleteGrip, setAthleteGrip] = useState(report?.athleteGrip || "");
-  const [athleteAttackNotes, setAthleteAttackNotes] = useState(
-    report?.athleteAttackNotes || ""
-  );
-
   const [loadedTechniques, setLoadedTechniques] = useState([]);
-  const [athleteSelected, setAthleteSelected] = useState(
-    report?.athleteAttacks?.map((item, i) => ({ value: i, label: item })) || []
-  );
-  const [videos, setVideos] = useState(report?.videos || []);
-  const [newVideos, setNewVideos] = useState([]);
-  const [reportFor, setReportFor] = useState(report?.reportFor || []);
+  const [styleOptions, setStyleOptions] = useState([]);
 
-  // ✅ Fetch team members (athletes) and hold the form until loaded
+  // -----------------------
+  // Form state (with reset)
+  // -----------------------
+  const [matchType, setMatchType] = useState(""); // keep placeholder by default
+  const [athleteFirstName, setAthleteFirstName] = useState("");
+  const [athleteLastName, setAthleteLastName] = useState("");
+  const [athleteNationalRank, setAthleteNationalRank] = useState("");
+  const [athleteWorldRank, setAthleteWorldRank] = useState("");
+  const [division, setDivision] = useState("");
+  const [weightCategory, setWeightCategory] = useState("");
+  const [athleteClub, setAthleteClub] = useState("");
+  const [athleteCountry, setAthleteCountry] = useState("");
+  const [athleteGrip, setAthleteGrip] = useState("");
+  const [athleteAttackNotes, setAthleteAttackNotes] = useState("");
+
+  const [athleteSelected, setAthleteSelected] = useState([]);
+  const [videos, setVideos] = useState([]);
+  const [newVideos, setNewVideos] = useState([]);
+  const [reportFor, setReportFor] = useState([]); // [{ value: id, label, athleteType }]
+
+  // Reset state on report change (edit vs create)
+  useEffect(() => {
+    if (report) {
+      setMatchType(report.matchType || "");
+      setAthleteFirstName(report.athleteFirstName || "");
+      setAthleteLastName(report.athleteLastName || "");
+      setAthleteNationalRank(report.athleteNationalRank || "");
+      setAthleteWorldRank(report.athleteWorldRank || "");
+      setDivision(report.division || "");
+      setWeightCategory(report.weightCategory || "");
+      setAthleteClub(report.athleteClub || "");
+      setAthleteCountry(report.athleteCountry || "");
+      setAthleteGrip(report.athleteGrip || "");
+      setAthleteAttackNotes(report.athleteAttackNotes || "");
+      setAthleteSelected(
+        Array.isArray(report.athleteAttacks)
+          ? report.athleteAttacks.map((t, i) => ({ value: i, label: t }))
+          : []
+      );
+      setVideos(Array.isArray(report.videos) ? report.videos : []);
+      setNewVideos([]);
+      newVideosRef.current = [];
+      deletedVideoIdsRef.current = [];
+      // reportFor is stored as [{ athleteId, athleteType }]
+      setReportFor(
+        Array.isArray(report.reportFor)
+          ? report.reportFor.map((rf) => ({
+              value: rf.athleteId,
+              label: "", // will re-label once members load
+              athleteType: rf.athleteType,
+            }))
+          : []
+      );
+    } else {
+      // create new
+      setMatchType("");
+      setAthleteFirstName("");
+      setAthleteLastName("");
+      setAthleteNationalRank("");
+      setAthleteWorldRank("");
+      setDivision("");
+      setWeightCategory("");
+      setAthleteClub("");
+      setAthleteCountry("");
+      setAthleteGrip("");
+      setAthleteAttackNotes("");
+      setAthleteSelected([]);
+      setVideos([]);
+      setNewVideos([]);
+      newVideosRef.current = [];
+      deletedVideoIdsRef.current = [];
+      setReportFor([]);
+    }
+  }, [report]);
+
+  // -----------------------
+  // Fetch: styles (global)
+  // -----------------------
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/styles", { cache: "no-store" });
+        const data = await res.json();
+
+        const opts = (Array.isArray(data) ? data : [])
+          .map((s) => {
+            const name =
+              typeof s?.styleName === "string" ? s.styleName.trim() : "";
+            return name ? { value: name, label: name } : null;
+          })
+          .filter(Boolean)
+          .sort((a, b) =>
+            String(a?.label ?? "").localeCompare(
+              String(b?.label ?? ""),
+              undefined,
+              {
+                sensitivity: "base",
+              }
+            )
+          );
+
+        if (alive) setStyleOptions(opts);
+      } catch (e) {
+        console.error("Failed to fetch styles:", e);
+        if (alive) setStyleOptions([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // -----------------------
+  // Fetch: team members
+  // -----------------------
   useEffect(() => {
     if (!teamSlug) return;
     const fetchMembers = async () => {
@@ -84,7 +177,10 @@ const TeamScoutingReportForm = ({
         );
         if (!res.ok) throw new Error("Failed to load team members");
         const data = await res.json();
-        setMembers(Array.isArray(data.members) ? data.members : []);
+        const membersList = Array.isArray(data.members) ? data.members : [];
+        setMembers(
+          sortByName(membersList.map((m) => ({ ...m, name: m.name || "" })))
+        );
       } catch (err) {
         console.error("Failed to load team members", err);
         toast.error("Failed to load team members");
@@ -96,23 +192,47 @@ const TeamScoutingReportForm = ({
     fetchMembers();
   }, [teamSlug]);
 
-  const memberOptions = useMemo(
-    () =>
-      members.map((m) => ({
-        value: m.familyMemberId || m.userId,
-        label: m.name,
-        athleteType: m.familyMemberId ? "family" : "user",
-      })),
-    [members]
-  );
+  // map members -> multi-select options (sorted)
+  const memberOptions = useMemo(() => {
+    const opts = members.map((m) => ({
+      value: m.familyMemberId || m.userId,
+      label: m.name || "Unknown",
+      athleteType: m.familyMemberId ? "family" : "user",
+    }));
+    const sorted = sortByLabel(opts);
 
-  // Fetch techniques (can load in background)
+    // If editing: fill missing labels for preselected reportFor
+    if (report && Array.isArray(reportFor) && reportFor.length) {
+      const map = new Map(sorted.map((o) => [String(o.value), o.label]));
+      setReportFor((prev) =>
+        prev.map((p) => ({
+          ...p,
+          label: map.get(String(p.value)) || p.label || "Unknown",
+        }))
+      );
+    }
+    return sorted;
+  }, [members, report]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // -----------------------
+  // Fetch: techniques
+  // -----------------------
   useEffect(() => {
     const fetchTechniques = async () => {
       try {
-        const res = await fetch("/api/techniques");
+        const res = await fetch("/api/techniques", { cache: "no-store" });
         const data = await res.json();
-        setLoadedTechniques(Array.isArray(data) ? data : []);
+        const arr = Array.isArray(data) ? data : [];
+        const sorted = [...arr].sort((a, b) =>
+          String(a?.name ?? "").localeCompare(
+            String(b?.name ?? ""),
+            undefined,
+            {
+              sensitivity: "base",
+            }
+          )
+        );
+        setLoadedTechniques(sorted);
       } catch (error) {
         console.error("Error fetching techniques:", error);
         setLoadedTechniques([]);
@@ -130,16 +250,28 @@ const TeamScoutingReportForm = ({
     [loadedTechniques]
   );
 
+  // Countries sorted
+  const countryOptions = useMemo(() => {
+    const options = CountriesRaw.map((c) => ({
+      value: c.code3,
+      label: c.name,
+      name: c.name,
+    }));
+    return sortByLabel(options);
+  }, []);
+
   const onAthleteAdd = useCallback(
     (tag) => setAthleteSelected((prev) => [...prev, tag]),
     []
   );
-
   const onAthleteDelete = useCallback(
     (i) => setAthleteSelected((prev) => prev.filter((_, idx) => idx !== i)),
     []
   );
 
+  // -----------------------
+  // Video helpers
+  // -----------------------
   const handleVideoChange = (index, field, value, type = "existing") => {
     if (type === "existing") {
       const updated = [...videos];
@@ -175,13 +307,11 @@ const TeamScoutingReportForm = ({
     setNewVideos(updated);
     newVideosRef.current = updated;
   };
-
   const handleAddNewVideo = () => {
     const updated = [...newVideos, { title: "", notes: "", url: "" }];
     setNewVideos(updated);
     newVideosRef.current = updated;
   };
-
   const handleDeleteNewVideo = (index) => {
     const updated = [...newVideos];
     updated.splice(index, 1);
@@ -195,8 +325,17 @@ const TeamScoutingReportForm = ({
     return match ? match[1] : null;
   };
 
+  // -----------------------
+  // Submit
+  // -----------------------
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!matchType) {
+      toast.error("Please select a match type.");
+      return;
+    }
+
     const payload = {
       teamId: team._id,
       matchType,
@@ -211,7 +350,7 @@ const TeamScoutingReportForm = ({
       athleteGrip,
       athleteAttacks: athleteSelected.map((item) => item.label.toLowerCase()),
       athleteAttackNotes,
-      reportFor,
+      reportFor, // [{ value, label, athleteType }]
       updatedVideos: videos.filter((v) => v._id),
       newVideos: newVideosRef.current,
       deletedVideos: deletedVideoIdsRef.current || [],
@@ -229,26 +368,21 @@ const TeamScoutingReportForm = ({
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-      teamScoutingReportCreated({
-        teamName: team?.name || "(unknown)",
-        competitionLevel: level || "",
-        opponentsCount: Array.isArray(opponents) ? opponents.length : 0,
-        tagsCount: Array.isArray(selectedTags) ? selectedTags.length : 0,
-        isPublic: !!isPublic,
-      });
-      toast.success(data.message);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || "Failed to save report");
+
+      toast.success(
+        data?.message || (report ? "Report updated" : "Report created")
+      );
       setOpen(false);
       onSuccess?.();
       router.refresh();
     } catch (err) {
       console.error(err);
-      toast.error("An error occurred while saving the report.");
+      toast.error(err.message || "An error occurred while saving the report.");
     }
   };
 
-  // ⏳ Block the form until athletes are loaded
   if (loadingMembers) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[40vh]">
@@ -265,7 +399,7 @@ const TeamScoutingReportForm = ({
       onSubmit={handleSubmit}
       className="space-y-6"
     >
-      {/* ✅ Select Athletes */}
+      {/* Select Athletes */}
       <FormMultiSelect
         label="Select Athletes"
         value={reportFor}
@@ -274,19 +408,17 @@ const TeamScoutingReportForm = ({
         placeholder="Select athletes..."
       />
 
-      {/* ✅ Match Type */}
+      {/* Match Type */}
       <FormSelect
         label="Match Type"
         value={matchType}
         onChange={setMatchType}
         placeholder="Select match type..."
-        options={(userStyles || []).map((style) => ({
-          value: style.styleName,
-          label: style.styleName,
-        }))}
+        options={styleOptions}
+        required
       />
 
-      {/* ✅ Athlete Info */}
+      {/* Athlete Info */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <FormField
           label="Athlete First Name"
@@ -345,13 +477,10 @@ const TeamScoutingReportForm = ({
         value={athleteCountry}
         onChange={setAthleteCountry}
         placeholder="Select country..."
-        options={Countries.map((c) => ({
-          value: c.code3,
-          label: c.name,
-        }))}
+        options={countryOptions}
       />
 
-      {/* ✅ Grip */}
+      {/* Grip */}
       <div>
         <label className="block mb-1 font-medium">Grip</label>
         <div className="flex gap-4 mt-2">
@@ -378,7 +507,7 @@ const TeamScoutingReportForm = ({
         </div>
       </div>
 
-      {/* ✅ Techniques */}
+      {/* Techniques */}
       <TechniqueTagInput
         label="Known Attacks"
         name="athleteAttacks"
@@ -388,7 +517,7 @@ const TeamScoutingReportForm = ({
         onDelete={onAthleteDelete}
       />
 
-      {/* ✅ Notes */}
+      {/* Notes */}
       <Editor
         name="athleteAttackNotes"
         text={athleteAttackNotes}
@@ -396,9 +525,10 @@ const TeamScoutingReportForm = ({
         label="Attack Notes"
       />
 
-      {/* ✅ Videos */}
+      {/* Videos */}
       <div className="mt-6">
         <h3 className="text-lg font-semibold mb-2">Videos</h3>
+
         {videos.map((vid, index) => (
           <div
             key={vid._id || index}
@@ -505,6 +635,4 @@ const TeamScoutingReportForm = ({
       </Button>
     </form>
   );
-};
-
-export default TeamScoutingReportForm;
+}

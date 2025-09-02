@@ -42,15 +42,27 @@ export default function MembersPage() {
   const fetchMembers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/teams/${slug}/members?ts=${Date.now()}`);
+      const res = await fetch(`/api/teams/${slug}/members?ts=${Date.now()}`, {
+        cache: "no-store",
+      });
+
+      // Handle auth/forbidden early
       if (res.status === 401 || res.status === 403) {
         toast.error("You are not authorized to view team members.");
         router.replace(`/teams/${slug}`);
         return;
       }
-      const json = await res.json();
-      setViewerRole(json.viewerRole || null);
-      setMembers(Array.isArray(json.members) ? json.members : []);
+
+      const { data } = await parseJsonSafe(res);
+
+      if (!res.ok) {
+        const msg =
+          data?.error || data?.message || `${res.status} ${res.statusText}`;
+        throw new Error(msg);
+      }
+
+      setViewerRole(data?.viewerRole || null);
+      setMembers(Array.isArray(data?.members) ? data.members : []);
     } catch (e) {
       console.error("Error loading members:", e);
       toast.error("Failed to load members.");
@@ -62,13 +74,17 @@ export default function MembersPage() {
   const fetchInvites = useCallback(async () => {
     setInvitesLoading(true);
     try {
-      const res = await fetch(`/api/teams/${slug}/invites?ts=${Date.now()}`);
+      const res = await fetch(`/api/teams/${slug}/invites?ts=${Date.now()}`, {
+        cache: "no-store",
+      });
+
+      const { data } = await parseJsonSafe(res);
       if (!res.ok) {
         setInvites([]);
         return;
       }
-      const data = await res.json();
-      setInvites(Array.isArray(data.invites) ? data.invites : []);
+
+      setInvites(Array.isArray(data?.invites) ? data.invites : []);
     } catch {
       setInvites([]);
     } finally {

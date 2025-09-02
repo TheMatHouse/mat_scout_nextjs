@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
-import moment from "moment";
 import { ReportDataTable } from "@/components/shared/report-data-table";
 import ScoutingReportForm from "@/components/dashboard/forms/ScoutingReportForm";
 import PreviewReportModal from "@/components/dashboard/PreviewReportModal";
@@ -90,7 +89,17 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
       ),
     },
     { accessorKey: "athleteFirstName", header: "First Name" },
-    { accessorKey: "athleteLastName", header: "Last Name" },
+    {
+      accessorKey: "athleteLastName",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Last Name <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
     { accessorKey: "athleteNationalRank", header: "Nat. Rank" },
     { accessorKey: "athleteWorldRank", header: "World Rank" },
     {
@@ -98,7 +107,17 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
       header: "Club",
       meta: { className: "hidden md:table-cell" },
     },
-    { accessorKey: "athleteCountry", header: "Country" },
+    {
+      accessorKey: "athleteCountry",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Country <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
     {
       accessorKey: "division",
       header: "Division",
@@ -110,7 +129,21 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
       meta: { className: "hidden md:table-cell" },
     },
 
-    // ✅ Actions column like the matches table
+    // ✅ Created By (sortable) — placed before Actions
+    {
+      accessorKey: "createdByName",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Created By <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => row.original.createdByName || "—",
+    },
+
+    // ✅ Actions column
     {
       id: "actions",
       header: "Actions",

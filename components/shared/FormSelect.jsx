@@ -1,43 +1,50 @@
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+// components/shared/FormSelect.jsx
+"use client";
 
 export default function FormSelect({
   label,
+  name,
   value,
   onChange,
-  placeholder,
-  options,
+  options = [], // [{ value, label }]
+  placeholder = "Select…",
+  disabled = false,
+  required = false,
+  className = "",
 }) {
+  const handleChange = (e) => onChange?.(e.target.value);
+
   return (
-    <div className="space-y-2">
+    <div className={`mb-4 ${className}`}>
       {label && (
-        <label className="block text-sm font-medium text-foreground">
+        <label
+          htmlFor={name}
+          className="block text-sm font-medium mb-2 text-[var(--color-text)]"
+        >
           {label}
         </label>
       )}
-      <Select
-        onValueChange={onChange}
-        value={value}
+
+      <select
+        id={name}
+        name={name}
+        value={value ?? ""} // keep it empty until user picks
+        onChange={handleChange}
+        disabled={disabled}
+        required={required}
+        className="w-full rounded-md border px-3 py-2 text-sm bg-[var(--color-card)] text-[var(--color-text)] shadow-sm transition focus:outline-none focus:ring-1 focus:border-[var(--color-border)] focus:ring-[var(--color-border)] disabled:opacity-60"
       >
-        <SelectTrigger className="w-full h-10 rounded-md border border-gray-600 bg-gray-900 px-3 text-gray-100">
-          <SelectValue placeholder={placeholder} />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((opt, i) => (
-            <SelectItem
-              key={i}
-              value={opt.value}
-            >
-              {opt.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        <option value="">{placeholder}</option>
+
+        {options.map((opt) => (
+          <option
+            key={String(opt.value)}
+            value={opt.value}
+          >
+            {opt.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

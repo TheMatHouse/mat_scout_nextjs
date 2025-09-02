@@ -169,7 +169,6 @@ export default async function TeamLayout({ children, params }) {
         "User",
       username: u.username || null,
     }))
-    // sort by last, then first (best-effort)
     .sort((a, b) => a.name.localeCompare(b.name));
 
   // Absolute URL for sharing
@@ -188,7 +187,7 @@ export default async function TeamLayout({ children, params }) {
     <TeamProviderClient team={safeTeam}>
       {/* Banner / Header with Logo */}
       <div className="bg-gray-100 dark:bg-gray-900 py-8 shadow-sm">
-        <div className="max-w-5xl mx-auto flex flex-col items-center text-center">
+        <div className="mx-auto w-full max-w-[1600px] px-4 md:px-6 lg:px-8 flex flex-col items-center text-center">
           <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white shadow-md mb-4">
             {safeTeam.logoURL ? (
               <Image
@@ -246,7 +245,7 @@ export default async function TeamLayout({ children, params }) {
 
       {/* Tabs + Share */}
       <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-4 px-4 md:px-0">
+        <div className="mx-auto w-full max-w-[1600px] px-4 md:px-6 lg:px-8 flex items-center justify-between gap-4">
           <TeamTabs tabs={tabs} />
           <ShareMenu
             url={shareUrl}
@@ -256,8 +255,10 @@ export default async function TeamLayout({ children, params }) {
         </div>
       </div>
 
-      {/* Main content */}
-      <main className="max-w-5xl mx-auto px-4 py-8">{children}</main>
+      {/* Main content (wide) */}
+      <main className="mx-auto w-full max-w-[1600px] px-4 md:px-6 lg:px-8 py-8">
+        {children}
+      </main>
     </TeamProviderClient>
   );
 }

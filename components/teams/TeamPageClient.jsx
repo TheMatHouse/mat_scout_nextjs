@@ -13,6 +13,41 @@ import {
   UserPlus,
 } from "lucide-react";
 
+/* ---------- id helpers ---------- */
+const asId = (v) =>
+  v && (v._id || v.id || v.userId || v)
+    ? String(v._id || v.id || v.userId || v)
+    : "";
+
+/** Owner check — includes your actual field: team.user */
+function isOwner(team, userId) {
+  if (!team || !userId) return false;
+  const uid = String(userId);
+  const ownerCandidates = [
+    team.user, // ✅ your Team owner field
+    team.userId, // optional safety (if you ever expose this)
+    team.ownerId,
+    team.owner,
+    team.ownerID,
+    team.createdBy,
+    team.createdById,
+    team.createdByID,
+  ];
+  return ownerCandidates.filter(Boolean).map(asId).includes(uid);
+}
+
+/** Manager check — look across common arrays */
+function isManager(team, userId) {
+  if (!team || !userId) return false;
+  const uid = String(userId);
+  const managerLists = []
+    .concat(team.managers || [])
+    .concat(team.admins || [])
+    .concat(team.teamManagers || [])
+    .concat(team.moderators || []);
+  return managerLists.some((m) => asId(m) === uid);
+}
+
 export default function TeamPageClient({ slug, initialData }) {
   const { user } = useUser();
   const [team, setTeam] = useState(initialData || null);
@@ -69,12 +104,39 @@ export default function TeamPageClient({ slug, initialData }) {
     };
   }, [slug, user, initialData]);
 
-  const userMembership = useMemo(() => {
+  /* ---------- robust membership derivation ---------- */
+  const rowMembership = useMemo(() => {
     if (!userId) return undefined;
-    return memberships.find(
+    return (Array.isArray(memberships) ? memberships : []).find(
       (m) => !m.familyMemberId && String(m.userId) === String(userId)
     );
   }, [memberships, userId]);
+
+  // If you’re owner/manager but there’s no row yet, synthesize one so UI shows you as a member
+  const syntheticMembership = useMemo(() => {
+    if (!userId || !team) return null;
+    if (isOwner(team, userId)) {
+      return {
+        _id: null,
+        userId: String(userId),
+        role: "owner",
+        status: "active",
+        synthetic: true,
+      };
+    }
+    if (isManager(team, userId)) {
+      return {
+        _id: null,
+        userId: String(userId),
+        role: "manager",
+        status: "active",
+        synthetic: true,
+      };
+    }
+    return null;
+  }, [team, userId]);
+
+  const userMembership = syntheticMembership || rowMembership;
 
   const refreshMemberships = async () => {
     const resM = await fetch(`/api/teams/${slug}/membership`, {
@@ -175,16 +237,19 @@ export default function TeamPageClient({ slug, initialData }) {
     : "—";
 
   const roleLabel = (r) => (r ? r.charAt(0).toUpperCase() + r.slice(1) : "—");
-  const userRole = (userMembership?.role || "").toLowerCase();
-  const cannotLeave = userRole === "manager" || userRole === "owner";
+  const role = (userMembership?.role || "").toLowerCase();
+  const status = (userMembership?.status || "active").toLowerCase();
+  const isPending = status === "pending" || role === "pending"; // support both styles
+  const cannotLeave = role === "manager" || role === "owner";
+  const hasRow = !!userMembership?._id; // synthetic membership has no _id
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-      {/* CONTENT GRID (no hero, no duplicate header) */}
+      {/* CONTENT GRID */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* LEFT – About + Contact */}
         <div className="lg:col-span-2 space-y-6">
-          {/* About (rich text) */}
+          {/* About */}
           <div className="rounded-xl border border-border bg-card shadow">
             <div className="p-5 md:p-6">
               <h2 className="text-xl font-semibold mb-3">
@@ -235,26 +300,30 @@ export default function TeamPageClient({ slug, initialData }) {
 
         {/* RIGHT – Membership & Family */}
         <div className="space-y-6">
-          {/* Your Membership (only place with Join/Leave) */}
+          {/* Your Membership */}
           <div className="rounded-xl border border-border bg-card shadow">
             <div className="p-5 md:p-6 space-y-3">
               <h2 className="text-xl font-semibold">Your Membership</h2>
 
               {user ? (
                 userMembership ? (
-                  // You have SOME membership record
-                  userRole === "pending" ? (
+                  isPending ? (
                     <>
                       <p className="text-sm text-muted-foreground">
                         Your join request is <strong>Pending</strong>.
                       </p>
                       <button
                         onClick={() =>
+                          hasRow &&
                           handleLeave({ membershipId: userMembership._id })
                         }
-                        disabled={buttonLoading}
+                        disabled={buttonLoading || !hasRow}
                         className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-yellow-600 px-4 py-2 text-sm font-semibold text-white hover:bg-yellow-700 disabled:opacity-60"
-                        title="Withdraw your request"
+                        title={
+                          !hasRow
+                            ? "No pending row to withdraw"
+                            : "Withdraw your request"
+                        }
                       >
                         <LogOut className="w-4 h-4" />
                         Withdraw Request
@@ -270,13 +339,16 @@ export default function TeamPageClient({ slug, initialData }) {
                       </p>
                       <button
                         onClick={() =>
+                          hasRow &&
                           handleLeave({ membershipId: userMembership._id })
                         }
-                        disabled={buttonLoading || cannotLeave}
+                        disabled={buttonLoading || cannotLeave || !hasRow}
                         className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
                         title={
                           cannotLeave
-                            ? "Managers/Owners cannot leave"
+                            ? "Managers/Owners cannot leave from here"
+                            : !hasRow
+                            ? "No membership row to leave"
                             : "Leave team"
                         }
                       >
@@ -286,7 +358,6 @@ export default function TeamPageClient({ slug, initialData }) {
                     </>
                   )
                 ) : (
-                  // No membership for this user yet
                   <>
                     <p className="text-sm text-muted-foreground">
                       You’re not a member yet.
@@ -320,9 +391,16 @@ export default function TeamPageClient({ slug, initialData }) {
                     const m = memberships.find(
                       (m) => String(m.familyMemberId) === String(fm._id)
                     );
-
                     const mRole = (m?.role || "").toLowerCase();
-                    let status = "Not a member";
+                    const mStatus = (m?.status || "active").toLowerCase();
+                    const mPending =
+                      mStatus === "pending" || mRole === "pending";
+
+                    let statusLabel = m
+                      ? mPending
+                        ? "Pending"
+                        : roleLabel(mRole)
+                      : "Not a member";
                     let button = (
                       <button
                         onClick={() => handleJoin(fm._id)}
@@ -334,30 +412,30 @@ export default function TeamPageClient({ slug, initialData }) {
                       </button>
                     );
 
-                    if (mRole === "pending") {
-                      status = "Pending";
-                      button = (
-                        <button
-                          onClick={() => handleLeave({ membershipId: m._id })}
-                          disabled={buttonLoading}
-                          className="inline-flex items-center gap-2 rounded-md bg-yellow-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-yellow-700 disabled:opacity-60"
-                        >
-                          Withdraw
-                        </button>
-                      );
-                    } else if (
-                      ["member", "manager", "owner", "coach"].includes(mRole)
-                    ) {
-                      status = roleLabel(mRole);
-                      button = (
-                        <button
-                          onClick={() => handleLeave({ membershipId: m._id })}
-                          disabled={buttonLoading}
-                          className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
-                        >
-                          Leave Team
-                        </button>
-                      );
+                    if (m) {
+                      if (mPending) {
+                        button = (
+                          <button
+                            onClick={() => handleLeave({ membershipId: m._id })}
+                            disabled={buttonLoading}
+                            className="inline-flex items-center gap-2 rounded-md bg-yellow-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-yellow-700 disabled:opacity-60"
+                          >
+                            Withdraw
+                          </button>
+                        );
+                      } else if (
+                        ["member", "manager", "owner", "coach"].includes(mRole)
+                      ) {
+                        button = (
+                          <button
+                            onClick={() => handleLeave({ membershipId: m._id })}
+                            disabled={buttonLoading}
+                            className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                          >
+                            Leave Team
+                          </button>
+                        );
+                      }
                     }
 
                     return (
@@ -370,7 +448,7 @@ export default function TeamPageClient({ slug, initialData }) {
                             {fm.firstName} {fm.lastName}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Status: {status}
+                            Status: {statusLabel}
                           </p>
                         </div>
                         {button}

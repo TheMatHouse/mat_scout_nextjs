@@ -1,101 +1,200 @@
-// components/dashboard/DashboardMatches.jsx
+// app/teams/[slug]/scouting-reports/page.jsx
 "use client";
+export const dynamic = "force-dynamic";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import moment from "moment";
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { toast } from "react-toastify";
-
-import { ReportDataTable } from "../shared/report-data-table";
-import MatchReportForm from "./forms/MatchReportForm";
-import PreviewReportModal from "./PreviewReportModal";
-
 import { Button } from "@/components/ui/button";
-import { ArrowUpDown, Eye, Edit, Trash } from "lucide-react";
+import { Eye, Edit, Trash, ArrowUpDown } from "lucide-react";
+import PreviewReportModal from "@/components/shared/PreviewReportModal";
+import ScoutingReportForm from "@/components/teams/forms/ScoutingReportForm";
+import { ReportDataTable } from "@/components/shared/report-data-table";
 import ModalLayout from "@/components/shared/ModalLayout";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 import Spinner from "@/components/shared/Spinner";
 
-const DashboardMatches = ({ user }) => {
+export default function TeamScoutingReportsPage() {
+  const params = useParams();
   const router = useRouter();
-  const [matchReports, setMatchReports] = useState([]);
+  const slug = params.slug;
 
-  // Modal state
+  const [team, setTeam] = useState(null);
+  const [reports, setReports] = useState([]);
+  const [user, setUser] = useState(null);
+
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [selectedReport, setSelectedReport] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [selectedMatch, setSelectedMatch] = useState(null);
 
-  // Styles-for-form state
-  const [stylesLoading, setStylesLoading] = useState(false);
-  const [stylesForForm, setStylesForForm] = useState([]);
+  // map of id -> display name for members (users + family)
+  const [membersMap, setMembersMap] = useState(() => new Map());
 
-  // resolve a default logo (used in the PDF header)
-  const logoUrl =
-    process.env.NEXT_PUBLIC_PDF_LOGO ||
-    "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png";
-
+  // ✅ Fetch team data
   useEffect(() => {
-    if (!user?._id) return;
-    fetchMatches();
-  }, [user]);
+    if (!slug) return;
 
-  const fetchMatches = async () => {
+    const fetchTeam = async () => {
+      try {
+        const res = await fetch(`/api/teams/${slug}`);
+        if (!res.ok) throw new Error("Failed to fetch team");
+        const data = await res.json();
+        setTeam(data.team);
+      } catch (err) {
+        console.error("Error fetching team:", err);
+        toast.error("Error loading team data");
+      }
+    };
+
+    fetchTeam();
+  }, [slug]);
+
+  // ✅ Fetch scouting reports
+  const fetchReports = async () => {
     try {
-      const res = await fetch(`/api/dashboard/${user._id}/matchReports`);
-      if (!res.ok) throw new Error("Failed to fetch match reports");
+      setLoading(true);
+      const res = await fetch(
+        `/api/teams/${slug}/scouting-reports?ts=${Date.now()}`
+      );
+      if (!res.ok) throw new Error("Failed to load scouting reports");
       const data = await res.json();
-      setMatchReports(data);
-    } catch (err) {
-      console.error(err);
-      toast.error("Could not load match reports.");
+      setReports(data.scoutingReports || []);
+    } catch (error) {
+      console.error(error);
+      toast.error("Error loading scouting reports");
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Fetch the current user's styles specifically for the form (fresh, not from user object)
-  const loadStylesForModal = useCallback(async () => {
-    if (!user?._id) {
-      setStylesForForm([]);
-      return;
-    }
-    setStylesLoading(true);
-    try {
-      const res = await fetch(`/api/dashboard/${user._id}/userStyles`);
-      if (!res.ok) throw new Error("Failed to load styles");
-      const data = await res.json();
-      setStylesForForm(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error("Failed to load styles:", e);
-      setStylesForForm([]);
-    } finally {
-      setStylesLoading(false);
-    }
-  }, [user?._id]);
+  useEffect(() => {
+    if (!slug) return;
+    fetchReports();
+  }, [slug]);
 
-  const handleDeleteMatch = async (match) => {
+  // ✅ Fetch current user (for the form)
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (!res.ok) throw new Error("Failed to fetch user");
+        const userData = await res.json();
+        setUser(userData);
+      } catch (err) {
+        console.error("Failed to load user:", err);
+      }
+    };
+    fetchUser();
+  }, []);
+
+  // ✅ Fetch members -> names map (used to render “Report For”)
+  useEffect(() => {
+    if (!slug) return;
+
+    const fetchMembers = async () => {
+      try {
+        const res = await fetch(`/api/teams/${slug}/members?ts=${Date.now()}`, {
+          cache: "no-store",
+        });
+        const json = await res.json().catch(() => ({}));
+        const list = Array.isArray(json.members) ? json.members : [];
+        const map = new Map();
+        for (const m of list) {
+          const id = String(m.familyMemberId || m.userId || "");
+          if (id) map.set(id, m.name || m.username || "Unknown");
+        }
+        setMembersMap(map);
+      } catch (e) {
+        console.error("Failed to fetch member names", e);
+        setMembersMap(new Map());
+      }
+    };
+
+    fetchMembers();
+  }, [slug]);
+
+  // Derive rows for the table (resolve Report For names, add sortable ts)
+  const tableRows = useMemo(() => {
+    const namesFor = (r) =>
+      Array.isArray(r?.reportFor) && r.reportFor.length
+        ? r.reportFor
+            .map((rf) => membersMap.get(String(rf.athleteId)) || "Unknown")
+            .join(", ")
+        : "—";
+
+    return (Array.isArray(reports) ? reports : []).map((r) => ({
+      ...r,
+      reportForNames: namesFor(r),
+      _createdAtTs: r?.createdAt ? new Date(r.createdAt).getTime() : 0,
+    }));
+  }, [reports, membersMap]);
+
+  const handleDeleteReport = async (report) => {
     if (
       window.confirm(`This report will be permanently deleted! Are you sure?`)
     ) {
-      try {
-        const res = await fetch(
-          `/api/dashboard/${user._id}/matchReports/${match._id}`,
-          {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-        const data = await res.json();
-        if (res.ok) {
-          toast.success(data.message);
-          fetchMatches();
-        } else {
-          toast.error(data.message);
+      const response = await fetch(
+        `/api/teams/${slug}/scouting-reports/${report._id}`,
+        {
+          method: "DELETE",
+          headers: { "Content-type": "application/json; charset=UTF-8" },
+          credentials: "include",
         }
-      } catch (err) {
-        console.error(err);
-        toast.error("Failed to delete match report.");
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        toast.success(data.message || "Report deleted");
+        setReports((prev) => prev.filter((r) => r._id !== report._id));
+        setSelectedReport(null);
+        router.refresh();
+      } else {
+        toast.error(data.message || "Failed to delete report");
       }
     }
   };
 
+  const exportReportsToExcel = () => {
+    const dataToExport = reports.map((r) => ({
+      Type: r.matchType,
+      "Report For":
+        Array.isArray(r.reportFor) && r.reportFor.length
+          ? r.reportFor
+              .map((rf) => membersMap.get(String(rf.athleteId)) || "Unknown")
+              .join(", ")
+          : "—",
+      "Athlete First": r.athleteFirstName,
+      "Athlete Last": r.athleteLastName,
+      "Nat. Rank": r.athleteNationalRank,
+      "World Rank": r.athleteWorldRank,
+      Club: r.athleteClub,
+      Country: r.athleteCountry,
+      Division: r.division,
+      "Weight Class": r.weightCategory,
+      "Created By": r.createdByName || "—",
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Reports");
+
+    const excelBuffer = XLSX.write(workbook, {
+      bookType: "xlsx",
+      type: "array",
+    });
+    const file = new Blob([excelBuffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    saveAs(file, `scouting-reports-${slug}.xlsx`);
+  };
+
+  // --------------------
+  // Columns (sortable)
+  // --------------------
   const columns = [
     {
       accessorKey: "matchType",
@@ -109,73 +208,148 @@ const DashboardMatches = ({ user }) => {
       ),
     },
     {
-      accessorKey: "eventName",
+      accessorKey: "reportForNames",
       header: ({ column }) => (
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
         >
-          Event <ArrowUpDown className="ml-2 h-4 w-4" />
+          Report For <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => row.original.reportForNames || "—",
+    },
+    {
+      accessorKey: "athleteFirstName",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          First Name <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
     },
     {
-      accessorKey: "matchDate",
+      accessorKey: "athleteLastName",
       header: ({ column }) => (
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
         >
-          Date <ArrowUpDown className="ml-2 h-4 w-4" />
+          Last Name <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ getValue }) => moment.utc(getValue()).format("MMMM D, YYYY"),
+    },
+    {
+      id: "natRank",
+      accessorFn: (row) => Number(row?.athleteNationalRank ?? 0),
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Nat. Rank <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => row.original.athleteNationalRank ?? "—",
+      meta: { className: "hidden sm:table-cell" },
+    },
+    {
+      id: "worldRank",
+      accessorFn: (row) => Number(row?.athleteWorldRank ?? 0),
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          World Rank <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => row.original.athleteWorldRank ?? "—",
+      meta: { className: "hidden sm:table-cell" },
+    },
+    {
+      accessorKey: "athleteCountry",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Country <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      meta: { className: "hidden md:table-cell" },
     },
     {
       accessorKey: "division",
-      header: "Division",
-      meta: { className: "hidden md:table-cell" },
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Division <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
     },
-    { accessorKey: "opponentName", header: "Opponent" },
     {
-      accessorKey: "opponentCountry",
-      header: "Country",
-      meta: { className: "hidden sm:table-cell" },
+      accessorKey: "weightCategory",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Weight Class <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
     },
-    { accessorKey: "result", header: "Result" },
+
+    // <-- Created By sits right before Actions
+    {
+      accessorKey: "createdByName",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Created By <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => row.original.createdByName || "—",
+    },
+
     {
       id: "actions",
       header: "Actions",
       enableSorting: false,
       cell: ({ row }) => {
-        const match = row.original;
+        const report = row.original;
         return (
           <div className="flex justify-center gap-3">
             <button
               onClick={() => {
-                setSelectedMatch(match);
+                setSelectedReport(report);
                 setPreviewOpen(true);
               }}
-              title="View Match Details"
-              className="icon-btn"
+              title="View Report Details"
+              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
             >
               <Eye className="w-5 h-5 text-blue-500" />
             </button>
             <button
-              onClick={async () => {
-                setSelectedMatch(match);
+              onClick={() => {
+                setSelectedReport(report);
                 setOpen(true);
-                await loadStylesForModal();
               }}
-              title="Edit Match"
-              className="icon-btn"
+              title="Edit Report"
+              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
             >
               <Edit className="w-5 h-5 text-green-500" />
             </button>
             <button
-              onClick={() => handleDeleteMatch(match)}
-              title="Delete Match"
-              className="icon-btn"
+              onClick={() => handleDeleteReport(report)}
+              title="Delete Report"
+              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
             >
               <Trash className="w-5 h-5 text-red-500" />
             </button>
@@ -185,176 +359,104 @@ const DashboardMatches = ({ user }) => {
     },
   ];
 
-  const printAllHref = (() => {
-    const qs = new URLSearchParams();
-    if (logoUrl) qs.set("logo", logoUrl);
-    return `/api/records/style/all${qs.toString() ? `?${qs.toString()}` : ""}`;
-  })();
+  // ✅ Full-page spinner while loading
+  if (loading) {
+    return (
+      <div className="flex flex-col justify-center items-center h-[70vh] bg-background">
+        <Spinner size={64} />
+        <p className="text-gray-400 dark:text-gray-300 mt-2 text-lg">
+          Loading scouting reports…
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="px-4 md:px-6 lg:px-8">
-      {/* Header with Add Button */}
-      <div className="flex flex-col items-start gap-4 mb-4">
-        <h1 className="text-2xl font-bold">My Matches</h1>
-        <Button
-          className="btn btn-primary"
-          onClick={async () => {
-            setSelectedMatch(null);
-            setOpen(true);
-            await loadStylesForModal();
-          }}
-        >
-          Add Match Report
-        </Button>
-      </div>
+    <div>
+      {/* Header + actions (buttons on the RIGHT) */}
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Scouting Reports</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Create a scouting report to help your athletes prepare for upcoming
+            matches. You can include multiple athletes in a single report if
+            they’re in the same division or preparing for the same event.
+          </p>
+        </div>
 
-      {/* Modal using ModalLayout */}
-      <ModalLayout
-        isOpen={open}
-        onClose={() => setOpen(false)}
-        title={selectedMatch ? "Edit Match Report" : "Add Match Report"}
-        description="Fill out all match details below."
-        withCard={true}
-      >
-        {stylesLoading ? (
-          <div className="flex items-center justify-center py-10">
-            <Spinner size={40} />
-          </div>
-        ) : stylesForForm.length > 0 ? (
-          <MatchReportForm
-            athlete={user}
-            styles={stylesForForm}
-            match={selectedMatch}
-            setOpen={setOpen}
-            onSuccess={fetchMatches}
-            userType="user"
-          />
-        ) : (
-          <div className="p-6 text-center">
-            <p className="text-base text-muted-foreground mb-4">
-              You must add a style/sport before creating a match report.
-            </p>
-            <Button
-              onClick={() => {
-                setOpen(false);
-                router.push("/dashboard/styles");
-              }}
-              className="bg-ms-blue-gray hover:bg-ms-blue text-white"
-            >
-              Go to Styles
-            </Button>
-          </div>
-        )}
-      </ModalLayout>
-
-      <div className="mb-4 flex justify-start md:justify-end">
-        <a
-          href={printAllHref}
-          target="_blank"
-          rel="noopener"
-          className="btn-white-sm"
-          title="Print all matches as a PDF"
-        >
-          Print All Matches (PDF)
-        </a>
-      </div>
-
-      {/* Cards for Mobile */}
-      <div className="block md:hidden space-y-4">
-        {matchReports.length > 0 ? (
-          matchReports.map((match) => (
-            <div
-              key={match._id}
-              className="card p-4 rounded-lg shadow-md"
-            >
-              <p>
-                <strong>Type:</strong> {match.matchType}
-              </p>
-              <p>
-                <strong>Event:</strong> {match.eventName}
-              </p>
-              <p>
-                <strong>Date:</strong>{" "}
-                {moment(match.matchDate).format("MMM D, YYYY")}
-              </p>
-              <p>
-                <strong>Opponent:</strong> {match.opponentName}
-              </p>
-              <p>
-                <strong>Result:</strong>{" "}
-                {match.result === "Won" ? (
-                  <span className="text-[var(--color-success)]">Win</span>
-                ) : (
-                  <span className="text-[var(--color-danger)]">Loss</span>
-                )}
-              </p>
-              <div className="flex justify-end gap-3 mt-3">
-                <button
-                  onClick={() => {
-                    setSelectedMatch(match);
-                    setPreviewOpen(true);
-                  }}
-                  title="View Details"
-                  className="icon-btn"
-                >
-                  <Eye size={18} />
-                </button>
-                <button
-                  onClick={async () => {
-                    setSelectedMatch(match);
-                    setOpen(true);
-                    await loadStylesForModal();
-                  }}
-                  title="Edit"
-                  className="icon-btn"
-                >
-                  <Edit size={18} />
-                </button>
-                <button
-                  onClick={() => handleDeleteMatch(match)}
-                  title="Delete"
-                  className="icon-btn"
-                >
-                  <Trash size={18} />
-                </button>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="text-gray-400">No match reports found.</p>
-        )}
-      </div>
-
-      {/* Table for Desktop */}
-      <div className="hidden md:block overflow-x-auto">
-        <div className="min-w-[800px]">
-          <ReportDataTable
-            columns={columns}
-            data={matchReports}
-            onView={(match) => {
-              setSelectedMatch(match);
-              setPreviewOpen(true);
-            }}
-            onEdit={async (match) => {
-              setSelectedMatch(match);
+        <div className="flex flex-wrap gap-3">
+          <button
+            className="btn-primary px-4 py-2 rounded-md"
+            onClick={() => {
+              setSelectedReport(null);
               setOpen(true);
-              await loadStylesForModal();
             }}
-            onDelete={(match) => handleDeleteMatch(match)}
-          />
+          >
+            ➕ Add Scouting Report
+          </button>
+          <button
+            className="btn-secondary px-4 py-2 rounded-md"
+            onClick={exportReportsToExcel}
+          >
+            Export to Excel
+          </button>
         </div>
       </div>
 
-      {previewOpen && selectedMatch && (
+      {/* No reports empty state */}
+      {tableRows.length === 0 ? (
+        <div className="rounded-md border border-border p-6 text-sm text-muted-foreground">
+          No reports yet. Click{" "}
+          <span className="font-medium">Add Scouting Report</span> to create
+          your first scouting report.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <div className="min-w-[900px]">
+            <ReportDataTable
+              columns={columns}
+              data={tableRows}
+              onView={(report) => {
+                setSelectedReport(report);
+                setPreviewOpen(true);
+              }}
+              onEdit={(report) => {
+                setSelectedReport(report);
+                setOpen(true);
+              }}
+              onDelete={(report) => handleDeleteReport(report)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Add/Edit modal */}
+      <ModalLayout
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        title={selectedReport ? "Edit Scouting Report" : "Add Scouting Report"}
+        description="Fill out all scouting details below."
+        withCard
+      >
+        <ScoutingReportForm
+          key={selectedReport?._id}
+          team={team}
+          user={user}
+          report={selectedReport}
+          setOpen={setOpen}
+          onSuccess={fetchReports}
+        />
+      </ModalLayout>
+
+      {/* Preview modal */}
+      {previewOpen && selectedReport && (
         <PreviewReportModal
           previewOpen={previewOpen}
           setPreviewOpen={setPreviewOpen}
-          report={selectedMatch}
-          reportType="match"
+          report={selectedReport}
+          reportType="scouting"
         />
       )}
     </div>
   );
-};
-
-export default DashboardMatches;
+}

@@ -17,14 +17,15 @@ export async function GET(_req, { params }) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { slug } = await params; // Next 15 requires awaiting params
+  const { slug } = await params; // Next 15: await params
   const team = await Team.findOne({ teamSlug: slug }).lean();
   if (!team) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
-  // Determine viewer role (owner counts as staff even without a TeamMember row)
   const isOwner = String(team.user) === String(viewer._id);
+
+  // ✅ Prefer owner over any TeamMember row (this was the bug)
   const link = await TeamMember.findOne({
     teamId: team._id,
     userId: viewer._id,
@@ -32,16 +33,17 @@ export async function GET(_req, { params }) {
     .select("role")
     .lean();
 
-  const viewerRole =
-    (link?.role || (isOwner ? "owner" : null))?.toLowerCase() || null;
+  const linkRole = (link?.role || "").toLowerCase();
+  const viewerRole = isOwner ? "owner" : linkRole || null;
+
   if (!viewerRole) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Pull all TeamMember rows
+  // Pull all membership rows
   const raw = await TeamMember.find({ teamId: team._id }).lean();
 
-  // Map rows -> display objects
+  // Map to display objects
   const members = await Promise.all(
     raw.map(async (m) => {
       if (m.familyMemberId) {
@@ -76,7 +78,11 @@ export async function GET(_req, { params }) {
           isOwner: false,
           familyMemberId: null,
           userId: String(u._id),
-          name: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
+          name:
+            `${u.firstName || ""} ${u.lastName || ""}`.trim() ||
+            u.username ||
+            u.email ||
+            "Member",
           username: u.username || null,
           avatarUrl,
         };
@@ -88,7 +94,7 @@ export async function GET(_req, { params }) {
 
   const clean = members.filter(Boolean);
 
-  // ✅ Ensure the OWNER appears as a non-editable "manager" row
+  // Ensure the OWNER shows up as a non-editable row
   const ownerId = String(team.user);
   const hasOwnerInList = clean.some(
     (m) => !m.isFamilyMember && m.userId === ownerId
@@ -104,10 +110,10 @@ export async function GET(_req, { params }) {
         avatarUrl = owner.facebookAvatar || avatarUrl;
 
       clean.unshift({
-        id: `owner-${team._id}`, // synthetic id
-        role: "manager", // show as manager
+        id: `owner-${team._id}`, // synthetic id (not editable)
+        role: "manager", // shown as manager
         isFamilyMember: false,
-        isOwner: true, // <-- flag for UI to lock editing
+        isOwner: true, // UI should lock this row
         familyMemberId: null,
         userId: ownerId,
         name:

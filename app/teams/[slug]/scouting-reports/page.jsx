@@ -1,11 +1,12 @@
+// app/teams/[slug]/scouting-reports/page.jsx
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { Button } from "@/components/ui/button";
-import { Eye, Edit, Trash } from "lucide-react";
+import { Eye, Edit, Trash, ArrowUpDown } from "lucide-react";
 import PreviewReportModal from "@/components/shared/PreviewReportModal";
 import ScoutingReportForm from "@/components/teams/forms/ScoutingReportForm";
 import { ReportDataTable } from "@/components/shared/report-data-table";
@@ -15,9 +16,8 @@ import { saveAs } from "file-saver";
 import Spinner from "@/components/shared/Spinner";
 
 export default function TeamScoutingReportsPage() {
-  const params = useParams();
+  const { slug } = useParams();
   const router = useRouter();
-  const slug = params.slug;
 
   const [team, setTeam] = useState(null);
   const [reports, setReports] = useState([]);
@@ -28,138 +28,286 @@ export default function TeamScoutingReportsPage() {
   const [selectedReport, setSelectedReport] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  // ✅ Fetch team data
+  // id -> name for members (users + family)
+  const [membersMap, setMembersMap] = useState(() => new Map());
+
+  // Team
   useEffect(() => {
     if (!slug) return;
-
-    const fetchTeam = async () => {
+    (async () => {
       try {
         const res = await fetch(`/api/teams/${slug}`);
         if (!res.ok) throw new Error("Failed to fetch team");
         const data = await res.json();
         setTeam(data.team);
-      } catch (err) {
-        console.error("Error fetching team:", err);
-        toast.error("Error loading team data");
+      } catch (e) {
+        console.error(e);
+        toast.error("Error loading team.");
       }
-    };
-
-    fetchTeam();
+    })();
   }, [slug]);
 
-  // ✅ Fetch scouting reports
+  // Reports
   const fetchReports = async () => {
     try {
-      setLoading(true); // show spinner immediately
+      setLoading(true);
       const res = await fetch(
         `/api/teams/${slug}/scouting-reports?ts=${Date.now()}`
       );
-      if (!res.ok) throw new Error("Failed to load scouting reports");
+      if (!res.ok) throw new Error();
       const data = await res.json();
       setReports(data.scoutingReports || []);
-    } catch (error) {
-      console.error(error);
+    } catch {
       toast.error("Error loading scouting reports");
     } finally {
-      setLoading(false); // hide spinner when done
+      setLoading(false);
     }
   };
-
   useEffect(() => {
     if (!slug) return;
     fetchReports();
   }, [slug]);
 
-  // ✅ Fetch current user
+  // Current user (for form)
   useEffect(() => {
-    const fetchUser = async () => {
+    (async () => {
       try {
         const res = await fetch("/api/auth/me");
-        if (!res.ok) throw new Error("Failed to fetch user");
-        const userData = await res.json();
-        setUser(userData);
-      } catch (err) {
-        console.error("Failed to load user:", err);
-      }
-    };
-
-    fetchUser();
+        if (!res.ok) return;
+        setUser(await res.json());
+      } catch {}
+    })();
   }, []);
 
+  // Members map for “Report For”
+  useEffect(() => {
+    if (!slug) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/teams/${slug}/members?ts=${Date.now()}`, {
+          cache: "no-store",
+        });
+        const json = await res.json().catch(() => ({}));
+        const list = Array.isArray(json.members) ? json.members : [];
+        const map = new Map();
+        list.forEach((m) => {
+          const id = String(m.familyMemberId || m.userId || "");
+          if (id) map.set(id, m.name || m.username || "Unknown");
+        });
+        setMembersMap(map);
+      } catch (e) {
+        console.error(e);
+        setMembersMap(new Map());
+      }
+    })();
+  }, [slug]);
+
+  // Rows with resolved names (also provide a value to sort by)
+  const tableRows = useMemo(() => {
+    const namesArrFor = (r) =>
+      Array.isArray(r?.reportFor) && r.reportFor.length
+        ? r.reportFor.map(
+            (rf) => membersMap.get(String(rf.athleteId)) || "Unknown"
+          )
+        : [];
+
+    return (Array.isArray(reports) ? reports : []).map((r) => {
+      const namesArr = namesArrFor(r);
+      return {
+        ...r,
+        reportForNamesArr: namesArr, // for rendering as stacked lines
+        reportForSort: namesArr.join(" ").toLowerCase(), // for sorting
+        _createdAtTs: r?.createdAt ? new Date(r.createdAt).getTime() : 0,
+      };
+    });
+  }, [reports, membersMap]);
+
+  // Actions
   const handleDeleteReport = async (report) => {
-    if (
-      window.confirm(`This report will be permanently deleted! Are you sure?`)
-    ) {
-      const response = await fetch(
+    if (!window.confirm("This report will be permanently deleted. Continue?"))
+      return;
+    try {
+      const res = await fetch(
         `/api/teams/${slug}/scouting-reports/${report._id}`,
         {
           method: "DELETE",
-          headers: { "Content-type": "application/json; charset=UTF-8" },
+          headers: { "Content-Type": "application/json" },
           credentials: "include",
         }
       );
-
-      const data = await response.json();
-
-      if (response.ok) {
-        toast.success(data.message);
-        setReports((prev) => prev.filter((r) => r._id !== report._id));
-        setSelectedReport(null);
-        router.refresh();
-      } else {
-        toast.error(data.message || "Failed to delete report");
-      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || "Delete failed");
+      toast.success(data?.message || "Report deleted");
+      setReports((prev) => prev.filter((r) => r._id !== report._id));
+      setSelectedReport(null);
+      router.refresh();
+    } catch (e) {
+      toast.error(e.message || "Failed to delete report");
     }
   };
 
   const exportReportsToExcel = () => {
     const dataToExport = reports.map((r) => ({
-      FirstName: r.athleteFirstName,
-      LastName: r.athleteLastName,
-      Country: r.athleteCountry,
-      NationalRank: r.athleteNationalRank,
-      WorldRank: r.athleteWorldRank,
+      Type: r.matchType,
+      "Report For":
+        Array.isArray(r.reportFor) && r.reportFor.length
+          ? r.reportFor
+              .map((rf) => membersMap.get(String(rf.athleteId)) || "Unknown")
+              .join(", ")
+          : "—",
+      "Athlete First": r.athleteFirstName,
+      "Athlete Last": r.athleteLastName,
+      "Nat. Rank": r.athleteNationalRank,
+      "World Rank": r.athleteWorldRank,
       Club: r.athleteClub,
+      Country: r.athleteCountry,
       Division: r.division,
-      WeightClass: r.weightCategory,
-      Grip: r.athleteGrip,
-      MatchType: r.matchType,
-      Attacks: (r.athleteAttacks || []).join(", "),
-      Notes: r.athleteAttackNotes || "",
-      VideoLinks: (r.videos || []).map((v) => v.url).join(", "),
+      "Weight Class": r.weightCategory,
+      "Created By": r.createdByName || "—",
     }));
-
-    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Reports");
-
-    const excelBuffer = XLSX.write(workbook, {
-      bookType: "xlsx",
-      type: "array",
-    });
-    const file = new Blob([excelBuffer], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-
-    saveAs(file, `scouting-reports-${slug}.xlsx`);
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Reports");
+    const out = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+    saveAs(
+      new Blob([out], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }),
+      `scouting-reports-${slug}.xlsx`
+    );
   };
 
+  // Columns (sortable via ReportDataTable)
   const columns = [
-    { accessorKey: "matchType", header: "Type" },
-    { accessorKey: "athleteFirstName", header: "First Name" },
-    { accessorKey: "athleteLastName", header: "Last Name" },
-    { accessorKey: "athleteNationalRank", header: "Nat. Rank" },
-    { accessorKey: "athleteWorldRank", header: "World Rank" },
-    { accessorKey: "athleteCountry", header: "Country" },
     {
-      accessorKey: "division",
-      header: "Division",
+      accessorKey: "matchType",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Type <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      id: "reportFor",
+      accessorFn: (row) => row.reportForSort || "",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Report For <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => {
+        const names = row.original.reportForNamesArr || [];
+        if (!names.length) return "—";
+        return (
+          <div className="whitespace-pre-wrap leading-5">
+            {names.map((n, i) => (
+              <div key={i}>{n}</div>
+            ))}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: "athleteFirstName",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          First Name <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      accessorKey: "athleteLastName",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Last Name <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      id: "natRank",
+      accessorFn: (row) => Number(row?.athleteNationalRank ?? 0),
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Nat. Rank <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => row.original.athleteNationalRank ?? "—",
+      meta: { className: "hidden sm:table-cell" },
+    },
+    {
+      id: "worldRank",
+      accessorFn: (row) => Number(row?.athleteWorldRank ?? 0),
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          World Rank <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => row.original.athleteWorldRank ?? "—",
+      meta: { className: "hidden sm:table-cell" },
+    },
+    {
+      accessorKey: "athleteCountry",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Country <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
       meta: { className: "hidden md:table-cell" },
     },
     {
+      accessorKey: "division",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Division <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
       accessorKey: "weightCategory",
-      header: "Weight Class",
-      meta: { className: "hidden md:table-cell" },
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Weight Class <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
+    {
+      accessorKey: "createdByName",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Created By <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => row.original.createdByName || "—",
     },
     {
       id: "actions",
@@ -202,7 +350,6 @@ export default function TeamScoutingReportsPage() {
     },
   ];
 
-  // ✅ Full-page spinner while loading (prevents awkward blank area / no-scroll)
   if (loading) {
     return (
       <div className="flex flex-col justify-center items-center h-[70vh] bg-background">
@@ -216,10 +363,18 @@ export default function TeamScoutingReportsPage() {
 
   return (
     <div>
-      {/* Header + Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
-        <h1 className="text-2xl font-bold">Scouting Reports</h1>
-        <div className="flex flex-wrap gap-3">
+      {/* Title left, buttons RIGHT */}
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Scouting Reports</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Create a scouting report to help your athletes prepare for upcoming
+            matches. You can include multiple athletes in a single report if
+            they’re in the same division or preparing for the same event.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-3 sm:justify-end">
           <button
             className="btn-primary px-4 py-2 rounded-md"
             onClick={() => {
@@ -238,105 +393,50 @@ export default function TeamScoutingReportsPage() {
         </div>
       </div>
 
-      {/* Modal for Add/Edit */}
+      {tableRows.length === 0 ? (
+        <div className="rounded-md border border-border p-6 text-sm text-muted-foreground">
+          No reports yet. Click{" "}
+          <span className="font-medium">Add Scouting Report</span> to create
+          your first scouting report.
+        </div>
+      ) : (
+        // No forced min-width; no overflow unless really needed
+        <div className="w-full">
+          <ReportDataTable
+            columns={columns}
+            data={tableRows}
+            onView={(report) => {
+              setSelectedReport(report);
+              setPreviewOpen(true);
+            }}
+            onEdit={(report) => {
+              setSelectedReport(report);
+              setOpen(true);
+            }}
+            onDelete={(report) => handleDeleteReport(report)}
+          />
+        </div>
+      )}
+
+      {/* Add/Edit */}
       <ModalLayout
         isOpen={open}
         onClose={() => setOpen(false)}
         title={selectedReport ? "Edit Scouting Report" : "Add Scouting Report"}
         description="Fill out all scouting details below."
-        withCard={true}
+        withCard
       >
         <ScoutingReportForm
           key={selectedReport?._id}
           team={team}
           user={user}
-          userStyles={user?.user?.userStyles || []}
           report={selectedReport}
           setOpen={setOpen}
           onSuccess={fetchReports}
         />
       </ModalLayout>
 
-      {/* Mobile Cards */}
-      <div className="grid grid-cols-1 sm:hidden gap-4 mb-6">
-        {reports.length > 0 ? (
-          reports.map((report) => (
-            <div
-              key={report._id}
-              className="bg-gray-900 text-white p-4 rounded-xl shadow-md border border-gray-700"
-            >
-              <p>
-                <strong>Type:</strong> {report.matchType}
-              </p>
-              <p>
-                <strong>Athlete:</strong> {report.athleteFirstName}{" "}
-                {report.athleteLastName}
-              </p>
-              <p>
-                <strong>Country:</strong> {report.athleteCountry}
-              </p>
-              <p>
-                <strong>Division:</strong> {report.division}
-              </p>
-              <p>
-                <strong>Weight Class:</strong> {report.weightCategory}
-              </p>
-
-              <div className="flex justify-end gap-4 mt-4">
-                <button
-                  onClick={() => {
-                    setSelectedReport(report);
-                    setPreviewOpen(true);
-                  }}
-                  className="text-blue-400 hover:text-blue-300"
-                >
-                  <Eye size={18} />
-                </button>
-                <button
-                  onClick={() => {
-                    setSelectedReport(report);
-                    setOpen(true);
-                  }}
-                  className="text-green-400 hover:text-green-300"
-                >
-                  <Edit size={18} />
-                </button>
-                <button
-                  onClick={() => handleDeleteReport(report)}
-                  className="text-red-500 hover:text-red-400"
-                >
-                  <Trash size={18} />
-                </button>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="text-gray-400">No scouting reports found.</p>
-        )}
-      </div>
-
-      {/* Desktop Table */}
-      {reports.length > 0 && (
-        <div className="hidden md:block overflow-x-auto">
-          <div className="min-w-[800px]">
-            <ReportDataTable
-              columns={columns}
-              data={reports}
-              onView={(report) => {
-                setSelectedReport(report);
-                setPreviewOpen(true);
-              }}
-              onEdit={(report) => {
-                setSelectedReport(report);
-                setOpen(true);
-              }}
-              onDelete={(report) => handleDeleteReport(report)}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Preview Modal */}
+      {/* Preview */}
       {previewOpen && selectedReport && (
         <PreviewReportModal
           previewOpen={previewOpen}
