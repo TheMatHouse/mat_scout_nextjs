@@ -9,10 +9,12 @@ import { useUser } from "@/context/UserContext";
 export default function NotificationBell() {
   const { user, loading } = useUser();
   const [isOpen, setIsOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const bellRef = useRef(null);
   const dropdownRef = useRef(null);
+
+  // Derive unread from notifications (single source of truth)
+  const unreadCount = notifications.filter((n) => !n.viewed).length;
 
   const fetchNotifications = async () => {
     if (!user || loading) return;
@@ -20,11 +22,11 @@ export default function NotificationBell() {
       const res = await fetch(`/api/notifications?limit=20&ts=${Date.now()}`, {
         method: "GET",
         credentials: "include",
+        cache: "no-store",
       });
 
       if (res.status === 404) {
         setNotifications([]);
-        setUnreadCount(0);
         return;
       }
 
@@ -43,17 +45,9 @@ export default function NotificationBell() {
         : [];
 
       setNotifications(list);
-
-      const unread =
-        typeof payload?.unreadCount === "number"
-          ? payload.unreadCount
-          : list.filter((n) => !n.viewed).length;
-
-      setUnreadCount(unread);
     } catch (err) {
       console.error("Failed to fetch notifications:", err);
       setNotifications([]);
-      setUnreadCount(0);
     }
   };
 
@@ -88,6 +82,41 @@ export default function NotificationBell() {
     setIsOpen((prev) => !prev);
   };
 
+  // Optimistic mark-as-read / delete handler passed to dropdown
+  async function handleMarkAsRead(id, isDelete = false) {
+    // Optimistic state update
+    setNotifications((prev) =>
+      isDelete
+        ? prev.filter((n) => n._id !== id)
+        : prev.map((n) =>
+            n._id === id
+              ? { ...n, viewed: true, viewedAt: new Date().toISOString() }
+              : n
+          )
+    );
+
+    // Persist to server
+    try {
+      if (isDelete) {
+        await fetch(`/api/notifications/${id}`, {
+          method: "DELETE",
+          cache: "no-store",
+        });
+      } else {
+        await fetch(`/api/notifications/mark-read`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          body: JSON.stringify({ notificationIds: [id] }),
+        });
+      }
+    } catch (err) {
+      console.error("Failed to mark notification:", err);
+      // Optional: refetch to resync if your backend is authoritative
+      // await fetchNotifications();
+    }
+  }
+
   return (
     <div
       className="relative"
@@ -95,7 +124,6 @@ export default function NotificationBell() {
     >
       <button
         onClick={toggleDropdown}
-        // FIX: force light icon color to match dark header always
         className="relative p-2 rounded-full text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/40 transition"
         aria-label={
           unreadCount > 0
@@ -103,21 +131,17 @@ export default function NotificationBell() {
             : "Notifications"
         }
       >
-        {/* Bell inherits text color from button */}
         <Bell
           className="h-6 w-6"
           aria-hidden="true"
         />
-
         {unreadCount > 0 && (
           <motion.span
             key={unreadCount}
             initial={{ scale: 0.8 }}
             animate={{ scale: 1 }}
             transition={{ type: "spring", stiffness: 300, damping: 15 }}
-            className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold text-white bg-red-500 rounded-full ring-2"
-            // ring color to separate from the dark header (use your header hex if you prefer)
-            style={{ ringColor: "#2b2d42" }}
+            className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold text-white bg-red-500 rounded-full ring-2 ring-[#2b2d42]"
           >
             {unreadCount > 9 ? "9+" : unreadCount}
           </motion.span>
@@ -137,32 +161,7 @@ export default function NotificationBell() {
             <NotificationDropdown
               notifications={notifications}
               onClose={() => setIsOpen(false)}
-              onMarkAsRead={async (id, isDelete = false) => {
-                try {
-                  if (isDelete) {
-                    await fetch(`/api/notifications/${id}`, {
-                      method: "DELETE",
-                    });
-                    setNotifications((prev) =>
-                      prev.filter((n) => n._id !== id)
-                    );
-                  } else {
-                    await fetch(`/api/notifications/mark-read`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ notificationIds: [id] }),
-                    });
-                    setNotifications((prev) =>
-                      prev.map((n) =>
-                        n._id === id ? { ...n, viewed: true } : n
-                      )
-                    );
-                  }
-                  setUnreadCount((c) => Math.max(0, c - 1));
-                } catch (err) {
-                  console.error("Failed to mark notification:", err);
-                }
-              }}
+              onMarkAsRead={handleMarkAsRead}
             />
           </motion.div>
         )}

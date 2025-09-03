@@ -2,12 +2,15 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export default function NotificationDropdown({
   notifications,
   onClose,
-  onMarkAsRead,
+  onMarkAsRead, // should return a Promise
 }) {
+  const router = useRouter();
+
   const newNotifications = notifications.filter((n) => !n.viewed);
   const earlierNotifications = notifications.filter((n) => n.viewed);
 
@@ -21,10 +24,15 @@ export default function NotificationDropdown({
       className={`flex justify-between items-start gap-2 px-4 py-3 group cursor-pointer ${
         !n.viewed ? "bg-blue-50 dark:bg-gray-700/60" : "bg-transparent"
       } hover:bg-gray-100 dark:hover:bg-gray-700`}
-      onClick={() => {
-        onMarkAsRead?.(n._id);
-        window.location.href = n.notificationLink;
-        onClose?.();
+      onClick={async () => {
+        try {
+          await onMarkAsRead?.(n._id);
+        } finally {
+          if (n.notificationLink) {
+            router.push(n.notificationLink);
+          }
+          onClose?.();
+        }
       }}
     >
       <div className="flex items-start gap-2 min-w-0">
@@ -48,9 +56,9 @@ export default function NotificationDropdown({
       </div>
 
       <button
-        onClick={(e) => {
+        onClick={async (e) => {
           e.stopPropagation();
-          onMarkAsRead?.(n._id, true); // true => delete
+          await onMarkAsRead?.(n._id, true); // dismiss/delete
         }}
         className="p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500"
         aria-label="Dismiss notification"

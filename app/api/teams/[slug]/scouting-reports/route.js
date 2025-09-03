@@ -15,11 +15,12 @@ import { createNotification } from "@/lib/createNotification";
 import { Mail } from "@/lib/email/mailer";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
-export async function POST(req, { params }) {
+export async function POST(req, context) {
   try {
     await connectDB();
 
-    const { slug } = params;
+    const { params } = context;
+    const { slug } = await params;
     if (!slug) {
       return NextResponse.json(
         { message: "Missing team slug" },
@@ -197,9 +198,10 @@ export async function POST(req, { params }) {
   }
 }
 
-export async function GET(_request, { params }) {
+export async function GET(_request, context) {
   try {
-    const { slug } = params;
+    const { params } = context;
+    const { slug } = await params;
     await connectDB();
 
     const team = await Team.findOne({ teamSlug: slug });
