@@ -1,11 +1,10 @@
 // components/teams/MemberRow.jsx
 "use client";
 
+import Link from "next/link"; // ⬅️ added
 import { useState, useMemo } from "react";
 import { toast } from "react-toastify";
 
-// If you use shadcn Select in your app, keep these imports.
-// If you don't have these, swap for a native <select>.
 import {
   Select,
   SelectTrigger,
@@ -16,15 +15,14 @@ import {
 
 export default function MemberRow({
   member, // { id, name, username, avatarUrl, role, isOwner, isFamilyMember, userId, familyMemberId }
-  slug, // team slug
-  isManager, // viewer is owner/manager/coach
-  onRoleChange, // callback to refresh list after change
+  slug,
+  isManager,
+  onRoleChange,
 }) {
   const [role, setRole] = useState((member.role || "").toLowerCase());
   const [saving, setSaving] = useState(false);
 
   const disabled = useMemo(() => {
-    // lock the owner row and non-manager viewers
     return !isManager || member.isOwner || saving;
   }, [isManager, member.isOwner, saving]);
 
@@ -32,8 +30,6 @@ export default function MemberRow({
 
   const handleChange = async (newRole) => {
     if (disabled) return;
-
-    // no-op if unchanged
     if ((newRole || "").toLowerCase() === (role || "").toLowerCase()) return;
 
     try {
@@ -45,7 +41,6 @@ export default function MemberRow({
         cache: "no-store",
       });
 
-      // try to parse error detail (always handle empty body)
       let detail = "";
       try {
         const txt = await res.text();
@@ -53,13 +48,9 @@ export default function MemberRow({
           const json = JSON.parse(txt);
           detail = json?.error || json?.message || "";
         }
-      } catch {
-        /* ignore */
-      }
+      } catch {}
 
       if (!res.ok) {
-        // Common guard you were hitting before:
-        // “Cannot modify team owner” will arrive from API—just show it.
         throw new Error(
           `${res.status} ${res.statusText}${detail ? ` – ${detail}` : ""}`
         );
@@ -76,6 +67,13 @@ export default function MemberRow({
     }
   };
 
+  // Build profile href when we have a username
+  const profileHref = member?.username
+    ? member.isFamilyMember
+      ? `/family/${member.username}`
+      : `/${member.username}`
+    : null;
+
   return (
     <div className="flex items-center justify-between">
       {/* Left: identity */}
@@ -87,13 +85,25 @@ export default function MemberRow({
         />
         <div className="flex flex-col">
           <span className="text-sm font-medium">
-            {member.name || member.username || "—"}
+            {profileHref ? (
+              <Link
+                href={profileHref}
+                className="text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/50 rounded"
+                title={`View ${member.username}'s profile`}
+              >
+                {member.name || member.username || "—"}
+              </Link>
+            ) : (
+              member.name || member.username || "—"
+            )}
           </span>
+
           {member.username && (
             <span className="text-xs text-muted-foreground">
               @{member.username}
             </span>
           )}
+
           {member.isOwner && (
             <span className="text-xs text-amber-600">Team Owner</span>
           )}
@@ -112,7 +122,6 @@ export default function MemberRow({
               <SelectValue placeholder="Select a role" />
             </SelectTrigger>
             <SelectContent>
-              {/* Show all possible roles (your API validates) */}
               <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="member">Member</SelectItem>
               <SelectItem value="coach">Coach</SelectItem>
