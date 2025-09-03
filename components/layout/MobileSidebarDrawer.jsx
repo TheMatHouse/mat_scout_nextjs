@@ -250,19 +250,20 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
               About
             </Link>
             <Link
+              href="/teams"
+              onClick={onClose}
+              className="block hover:text-white transition"
+            >
+              Teams
+            </Link>
+            <Link
               href="/contact"
               onClick={onClose}
               className="block hover:text-white transition"
             >
               Contact Us
             </Link>
-            <Link
-              href="/login"
-              onClick={onClose}
-              className="block hover:text-white transition"
-            >
-              Login
-            </Link>
+
             <Link
               href="/register"
               onClick={onClose}

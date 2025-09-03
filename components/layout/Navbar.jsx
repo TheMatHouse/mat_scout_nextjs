@@ -53,6 +53,12 @@ const Navbar = () => {
                 About
               </Link>
               <Link
+                href="/teams"
+                className="hover:underline"
+              >
+                Teams
+              </Link>
+              <Link
                 href="/contact"
                 className="hover:underline"
               >
