@@ -30,7 +30,7 @@ const asLower = (arr) => arr.map((s) => s.toLowerCase());
 // ---------- GET: all match reports for a user ----------
 export async function GET(_request, context) {
   await connectDB();
-  const { userId } = context.params || {};
+  const { userId } = await context.params; // <-- Next 15 requires await
 
   try {
     if (!userId || !Types.ObjectId.isValid(userId)) {
@@ -62,7 +62,7 @@ export async function GET(_request, context) {
 // ---------- POST: create a new match report ----------
 export async function POST(request, context) {
   await connectDB();
-  const { userId } = context.params || {};
+  const { userId } = await context.params; // <-- Next 15 requires await
 
   try {
     if (!userId || !Types.ObjectId.isValid(userId)) {

@@ -145,14 +145,14 @@ export default function LoginForm({ redirect = "/dashboard" }) {
             or continue with
           </div>
           <div className="flex justify-center gap-4">
-            <a
+            {/* <a
               href="/api/auth/facebook"
               onClick={setRedirectCookie}
               className="flex items-center gap-2 px-4 py-2 border rounded bg-white dark:bg-gray-800 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
             >
               <FacebookIcon className="w-4 h-4" />
               Facebook
-            </a>
+            </a> */}
             <a
               href="/api/auth/google"
               onClick={setRedirectCookie}

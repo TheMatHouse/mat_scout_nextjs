@@ -22,7 +22,6 @@ export default function DashboardHome() {
   const [scoutingCount, setScoutingCount] = useState(null);
   const [teamCount, setTeamCount] = useState(null);
 
-  console.log("USER ", user);
   useEffect(() => {
     if (!user?._id) return;
 
@@ -30,7 +29,8 @@ export default function DashboardHome() {
     (async () => {
       try {
         const res = await fetch(
-          `/api/dashboard/${user._id}/matchReports?ts=${Date.now()}`
+          `/api/dashboard/${user._id}/matchReports?ts=${Date.now()}`,
+          { cache: "no-store" }
         );
         if (res.ok) {
           const data = await res.json();
@@ -47,7 +47,8 @@ export default function DashboardHome() {
     (async () => {
       try {
         const res = await fetch(
-          `/api/dashboard/${user._id}/scoutingReports?ts=${Date.now()}`
+          `/api/dashboard/${user._id}/scoutingReports?ts=${Date.now()}`,
+          { cache: "no-store" }
         );
         if (res.ok) {
           const data = await res.json();
@@ -64,21 +65,16 @@ export default function DashboardHome() {
       }
     })();
 
-    // Teams (active memberships)
+    // Teams – use "my teams" endpoint so owner OR member both count
     (async () => {
       try {
-        const res = await fetch(
-          `/api/teams/memberships?activeOnly=1&ts=${Date.now()}`
-        );
+        const res = await fetch(`/api/teams?limit=0&ts=${Date.now()}`, {
+          cache: "no-store",
+        });
         if (res.ok) {
           const data = await res.json();
-          setTeamCount(
-            typeof data?.count === "number"
-              ? data.count
-              : Array.isArray(data?.memberships)
-              ? data.memberships.length
-              : 0
-          );
+          const count = Array.isArray(data?.myTeams) ? data.myTeams.length : 0;
+          setTeamCount(count);
         } else {
           setTeamCount(user.teams ? user.teams.length : 0);
         }
@@ -263,7 +259,6 @@ function DashboardCard({ href, icon, title, description }) {
 
 /* ---------- Checklist row with animated check ---------- */
 function NextStepItem({ href, label, checked, loading }) {
-  // Track previous checked state to know if it just completed
   const prevRef = useRef(checked);
   useEffect(() => {
     prevRef.current = checked;
@@ -278,7 +273,6 @@ function NextStepItem({ href, label, checked, loading }) {
       }`}
       aria-label={`${label}${checked ? " (completed)" : ""}`}
     >
-      {/* Icon */}
       <AnimatePresence
         mode="popLayout"
         initial={false}
@@ -310,12 +304,10 @@ function NextStepItem({ href, label, checked, loading }) {
         )}
       </AnimatePresence>
 
-      {/* Label */}
       <span className="text-ms-blue dark:text-ms-light-gray group-hover:text-ms-dark-red">
         {label}
       </span>
 
-      {/* Status + chevron */}
       <span
         className={`ml-auto text-xs ${
           checked ? "text-green-600 dark:text-green-400" : "text-gray-500"
