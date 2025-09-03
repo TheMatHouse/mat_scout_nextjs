@@ -319,9 +319,8 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
                 <FormItem>
                   <FormLabel>Password</FormLabel>
                   <FormControl>
-                    <Input
+                    <PasswordInput
                       {...field}
-                      type="password"
                       placeholder="••••••••"
                       autoComplete="new-password"
                     />

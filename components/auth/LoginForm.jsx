@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 
 import FacebookIcon from "@/components/icons/FacebookIcon";
 import GoogleIcon from "@/components/icons/GoogleIcon";
+import PasswordInput from "../shared/PasswordInput";
 
 export default function LoginForm({ redirect = "/dashboard" }) {
   const router = useRouter();
@@ -109,9 +110,8 @@ export default function LoginForm({ redirect = "/dashboard" }) {
                 <FormItem>
                   <FormLabel>Password</FormLabel>
                   <FormControl>
-                    <Input
+                    <PasswordInput
                       {...field}
-                      type="password"
                       placeholder="••••••••"
                       autoComplete="current-password"
                     />

@@ -5,10 +5,10 @@ export const dynamic = "force-dynamic";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "react-toastify";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+import PasswordInput from "@/components/shared/PasswordInput";
+import FormField from "@/components/shared/FormField";
 
 export default function ResetPasswordPage() {
   const searchParams = useSearchParams();
@@ -39,7 +39,7 @@ export default function ResetPasswordPage() {
         body: JSON.stringify({ token, email, password }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || "Reset failed");
 
       toast.success("Password reset successful. Please log in.");
@@ -64,39 +64,53 @@ export default function ResetPasswordPage() {
               onSubmit={handleReset}
               className="space-y-4"
             >
-              <div>
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="password">New Password</Label>
-                <Input
+              {/* Email */}
+              <FormField
+                label="Email"
+                name="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+                required
+                disabled={loading}
+              />
+
+              {/* New Password */}
+              <FormField
+                label="New Password"
+                name="password"
+              >
+                <PasswordInput
                   id="password"
-                  type="password"
-                  placeholder="New password"
+                  name="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  placeholder="New password"
+                  autoComplete="new-password"
                   required
+                  disabled={loading}
                 />
-              </div>
-              <div>
-                <Label htmlFor="confirm">Confirm Password</Label>
-                <Input
-                  id="confirm"
-                  type="password"
-                  placeholder="Confirm password"
+              </FormField>
+
+              {/* Confirm Password */}
+              <FormField
+                label="Confirm Password"
+                name="confirmPassword"
+              >
+                <PasswordInput
+                  id="confirmPassword"
+                  name="confirmPassword"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm password"
+                  autoComplete="new-password"
                   required
+                  disabled={loading}
                 />
-              </div>
+              </FormField>
+
               <Button
                 type="submit"
                 disabled={loading}

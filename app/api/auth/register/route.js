@@ -1,4 +1,6 @@
 // app/api/auth/register/route.js
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
@@ -7,27 +9,51 @@ import jwt from "jsonwebtoken";
 import { sendWelcomeAndVerifyEmail } from "@/lib/email/sendWelcomeAndVerifyEmail";
 import { sanitizeUsername, isUsernameFormatValid } from "@/lib/identifiers";
 
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET || "";
+
+function escapeRegex(s = "") {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 export async function POST(req) {
   try {
+    if (!JWT_SECRET) {
+      return NextResponse.json(
+        { error: "Server misconfiguration." },
+        { status: 500 }
+      );
+    }
+
     await connectDB();
-    const { firstName, lastName, email, username, password } = await req.json();
+    const payload = await req.json();
+
+    const firstName = String(payload?.firstName ?? "").trim();
+    const lastName = String(payload?.lastName ?? "").trim();
+    const emailIn = String(payload?.email ?? "")
+      .trim()
+      .toLowerCase();
+    const usernameIn = String(payload?.username ?? "").trim();
+    const password = String(payload?.password ?? "");
 
     // Basic presence checks
-    if (!email || !password || !username) {
+    if (!emailIn || !usernameIn || !password) {
       return NextResponse.json(
         { error: "Email, username, and password are required." },
         { status: 400 }
       );
     }
 
-    // Normalize inputs
-    const normalizedEmail = String(email).toLowerCase().trim();
-    const cleanUsername = sanitizeUsername(username);
+    // Email format check (lightweight)
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailIn)) {
+      return NextResponse.json(
+        { error: "Invalid email format." },
+        { status: 400 }
+      );
+    }
 
-    // Server-side username format validation (authoritative)
-    if (!isUsernameFormatValid(cleanUsername)) {
+    // Server-side username rules (authoritative)
+    // Validate the *raw* input with our helper (which sanitizes internally)
+    if (!isUsernameFormatValid(usernameIn)) {
       return NextResponse.json(
         {
           error:
@@ -37,11 +63,21 @@ export async function POST(req) {
       );
     }
 
-    // Availability checks (authoritative)
+    // Final username we will store (lowercase, URL-safe)
+    const cleanUsername = sanitizeUsername(usernameIn);
+
+    // Case-insensitive availability checks (robust even if legacy rows weren't normalized)
     const [emailExists, usernameExists] = await Promise.all([
-      User.findOne({ email: normalizedEmail }).select("_id").lean(),
-      User.findOne({ username: cleanUsername }).select("_id").lean(),
+      User.findOne({ email: new RegExp(`^${escapeRegex(emailIn)}$`, "i") })
+        .select("_id")
+        .lean(),
+      User.findOne({
+        username: new RegExp(`^${escapeRegex(cleanUsername)}$`, "i"),
+      })
+        .select("_id")
+        .lean(),
     ]);
+
     if (emailExists) {
       return NextResponse.json(
         { error: "Email already in use." },
@@ -55,13 +91,20 @@ export async function POST(req) {
       );
     }
 
-    // Create user
+    // Hash & create user
+    if (password.length < 6) {
+      return NextResponse.json(
+        { error: "Password must be at least 6 characters." },
+        { status: 400 }
+      );
+    }
+
     const hashed = await bcrypt.hash(password, 10);
     const user = await User.create({
-      firstName: firstName?.trim() || "",
-      lastName: lastName?.trim() || "",
-      email: normalizedEmail,
-      username: cleanUsername, // schema lowercases & trims as well
+      firstName,
+      lastName,
+      email: emailIn,
+      username: cleanUsername,
       password: hashed,
       provider: "local",
       verified: false,
@@ -74,14 +117,21 @@ export async function POST(req) {
       { expiresIn: "1d" }
     );
 
-    const base =
-      process.env.NEXT_PUBLIC_DOMAIN || process.env.NEXT_PUBLIC_BASE_URL || "";
+    const base = (
+      process.env.NEXT_PUBLIC_DOMAIN ||
+      process.env.NEXT_PUBLIC_BASE_URL ||
+      ""
+    ).replace(/\/+$/, "");
     const verifyUrl = `${base}/verify?token=${encodeURIComponent(token)}`;
 
-    // Send welcome + verify email
-    await sendWelcomeAndVerifyEmail({ toUser: user, verifyUrl });
+    // Send welcome + verify email (best-effort)
+    try {
+      await sendWelcomeAndVerifyEmail({ toUser: user, verifyUrl });
+    } catch (e) {
+      // Don't block registration if email vendor hiccups
+      console.warn("sendWelcomeAndVerifyEmail failed:", e?.message || e);
+    }
 
-    // Success (don’t auto-login until verified)
     return NextResponse.json(
       {
         ok: true,
@@ -90,7 +140,7 @@ export async function POST(req) {
       { status: 201 }
     );
   } catch (err) {
-    // Graceful duplicate handling (in case of race)
+    // Handle dup keys (race conditions)
     if (err?.code === 11000 && err?.keyPattern) {
       if (err.keyPattern.email) {
         return NextResponse.json(
@@ -105,6 +155,7 @@ export async function POST(req) {
         );
       }
     }
+
     console.error("Register error:", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }

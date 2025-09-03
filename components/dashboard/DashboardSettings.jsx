@@ -1,7 +1,8 @@
+// app/(dashboard)/dashboard/settings/DashboardSettings.jsx
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Pencil, Camera, Copy, Share } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SettingsForm from "./forms/SettingsForm";
@@ -24,9 +25,15 @@ function cld(url, extra = "") {
 export default function DashboardSettings({ user, refreshUser }) {
   const [open, setOpen] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState(null);
+  const [viewUser, setViewUser] = useState(user); // ← local, updatable copy
   const router = useRouter();
 
-  if (!user) {
+  // keep local copy in sync if parent user changes
+  useEffect(() => {
+    setViewUser(user);
+  }, [user]);
+
+  if (!viewUser) {
     return (
       <section className="max-w-3xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-4">Personal Settings</h1>
@@ -38,24 +45,18 @@ export default function DashboardSettings({ user, refreshUser }) {
   }
 
   // Pick the correct base avatar URL (google/facebook/uploaded/default)
-  let baseAvatarUrl = user.avatar;
-  if (user.avatarType === "google") baseAvatarUrl = user.googleAvatar;
-  if (user.avatarType === "facebook") baseAvatarUrl = user.facebookAvatar;
-  if (user.avatarType === "uploaded") baseAvatarUrl = user.avatar;
+  let baseAvatarUrl = viewUser.avatar;
+  if (viewUser.avatarType === "google") baseAvatarUrl = viewUser.googleAvatar;
+  if (viewUser.avatarType === "facebook")
+    baseAvatarUrl = viewUser.facebookAvatar;
+  if (viewUser.avatarType === "uploaded") baseAvatarUrl = viewUser.avatar;
   if (!baseAvatarUrl) {
-    // Default Cloudinary image (will benefit from f_auto,q_auto too)
     baseAvatarUrl =
       "https://res.cloudinary.com/matscout/image/upload/v1747956346/default_user_rval6s.jpg";
   }
 
-  // For display: prefer preview (data URL), else fast Cloudinary URL
   const displayAvatarUrl =
-    avatarPreview ||
-    cld(
-      baseAvatarUrl,
-      // request 192x192, we render 96x96 so it looks crisp on 2x screens
-      "w_192,h_192,c_fill,g_auto,dpr_auto"
-    );
+    avatarPreview || cld(baseAvatarUrl, "w_192,h_192,c_fill,g_auto,dpr_auto");
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -67,7 +68,7 @@ export default function DashboardSettings({ user, refreshUser }) {
       setAvatarPreview(base64Image);
 
       try {
-        const res = await fetch(`/api/dashboard/${user._id}/avatar`, {
+        const res = await fetch(`/api/dashboard/${viewUser._id}/avatar`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ image: base64Image, avatarType: "uploaded" }),
@@ -89,7 +90,7 @@ export default function DashboardSettings({ user, refreshUser }) {
   };
 
   const revertToSocial = async (provider) => {
-    await fetch(`/api/dashboard/${user._id}/avatar`, {
+    await fetch(`/api/dashboard/${viewUser._id}/avatar`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ avatarType: provider }),
@@ -101,7 +102,7 @@ export default function DashboardSettings({ user, refreshUser }) {
   };
 
   const revertToUploaded = async () => {
-    await fetch(`/api/dashboard/${user._id}/avatar`, {
+    await fetch(`/api/dashboard/${viewUser._id}/avatar`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ avatarType: "uploaded", image: "use-existing" }),
@@ -129,9 +130,24 @@ export default function DashboardSettings({ user, refreshUser }) {
     }
   };
 
+  // Pretty gender display
+  const prettyGender =
+    viewUser.gender && viewUser.gender !== "not specified"
+      ? viewUser.gender.charAt(0).toUpperCase() + viewUser.gender.slice(1)
+      : "Not specified";
+
+  // Show whatever location parts are present (don’t require all 3)
+  const locationParts = [
+    viewUser.city,
+    viewUser.state,
+    viewUser.country,
+  ].filter((v) => v && v !== "not specified");
+  const locationDisplay =
+    locationParts.length > 0 ? locationParts.join(", ") : null;
+
   return (
     <section className="max-w-4xl mx-auto px-4 py-8">
-      {user && !user.verified && (
+      {viewUser && !viewUser.verified && (
         <div className="bg-[var(--ms-blue-gray)] text-white px-4 py-3 rounded text-center mb-4">
           Please verify your email to unlock full features.
           <button
@@ -167,7 +183,7 @@ export default function DashboardSettings({ user, refreshUser }) {
           </label>
 
           <div className="flex gap-2 flex-wrap justify-center">
-            {user.googleAvatar && user.avatarType !== "google" && (
+            {viewUser.googleAvatar && viewUser.avatarType !== "google" && (
               <Button
                 variant="outline"
                 size="sm"
@@ -176,7 +192,7 @@ export default function DashboardSettings({ user, refreshUser }) {
                 <GoogleIcon className="w-4 h-4 mr-1" /> Google Avatar
               </Button>
             )}
-            {user.facebookAvatar && user.avatarType !== "facebook" && (
+            {viewUser.facebookAvatar && viewUser.avatarType !== "facebook" && (
               <Button
                 variant="outline"
                 size="sm"
@@ -185,7 +201,7 @@ export default function DashboardSettings({ user, refreshUser }) {
                 <FacebookIcon className="w-4 h-4 mr-1" /> Facebook Avatar
               </Button>
             )}
-            {user.avatarType !== "uploaded" && user.avatarId && (
+            {viewUser.avatarType !== "uploaded" && viewUser.avatarId && (
               <Button
                 variant="outline"
                 size="sm"
@@ -197,7 +213,7 @@ export default function DashboardSettings({ user, refreshUser }) {
           </div>
 
           <h1 className="text-3xl font-bold text-center">
-            {user.firstName} {user.lastName}
+            {viewUser.firstName} {viewUser.lastName}
           </h1>
         </div>
 
@@ -212,7 +228,7 @@ export default function DashboardSettings({ user, refreshUser }) {
         </div>
       </header>
 
-      {/* Reusable Modal Layout */}
+      {/* Modal */}
       <ModalLayout
         isOpen={open}
         onClose={() => setOpen(false)}
@@ -221,9 +237,13 @@ export default function DashboardSettings({ user, refreshUser }) {
         withCard={true}
       >
         <SettingsForm
-          user={user}
+          user={viewUser}
           onClose={() => setOpen(false)}
           refreshUser={refreshUser}
+          // ⬇️ update local view immediately when API returns the new user
+          onSaved={(updated) => {
+            if (updated) setViewUser(updated);
+          }}
         />
       </ModalLayout>
 
@@ -233,12 +253,12 @@ export default function DashboardSettings({ user, refreshUser }) {
           <div>
             <p className="font-semibold">Your Public Profile</p>
             <a
-              href={`https://matscout.com/${user.username}`}
+              href={`https://matscout.com/${viewUser.username}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-blue-600 dark:text-blue-400 underline break-all"
             >
-              https://matscout.com/{user.username}
+              https://matscout.com/{viewUser.username}
             </a>
           </div>
           <div className="flex gap-2">
@@ -247,7 +267,7 @@ export default function DashboardSettings({ user, refreshUser }) {
               size="icon"
               onClick={() => {
                 navigator.clipboard.writeText(
-                  `https://matscout.com/${user.username}`
+                  `https://matscout.com/${viewUser.username}`
                 );
                 toast.success("Copied profile link");
               }}
@@ -261,7 +281,7 @@ export default function DashboardSettings({ user, refreshUser }) {
                 onClick={() =>
                   navigator.share({
                     title: "Check out my MatScout profile",
-                    url: `https://matscout.com/${user.username}`,
+                    url: `https://matscout.com/${viewUser.username}`,
                   })
                 }
               >
@@ -274,16 +294,14 @@ export default function DashboardSettings({ user, refreshUser }) {
         {/* Email */}
         <div className="settings-card">
           <h2 className="text-lg font-semibold mb-1">Email</h2>
-          <p className="text-sm">{user.email}</p>
+          <p className="text-sm">{viewUser.email}</p>
         </div>
 
         {/* Location */}
         <div className="settings-card">
           <h2 className="text-lg font-semibold mb-1">Location</h2>
-          {user.city && user.state && user.country ? (
-            <p className="text-sm">
-              {user.city}, {user.state}, {user.country}
-            </p>
+          {locationDisplay ? (
+            <p className="text-sm">{locationDisplay}</p>
           ) : (
             <p className="text-sm text-muted-foreground">
               No location info provided
@@ -294,7 +312,7 @@ export default function DashboardSettings({ user, refreshUser }) {
         {/* Gender */}
         <div className="settings-card">
           <h2 className="text-lg font-semibold mb-1">Gender</h2>
-          <p className="text-sm">{user.gender || "Not specified"}</p>
+          <p className="text-sm">{prettyGender}</p>
         </div>
 
         {/* Privacy */}
@@ -303,7 +321,8 @@ export default function DashboardSettings({ user, refreshUser }) {
           <p className="text-sm">
             Your profile is currently{" "}
             <span className="font-semibold">
-              {user.allowPublic === "Public" || user.allowPublic === true
+              {viewUser.allowPublic === "Public" ||
+              viewUser.allowPublic === true
                 ? "Public"
                 : "Private"}
             </span>

@@ -22,26 +22,27 @@ function isAdminUser(u) {
   if (
     typeof u.role === "string" &&
     ["admin", "superadmin"].includes(toStr(u.role))
-  )
+  ) {
     return true;
-
+  }
   if (
     Array.isArray(u.roles) &&
     u.roles.some((r) => ["admin", "superadmin"].includes(toStr(r)))
-  )
+  ) {
     return true;
-
+  }
   if (
     Array.isArray(u.permissions) &&
     u.permissions.some((p) => ["admin", "site:admin"].includes(toStr(p)))
-  )
+  ) {
     return true;
+  }
   if (
     Array.isArray(u.scopes) &&
     u.scopes.some((s) => ["admin", "site:admin"].includes(toStr(s)))
-  )
+  ) {
     return true;
-
+  }
   if (Array.isArray(u.teamMemberships)) {
     if (
       u.teamMemberships.some(
@@ -52,7 +53,6 @@ function isAdminUser(u) {
       return true;
     }
   }
-
   return false;
 }
 
@@ -60,7 +60,6 @@ export async function GET() {
   try {
     await connectDB();
 
-    // Whatever your auth util returns from cookies/session
     const sessionUser = await getCurrentUser();
     if (!sessionUser?._id && !sessionUser?.id) {
       return new NextResponse(JSON.stringify({ loggedIn: false }), {
@@ -72,8 +71,7 @@ export async function GET() {
       });
     }
 
-    // Always fetch the latest user from DB so flags are up-to-date
-    const lookupId = String(sessionUser._id || sessionUser.id);
+    const lookupId = String(sessionUser._id || sessionUser.id || "");
     const dbUser =
       (lookupId ? await User.findById(lookupId).lean() : null) ||
       (sessionUser.email
@@ -100,11 +98,26 @@ export async function GET() {
         username: dbUser.username || null,
         firstName: dbUser.firstName || "",
         lastName: dbUser.lastName || "",
+
+        // ✨ added profile fields so DashboardSettings sees them
+        city: dbUser.city || "",
+        state: dbUser.state || "",
+        country: dbUser.country || "",
+        gender: dbUser.gender || "",
+        bMonth: dbUser.bMonth || "",
+        bDay: dbUser.bDay || "",
+        bYear: dbUser.bYear || "",
+
+        allowPublic: !!dbUser.allowPublic,
+
         avatarType: dbUser.avatarType || "default",
         avatar: dbUser.avatar || null,
         googleAvatar: dbUser.googleAvatar || null,
         facebookAvatar: dbUser.facebookAvatar || null,
-        allowPublic: !!dbUser.allowPublic,
+        avatarId: dbUser.avatarId || null,
+
+        verified: !!dbUser.verified,
+        provider: dbUser.provider || null,
 
         // raw fields (handy for debugging)
         isAdminRaw: dbUser.isAdmin ?? null,

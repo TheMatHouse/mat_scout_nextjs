@@ -1,3 +1,4 @@
+// components/shared/FormField.jsx
 "use client";
 
 export default function FormField({
@@ -6,18 +7,22 @@ export default function FormField({
   type = "text",
   value,
   onChange,
-  placeholder = "",
-  disabled = false,
-  error = "",
+  placeholder,
+  disabled,
+  required,
+  autoComplete, // ← pass-through
+  ...rest
 }) {
   return (
-    <div>
-      <label
-        htmlFor={name}
-        className="block mb-1 font-medium"
-      >
-        {label}
-      </label>
+    <div className="space-y-1">
+      {label && (
+        <label
+          htmlFor={name}
+          className="block text-sm font-medium"
+        >
+          {label}
+        </label>
+      )}
       <input
         id={name}
         name={name}
@@ -26,9 +31,11 @@ export default function FormField({
         onChange={onChange}
         placeholder={placeholder}
         disabled={disabled}
-        className="form-control"
+        required={required}
+        autoComplete={autoComplete} // ← don’t force "off"
+        className="w-full rounded-md border px-3 py-2 bg-background"
+        {...rest}
       />
-      {error && <p className="text-error">{error}</p>}
     </div>
   );
 }
