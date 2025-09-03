@@ -132,6 +132,13 @@ const MatchReportForm = ({
     []
   );
 
+  function clampYear(value) {
+    if (!value) return "";
+    const [y = "", m = "", d = ""] = String(value).split("-");
+    const y4 = y.replace(/\D/g, "").slice(0, 4); // only digits, max 4
+    return [y4, m, d].filter(Boolean).join("-");
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -273,9 +280,27 @@ const MatchReportForm = ({
         label="Match Date"
         name="matchDate"
         type="date"
-        value={matchDate}
+        value={matchDate || ""}
         onChange={(e) => setMatchDate(e.target.value)}
         required
+        min="1900-01-01"
+        max="2100-12-31"
+        // ⬇️ block typing but keep calendar usable
+        onKeyDown={(e) => {
+          const allow = [
+            "Tab",
+            "Shift",
+            "ArrowLeft",
+            "ArrowRight",
+            "ArrowUp",
+            "ArrowDown",
+            "Home",
+            "End",
+            "Escape",
+          ];
+          if (!allow.includes(e.key)) e.preventDefault();
+        }}
+        onPaste={(e) => e.preventDefault()}
       />
 
       <FormField
