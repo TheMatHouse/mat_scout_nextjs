@@ -20,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import GoogleIcon from "@/components/icons/GoogleIcon";
 import FacebookIcon from "@/components/icons/FacebookIcon";
+import PasswordInput from "../shared/PasswordInput";
 
 export default function RegisterForm({ redirect = "/dashboard" }) {
   const router = useRouter();
