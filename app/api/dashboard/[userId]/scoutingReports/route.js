@@ -125,7 +125,7 @@ export async function POST(req, context) {
 // ---------- GET: all scouting reports created by this user ----------
 export async function GET(_request, context) {
   await connectDB();
-  const { userId } = context.params || {};
+  const { userId } = (await context.params) || {};
 
   try {
     if (!userId || !Types.ObjectId.isValid(userId)) {

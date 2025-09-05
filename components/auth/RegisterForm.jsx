@@ -19,8 +19,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import GoogleIcon from "@/components/icons/GoogleIcon";
-import FacebookIcon from "@/components/icons/FacebookIcon";
-import PasswordInput from "../shared/PasswordInput";
+import PasswordInput from "@/components/shared/PasswordInput";
 
 export default function RegisterForm({ redirect = "/dashboard" }) {
   const router = useRouter();
@@ -42,40 +41,60 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
 
   // Username / Email availability
   const [checkingUsername, setCheckingUsername] = useState(false);
-  const [usernameAvailable, setUsernameAvailable] = useState(null); // true | false | null
+  const [usernameAvailable, setUsernameAvailable] = useState(null);
+  const [usernameCode, setUsernameCode] = useState(null);
+  const [usernameDebug, setUsernameDebug] = useState(null); // TEMP: show server debug
+
   const [checkingEmail, setCheckingEmail] = useState(false);
-  const [emailAvailable, setEmailAvailable] = useState(null); // true | false | null
+  const [emailAvailable, setEmailAvailable] = useState(null);
+  const [emailCode, setEmailCode] = useState(null);
 
   const username = form.watch("username");
   const email = form.watch("email");
 
   const usernameInvalid = !!username && !isUsernameFormatValid(username);
 
-  // Debounced username check (only when valid)
+  // Debounced username check with debug
   useEffect(() => {
     const u = (username || "").trim();
     if (!u) {
       setUsernameAvailable(null);
+      setUsernameCode(null);
+      setUsernameDebug(null);
       return;
     }
     if (!isUsernameFormatValid(u)) {
       setUsernameAvailable(null);
+      setUsernameCode("invalid_format");
+      setUsernameDebug(null);
       return;
     }
 
     const t = setTimeout(async () => {
       setCheckingUsername(true);
       try {
-        const res = await apiFetch(
-          `/api/auth/check-username?username=${encodeURIComponent(u)}`
+        const res = await fetch(
+          `/api/auth/check-username?username=${encodeURIComponent(u)}&debug=1`,
+          { cache: "no-store", headers: { "cache-control": "no-cache" } }
         );
-        setUsernameAvailable(!!res?.available);
+        const data = await res.json().catch(() => null);
+        setUsernameDebug(data?.debug ?? null); // TEMP: keep a peek at server decision
+
+        if (!res.ok || !data?.ok) {
+          setUsernameAvailable(null);
+          setUsernameCode("server_error");
+        } else {
+          setUsernameAvailable(!!data.available);
+          setUsernameCode(data.code || null);
+        }
       } catch {
         setUsernameAvailable(null);
+        setUsernameCode("server_error");
+        setUsernameDebug(null);
       } finally {
         setCheckingUsername(false);
       }
-    }, 500);
+    }, 400);
 
     return () => clearTimeout(t);
   }, [username]);
@@ -85,21 +104,33 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
     const e = (email || "").trim();
     if (!e) {
       setEmailAvailable(null);
+      setEmailCode(null);
       return;
     }
+
     const t = setTimeout(async () => {
       setCheckingEmail(true);
       try {
-        const res = await apiFetch(
-          `/api/auth/check-email?email=${encodeURIComponent(e)}`
+        const res = await fetch(
+          `/api/auth/check-email?email=${encodeURIComponent(e)}`,
+          { cache: "no-store", headers: { "cache-control": "no-cache" } }
         );
-        setEmailAvailable(!!res?.available);
+        const data = await res.json().catch(() => null);
+
+        if (!res.ok || !data) {
+          setEmailAvailable(null);
+          setEmailCode("error");
+        } else {
+          setEmailAvailable(!!data.available);
+          setEmailCode(data.available ? "available" : "taken");
+        }
       } catch {
         setEmailAvailable(null);
+        setEmailCode("error");
       } finally {
         setCheckingEmail(false);
       }
-    }, 500);
+    }, 400);
 
     return () => clearTimeout(t);
   }, [email]);
@@ -107,16 +138,19 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
   const onSubmit = async (values) => {
     setError("");
 
-    // prevent submit if we *know* one is taken or invalid
-    if (usernameInvalid) {
-      setError("Username must be 3–30 chars (a–z, 0–9, - or _), not reserved.");
+    if (
+      usernameInvalid ||
+      usernameCode === "invalid_format" ||
+      usernameCode === "reserved"
+    ) {
+      setError("Username must be 3–30 chars (a–z, 0–9), not reserved.");
       return;
     }
-    if (usernameAvailable === false) {
+    if (usernameCode === "taken" || usernameAvailable === false) {
       setError("That username is already taken. Please choose another.");
       return;
     }
-    if (emailAvailable === false) {
+    if (emailAvailable === false || emailCode === "taken") {
       setError("That email is already in use. Please use a different email.");
       return;
     }
@@ -145,7 +179,6 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
     }
   };
 
-  // For OAuth: stash redirect for the callback to read
   const setRedirectCookie = () => {
     document.cookie = `post_auth_redirect=${encodeURIComponent(
       redirect
@@ -157,13 +190,14 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
     checkingUsername ||
     checkingEmail ||
     usernameInvalid ||
-    usernameAvailable === false ||
+    usernameCode === "invalid_format" ||
+    usernameCode === "reserved" ||
+    usernameCode === "taken" ||
     emailAvailable === false;
 
-  // Prevent invalid keystrokes in username (still allows backspace/arrows/delete)
   const preventBadUsernameInput = (e) => {
     if (!e.data) return;
-    if (!/^[a-zA-Z0-9_-]$/.test(e.data)) e.preventDefault();
+    if (!/^[a-zA-Z0-9]$/.test(e.data)) e.preventDefault();
   };
 
   return (
@@ -180,7 +214,6 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
             onSubmit={form.handleSubmit(onSubmit)}
             className="space-y-6"
           >
-            {/* First Name */}
             <FormField
               control={form.control}
               name="firstName"
@@ -200,7 +233,6 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
               )}
             />
 
-            {/* Last Name */}
             <FormField
               control={form.control}
               name="lastName"
@@ -220,16 +252,14 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
               )}
             />
 
-            {/* Username + availability (URL-safe only) */}
             <FormField
               control={form.control}
               name="username"
               rules={{
                 required: "Username is required",
-                minLength: { value: 3, message: "At least 3 characters" },
                 pattern: {
-                  value: /^[a-z0-9](?:[a-z0-9_-]{1,28}[a-z0-9])?$/,
-                  message: "Use a–z, 0–9, hyphen or underscore",
+                  value: /^[a-z0-9]{3,30}$/,
+                  message: "Use 3–30 lowercase letters or numbers (a–z, 0–9)",
                 },
               }}
               render={({ field }) => (
@@ -248,27 +278,60 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
                   </FormControl>
                   <div className="mt-1 text-sm">
                     {field.value ? (
-                      usernameInvalid ? (
+                      usernameInvalid || usernameCode === "invalid_format" ? (
                         <span className="text-red-600">
-                          Use 3–30 chars: a–z, 0–9, - or _
+                          Use 3–30 lowercase letters or numbers (a–z, 0–9)
+                        </span>
+                      ) : usernameCode === "reserved" ? (
+                        <span className="text-red-600">
+                          This username is reserved. Please choose another.
                         </span>
                       ) : checkingUsername ? (
                         <span className="text-gray-500">Checking…</span>
+                      ) : usernameCode === "server_error" ? (
+                        <span className="text-amber-600">
+                          Couldn’t check right now. Try again.
+                        </span>
                       ) : usernameAvailable === null ? (
                         <span className="text-gray-500">—</span>
-                      ) : usernameAvailable ? (
-                        <span className="text-green-600">✓ Available</span>
-                      ) : (
+                      ) : usernameCode === "taken" ? (
                         <span className="text-red-600">✕ Taken</span>
-                      )
+                      ) : usernameCode === "available" && usernameAvailable ? (
+                        <span className="text-green-600">✓ Available</span>
+                      ) : null
                     ) : null}
                   </div>
+
+                  {/* TEMP: surface server debug to the UI for now */}
+                  {usernameDebug && (
+                    <div className="mt-1 text-xs text-gray-500">
+                      server: {usernameCode} — normalized:
+                      <code className="ml-1">
+                        {usernameDebug.normalized ?? "n/a"}
+                      </code>
+                      {typeof usernameDebug.exists !== "undefined" && (
+                        <>
+                          , exists: <code>{String(usernameDebug.exists)}</code>
+                        </>
+                      )}
+                      {usernameDebug.hit && (
+                        <>
+                          , hit: <code>{usernameDebug.hit}</code>
+                        </>
+                      )}
+                      {usernameDebug.probe && (
+                        <>
+                          , probe: <code>true</code>
+                        </>
+                      )}
+                    </div>
+                  )}
+
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            {/* Email + availability */}
             <FormField
               control={form.control}
               name="email"
@@ -296,6 +359,10 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
                         <span className="text-gray-500">Checking…</span>
                       ) : emailAvailable === null ? (
                         <span className="text-gray-500">—</span>
+                      ) : emailCode === "error" ? (
+                        <span className="text-amber-600">
+                          Couldn’t check right now. Try again.
+                        </span>
                       ) : emailAvailable ? (
                         <span className="text-green-600">✓ Available</span>
                       ) : (
@@ -308,7 +375,6 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
               )}
             />
 
-            {/* Password */}
             <FormField
               control={form.control}
               name="password"
@@ -346,17 +412,13 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
             or continue with
           </div>
           <div className="flex justify-center gap-4">
-            {/* <a
-              href="/api/auth/facebook"
-              onClick={setRedirectCookie}
-              className="flex items-center gap-2 px-4 py-2 border rounded bg-white dark:bg-gray-800 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-            >
-              <FacebookIcon className="w-4 h-4" />
-              Facebook
-            </a> */}
             <a
               href="/api/auth/google"
-              onClick={setRedirectCookie}
+              onClick={() => {
+                document.cookie = `post_auth_redirect=${encodeURIComponent(
+                  redirect
+                )}; Path=/; Max-Age=600; SameSite=Lax`;
+              }}
               className="flex items-center gap-2 px-4 py-2 border rounded bg-white dark:bg-gray-800 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
             >
               <GoogleIcon className="w-4 h-4" />
