@@ -1,14 +1,28 @@
-// app/api/admin/analytics/route.js
-export const runtime = "nodejs"; // ensure Node runtime, not Edge
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth-server";
 import { getAnalyticsClient, getProperty } from "@/lib/ga";
 
+function hasAdminAccess(user) {
+  if (!user) return false;
+  if (user.isAdmin === true) return true; // ✅ your marker
+  if (user.role && ["admin", "owner", "superadmin"].includes(user.role))
+    return true;
+  if (Array.isArray(user.roles) && user.roles.includes("admin")) return true;
+  if (
+    Array.isArray(user.permissions) &&
+    user.permissions.includes("viewAnalytics")
+  )
+    return true;
+  return false;
+}
+
 export async function GET() {
   try {
-    const user = await getCurrentUser();
-    if (!user || (user.role !== "admin" && user.role !== "owner")) {
+    const user = await getCurrentUser(); // from "@/lib/auth-server"
+    if (!hasAdminAccess(user)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -46,25 +60,25 @@ export async function GET() {
       }),
     ]);
 
-    const toRows = (r) => r?.rows || [];
+    const rows = (r) => r?.rows || [];
 
-    const trafficRows = toRows(traffic).map((r) => ({
+    const trafficRows = rows(traffic).map((r) => ({
       date: r.dimensionValues?.[0]?.value ?? "",
       users: Number(r.metricValues?.[0]?.value ?? 0),
       views: Number(r.metricValues?.[1]?.value ?? 0),
     }));
 
-    const topPageRows = toRows(topPages).map((r) => ({
+    const topPageRows = rows(topPages).map((r) => ({
       path: r.dimensionValues?.[0]?.value ?? "",
       views: Number(r.metricValues?.[0]?.value ?? 0),
     }));
 
-    const deviceRows = toRows(devices).map((r) => ({
+    const deviceRows = rows(devices).map((r) => ({
       device: r.dimensionValues?.[0]?.value ?? "",
       users: Number(r.metricValues?.[0]?.value ?? 0),
     }));
 
-    const refRows = toRows(referrers).map((r) => ({
+    const refRows = rows(referrers).map((r) => ({
       sourceMedium: r.dimensionValues?.[0]?.value ?? "",
       sessions: Number(r.metricValues?.[0]?.value ?? 0),
     }));

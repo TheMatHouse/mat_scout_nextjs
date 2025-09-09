@@ -33,7 +33,10 @@ export default function AdminAnalyticsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/admin/analytics", { cache: "no-store" });
+        const res = await fetch("/api/admin/analytics", {
+          cache: "no-store",
+          credentials: "include",
+        });
         const json = await res.json();
         if (!res.ok || !json.ok) throw new Error(json.error || "Failed");
         setData(json);
