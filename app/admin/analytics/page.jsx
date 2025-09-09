@@ -1,179 +1,410 @@
-// app/admin/analytics/page.jsx
-import { connectDB } from "@/lib/mongo";
-import AnalyticsEvent from "@/models/analyticsEvent";
-import { getCurrentUser } from "@/lib/auth-server";
-import { redirect } from "next/navigation";
+"use client";
 
-function hoursAgo(n) {
-  const d = new Date();
-  d.setMinutes(0, 0, 0);
-  d.setHours(d.getHours() - n);
-  return d;
+import { useEffect, useMemo, useState } from "react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from "recharts";
+
+function yyyymmddToLabel(yyyymmdd) {
+  if (!yyyymmdd || yyyymmdd.length !== 8) return yyyymmdd || "";
+  const y = yyyymmdd.slice(0, 4);
+  const m = yyyymmdd.slice(4, 6);
+  const d = yyyymmdd.slice(6, 8);
+  return `${y}-${m}-${d}`;
 }
 
-async function getData() {
-  await connectDB();
+export default function AdminAnalyticsPage() {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState("");
+  const [view, setView] = useState("charts"); // "charts" | "tables"
 
-  const since24h = new Date(Date.now() - 24 * 3600 * 1000);
-  const since7d = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/analytics", { cache: "no-store" });
+        const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error(json.error || "Failed");
+        setData(json);
+      } catch (e) {
+        setErr(e.message || "Error");
+      }
+    })();
+  }, []);
 
-  const [hourly, unique24h, pv24h, topPages7d] = await Promise.all([
-    AnalyticsEvent.aggregate([
-      { $match: { ts: { $gte: since24h } } },
-      {
-        $group: {
-          _id: { $dateTrunc: { date: "$ts", unit: "hour" } },
-          pv: { $sum: 1 },
-        },
-      },
-      { $project: { _id: 0, hour: "$_id", pv: 1 } },
-      { $sort: { hour: 1 } },
-    ]),
-    AnalyticsEvent.distinct("visitor", { ts: { $gte: since24h } }).then(
-      (a) => a.length
-    ),
-    AnalyticsEvent.countDocuments({ ts: { $gte: since24h } }),
-    AnalyticsEvent.aggregate([
-      { $match: { ts: { $gte: since7d } } },
-      { $group: { _id: "$path", pv: { $sum: 1 } } },
-      { $project: { _id: 0, path: "$_id", pv: 1 } },
-      { $sort: { pv: -1 } },
-      { $limit: 25 },
-    ]),
-  ]);
+  const {
+    totals,
+    traffic = [],
+    topPages = [],
+    devices = [],
+    referrers = [],
+  } = data || {};
 
-  return { hourly, unique24h, pv24h, topPages7d };
-}
+  const trafficChartData = useMemo(
+    () =>
+      (traffic || []).map((t) => ({
+        date: yyyymmddToLabel(t.date),
+        users: t.users,
+        views: t.views,
+      })),
+    [traffic]
+  );
 
-export default async function AdminAnalyticsPage() {
-  const user = await getCurrentUser();
-  if (!user || !user.isAdmin) redirect("/");
+  const deviceChartData = useMemo(
+    () => (devices || []).map((d) => ({ name: d.device, value: d.users })),
+    [devices]
+  );
 
-  const data = await getData();
-  const norm = normalize24(data.hourly);
+  const refChartData = useMemo(
+    () =>
+      (referrers || []).map((r) => ({
+        name: r.sourceMedium, // e.g. "google / organic"
+        sessions: r.sessions,
+      })),
+    [referrers]
+  );
+
+  if (err) {
+    return (
+      <div className="p-6">
+        <h1 className="text-2xl font-semibold mb-4">Analytics</h1>
+        <div className="text-red-600">Error: {err}</div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="p-6">
+        <h1 className="text-2xl font-semibold mb-4">Analytics</h1>
+        <div>Loading…</div>
+      </div>
+    );
+  }
+
+  const Toggle = () => (
+    <div className="inline-flex rounded-2xl border overflow-hidden">
+      <button
+        className={`px-3 py-1 text-sm ${
+          view === "charts" ? "bg-gray-900 text-white" : "bg-white"
+        }`}
+        onClick={() => setView("charts")}
+      >
+        Charts
+      </button>
+      <button
+        className={`px-3 py-1 text-sm ${
+          view === "tables" ? "bg-gray-900 text-white" : "bg-white"
+        }`}
+        onClick={() => setView("tables")}
+      >
+        Tables
+      </button>
+    </div>
+  );
 
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-semibold">Analytics</h1>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <KPI
-          label="Pageviews (24h)"
-          value={data.pv24h}
-        />
-        <KPI
-          label="Unique visitors (24h)"
-          value={data.unique24h}
-        />
-        <KPI
-          label="Top page (7d)"
-          value={data.topPages7d[0]?.path || "—"}
-        />
+    <div className="p-6 space-y-8">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">Analytics</h1>
+        <Toggle />
       </div>
 
-      <section className="rounded-2xl border p-4">
-        <h2 className="text-lg font-medium mb-2">Pageviews by hour (24h)</h2>
-        <LineSVG data={norm} />
+      {/* KPI cards */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="rounded-2xl border p-4">
+          <div className="text-sm text-gray-500">Users (28d)</div>
+          <div className="text-3xl font-bold">
+            {(totals?.users || 0).toLocaleString()}
+          </div>
+        </div>
+        <div className="rounded-2xl border p-4">
+          <div className="text-sm text-gray-500">Page Views (28d)</div>
+          <div className="text-3xl font-bold">
+            {(totals?.views || 0).toLocaleString()}
+          </div>
+        </div>
       </section>
 
-      <section className="rounded-2xl border p-4">
-        <h2 className="text-lg font-medium mb-2">Top pages (7d)</h2>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-gray-500">
-              <th className="py-2">Path</th>
-              <th className="py-2 w-24">PVs</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.topPages7d.map((r) => (
-              <tr
-                key={r.path}
-                className="border-t"
+      {view === "charts" ? (
+        <>
+          {/* Traffic line chart */}
+          <section>
+            <h2 className="text-xl font-semibold mb-3">
+              Traffic (last 28 days)
+            </h2>
+            <div className="h-72 rounded-2xl border p-3">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
               >
-                <td className="py-2 font-mono">{r.path}</td>
-                <td className="py-2">{r.pv}</td>
-              </tr>
-            ))}
-            {data.topPages7d.length === 0 && (
-              <tr>
-                <td
-                  className="py-6 text-gray-500"
-                  colSpan={2}
+                <LineChart data={trafficChartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="users"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="views"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+
+          {/* Top pages bar chart + Devices pie chart */}
+          <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <h2 className="text-xl font-semibold mb-3">Top Pages (7d)</h2>
+              <div className="h-72 rounded-2xl border p-3">
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
                 >
-                  No data yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </section>
-    </div>
-  );
-}
+                  <BarChart
+                    data={topPages.map((r) => ({
+                      name: r.path,
+                      views: r.views,
+                    }))}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 12 }}
+                      interval={0}
+                      angle={-20}
+                      height={60}
+                    />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="views" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
 
-function KPI({ label, value }) {
-  return (
-    <div className="rounded-2xl border p-4">
-      <div className="text-sm text-gray-500">{label}</div>
-      <div className="text-2xl font-semibold mt-1">{value}</div>
-    </div>
-  );
-}
+            <div>
+              <h2 className="text-xl font-semibold mb-3">Devices (7d)</h2>
+              <div className="h-72 rounded-2xl border p-3">
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
+                  <PieChart>
+                    <Pie
+                      data={deviceChartData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={90}
+                      label
+                    >
+                      {deviceChartData.map((_, i) => (
+                        <Cell key={i} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </section>
 
-function normalize24(hourly) {
-  // ensure 24 buckets ending at current hour
-  const map = new Map(
-    hourly.map((r) => [new Date(r.hour).toISOString(), r.pv])
-  );
-  const out = [];
-  const end = new Date();
-  end.setMinutes(0, 0, 0);
-  for (let i = 23; i >= 0; i--) {
-    const d = new Date(end.getTime() - i * 3600 * 1000);
-    d.setMinutes(0, 0, 0);
-    const key = d.toISOString();
-    out.push({ hour: d, pv: map.get(key) || 0 });
-  }
-  return out;
-}
+          {/* Referrers bar chart */}
+          <section>
+            <h2 className="text-xl font-semibold mb-3">Top Referrers (7d)</h2>
+            <div className="h-72 rounded-2xl border p-3">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
+                <BarChart data={refChartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 12 }}
+                    interval={0}
+                    angle={-20}
+                    height={60}
+                  />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="sessions" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+        </>
+      ) : (
+        <>
+          {/* Tables view */}
+          <section>
+            <h2 className="text-xl font-semibold mb-3">
+              Traffic (last 28 days)
+            </h2>
+            <div className="overflow-x-auto rounded-2xl border">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left p-2">Date</th>
+                    <th className="text-left p-2">Users</th>
+                    <th className="text-left p-2">Views</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trafficChartData.map((d) => (
+                    <tr
+                      key={d.date}
+                      className="border-t"
+                    >
+                      <td className="p-2">{d.date}</td>
+                      <td className="p-2">{d.users.toLocaleString()}</td>
+                      <td className="p-2">{d.views.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                  {trafficChartData.length === 0 && (
+                    <tr>
+                      <td
+                        className="p-2 text-gray-500"
+                        colSpan={3}
+                      >
+                        No data
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
 
-/** zero-dep inline SVG line chart */
-function LineSVG({ data }) {
-  const W = 800;
-  const H = 200;
-  const P = 24;
-  const max = Math.max(1, ...data.map((d) => d.pv));
-  const stepX = (W - P * 2) / (data.length - 1);
-  const points = data.map((d, i) => {
-    const x = P + i * stepX;
-    const y = H - P - (d.pv * (H - P * 2)) / max;
-    return `${x},${y}`;
-  });
+          <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <h2 className="text-xl font-semibold mb-3">Top Pages (7d)</h2>
+              <div className="overflow-x-auto rounded-2xl border">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left p-2">Path</th>
+                      <th className="text-left p-2">Views</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(topPages || []).map((r) => (
+                      <tr
+                        key={r.path}
+                        className="border-t"
+                      >
+                        <td className="p-2">{r.path}</td>
+                        <td className="p-2">{r.views.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                    {(!topPages || topPages.length === 0) && (
+                      <tr>
+                        <td
+                          className="p-2 text-gray-500"
+                          colSpan={2}
+                        >
+                          No data
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
-  return (
-    <div className="overflow-x-auto">
-      <svg
-        width={W}
-        height={H}
-        className="w-full h-52"
-      >
-        <polyline
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          points={points.join(" ")}
-        />
-        <line
-          x1={P}
-          y1={H - P}
-          x2={W - P}
-          y2={H - P}
-          stroke="currentColor"
-          strokeWidth="1"
-          opacity="0.2"
-        />
-      </svg>
+            <div>
+              <h2 className="text-xl font-semibold mb-3">Devices (7d)</h2>
+              <div className="overflow-x-auto rounded-2xl border">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left p-2">Device</th>
+                      <th className="text-left p-2">Users</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(devices || []).map((r) => (
+                      <tr
+                        key={r.device}
+                        className="border-t"
+                      >
+                        <td className="p-2">{r.device}</td>
+                        <td className="p-2">{r.users.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                    {(!devices || devices.length === 0) && (
+                      <tr>
+                        <td
+                          className="p-2 text-gray-500"
+                          colSpan={2}
+                        >
+                          No data
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold mb-3">Top Referrers (7d)</h2>
+            <div className="overflow-x-auto rounded-2xl border">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left p-2">Source / Medium</th>
+                    <th className="text-left p-2">Sessions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(referrers || []).map((r) => (
+                    <tr
+                      key={r.sourceMedium}
+                      className="border-t"
+                    >
+                      <td className="p-2">{r.sourceMedium}</td>
+                      <td className="p-2">{r.sessions.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                  {(!referrers || referrers.length === 0) && (
+                    <tr>
+                      <td
+                        className="p-2 text-gray-500"
+                        colSpan={2}
+                      >
+                        No data
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }

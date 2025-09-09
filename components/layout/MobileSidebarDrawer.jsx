@@ -214,12 +214,6 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
             </nav>
 
             <div className="mt-8 space-y-4 text-sm text-ms-blue-gray">
-              <Link
-                href="/social"
-                onClick={onClose}
-              >
-                Social
-              </Link>
               <LogoutButton className="text-red-400 hover:text-white" />
               <div className="pt-4 border-t border-gray-700">
                 <ThemeToggle />
@@ -262,6 +256,14 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
               className="block hover:text-white transition"
             >
               Contact Us
+            </Link>
+
+            <Link
+              href="/login"
+              onClick={onClose}
+              className="block hover:text-white transition"
+            >
+              Log In
             </Link>
 
             <Link
