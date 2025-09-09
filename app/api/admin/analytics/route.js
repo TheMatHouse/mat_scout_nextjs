@@ -1,5 +1,8 @@
+// app/api/admin/analytics/route.js
+export const runtime = "nodejs"; // ensure Node runtime, not Edge
+
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth-server"; // per your project memory
+import { getCurrentUser } from "@/lib/auth-server";
 import { getAnalyticsClient, getProperty } from "@/lib/ga";
 
 export async function GET() {
@@ -9,50 +12,41 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const analytics = await getAnalyticsClient();
+    const analytics = getAnalyticsClient();
     const property = getProperty();
 
+    const run = (requestBody) =>
+      analytics.runReport({ property, ...requestBody }).then(([r]) => r);
+
     const [traffic, topPages, devices, referrers] = await Promise.all([
-      analytics.properties.runReport({
-        property,
-        requestBody: {
-          dimensions: [{ name: "date" }],
-          metrics: [{ name: "totalUsers" }, { name: "screenPageViews" }],
-          dateRanges: [{ startDate: "28daysAgo", endDate: "today" }],
-        },
+      run({
+        dateRanges: [{ startDate: "28daysAgo", endDate: "today" }],
+        dimensions: [{ name: "date" }],
+        metrics: [{ name: "totalUsers" }, { name: "screenPageViews" }],
       }),
-      analytics.properties.runReport({
-        property,
-        requestBody: {
-          dimensions: [{ name: "pagePath" }],
-          metrics: [{ name: "screenPageViews" }],
-          dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
-          orderBys: [{ desc: true, metric: { metricName: "screenPageViews" } }],
-          limit: 10,
-        },
+      run({
+        dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
+        dimensions: [{ name: "pagePath" }],
+        metrics: [{ name: "screenPageViews" }],
+        orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
+        limit: 10,
       }),
-      analytics.properties.runReport({
-        property,
-        requestBody: {
-          dimensions: [{ name: "deviceCategory" }],
-          metrics: [{ name: "totalUsers" }],
-          dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
-          orderBys: [{ desc: true, metric: { metricName: "totalUsers" } }],
-        },
+      run({
+        dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
+        dimensions: [{ name: "deviceCategory" }],
+        metrics: [{ name: "totalUsers" }],
+        orderBys: [{ metric: { metricName: "totalUsers" }, desc: true }],
       }),
-      analytics.properties.runReport({
-        property,
-        requestBody: {
-          dimensions: [{ name: "sessionSourceMedium" }],
-          metrics: [{ name: "sessions" }],
-          dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
-          orderBys: [{ desc: true, metric: { metricName: "sessions" } }],
-          limit: 10,
-        },
+      run({
+        dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
+        dimensions: [{ name: "sessionSourceMedium" }],
+        metrics: [{ name: "sessions" }],
+        orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+        limit: 10,
       }),
     ]);
 
-    const toRows = (r) => r.data?.rows || [];
+    const toRows = (r) => r?.rows || [];
 
     const trafficRows = toRows(traffic).map((r) => ({
       date: r.dimensionValues?.[0]?.value ?? "",
@@ -70,20 +64,13 @@ export async function GET() {
       users: Number(r.metricValues?.[0]?.value ?? 0),
     }));
 
-    const refRows = toRows(referrers).map((r) => {
-      const label = r.dimensionValues?.[0]?.value ?? ""; // e.g. "google / organic"
-      return {
-        sourceMedium: label,
-        sessions: Number(r.metricValues?.[0]?.value ?? 0),
-      };
-    });
+    const refRows = toRows(referrers).map((r) => ({
+      sourceMedium: r.dimensionValues?.[0]?.value ?? "",
+      sessions: Number(r.metricValues?.[0]?.value ?? 0),
+    }));
 
     const totals = trafficRows.reduce(
-      (acc, d) => {
-        acc.users += d.users;
-        acc.views += d.views;
-        return acc;
-      },
+      (acc, d) => ({ users: acc.users + d.users, views: acc.views + d.views }),
       { users: 0, views: 0 }
     );
 
