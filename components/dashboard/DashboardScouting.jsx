@@ -1,3 +1,4 @@
+// components/dashboard/DashboardScouting.jsx
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -74,14 +75,12 @@ const DashboardScouting = ({ user }) => {
         cache: "no-store",
         credentials: "same-origin",
       });
-      console.log("res ", res);
       let data = [];
       try {
         data = await res.json();
       } catch {
         data = [];
       }
-      // tolerate common response shapes
       const arr = Array.isArray(data)
         ? data
         : Array.isArray(data?.techniques)
@@ -93,8 +92,6 @@ const DashboardScouting = ({ user }) => {
         : Array.isArray(data?.results)
         ? data.results
         : [];
-      console.log(("DATA ", data));
-
       setTechniquesForForm(arr);
     } catch (e) {
       console.error("Failed to load techniques:", e);
@@ -141,8 +138,21 @@ const DashboardScouting = ({ user }) => {
         </Button>
       ),
     },
-    { accessorKey: "athleteFirstName", header: "Athlete First" },
-    { accessorKey: "athleteLastName", header: "Athlete Last" },
+    {
+      accessorKey: "athleteFirstName",
+      header: "Athlete First",
+    },
+    {
+      accessorKey: "athleteLastName",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Athlete Last <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
     { accessorKey: "athleteNationalRank", header: "National Rank" },
     { accessorKey: "athleteWorldRank", header: "World Rank" },
     {
@@ -150,7 +160,17 @@ const DashboardScouting = ({ user }) => {
       header: "Club",
       meta: { className: "hidden md:table-cell" },
     },
-    { accessorKey: "athleteCountry", header: "Country" },
+    {
+      accessorKey: "athleteCountry",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Country <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+    },
     {
       accessorKey: "division",
       header: "Division",
@@ -161,6 +181,21 @@ const DashboardScouting = ({ user }) => {
       header: "Weight Class",
       meta: { className: "hidden md:table-cell" },
     },
+
+    // Created By (sortable)
+    {
+      accessorKey: "createdByName",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Created By <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => row.original.createdByName || "—",
+    },
+
     {
       id: "actions",
       header: "Actions",
@@ -183,7 +218,6 @@ const DashboardScouting = ({ user }) => {
               onClick={async () => {
                 setSelectedReport(report);
                 setOpen(true);
-                // load styles + techniques for the modal
                 await Promise.all([
                   loadStylesForModal(),
                   loadTechniquesForModal(),
@@ -266,7 +300,7 @@ const DashboardScouting = ({ user }) => {
         )}
       </ModalLayout>
 
-      {/* Mobile cards */}
+      {/* Mobile cards (unchanged) */}
       <div className="grid grid-cols-1 sm:hidden gap-4 mb-6">
         {scoutingReports.length > 0 ? (
           scoutingReports.map((report) => (
@@ -289,6 +323,9 @@ const DashboardScouting = ({ user }) => {
               </p>
               <p>
                 <strong>Weight Class:</strong> {report.weightCategory}
+              </p>
+              <p>
+                <strong>Created By:</strong> {report.createdByName || "—"}
               </p>
 
               <div className="flex justify-end gap-4 mt-4">
