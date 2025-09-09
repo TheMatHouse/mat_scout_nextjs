@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 
-/** ---------- Small UI bits ---------- */
+/* ---------- helpers ---------- */
 function yyyymmddToLabel(yyyymmdd) {
   if (!yyyymmdd || yyyymmdd.length !== 8) return yyyymmdd || "";
   const m = yyyymmdd.slice(4, 6);
@@ -50,7 +50,7 @@ function Card({ title, children, className = "" }) {
   );
 }
 
-/** ---------- Error Boundary so charts can't crash the page ---------- */
+/* ---------- Error Boundary to isolate chart crashes ---------- */
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -60,8 +60,7 @@ class ErrorBoundary extends React.Component {
     return { err: err?.message || "Unknown error" };
   }
   componentDidCatch(err, info) {
-    // Optional: send to your logger/Sentry
-    // console.error("Charts error:", err, info);
+    // Hook up Sentry here if you want
   }
   render() {
     if (this.state.err) {
@@ -78,7 +77,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-/** ---------- Load charts client-only ---------- */
+/* ---------- Client-only charts ---------- */
 const Charts = dynamic(() => import("./_AnalyticsCharts"), { ssr: false });
 
 export default function AdminAnalyticsPage() {
@@ -116,76 +115,41 @@ export default function AdminAnalyticsPage() {
     })();
   }, []);
 
-  if (err) {
-    return (
-      <div className="p-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Analytics</h1>
-          <Segmented
-            value={view}
-            onChange={setView}
-          />
-        </div>
-        <p className="mt-4 text-red-600 dark:text-red-400">Error: {err}</p>
-      </div>
-    );
-  }
+  // ✅ Always define defaults so hooks run on every render
+  const dataset = data ?? {
+    totals: { users: 0, views: 0 },
+    traffic: [],
+    topPages: [],
+    devices: [],
+    referrers: [],
+  };
+  const loading = !data && !err;
 
-  if (!data) {
-    return (
-      <div className="p-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Analytics</h1>
-          <Segmented
-            value={view}
-            onChange={setView}
-          />
-        </div>
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-24 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 animate-pulse"
-            />
-          ))}
-        </div>
-        <div className="mt-6 h-72 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 animate-pulse" />
-      </div>
-    );
-  }
-
-  const {
-    totals,
-    traffic = [],
-    topPages = [],
-    devices = [],
-    referrers = [],
-  } = data;
-
+  // ✅ Hooks (useMemo) are called unconditionally — no early returns above this line
   const trafficChartData = useMemo(
     () =>
-      (traffic || []).map((t) => ({
+      dataset.traffic.map((t) => ({
         date: yyyymmddToLabel(t.date),
         users: t.users,
         views: t.views,
       })),
-    [traffic]
+    [dataset.traffic]
   );
   const pagesChartData = useMemo(
-    () => (topPages || []).map((r) => ({ name: r.path, views: r.views })),
-    [topPages]
+    () => dataset.topPages.map((r) => ({ name: r.path, views: r.views })),
+    [dataset.topPages]
   );
   const devicesChartData = useMemo(
-    () => (devices || []).map((d) => ({ name: d.device, users: d.users })),
-    [devices]
+    () => dataset.devices.map((d) => ({ name: d.device, users: d.users })),
+    [dataset.devices]
   );
   const refChartData = useMemo(
     () =>
-      (referrers || []).map((r) => ({
+      dataset.referrers.map((r) => ({
         name: r.sourceMedium,
         sessions: r.sessions,
       })),
-    [referrers]
+    [dataset.referrers]
   );
 
   return (
@@ -205,7 +169,7 @@ export default function AdminAnalyticsPage() {
             Users (28d)
           </div>
           <div className="text-3xl font-bold">
-            {(totals?.users || 0).toLocaleString()}
+            {(dataset.totals?.users || 0).toLocaleString()}
           </div>
         </div>
         <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 p-4 bg-white dark:bg-neutral-900">
@@ -213,12 +177,26 @@ export default function AdminAnalyticsPage() {
             Page Views (28d)
           </div>
           <div className="text-3xl font-bold">
-            {(totals?.views || 0).toLocaleString()}
+            {(dataset.totals?.views || 0).toLocaleString()}
           </div>
         </div>
       </section>
 
-      {view === "charts" ? (
+      {err ? (
+        <p className="text-red-600 dark:text-red-400">Error: {err}</p>
+      ) : loading ? (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-24 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 animate-pulse"
+              />
+            ))}
+          </div>
+          <div className="h-72 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 animate-pulse" />
+        </>
+      ) : view === "charts" ? (
         <ErrorBoundary>
           <Charts
             trafficChartData={trafficChartData}
@@ -230,6 +208,7 @@ export default function AdminAnalyticsPage() {
         </ErrorBoundary>
       ) : (
         <>
+          {/* Tables view */}
           <Card title="Traffic (last 28 days)">
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
