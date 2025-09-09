@@ -9,26 +9,82 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Legend,
   BarChart,
   Bar,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
 } from "recharts";
+
+/* ---------- helpers ---------- */
 
 function yyyymmddToLabel(yyyymmdd) {
   if (!yyyymmdd || yyyymmdd.length !== 8) return yyyymmdd || "";
   const y = yyyymmdd.slice(0, 4);
   const m = yyyymmdd.slice(4, 6);
   const d = yyyymmdd.slice(6, 8);
-  return `${y}-${m}-${d}`;
+  return `${m}/${d}`;
+}
+
+function truncate(str, n = 28) {
+  if (!str) return "";
+  return str.length > n ? str.slice(0, n - 1) + "…" : str;
+}
+
+/* A small segmented control that looks good in light/dark + mobile */
+function Segmented({ value, onChange }) {
+  return (
+    <div className="inline-flex rounded-full border border-neutral-200 dark:border-neutral-800 p-1 bg-neutral-100/60 dark:bg-neutral-900/60 backdrop-blur">
+      {["charts", "tables"].map((v) => {
+        const active = v === value;
+        return (
+          <button
+            key={v}
+            type="button"
+            onClick={() => onChange(v)}
+            className={[
+              "px-3 py-1.5 text-sm rounded-full transition",
+              active
+                ? "bg-neutral-900 text-white dark:bg-white dark:text-black shadow"
+                : "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200/60 dark:hover:bg-neutral-800/60",
+            ].join(" ")}
+            aria-pressed={active}
+          >
+            {v === "charts" ? "Charts" : "Tables"}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* A simple card wrapper that adapts to theme */
+function Card({ title, children, className = "" }) {
+  return (
+    <section className={"space-y-3 " + className}>
+      {title && <h2 className="text-lg sm:text-xl font-semibold">{title}</h2>}
+      <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+        {children}
+      </div>
+    </section>
+  );
 }
 
 export default function AdminAnalyticsPage() {
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
   const [view, setView] = useState("charts"); // "charts" | "tables"
+
+  // remember the selected tab
+  useEffect(() => {
+    const saved =
+      typeof window !== "undefined"
+        ? localStorage.getItem("adminAnalyticsView")
+        : null;
+    if (saved === "charts" || saved === "tables") setView(saved);
+  }, []);
+  useEffect(() => {
+    if (typeof window !== "undefined")
+      localStorage.setItem("adminAnalyticsView", view);
+  }, [view]);
 
   useEffect(() => {
     (async () => {
@@ -46,13 +102,47 @@ export default function AdminAnalyticsPage() {
     })();
   }, []);
 
+  if (err) {
+    return (
+      <div className="p-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">Analytics</h1>
+        </div>
+        <p className="mt-4 text-red-600 dark:text-red-400">Error: {err}</p>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="p-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">Analytics</h1>
+          <Segmented
+            value={view}
+            onChange={setView}
+          />
+        </div>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-24 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 animate-pulse"
+            />
+          ))}
+        </div>
+        <div className="mt-6 h-72 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 animate-pulse" />
+      </div>
+    );
+  }
+
   const {
     totals,
     traffic = [],
     topPages = [],
     devices = [],
     referrers = [],
-  } = data || {};
+  } = data;
 
   const trafficChartData = useMemo(
     () =>
@@ -64,210 +154,248 @@ export default function AdminAnalyticsPage() {
     [traffic]
   );
 
-  const deviceChartData = useMemo(
-    () => (devices || []).map((d) => ({ name: d.device, value: d.users })),
+  const pagesChartData = useMemo(
+    () => (topPages || []).map((r) => ({ name: r.path, views: r.views })),
+    [topPages]
+  );
+
+  const devicesChartData = useMemo(
+    () => (devices || []).map((d) => ({ name: d.device, users: d.users })),
     [devices]
   );
 
   const refChartData = useMemo(
     () =>
       (referrers || []).map((r) => ({
-        name: r.sourceMedium, // e.g. "google / organic"
+        name: r.sourceMedium,
         sessions: r.sessions,
       })),
     [referrers]
   );
 
-  if (err) {
-    return (
-      <div className="p-6">
-        <h1 className="text-2xl font-semibold mb-4">Analytics</h1>
-        <div className="text-red-600">Error: {err}</div>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="p-6">
-        <h1 className="text-2xl font-semibold mb-4">Analytics</h1>
-        <div>Loading…</div>
-      </div>
-    );
-  }
-
-  const Toggle = () => (
-    <div className="inline-flex rounded-2xl border overflow-hidden">
-      <button
-        className={`px-3 py-1 text-sm ${
-          view === "charts" ? "bg-gray-900 text-white" : "bg-white"
-        }`}
-        onClick={() => setView("charts")}
-      >
-        Charts
-      </button>
-      <button
-        className={`px-3 py-1 text-sm ${
-          view === "tables" ? "bg-gray-900 text-white" : "bg-white"
-        }`}
-        onClick={() => setView("tables")}
-      >
-        Tables
-      </button>
-    </div>
-  );
+  /* Shared chart styles that adapt to dark/light:
+     - We set the container's text color, then use 'currentColor' in Recharts for axes/grid/series.
+     - To distinguish the two lines without relying on colors, we use different widths and dash. */
+  const chartWrap = "h-72 p-3 text-neutral-700 dark:text-neutral-300";
+  const axisTick = { fill: "currentColor", fontSize: 12 };
+  const gridStroke = "currentColor";
 
   return (
     <div className="p-6 space-y-8">
-      <div className="flex items-center justify-between gap-3">
+      {/* Sticky header with tabs, so the toggle never overlaps content */}
+      <div className="sticky top-0 z-10 -mx-6 px-6 py-3 bg-white/80 dark:bg-neutral-950/80 backdrop-blur border-b border-neutral-200/60 dark:border-neutral-800/60 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Analytics</h1>
-        <Toggle />
+        <Segmented
+          value={view}
+          onChange={setView}
+        />
       </div>
 
       {/* KPI cards */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="rounded-2xl border p-4">
-          <div className="text-sm text-gray-500">Users (28d)</div>
+        <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 p-4 bg-white dark:bg-neutral-900">
+          <div className="text-sm text-neutral-500 dark:text-neutral-400">
+            Users (28d)
+          </div>
           <div className="text-3xl font-bold">
             {(totals?.users || 0).toLocaleString()}
           </div>
         </div>
-        <div className="rounded-2xl border p-4">
-          <div className="text-sm text-gray-500">Page Views (28d)</div>
+        <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 p-4 bg-white dark:bg-neutral-900">
+          <div className="text-sm text-neutral-500 dark:text-neutral-400">
+            Page Views (28d)
+          </div>
           <div className="text-3xl font-bold">
             {(totals?.views || 0).toLocaleString()}
           </div>
         </div>
       </section>
 
+      {/* Only render the active view to avoid layout clashes / unreadable overlap */}
       {view === "charts" ? (
         <>
-          {/* Traffic line chart */}
-          <section>
-            <h2 className="text-xl font-semibold mb-3">
-              Traffic (last 28 days)
-            </h2>
-            <div className="h-72 rounded-2xl border p-3">
+          <Card title="Traffic (last 28 days)">
+            <div className={`rounded-2xl ${chartWrap}`}>
               <ResponsiveContainer
                 width="100%"
                 height="100%"
               >
-                <LineChart data={trafficChartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
+                <LineChart
+                  data={trafficChartData}
+                  margin={{ left: 8, right: 8 }}
+                >
+                  <CartesianGrid
+                    stroke={gridStroke}
+                    strokeOpacity={0.15}
+                  />
+                  <XAxis
+                    dataKey="date"
+                    tick={axisTick}
+                    interval="preserveStartEnd"
+                    minTickGap={16}
+                    tickMargin={8}
+                  />
+                  <YAxis
+                    tick={axisTick}
+                    width={40}
+                  />
+                  <Tooltip
+                    contentStyle={{ background: "var(--tooltip-bg, #fff)" }}
+                    formatter={(v, n) => [Number(v).toLocaleString(), n]}
+                  />
                   <Legend />
+                  {/* Two lines: same 'currentColor' family; distinguish by width/dash so it reads in both themes */}
                   <Line
                     type="monotone"
                     dataKey="users"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                    dot={false}
                   />
                   <Line
                     type="monotone"
                     dataKey="views"
+                    stroke="currentColor"
+                    strokeDasharray="4 3"
+                    strokeWidth={1.5}
+                    dot={false}
                   />
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          </section>
+          </Card>
 
-          {/* Top pages bar chart + Devices pie chart */}
-          <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-              <h2 className="text-xl font-semibold mb-3">Top Pages (7d)</h2>
-              <div className="h-72 rounded-2xl border p-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card title="Top Pages (7d)">
+              <div className={`rounded-2xl ${chartWrap}`}>
                 <ResponsiveContainer
                   width="100%"
                   height="100%"
                 >
                   <BarChart
-                    data={topPages.map((r) => ({
-                      name: r.path,
-                      views: r.views,
-                    }))}
+                    data={pagesChartData}
+                    margin={{ left: 8, right: 8 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <CartesianGrid
+                      stroke={gridStroke}
+                      strokeOpacity={0.15}
+                    />
                     <XAxis
                       dataKey="name"
-                      tick={{ fontSize: 12 }}
+                      tick={axisTick}
                       interval={0}
                       angle={-20}
                       height={60}
+                      tickFormatter={(v) => truncate(v, 24)}
                     />
-                    <YAxis />
-                    <Tooltip />
+                    <YAxis
+                      tick={axisTick}
+                      width={50}
+                    />
+                    <Tooltip
+                      contentStyle={{ background: "var(--tooltip-bg, #fff)" }}
+                      formatter={(v) => Number(v).toLocaleString()}
+                      labelFormatter={(l) => l}
+                    />
                     <Legend />
-                    <Bar dataKey="views" />
+                    <Bar
+                      dataKey="views"
+                      fill="currentColor"
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-            </div>
+            </Card>
 
-            <div>
-              <h2 className="text-xl font-semibold mb-3">Devices (7d)</h2>
-              <div className="h-72 rounded-2xl border p-3">
+            <Card title="Devices (7d)">
+              <div className={`rounded-2xl ${chartWrap}`}>
                 <ResponsiveContainer
                   width="100%"
                   height="100%"
                 >
-                  <PieChart>
-                    <Pie
-                      data={deviceChartData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={90}
-                      label
-                    >
-                      {deviceChartData.map((_, i) => (
-                        <Cell key={i} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
+                  {/* vertical bars read better than a monochrome pie in dark mode */}
+                  <BarChart
+                    data={devicesChartData}
+                    layout="vertical"
+                    margin={{ left: 16, right: 8 }}
+                  >
+                    <CartesianGrid
+                      stroke={gridStroke}
+                      strokeOpacity={0.15}
+                    />
+                    <XAxis
+                      type="number"
+                      tick={axisTick}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      tick={axisTick}
+                      width={90}
+                    />
+                    <Tooltip
+                      contentStyle={{ background: "var(--tooltip-bg, #fff)" }}
+                      formatter={(v) => Number(v).toLocaleString()}
+                    />
                     <Legend />
-                  </PieChart>
+                    <Bar
+                      dataKey="users"
+                      fill="currentColor"
+                    />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
-            </div>
-          </section>
+            </Card>
+          </div>
 
-          {/* Referrers bar chart */}
-          <section>
-            <h2 className="text-xl font-semibold mb-3">Top Referrers (7d)</h2>
-            <div className="h-72 rounded-2xl border p-3">
+          <Card title="Top Referrers (7d)">
+            <div className={`rounded-2xl ${chartWrap}`}>
               <ResponsiveContainer
                 width="100%"
                 height="100%"
               >
-                <BarChart data={refChartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
+                <BarChart
+                  data={refChartData}
+                  margin={{ left: 8, right: 8 }}
+                >
+                  <CartesianGrid
+                    stroke={gridStroke}
+                    strokeOpacity={0.15}
+                  />
                   <XAxis
                     dataKey="name"
-                    tick={{ fontSize: 12 }}
+                    tick={axisTick}
                     interval={0}
                     angle={-20}
                     height={60}
+                    tickFormatter={(v) => truncate(v, 28)}
                   />
-                  <YAxis />
-                  <Tooltip />
+                  <YAxis
+                    tick={axisTick}
+                    width={50}
+                  />
+                  <Tooltip
+                    contentStyle={{ background: "var(--tooltip-bg, #fff)" }}
+                    formatter={(v) => Number(v).toLocaleString()}
+                    labelFormatter={(l) => l}
+                  />
                   <Legend />
-                  <Bar dataKey="sessions" />
+                  <Bar
+                    dataKey="sessions"
+                    fill="currentColor"
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </section>
+          </Card>
         </>
       ) : (
         <>
-          {/* Tables view */}
-          <section>
-            <h2 className="text-xl font-semibold mb-3">
-              Traffic (last 28 days)
-            </h2>
-            <div className="overflow-x-auto rounded-2xl border">
+          {/* TABLES VIEW */}
+          <Card title="Traffic (last 28 days)">
+            <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
-                <thead className="bg-gray-50">
+                <thead className="bg-neutral-50 dark:bg-neutral-900/60">
                   <tr>
                     <th className="text-left p-2">Date</th>
                     <th className="text-left p-2">Users</th>
@@ -278,7 +406,7 @@ export default function AdminAnalyticsPage() {
                   {trafficChartData.map((d) => (
                     <tr
                       key={d.date}
-                      className="border-t"
+                      className="border-t border-neutral-200 dark:border-neutral-800"
                     >
                       <td className="p-2">{d.date}</td>
                       <td className="p-2">{d.users.toLocaleString()}</td>
@@ -288,7 +416,7 @@ export default function AdminAnalyticsPage() {
                   {trafficChartData.length === 0 && (
                     <tr>
                       <td
-                        className="p-2 text-gray-500"
+                        className="p-2 text-neutral-500"
                         colSpan={3}
                       >
                         No data
@@ -298,14 +426,13 @@ export default function AdminAnalyticsPage() {
                 </tbody>
               </table>
             </div>
-          </section>
+          </Card>
 
-          <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-              <h2 className="text-xl font-semibold mb-3">Top Pages (7d)</h2>
-              <div className="overflow-x-auto rounded-2xl border">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card title="Top Pages (7d)">
+              <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-neutral-50 dark:bg-neutral-900/60">
                     <tr>
                       <th className="text-left p-2">Path</th>
                       <th className="text-left p-2">Views</th>
@@ -315,7 +442,7 @@ export default function AdminAnalyticsPage() {
                     {(topPages || []).map((r) => (
                       <tr
                         key={r.path}
-                        className="border-t"
+                        className="border-t border-neutral-200 dark:border-neutral-800"
                       >
                         <td className="p-2">{r.path}</td>
                         <td className="p-2">{r.views.toLocaleString()}</td>
@@ -324,7 +451,7 @@ export default function AdminAnalyticsPage() {
                     {(!topPages || topPages.length === 0) && (
                       <tr>
                         <td
-                          className="p-2 text-gray-500"
+                          className="p-2 text-neutral-500"
                           colSpan={2}
                         >
                           No data
@@ -334,13 +461,12 @@ export default function AdminAnalyticsPage() {
                   </tbody>
                 </table>
               </div>
-            </div>
+            </Card>
 
-            <div>
-              <h2 className="text-xl font-semibold mb-3">Devices (7d)</h2>
-              <div className="overflow-x-auto rounded-2xl border">
+            <Card title="Devices (7d)">
+              <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-neutral-50 dark:bg-neutral-900/60">
                     <tr>
                       <th className="text-left p-2">Device</th>
                       <th className="text-left p-2">Users</th>
@@ -350,7 +476,7 @@ export default function AdminAnalyticsPage() {
                     {(devices || []).map((r) => (
                       <tr
                         key={r.device}
-                        className="border-t"
+                        className="border-t border-neutral-200 dark:border-neutral-800"
                       >
                         <td className="p-2">{r.device}</td>
                         <td className="p-2">{r.users.toLocaleString()}</td>
@@ -359,7 +485,7 @@ export default function AdminAnalyticsPage() {
                     {(!devices || devices.length === 0) && (
                       <tr>
                         <td
-                          className="p-2 text-gray-500"
+                          className="p-2 text-neutral-500"
                           colSpan={2}
                         >
                           No data
@@ -369,14 +495,13 @@ export default function AdminAnalyticsPage() {
                   </tbody>
                 </table>
               </div>
-            </div>
-          </section>
+            </Card>
+          </div>
 
-          <section>
-            <h2 className="text-xl font-semibold mb-3">Top Referrers (7d)</h2>
-            <div className="overflow-x-auto rounded-2xl border">
+          <Card title="Top Referrers (7d)">
+            <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
-                <thead className="bg-gray-50">
+                <thead className="bg-neutral-50 dark:bg-neutral-900/60">
                   <tr>
                     <th className="text-left p-2">Source / Medium</th>
                     <th className="text-left p-2">Sessions</th>
@@ -386,7 +511,7 @@ export default function AdminAnalyticsPage() {
                   {(referrers || []).map((r) => (
                     <tr
                       key={r.sourceMedium}
-                      className="border-t"
+                      className="border-t border-neutral-200 dark:border-neutral-800"
                     >
                       <td className="p-2">{r.sourceMedium}</td>
                       <td className="p-2">{r.sessions.toLocaleString()}</td>
@@ -395,7 +520,7 @@ export default function AdminAnalyticsPage() {
                   {(!referrers || referrers.length === 0) && (
                     <tr>
                       <td
-                        className="p-2 text-gray-500"
+                        className="p-2 text-neutral-500"
                         colSpan={2}
                       >
                         No data
@@ -405,7 +530,7 @@ export default function AdminAnalyticsPage() {
                 </tbody>
               </table>
             </div>
-          </section>
+          </Card>
         </>
       )}
     </div>
