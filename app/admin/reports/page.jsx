@@ -1,241 +1,237 @@
-// app/admin/reports/page.jsx
-import { connectDB } from "@/lib/mongo";
-import User from "@/models/userModel";
-import Team from "@/models/teamModel";
-import MatchReport from "@/models/matchReportModel";
-import ScoutingReport from "@/models/scoutingReportModel";
-import ReportsDashboard from "@/components/admin/reports/ReportsDashboard";
+"use client";
 
-/** ---------- small in-memory cache (per server instance) ---------- */
-const CACHE_TTL_MS = 60_000; // 60s
-const cache = new Map(); // key -> { ts, data }
+import React, { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 
-/** helper: yyyy-mm-dd */
-function dstr(d) {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
+const Chart = dynamic(() => import("./_ReportChart"), { ssr: false });
 
-/** helper: list of dates (yyyy-mm-dd) inclusive */
-function dateRangeDays(start, end) {
-  const out = [];
-  const d = new Date(start);
-  while (d <= end) {
-    out.push(dstr(d));
-    d.setDate(d.getDate() + 1);
-  }
-  return out;
-}
-
-/** fill missing dates over last N days (zeros become null so lines don't sit on the x-axis) */
-function fillSeries(rows, daysBack, key = "date", valueKeys = ["count"]) {
-  const end = new Date();
-  const start = new Date(end.getTime() - (daysBack - 1) * 86400000);
-  const days = dateRangeDays(start, end);
-  const map = new Map(rows.map((r) => [r[key], r]));
-  return days.map((day) => {
-    const r = map.get(day) || {};
-    const filled = { date: day };
-    for (const k of valueKeys) {
-      const v = Number(r[k] ?? 0);
-      filled[k] = v === 0 ? null : v; // ⬅️ key change: null instead of 0
-    }
-    return filled;
-  });
-}
-
-export default async function ReportsPage({ searchParams }) {
-  await connectDB();
-
-  const sp = await searchParams;
-  const rawRange = parseInt(sp?.range, 10);
-  const allowed = [7, 30, 90, 180, 365];
-  const rangeDays = allowed.includes(rawRange) ? rawRange : 30;
-
-  const key = `range:${rangeDays}`;
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.ts < CACHE_TTL_MS) {
-    return <ReportsDashboard data={hit.data} />;
-  }
-
-  const since = (days) => new Date(Date.now() - days * 86400000);
-  const sinceRange = since(rangeDays);
-
-  const [matchByDayAgg, scoutByDayAgg] = await Promise.all([
-    MatchReport.aggregate([
-      { $match: { createdAt: { $gte: sinceRange } } },
-      {
-        $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-          count: { $sum: 1 },
-          public: { $sum: { $cond: ["$isPublic", 1, 0] } },
-        },
-      },
-      { $project: { _id: 0, date: "$_id", count: 1, public: 1 } },
-      { $sort: { date: 1 } },
-    ]),
-    ScoutingReport.aggregate([
-      { $match: { createdAt: { $gte: sinceRange } } },
-      {
-        $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-          count: { $sum: 1 },
-        },
-      },
-      { $project: { _id: 0, date: "$_id", count: 1 } },
-      { $sort: { date: 1 } },
-    ]),
-  ]);
-
-  const matchSeries = fillSeries(matchByDayAgg, rangeDays, "date", [
-    "count",
-    "public",
-  ]);
-  const scoutSeries = fillSeries(scoutByDayAgg, rangeDays, "date", ["count"]);
-
-  const [newUsersRange, newMatchesRange, newScoutsRange, totalTeams] =
-    await Promise.all([
-      User.countDocuments({ createdAt: { $gte: sinceRange } }),
-      MatchReport.countDocuments({ createdAt: { $gte: sinceRange } }),
-      ScoutingReport.countDocuments({ createdAt: { $gte: sinceRange } }),
-      Team.countDocuments(),
-    ]);
-
-  const winLossByStyle = await MatchReport.aggregate([
-    { $match: { createdAt: { $gte: sinceRange } } },
-    {
-      $group: {
-        _id: "$matchType",
-        total: { $sum: 1 },
-        wins: { $sum: { $cond: [{ $eq: ["$result", "Won"] }, 1, 0] } },
-        losses: { $sum: { $cond: [{ $eq: ["$result", "Lost"] }, 1, 0] } },
-      },
-    },
-    {
-      $project: {
-        _id: 0,
-        styleName: { $ifNull: ["$_id", "(none)"] },
-        total: 1,
-        wins: 1,
-        losses: 1,
-        winRate: {
-          $cond: [{ $gt: ["$total", 0] }, { $divide: ["$wins", "$total"] }, 0],
-        },
-      },
-    },
-    { $sort: { total: -1 } },
-    { $limit: 20 },
-  ]);
-
-  const [topOpponents, topTags] = await Promise.all([
-    ScoutingReport.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: sinceRange },
-          opponentName: { $exists: true, $ne: "" },
-        },
-      },
-      { $group: { _id: "$opponentName", reports: { $sum: 1 } } },
-      { $project: { _id: 0, opponent: "$_id", reports: 1 } },
-      { $sort: { reports: -1 } },
-      { $limit: 20 },
-    ]),
-    ScoutingReport.aggregate([
-      { $match: { createdAt: { $gte: sinceRange } } },
-      {
-        $project: {
-          tags: {
-            $concatArrays: [
-              { $ifNull: ["$opponentAttacks", []] },
-              { $ifNull: ["$athleteAttacks", []] },
-            ],
-          },
-        },
-      },
-      { $unwind: "$tags" },
-      { $group: { _id: { $toLower: "$tags" }, c: { $sum: 1 } } },
-      { $project: { _id: 0, tag: "$_id", count: "$c" } },
-      { $sort: { count: -1 } },
-      { $limit: 20 },
-    ]),
-  ]);
-
-  const newUsersInRange = await User.find({ createdAt: { $gte: sinceRange } })
-    .select("_id createdAt")
-    .lean();
-
-  const firstMatchByUser = await MatchReport.aggregate([
-    { $group: { _id: "$createdBy", firstReportAt: { $min: "$createdAt" } } },
-  ]);
-  const firstMap = new Map(
-    firstMatchByUser.map((x) => [String(x._id), x.firstReportAt])
+function Segmented({ value, onChange }) {
+  return (
+    <div className="inline-flex rounded-full border border-neutral-200 dark:border-neutral-800 p-1 bg-neutral-100/60 dark:bg-neutral-900/60">
+      {["chart", "table"].map((v) => {
+        const active = v === value;
+        return (
+          <button
+            key={v}
+            type="button"
+            onClick={() => onChange(v)}
+            className={[
+              "px-3 py-1.5 text-sm rounded-full transition whitespace-nowrap",
+              active
+                ? "bg-neutral-900 text-white dark:bg-white dark:text-black shadow"
+                : "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200/60 dark:hover:bg-neutral-800/60",
+            ].join(" ")}
+            aria-pressed={active}
+          >
+            {v === "chart" ? "Chart" : "Table"}
+          </button>
+        );
+      })}
+    </div>
   );
+}
 
-  let fA_step1 = newUsersInRange.length;
-  let fA_step2 = 0;
-  const diffs = [];
-  for (const u of newUsersInRange) {
-    const f = firstMap.get(String(u._id));
-    if (!f) continue;
-    const days = Math.max(0, (f - u.createdAt) / 86400000);
-    diffs.push(days);
-    if (days <= 7) fA_step2++;
+function Card({ title, actions, children }) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg sm:text-xl font-semibold">{title}</h2>
+        {actions}
+      </div>
+      <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+export default function AdminReportsPage() {
+  const [view, setView] = useState("chart"); // 'chart' | 'table'
+  const [report, setReport] = useState("usersByDay"); // 'usersByDay' | 'collectionByDay'
+  const [collection, setCollection] = useState(""); // used by collectionByDay
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  const [rows, setRows] = useState([]);
+  const [meta, setMeta] = useState(null);
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // defaults: last 28 days
+  useEffect(() => {
+    if (!startDate || !endDate) {
+      const today = new Date();
+      const toISO = (d) => d.toISOString().slice(0, 10);
+      const end = toISO(today);
+      const start = toISO(
+        new Date(today.getFullYear(), today.getMonth(), today.getDate() - 27)
+      );
+      setStartDate(start);
+      setEndDate(end);
+    }
+  }, [startDate, endDate]);
+
+  const qs = useMemo(() => {
+    const sp = new URLSearchParams({ report, startDate, endDate });
+    if (report === "collectionByDay" && collection)
+      sp.set("collection", collection);
+    return sp.toString();
+  }, [report, startDate, endDate, collection]);
+
+  const csvHref = `/api/admin/reports?${qs}&format=csv`;
+
+  async function run() {
+    try {
+      setLoading(true);
+      setErr("");
+      const res = await fetch(`/api/admin/reports?${qs}`, {
+        cache: "no-store",
+        credentials: "include",
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || "Failed");
+      setRows(json.rows || []);
+      setMeta(json.meta || null);
+    } catch (e) {
+      setErr(e.message || "Error");
+      setRows([]);
+      setMeta(null);
+    } finally {
+      setLoading(false);
+    }
   }
-  const fA_conv = fA_step1 ? Math.round((fA_step2 / fA_step1) * 100) : 0;
-  const medianDays =
-    diffs.length > 0
-      ? diffs.sort((a, b) => a - b)[Math.floor(diffs.length / 2)]
-      : 0;
 
-  const usersWithStyle = await User.find({ "userStyles.0": { $exists: true } })
-    .select("_id")
-    .lean();
-  const styleUserIds = usersWithStyle.map((u) => u._id);
-  const authorsWithReports = await MatchReport.distinct("createdBy", {
-    createdBy: { $in: styleUserIds },
-  });
-  const fB_step1 = styleUserIds.length;
-  const fB_step2 = authorsWithReports.length;
-  const fB_conv = fB_step1 ? Math.round((fB_step2 / fB_step1) * 100) : 0;
+  useEffect(() => {
+    // auto-run on first ready
+    if (startDate && endDate) run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDate, endDate, report]);
 
-  const data = {
-    generatedAt: new Date().toISOString(),
-    rangeDays,
-    kpis: {
-      newUsers7: newUsersRange,
-      newMatches7: newMatchesRange,
-      newScouts7: newScoutsRange,
-      totalTeams,
-      pctWithin7: fA_conv,
-      medianDays,
-    },
-    series: { matchSeries, scoutSeries },
-    tables: { winLossByStyle, topOpponents, topTags },
-    funnels: {
-      signupToFirstReport: {
-        title: "Sign-up → First report (≤7d)",
-        steps: [
-          { label: `New sign-ups (${rangeDays}d)`, count: fA_step1 },
-          { label: "First report ≤7d", count: fA_step2 },
-        ],
-        conversion: fA_conv,
-        medianDays,
-      },
-      styleToMatchReport: {
-        title: "Added style → Created match report",
-        steps: [
-          { label: "Users with ≥1 style (lifetime)", count: fB_step1 },
-          { label: "Users with ≥1 match report", count: fB_step2 },
-        ],
-        conversion: fB_conv,
-      },
-    },
-  };
+  return (
+    <div className="p-6 space-y-6">
+      {/* header */}
+      <div className="sticky top-0 z-10 -mx-6 px-6 py-3 bg-white/80 dark:bg-neutral-950/80 backdrop-blur border-b border-neutral-200/60 dark:border-neutral-800/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <h1 className="text-2xl font-semibold">Reports</h1>
+        <Segmented
+          value={view}
+          onChange={setView}
+        />
+      </div>
 
-  const serializable = JSON.parse(JSON.stringify(data));
-  cache.set(key, { ts: Date.now(), data: serializable });
+      {/* controls */}
+      <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-3 sm:p-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-neutral-600 dark:text-neutral-300">
+              Report:
+            </span>
+            <select
+              className="px-2 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 text-sm"
+              value={report}
+              onChange={(e) => setReport(e.target.value)}
+            >
+              <option value="usersByDay">Users created per day</option>
+              <option value="collectionByDay">
+                Any collection per day (advanced)
+              </option>
+            </select>
 
-  return <ReportsDashboard data={serializable} />;
+            {report === "collectionByDay" && (
+              <input
+                placeholder="collection name (e.g., matches)"
+                className="px-2 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 text-sm"
+                value={collection}
+                onChange={(e) => setCollection(e.target.value)}
+              />
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-neutral-600 dark:text-neutral-300">
+              Date range:
+            </span>
+            <input
+              type="date"
+              className="px-2 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 text-sm"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+            <span className="text-sm text-neutral-600 dark:text-neutral-300">
+              to
+            </span>
+            <input
+              type="date"
+              className="px-2 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 text-sm"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={run}
+              disabled={loading}
+              className="px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-800 text-sm disabled:opacity-60"
+            >
+              {loading ? "Running…" : "Run"}
+            </button>
+            <a
+              href={csvHref}
+              className="px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800"
+            >
+              Export CSV
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* output */}
+      <Card
+        title={
+          meta
+            ? `${meta.report} (${meta.startDate} → ${meta.endDate})`
+            : "Results"
+        }
+      >
+        {view === "chart" ? (
+          <div className="h-72 p-3 text-neutral-700 dark:text-neutral-300">
+            <Chart rows={rows} />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-neutral-50 dark:bg-neutral-900/60">
+                <tr>
+                  <th className="text-left p-2">Date</th>
+                  <th className="text-left p-2">Count</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr
+                    key={r.date}
+                    className="border-t border-neutral-200 dark:border-neutral-800"
+                  >
+                    <td className="p-2">{r.date}</td>
+                    <td className="p-2">{r.count.toLocaleString()}</td>
+                  </tr>
+                ))}
+                {rows.length === 0 && (
+                  <tr>
+                    <td
+                      className="p-2 text-neutral-500"
+                      colSpan={2}
+                    >
+                      No data
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
 }

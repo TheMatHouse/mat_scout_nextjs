@@ -7,6 +7,7 @@ import AdminSidebarNav from "@/components/admin/layout/AdminSidebarNav";
 const adminLinks = [
   { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/users", label: "Users" },
+  { href: "/admin/family-members", label: "Family Members" },
   { href: "/admin/teams", label: "Teams" },
   { href: "/admin/reports", label: "Reports" },
   { href: "/admin/settings", label: "Settings" },
