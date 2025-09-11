@@ -7,53 +7,59 @@ import StyleCard from "../../StyleCard";
 import StyleForm from "../../forms/StyleForm";
 import ModalLayout from "@/components/shared/ModalLayout";
 
+function SkeletonGrid({ count = 4 }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5 lg:gap-6">
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="rounded-2xl border border-slate-700 bg-slate-800/80 dark:bg-slate-900/80 shadow-xl animate-pulse h-56"
+        />
+      ))}
+    </div>
+  );
+}
+
 const FamilyStyles = ({ member }) => {
   const [styles, setStyles] = useState([]);
-  const [resultsMap, setResultsMap] = useState({});
   const [open, setOpen] = useState(false);
+  const [loadingStyles, setLoadingStyles] = useState(true);
 
   useEffect(() => {
     if (!member?.userId || !member?._id) return;
     fetchStyles();
-    fetchSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member?.userId, member?._id]);
 
   const fetchStyles = async () => {
     try {
+      setLoadingStyles(true);
       const res = await fetch(
-        `/api/dashboard/${member.userId}/family/${member._id}/styles`,
-        { cache: "no-store" }
+        `/api/dashboard/${member.userId}/family/${member._id}/styles`
       );
       const data = await res.json();
-      // tolerate either [] or { styles: [] }
-      const list = Array.isArray(data) ? data : data?.styles || [];
-      setStyles(list);
+      setStyles(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error("Failed to load styles:", err);
       toast.error("Failed to load styles.");
-      setStyles([]);
-    }
-  };
-
-  // ✅ child’s totals-by-style (wins/losses)
-  const fetchSummary = async () => {
-    try {
-      const res = await fetch(
-        `/api/results/summary?athleteId=${encodeURIComponent(member._id)}`,
-        { cache: "no-store" }
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Failed to load results");
-      setResultsMap(data?.byStyle || {});
-    } catch (err) {
-      console.error("Failed to load results summary:", err);
-      // Don’t block UI; cards will show 0/0 until next successful fetch
-      setResultsMap({});
+    } finally {
+      setLoadingStyles(false);
     }
   };
 
   const handleStylesRefresh = async () => {
-    await Promise.all([fetchStyles(), fetchSummary()]);
+    try {
+      setLoadingStyles(true);
+      const res = await fetch(
+        `/api/dashboard/${member.userId}/family/${member._id}/styles`
+      );
+      if (!res.ok) throw new Error("Failed to fetch updated styles.");
+      const updatedStyles = await res.json();
+      setStyles(Array.isArray(updatedStyles) ? updatedStyles : []);
+    } catch (err) {
+      toast.error("Failed to refresh styles");
+    } finally {
+      setLoadingStyles(false);
+    }
   };
 
   const handleDeleteStyle = (deletedStyleId) => {
@@ -61,6 +67,8 @@ const FamilyStyles = ({ member }) => {
       prevStyles.filter((style) => style._id !== deletedStyleId)
     );
   };
+
+  const isLoading = loadingStyles;
 
   return (
     <div>
@@ -77,6 +85,17 @@ const FamilyStyles = ({ member }) => {
         </Button>
       </div>
 
+      {/* Helpful message (keep your preferred colors) */}
+      <div className="mb-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white/5 dark:bg-black/20 p-4">
+        <p className="text-sm">
+          Click <span className="font-medium">Add Style</span> to create a
+          style/sport for {member.firstName} that you can record match results
+          for. For Judo and Brazilian Jiu-Jitsu, edit the style later to add
+          promotion dates and track history. The most recent promotion will be
+          used as the <span className="font-medium">current rank</span>.
+        </p>
+      </div>
+
       {/* Modal */}
       <ModalLayout
         isOpen={open}
@@ -86,10 +105,7 @@ const FamilyStyles = ({ member }) => {
         withCard={true}
       >
         <StyleForm
-          user={{
-            _id: member._id,
-            parentId: member.userId, // parent user ID for form submission
-          }}
+          user={{ _id: member._id, parentId: member.userId }}
           member={member}
           userType="family"
           setOpen={setOpen}
@@ -99,19 +115,28 @@ const FamilyStyles = ({ member }) => {
 
       <hr className="border-gray-200 dark:border-gray-700 my-4" />
 
-      {/* Style Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5 lg:gap-6">
-        {styles.map((style) => (
-          <StyleCard
-            key={style._id}
-            style={style}
-            member={member}
-            userType="family"
-            styleResultsMap={resultsMap} // ✅ pass child-specific W/L
-            onDelete={handleDeleteStyle}
-          />
-        ))}
-      </div>
+      {/* Loading / Empty / Cards */}
+      {isLoading ? (
+        <SkeletonGrid />
+      ) : styles.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-8 text-center">
+          <p className="text-sm">
+            No styles yet. Click “Add Style” to create the first one.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5 lg:gap-6">
+          {styles.map((style, index) => (
+            <StyleCard
+              key={index}
+              style={style}
+              member={member}
+              userType="family"
+              onDelete={handleDeleteStyle}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };

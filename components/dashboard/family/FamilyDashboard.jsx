@@ -1,3 +1,4 @@
+// components/dashboard/FamilyDashboard.jsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -8,29 +9,52 @@ import FamilyCard from "./FamilyCard";
 import { useUser } from "@/context/UserContext";
 import { apiFetch } from "@/lib/apiClient";
 
+function SkeletonGrid({ count = 6 }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="rounded-2xl border border-slate-700 bg-slate-800/80 dark:bg-slate-900/80 shadow-xl animate-pulse h-56"
+        />
+      ))}
+    </div>
+  );
+}
+
 const FamilyDashboard = () => {
   const { user } = useUser();
   const [familyMembers, setFamilyMembers] = useState([]);
   const [open, setOpen] = useState(false);
+  const [loadingMembers, setLoadingMembers] = useState(true);
 
   const fetchFamilyMembers = async () => {
     try {
+      setLoadingMembers(true);
       const res = await apiFetch(`/api/dashboard/${user._id}/family`);
-      setFamilyMembers(res);
+      setFamilyMembers(Array.isArray(res) ? res : []);
     } catch (error) {
       console.error("Failed to fetch family members", error);
+      setFamilyMembers([]);
+    } finally {
+      setLoadingMembers(false);
     }
   };
 
   useEffect(() => {
-    if (user?._id) {
-      fetchFamilyMembers();
+    if (!user?._id) {
+      setLoadingMembers(false);
+      return;
     }
-  }, [user]);
+    fetchFamilyMembers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?._id]);
 
   const handleDelete = (deletedId) => {
     setFamilyMembers((prev) => prev.filter((m) => m._id !== deletedId));
   };
+
+  const isLoading = loadingMembers;
 
   return (
     <div className="px-4 md:px-6 lg:px-8">
@@ -45,7 +69,7 @@ const FamilyDashboard = () => {
         </Button>
       </div>
 
-      {/* Modal using ModalLayout */}
+      {/* Modal */}
       <ModalLayout
         isOpen={open}
         onClose={() => setOpen(false)}
@@ -62,23 +86,27 @@ const FamilyDashboard = () => {
 
       <hr className="border-gray-200 dark:border-gray-700 my-4" />
 
-      {/* Family Member Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {Array.isArray(familyMembers) && familyMembers.length > 0 ? (
-          familyMembers.map((member) => (
+      {/* Loading / Empty / Cards */}
+      {isLoading ? (
+        <SkeletonGrid />
+      ) : familyMembers.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-8 text-center">
+          <p className="text-sm">
+            No family members yet. Click “Add Family Member” to get started.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {familyMembers.map((member) => (
             <FamilyCard
               key={member._id}
               member={member}
               userId={user._id}
               onDelete={handleDelete}
             />
-          ))
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            No family members found.
-          </p>
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
