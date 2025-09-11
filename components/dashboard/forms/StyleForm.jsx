@@ -10,6 +10,16 @@ import FormSelect from "@/components/shared/FormSelect";
 import Spinner from "@/components/shared/Spinner";
 import { format } from "date-fns";
 
+// Safe JSON parser: won't throw on empty body or non-JSON responses
+async function readJsonSafe(res) {
+  const text = await res.text();
+  try {
+    return text ? JSON.parse(text) : null;
+  } catch {
+    return null;
+  }
+}
+
 const AddPromotionInline = ({ userStyleId, onAdded }) => {
   const [form, setForm] = useState({
     rank: "",
@@ -33,7 +43,7 @@ const AddPromotionInline = ({ userStyleId, onAdded }) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-      const json = await res.json();
+      const json = await readJsonSafe(res);
       if (!res.ok || !json?.style) {
         throw new Error(json?.error || "Failed to add promotion");
       }
@@ -130,7 +140,50 @@ const AddPromotionInline = ({ userStyleId, onAdded }) => {
   );
 };
 
-const PromotionsList = ({ promotions = [] }) => {
+// Shows delete button even if subdoc has no _id (falls back to rank+promotedOn)
+const PromotionsList = ({ userStyleId, promotions = [], onDeleted }) => {
+  const [busyKey, setBusyKey] = useState(null);
+
+  const handleDelete = async (p) => {
+    if (!userStyleId) return;
+    if (!window.confirm("Delete this promotion?")) return;
+
+    const qs = new URLSearchParams();
+    let key;
+
+    if (p._id) {
+      qs.set("promotionId", String(p._id));
+      key = `id:${p._id}`;
+    } else {
+      if (!p.rank || !p.promotedOn) {
+        toast.error("Cannot identify this promotion to delete.");
+        return;
+      }
+      const iso = new Date(p.promotedOn).toISOString();
+      qs.set("rank", p.rank);
+      qs.set("promotedOn", iso);
+      key = `rp:${p.rank}|${iso}`;
+    }
+
+    setBusyKey(key);
+    try {
+      const url = p._id
+        ? `/api/userStyles/${userStyleId}/promotions/${p._id}`
+        : `/api/userStyles/${userStyleId}/promotions?${qs.toString()}`;
+      const res = await fetch(url, { method: "DELETE" });
+      const json = await readJsonSafe(res);
+      if (!res.ok || !json?.style) {
+        throw new Error(json?.error || "Failed to delete promotion");
+      }
+      toast.success("Promotion deleted");
+      onDeleted?.(json.style);
+    } catch (err) {
+      toast.error(err.message || "Error deleting promotion");
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
   if (!promotions.length) {
     return (
       <div className="text-sm text-muted-foreground">
@@ -138,19 +191,39 @@ const PromotionsList = ({ promotions = [] }) => {
       </div>
     );
   }
+
   return (
     <ul className="space-y-1 text-sm">
-      {[...promotions].reverse().map((p, i) => (
-        <li
-          key={i}
-          className="flex items-center justify-between"
-        >
-          <span className="font-medium">{p.rank}</span>
-          <span className="text-muted-foreground">
-            {p.promotedOn ? format(new Date(p.promotedOn), "LLL d, yyyy") : "—"}
-          </span>
-        </li>
-      ))}
+      {[...promotions].reverse().map((p) => {
+        const iso = p.promotedOn ? new Date(p.promotedOn).toISOString() : "";
+        const key = p._id ? `id:${p._id}` : `rp:${p.rank}|${iso}`;
+        const isBusy = busyKey === key;
+        return (
+          <li
+            key={key}
+            className="flex items-center justify-between gap-3"
+          >
+            <div className="flex items-center gap-3">
+              <span className="font-medium">{p.rank}</span>
+              <span className="text-muted-foreground">
+                {p.promotedOn
+                  ? format(new Date(p.promotedOn), "LLL d, yyyy")
+                  : "—"}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleDelete(p)}
+              disabled={isBusy}
+              className="px-2 py-1 rounded border border-red-400 text-red-400 hover:bg-red-500/10 hover:text-red-300 transition text-xs"
+              aria-label="Delete promotion"
+              title="Delete promotion"
+            >
+              {isBusy ? "Deleting…" : "Delete"}
+            </button>
+          </li>
+        );
+      })}
     </ul>
   );
 };
@@ -271,14 +344,14 @@ const StyleForm = ({
           body: JSON.stringify(payload),
         });
       }
-      data = await response.json();
+      data = await readJsonSafe(response);
 
       if (!response.ok) {
-        toast.error(data.error || data.message || "Something went wrong.");
+        toast.error(data?.error || data?.message || "Something went wrong.");
         return;
       }
 
-      toast.success(data.message || "Style saved!");
+      toast.success(data?.message || "Style saved!");
       await refreshUser();
       onSuccess?.(data.updatedStyle || data.createdStyle || data.style || {});
       setOpen?.(false);
@@ -406,6 +479,15 @@ const StyleForm = ({
       {/* Promotions block (only in edit mode) */}
       {isEdit && (
         <div className="rounded-xl border border-border bg-card p-5 md:p-6 shadow-xl">
+          <div className="text-center mb-2">
+            <h4 className="text-base font-semibold">Add a Promotion</h4>
+            <p className="text-xs text-muted-foreground">
+              Add or delete promotions here, then click{" "}
+              <span className="font-medium">Update Style</span> above when
+              finished.
+            </p>
+          </div>
+
           <div className="mb-4 space-y-1">
             <div className="text-sm text-muted-foreground">
               Current Rank:{" "}
@@ -424,16 +506,16 @@ const StyleForm = ({
           </div>
 
           <h4 className="text-base font-semibold mb-2">Promotion History</h4>
-          <PromotionsList promotions={style.promotions || []} />
+          <PromotionsList
+            userStyleId={style._id}
+            promotions={style.promotions || []}
+            onDeleted={(updated) => onSuccess?.(updated)}
+          />
 
           <div className="mt-5">
-            <h4 className="text-base font-semibold mb-2">Add Promotion</h4>
             <AddPromotionInline
               userStyleId={style._id}
-              onAdded={(updated) => {
-                // Keep the parent state in sync
-                onSuccess?.(updated);
-              }}
+              onAdded={(updated) => onSuccess?.(updated)}
             />
           </div>
         </div>
