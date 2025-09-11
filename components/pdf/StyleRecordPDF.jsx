@@ -10,38 +10,34 @@ import {
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 0,
+    paddingTop: 32, // ⬅️ add a little space above the logo
     paddingBottom: 40,
     paddingHorizontal: 36,
     fontSize: 11,
   },
-  header: {
-    backgroundColor: "#1f2937",
-    paddingVertical: 2, // compact header
-    paddingHorizontal: 12,
-    alignItems: "center",
-  },
+
+  // Clean header (no background bar)
+  header: { marginBottom: 12 },
   logo: {
-    width: 130, // larger logo
-    height: 130,
+    width: 160,
+    height: 42,
     objectFit: "contain",
-    marginBottom: 0,
-    marginTop: 0,
+    marginBottom: 6,
+    alignSelf: "flex-start", // logo stays left
   },
+  titleBlock: { alignItems: "center" }, // center title + subtitle
   title: {
-    fontSize: 15,
+    fontSize: 18,
+    fontWeight: 700,
     textAlign: "center",
-    marginTop: 2,
-    marginBottom: 0,
-    color: "#ffffff",
   },
   subtitle: {
-    fontSize: 10,
+    fontSize: 11,
+    color: "#666",
     textAlign: "center",
-    color: "#d1d5db",
-    marginTop: 1,
-    marginBottom: 2,
+    marginTop: 2,
   },
+
   table: {
     display: "table",
     width: "auto",
@@ -79,12 +75,11 @@ export default function StyleRecordPDF({
   wins,
   losses,
   matches,
-  includeStyleColumn = false, // <- NEW
+  includeStyleColumn = false,
 }) {
-  const title = `${userName} ${styleName} Record`;
-  const summary = `Wins ${wins}, Losses ${losses}`;
+  const title = `${styleName} Record`;
+  const subtitle = `${userName} • Wins ${wins}, Losses ${losses}`;
 
-  // When including "Style", rebalance widths to fit 6 or 7 cols nicely on Letter
   const headers = includeStyleColumn
     ? [
         { key: "style", label: "Style", width: "12%" },
@@ -118,8 +113,10 @@ export default function StyleRecordPDF({
               style={styles.logo}
             />
           ) : null}
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.subtitle}>{summary}</Text>
+          <View style={styles.titleBlock}>
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.subtitle}>{subtitle}</Text>
+          </View>
         </View>
 
         {/* Table */}

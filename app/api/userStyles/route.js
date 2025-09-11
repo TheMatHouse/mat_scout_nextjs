@@ -17,6 +17,7 @@ function json(data, status = 200) {
   });
 }
 
+// GET /api/userStyles?familyMemberId=optional
 export async function GET(request) {
   await connectDB();
   const me = await getCurrentUser();
@@ -30,10 +31,15 @@ export async function GET(request) {
     query.familyMemberId = familyMemberId;
   }
 
-  const styles = await UserStyle.find(query).lean();
+  // sort by most-recent promotion first, then createdAt
+  const styles = await UserStyle.find(query)
+    .sort({ lastPromotedOn: -1, createdAt: -1 })
+    .lean();
+
   return json({ styles });
 }
 
+// POST /api/userStyles  (create OR update by (userId,familyMemberId,styleName))
 export async function POST(request) {
   await connectDB();
   const me = await getCurrentUser();
@@ -48,13 +54,18 @@ export async function POST(request) {
 
   const {
     styleName,
-    rank,
+    // new schema
+    startDate,
+    currentRank,
+
+    // existing fields
     division,
     weightClass,
     grip,
     favoriteTechnique,
-    promotionDate,
-    familyMemberId, // optional
+
+    // optional
+    familyMemberId,
   } = body || {};
 
   if (!styleName) return json({ error: "Style name is required" }, 400);
@@ -68,17 +79,38 @@ export async function POST(request) {
     if (!fam) return json({ error: "Invalid family member" }, 403);
   }
 
-  const created = await UserStyle.create({
-    styleName,
-    rank: rank || "",
-    division: division || "",
-    weightClass: weightClass || "",
-    grip: grip || "",
-    favoriteTechnique: favoriteTechnique || "",
-    promotionDate: promotionDate ? new Date(promotionDate) : undefined,
+  // Upsert semantics based on (userId, familyMemberId, styleName)
+  const filter = {
     userId: me._id,
     familyMemberId: familyMemberId || null,
-  });
+    styleName,
+  };
 
-  return json({ message: "Style saved", createdStyle: created });
+  let doc = await UserStyle.findOne(filter);
+  if (!doc) {
+    // create new
+    doc = new UserStyle({
+      ...filter,
+      // apply fields (only set if provided)
+      ...(startDate ? { startDate: new Date(startDate) } : {}),
+      ...(currentRank ? { currentRank } : {}),
+      ...(division ? { division } : {}),
+      ...(weightClass ? { weightClass } : {}),
+      ...(grip ? { grip } : {}),
+      ...(favoriteTechnique ? { favoriteTechnique } : {}),
+    });
+  } else {
+    // update existing
+    if (startDate !== undefined)
+      doc.startDate = startDate ? new Date(startDate) : undefined;
+    if (currentRank !== undefined) doc.currentRank = currentRank || "";
+    if (division !== undefined) doc.division = division || "";
+    if (weightClass !== undefined) doc.weightClass = weightClass || "";
+    if (grip !== undefined) doc.grip = grip || "";
+    if (favoriteTechnique !== undefined)
+      doc.favoriteTechnique = favoriteTechnique || "";
+  }
+
+  await doc.save(); // ensures pre('save') runs to sync lastPromotedOn/currentRank
+  return json({ message: "Style saved", createdStyle: doc });
 }

@@ -1,101 +1,132 @@
-import { NextResponse } from "next/server";
-import { Types } from "mongoose";
-import { connectDB } from "@/lib/mongo";
-import UserStyle from "@/models/userStyleModel";
-import FamilyMember from "@/models/familyMemberModel";
-import { getCurrentUserFromCookies } from "@/lib/auth-server";
-
+// app/api/dashboard/[userId]/family/[memberId]/styles/route.js
 export const dynamic = "force-dynamic";
 
-const isValid = (id) => !!id && Types.ObjectId.isValid(id);
+import { NextResponse } from "next/server";
+import { connectDB } from "@/lib/mongo";
+import { getCurrentUserFromCookies } from "@/lib/auth-server";
+import FamilyMember from "@/models/familyMemberModel";
+import UserStyle from "@/models/userStyleModel";
 
-// GET: styles for this family member (owned by the logged-in user)
+function json(data, status = 200) {
+  return new NextResponse(JSON.stringify(data), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+}
+
+function computeDerived(style) {
+  const s = { ...style };
+  const promos = Array.isArray(s.promotions) ? s.promotions : [];
+  if (!s.lastPromotedOn && promos.length > 0) {
+    const latest = promos
+      .filter((p) => p?.promotedOn)
+      .sort((a, b) => new Date(b.promotedOn) - new Date(a.promotedOn))[0];
+    if (latest?.promotedOn) s.lastPromotedOn = latest.promotedOn;
+    if (!s.currentRank && latest?.rank) s.currentRank = latest.rank;
+  }
+  return s;
+}
+
 export async function GET(_req, { params }) {
   await connectDB();
-  const { userId, memberId } = params || {};
+  const { userId, memberId } = await params; // ✅ await params
 
-  const currentUser = await getCurrentUserFromCookies();
-  if (!currentUser || String(currentUser._id) !== String(userId)) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
-  if (!isValid(userId) || !isValid(memberId)) {
-    return NextResponse.json({ message: "Invalid ID(s)" }, { status: 400 });
-  }
+  const me = await getCurrentUserFromCookies();
+  if (!me) return json({ error: "Unauthorized" }, 401);
+  if (String(me._id) !== String(userId))
+    return json({ error: "Forbidden" }, 403);
+
+  // Verify the family member belongs to this user
+  const fam = await FamilyMember.findOne({
+    _id: memberId,
+    userId: me._id,
+  }).lean();
+  if (!fam) return json({ error: "Invalid family member" }, 404);
 
   try {
-    const styles = await UserStyle.find(
-      {
-        userId: new Types.ObjectId(userId),
-        familyMemberId: new Types.ObjectId(memberId),
-      },
-      { styleName: 1 }
-    )
-      .sort({ createdAt: -1 })
-      .lean();
+    const styles = await UserStyle.find({
+      userId: me._id,
+      familyMemberId: memberId,
+    }).lean();
 
-    const normalized = (styles || [])
-      .map((s) => {
-        const name = s?.styleName || s?.name || s?.title || s?.style || "";
-        return name ? { styleName: name } : null;
-      })
-      .filter(Boolean);
-
-    return NextResponse.json(normalized, { status: 200 });
+    // ✅ return a plain array (backward compatible with your UI)
+    return json((styles || []).map(computeDerived));
   } catch (err) {
-    console.error("Error fetching styles:", err);
-    return NextResponse.json(
-      { message: "Failed to fetch styles" },
-      { status: 500 }
-    );
+    console.error("GET family styles error:", err);
+    return json({ error: "Failed to load styles" }, 500);
   }
 }
 
-// POST: add a style for this family member
 export async function POST(req, { params }) {
   await connectDB();
-  const { userId, memberId } = params || {};
+  const { userId, memberId } = await params; // ✅ await params
 
-  const currentUser = await getCurrentUserFromCookies();
-  if (!currentUser || String(currentUser._id) !== String(userId)) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const me = await getCurrentUserFromCookies();
+  if (!me) return json({ error: "Unauthorized" }, 401);
+  if (String(me._id) !== String(userId))
+    return json({ error: "Forbidden" }, 403);
+
+  const fam = await FamilyMember.findOne({
+    _id: memberId,
+    userId: me._id,
+  }).lean();
+  if (!fam) return json({ error: "Invalid family member" }, 404);
+
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return json({ error: "Invalid JSON" }, 400);
   }
-  if (!isValid(userId) || !isValid(memberId)) {
-    return NextResponse.json({ message: "Invalid ID(s)" }, { status: 400 });
+
+  const {
+    styleName,
+    currentRank,
+    startDate,
+    // legacy fallbacks
+    rank,
+    promotionDate,
+    division,
+    weightClass,
+    grip,
+    favoriteTechnique,
+  } = body || {};
+
+  if (!styleName) return json({ error: "Style name is required" }, 400);
+
+  const doc = {
+    styleName,
+    currentRank: currentRank ?? rank ?? "",
+    startDate: startDate ? new Date(startDate) : undefined,
+    division: division ?? "",
+    weightClass: weightClass ?? "",
+    grip: grip ?? "",
+    favoriteTechnique: favoriteTechnique ?? "",
+    userId: me._id,
+    familyMemberId: memberId,
+  };
+
+  if (promotionDate) {
+    const pd = new Date(promotionDate);
+    doc.lastPromotedOn = pd;
+    doc.promotions = [
+      {
+        rank: doc.currentRank || (rank ?? ""),
+        promotedOn: pd,
+        awardedBy: "",
+        note: "",
+      },
+    ];
   }
 
   try {
-    const body = await req.json();
-    const styleName = String(body?.styleName || body?.name || "").trim();
-    if (!styleName) {
-      return NextResponse.json(
-        { message: "styleName is required" },
-        { status: 400 }
-      );
-    }
-
-    const newStyle = await UserStyle.create({
-      ...body,
-      styleName,
-      userId: new Types.ObjectId(userId),
-      familyMemberId: new Types.ObjectId(memberId),
-    });
-
-    await FamilyMember.findByIdAndUpdate(memberId, {
-      $addToSet: { userStyles: newStyle._id },
-    });
-
-    return NextResponse.json(
-      {
-        message: "Style added",
-        createdStyle: { _id: newStyle._id, styleName },
-      },
-      { status: 201 }
-    );
+    const created = await UserStyle.create(doc);
+    return json({ message: "Style saved", createdStyle: created.toObject() });
   } catch (err) {
-    console.error("Error creating style:", err);
-    return NextResponse.json(
-      { message: "Failed to create style" },
-      { status: 500 }
-    );
+    console.error("POST family styles error:", err);
+    return json({ error: "Failed to save style" }, 500);
   }
 }

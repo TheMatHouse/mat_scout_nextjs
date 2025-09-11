@@ -22,46 +22,9 @@ const norm = (v) =>
     .trim()
     .toLowerCase();
 
-function getTotals({ styleResultsMap, styleResultsArray, styleName }) {
-  const key = norm(styleName);
-
-  // 1) Preferred: map keyed by normalized style
-  if (styleResultsMap && typeof styleResultsMap === "object") {
-    const row =
-      styleResultsMap[key] ||
-      styleResultsMap[styleName] ||
-      styleResultsMap[
-        Object.keys(styleResultsMap).find((k) => norm(k) === key) || ""
-      ];
-    if (row) {
-      return {
-        wins: Number(row.wins ?? row?.totals?.wins ?? row?.Wins ?? 0) || 0,
-        losses:
-          Number(row.losses ?? row?.totals?.losses ?? row?.Losses ?? 0) || 0,
-      };
-    }
-  }
-
-  // 2) Fallback: array of rows with various shapes
-  const arr = Array.isArray(styleResultsArray) ? styleResultsArray : [];
-  const hit =
-    arr.find((r) => norm(r?.styleName ?? r?.Style ?? r?.style) === key) || null;
-
-  if (hit) {
-    const t = hit.totals || hit;
-    return {
-      wins: Number(t?.wins ?? t?.Wins ?? 0) || 0,
-      losses: Number(t?.losses ?? t?.Losses ?? 0) || 0,
-    };
-  }
-
-  return { wins: 0, losses: 0 };
-}
-
 const StyleCard = ({
   style: initialStyle,
-  styleResultsMap, // ← new preferred prop
-  styleResults, // optional legacy array prop
+  styleResultsMap = {}, // pre-aggregated totals from /api/results/summary
   user,
   userType,
   onDelete,
@@ -71,6 +34,7 @@ const StyleCard = ({
   const router = useRouter();
   const [style, setStyle] = useState(initialStyle);
   const [open, setOpen] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const { refreshUser } = useUser();
 
   const handleDeleteStyle = async () => {
@@ -99,20 +63,74 @@ const StyleCard = ({
     }
   };
 
-  const { wins, losses } = getTotals({
-    styleResultsMap,
-    styleResultsArray: styleResults,
-    styleName: style.styleName,
-  });
+  // ---- wins/losses lookup (no aggregation here) ----
+  const styleKey = norm(style?.styleName);
+  const wlRow =
+    styleResultsMap?.[styleKey] ||
+    styleResultsMap?.[style?.styleName] ||
+    styleResultsMap?.[
+      Object.keys(styleResultsMap).find((k) => norm(k) === styleKey) || ""
+    ] ||
+    null;
 
-  // PDF link
+  const wins = Number(wlRow?.wins ?? 0) || 0;
+  const losses = Number(wlRow?.losses ?? 0) || 0;
+
+  // PDF links
   const styleParam = style?.styleName || style?._id || "Judo";
   const resolvedLogo = logoUrl || process.env.NEXT_PUBLIC_PDF_LOGO || "";
   const qs = new URLSearchParams();
   if (resolvedLogo) qs.set("logo", resolvedLogo);
+
+  // Always pass the exact userStyle doc id (bullet-proof for PDFs)
+  if (style?._id) qs.set("userStyleId", String(style._id));
+
+  // Robust family member propagation (from style doc or page context)
+  const familyId = style?.familyMemberId || member?._id || null;
+  if (familyId) qs.set("familyMemberId", String(familyId));
+
   const pdfHref = `/api/records/style/${encodeURIComponent(styleParam)}${
     qs.toString() ? `?${qs.toString()}` : ""
   }`;
+
+  // Promotions PDF via the existing style route (?view=promotions)
+  const qsPromos = new URLSearchParams(qs.toString());
+  qsPromos.set("view", "promotions");
+  const pdfPromotionsHref = `/api/records/style/${encodeURIComponent(
+    styleParam
+  )}${qsPromos.toString() ? `?${qsPromos.toString()}` : ""}`;
+
+  // ---- derived fields & safe fallbacks ----
+  const currentRankRaw = style?.currentRank ?? style?.rank ?? "";
+  const currentRank =
+    currentRankRaw && String(currentRankRaw).trim() !== ""
+      ? currentRankRaw
+      : "—";
+
+  const latestPromotion = style?.lastPromotedOn ?? style?.promotionDate ?? null;
+  const latestPromotionText = latestPromotion
+    ? moment.utc(latestPromotion).format("MMMM D, YYYY")
+    : "—";
+
+  const promotions = Array.isArray(style?.promotions) ? style.promotions : [];
+  const promotionsSorted = [...promotions].sort(
+    (a, b) => new Date(a.promotedOn) - new Date(b.promotedOn)
+  );
+
+  const division =
+    style?.division && String(style.division).trim() !== ""
+      ? style.division
+      : "—";
+  const weightClass =
+    style?.weightClass && String(style.weightClass).trim() !== ""
+      ? style.weightClass
+      : "—";
+  const grip =
+    style?.grip && String(style.grip).trim() !== "" ? style.grip : "—";
+  const favoriteTechnique =
+    style?.favoriteTechnique && String(style.favoriteTechnique).trim() !== ""
+      ? style.favoriteTechnique
+      : "—";
 
   return (
     <div className="rounded-2xl border border-slate-700 bg-slate-800/80 dark:bg-slate-900/80 text-white shadow-xl backdrop-blur-md ring-1 ring-slate-700 hover:ring-2 hover:ring-[#ef233c] transition-all duration-200 transform hover:scale-[1.02]">
@@ -136,14 +154,18 @@ const StyleCard = ({
                 Update details for {style.styleName}.
               </DialogDescription>
             </DialogHeader>
-            <StyleForm
-              user={user}
-              style={style}
-              userType={userType}
-              setOpen={setOpen}
-              onSuccess={(updated) => setStyle(updated)}
-              member={member}
-            />
+
+            {/* Lazy-mount the form only when dialog is open */}
+            {open && (
+              <StyleForm
+                user={user}
+                style={style} // if present → edit mode, shows promotions UI
+                userType={userType}
+                setOpen={setOpen}
+                onSuccess={(updated) => setStyle(updated)}
+                member={member}
+              />
+            )}
           </DialogContent>
         </Dialog>
       </div>
@@ -152,31 +174,66 @@ const StyleCard = ({
       <div className="p-5 space-y-3 text-sm sm:text-base leading-relaxed">
         <div>
           <span className="font-semibold text-slate-300">Rank:</span>{" "}
-          {style.rank}
+          {currentRank}
         </div>
+
+        {/* Started {styleName}: only if startDate present */}
+        {style.startDate && (
+          <div>
+            <span className="font-semibold text-slate-300">
+              Started {style.styleName}:
+            </span>{" "}
+            {moment.utc(style.startDate).format("MMMM YYYY")}
+          </div>
+        )}
+
         <div>
           <span className="font-semibold text-slate-300">Promotion Date:</span>{" "}
-          {style.promotionDate
-            ? moment.utc(style.promotionDate).format("MMMM D, YYYY")
-            : "—"}
+          {latestPromotionText}
         </div>
+
+        {/* Collapsible promotion history (if any) */}
+        {promotionsSorted.length > 0 && (
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowHistory((v) => !v)}
+              className="text-left"
+            >
+              <span className="font-semibold text-slate-300">
+                Promotion History:
+              </span>{" "}
+              <span>{showHistory ? "▾" : "▸"}</span>
+            </button>
+
+            {showHistory && (
+              <ul className="ml-4 mt-1 space-y-1">
+                {promotionsSorted.map((p, idx) => (
+                  <li key={idx}>
+                    {moment.utc(p.promotedOn).format("MMMM D, YYYY")} — {p.rank}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
         <div>
           <span className="font-semibold text-slate-300">Division:</span>{" "}
-          {style.division}
+          {division}
         </div>
         <div>
           <span className="font-semibold text-slate-300">Weight Class:</span>{" "}
-          {style.weightClass}
+          {weightClass}
         </div>
         <div>
-          <span className="font-semibold text-slate-300">Grip:</span>{" "}
-          {style.grip}
+          <span className="font-semibold text-slate-300">Grip:</span> {grip}
         </div>
         <div>
           <span className="font-semibold text-slate-300">
             Favorite Technique:
           </span>{" "}
-          {style.favoriteTechnique}
+          {favoriteTechnique}
         </div>
 
         <div>
@@ -196,20 +253,33 @@ const StyleCard = ({
 
       {/* Footer */}
       <div className="flex justify-between items-center px-5 py-4 gap-3">
-        <a
-          href={pdfHref}
-          target="_blank"
-          rel="noopener"
-          className="btn-white-sm"
-        >
-          Print PDF Record
-        </a>
-        <button
-          onClick={handleDeleteStyle}
-          className="px-3 py-1.5 rounded-lg border border-red-400 text-red-400 hover:bg-red-500/10 hover:text-red-300 transition text-xs font-medium"
-        >
-          Delete
-        </button>
+        <div className="flex items-center gap-2">
+          <a
+            href={pdfHref}
+            target="_blank"
+            rel="noopener"
+            className="btn-white-sm"
+          >
+            Print PDF Record
+          </a>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <a
+            href={pdfPromotionsHref}
+            target="_blank"
+            rel="noopener"
+            className="btn-white-sm"
+          >
+            Print Promotions
+          </a>
+          <button
+            onClick={handleDeleteStyle}
+            className="px-3 py-1.5 rounded-lg border border-red-400 text-red-400 hover:bg-red-500/10 hover:text-red-300 transition text-xs font-medium"
+          >
+            Delete
+          </button>
+        </div>
       </div>
     </div>
   );

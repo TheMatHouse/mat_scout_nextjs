@@ -2,13 +2,158 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/context/UserContext";
 import FormField from "@/components/shared/FormField";
 import FormSelect from "@/components/shared/FormSelect";
 import Spinner from "@/components/shared/Spinner";
+import { format } from "date-fns";
+
+const AddPromotionInline = ({ userStyleId, onAdded }) => {
+  const [form, setForm] = useState({
+    rank: "",
+    promotedOn: "",
+    awardedBy: "",
+    note: "",
+    proofUrl: "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  const onChange = (e) =>
+    setForm((s) => ({ ...s, [e.target.name]: e.target.value }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!userStyleId) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/userStyles/${userStyleId}/promotions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.style) {
+        throw new Error(json?.error || "Failed to add promotion");
+      }
+      toast.success("Promotion added");
+      onAdded?.(json.style);
+      setForm({
+        rank: "",
+        promotedOn: "",
+        awardedBy: "",
+        note: "",
+        proofUrl: "",
+      });
+    } catch (err) {
+      toast.error(err.message || "Error adding promotion");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form
+      onSubmit={submit}
+      className="space-y-3"
+    >
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium">New Rank</label>
+          <input
+            name="rank"
+            className="mt-1 w-full rounded border p-2 bg-background"
+            value={form.rank}
+            onChange={onChange}
+            placeholder="e.g., Nidan / Brown"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium">Promotion Date</label>
+          <input
+            type="date"
+            name="promotedOn"
+            className="mt-1 w-full rounded border p-2 bg-background"
+            value={form.promotedOn}
+            onChange={onChange}
+            required
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium">
+            Awarded By (optional)
+          </label>
+          <input
+            name="awardedBy"
+            className="mt-1 w-full rounded border p-2 bg-background"
+            value={form.awardedBy}
+            onChange={onChange}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium">
+            Proof URL (optional)
+          </label>
+          <input
+            name="proofUrl"
+            className="mt-1 w-full rounded border p-2 bg-background"
+            value={form.proofUrl}
+            onChange={onChange}
+            placeholder="https://..."
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium">Note (optional)</label>
+        <input
+          name="note"
+          className="mt-1 w-full rounded border p-2 bg-background"
+          value={form.note}
+          onChange={onChange}
+        />
+      </div>
+
+      <Button
+        type="submit"
+        disabled={saving}
+        className="btn btn-primary"
+      >
+        {saving ? "Adding..." : "Add Promotion"}
+      </Button>
+    </form>
+  );
+};
+
+const PromotionsList = ({ promotions = [] }) => {
+  if (!promotions.length) {
+    return (
+      <div className="text-sm text-muted-foreground">
+        No promotions recorded yet.
+      </div>
+    );
+  }
+  return (
+    <ul className="space-y-1 text-sm">
+      {[...promotions].reverse().map((p, i) => (
+        <li
+          key={i}
+          className="flex items-center justify-between"
+        >
+          <span className="font-medium">{p.rank}</span>
+          <span className="text-muted-foreground">
+            {p.promotedOn ? format(new Date(p.promotedOn), "LLL d, yyyy") : "—"}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+};
 
 const StyleForm = ({
   user,
@@ -18,7 +163,6 @@ const StyleForm = ({
   setOpen,
   onSuccess,
 }) => {
-  const router = useRouter();
   const { refreshUser } = useUser();
 
   const [availableStyles, setAvailableStyles] = useState([]);
@@ -26,35 +170,36 @@ const StyleForm = ({
 
   const [formData, setFormData] = useState({
     styleName: "",
-    rank: "",
+    currentRank: "",
+    startDate: "",
     division: "",
     weightClass: "",
     grip: "",
     favoriteTechnique: "",
-    promotionDate: "",
   });
 
-  // Pre-fill when editing
+  // Prefill (supports legacy rank/promotionDate)
   useEffect(() => {
     if (!style) return;
-    const formatDate = (dateStr) => {
-      if (!dateStr) return "";
-      const d = new Date(dateStr);
-      return d.toISOString().split("T")[0];
+    const toYMD = (d) => {
+      if (!d) return "";
+      const dt = new Date(d);
+      if (Number.isNaN(dt.getTime())) return "";
+      return dt.toISOString().split("T")[0];
     };
     setFormData((prev) => ({
       ...prev,
       styleName: style.styleName || "",
-      rank: style.rank || "",
+      currentRank: style.currentRank ?? style.rank ?? "",
+      startDate: toYMD(style.startDate ?? style.promotionDate),
       division: style.division || "",
       weightClass: style.weightClass || "",
       grip: style.grip || "",
       favoriteTechnique: style.favoriteTechnique || "",
-      promotionDate: formatDate(style.promotionDate),
     }));
   }, [style]);
 
-  // Fetch style options; gate the entire form until loaded
+  // Fetch style options
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -76,8 +221,6 @@ const StyleForm = ({
     };
   }, []);
 
-  // Build options and ensure the current value is present even if the API
-  // hasn’t returned it yet (edge cases / race conditions).
   const styleOptions = (() => {
     const list = Array.isArray(availableStyles) ? availableStyles : [];
     const names = new Set(list.map((s) => s.styleName));
@@ -92,7 +235,7 @@ const StyleForm = ({
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e) => {
+  const submit = async (e) => {
     e.preventDefault();
 
     if (userType === "family" && (!member?._id || !member?.userId)) {
@@ -100,45 +243,44 @@ const StyleForm = ({
       return;
     }
 
-    const adjustedFormData = {
-      ...formData,
-      promotionDate: formData.promotionDate
-        ? `${formData.promotionDate}T00:00:00.000Z`
+    const payload = {
+      styleName: formData.styleName,
+      currentRank: formData.currentRank || undefined,
+      startDate: formData.startDate
+        ? `${formData.startDate}T00:00:00.000Z`
         : undefined,
+      division: formData.division || undefined,
+      weightClass: formData.weightClass || undefined,
+      grip: formData.grip || undefined,
+      favoriteTechnique: formData.favoriteTechnique || undefined,
+      ...(userType === "family" ? { familyMemberId: member._id } : {}),
     };
 
-    let endpoint = "";
-    const method = style ? "PATCH" : "POST";
-
-    if (userType === "user") {
-      adjustedFormData.userId = user._id;
-      endpoint = style
-        ? `/api/dashboard/${user._id}/userStyles/${style._id}`
-        : `/api/dashboard/${user._id}/userStyles`;
-    } else {
-      adjustedFormData.userId = member.userId;
-      adjustedFormData.familyMemberId = member._id;
-      endpoint = style
-        ? `/api/dashboard/${member.userId}/family/${member._id}/styles/${style._id}`
-        : `/api/dashboard/${member.userId}/family/${member._id}/styles`;
-    }
-
     try {
-      const response = await fetch(endpoint, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(adjustedFormData),
-      });
-      const data = await response.json();
+      let response, data;
+      if (style?._id) {
+        response = await fetch(`/api/userStyles/${style._id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        response = await fetch(`/api/userStyles`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
+      data = await response.json();
 
       if (!response.ok) {
-        toast.error(data.message || "Something went wrong.");
+        toast.error(data.error || data.message || "Something went wrong.");
         return;
       }
 
       toast.success(data.message || "Style saved!");
       await refreshUser();
-      onSuccess?.(data.updatedStyle || data.createdStyle || {});
+      onSuccess?.(data.updatedStyle || data.createdStyle || data.style || {});
       setOpen?.(false);
     } catch (err) {
       console.error("Submit error:", err);
@@ -146,7 +288,6 @@ const StyleForm = ({
     }
   };
 
-  // Gate the whole form UI until styles have loaded
   if (!stylesLoaded) {
     return (
       <div className="rounded-xl border border-border bg-card p-6 shadow-xl flex items-center justify-center">
@@ -158,102 +299,145 @@ const StyleForm = ({
     );
   }
 
+  const isEdit = Boolean(style?._id);
+
   return (
-    <div className="rounded-xl border border-border bg-card p-5 md:p-6 shadow-xl">
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-6"
-        aria-busy={!stylesLoaded}
-      >
-        <FormSelect
-          label="Style/Sport"
-          value={formData.styleName}
-          onChange={(val) =>
-            setFormData((prev) => ({ ...prev, styleName: val }))
-          }
-          placeholder="Select Style/Sport"
-          options={styleOptions.map((s) => ({
-            value: s.styleName,
-            label: s.styleName,
-          }))}
-          required
-        />
+    <div className="space-y-6">
+      {/* Base style form */}
+      <div className="rounded-xl border border-border bg-card p-5 md:p-6 shadow-xl">
+        <form
+          onSubmit={submit}
+          className="space-y-6"
+          aria-busy={!stylesLoaded}
+        >
+          <FormSelect
+            label="Style/Sport"
+            value={formData.styleName}
+            onChange={(val) =>
+              setFormData((prev) => ({ ...prev, styleName: val }))
+            }
+            placeholder="Select Style/Sport"
+            options={styleOptions.map((s) => ({
+              value: s.styleName,
+              label: s.styleName,
+            }))}
+            required
+          />
 
-        <FormField
-          label="Rank"
-          name="rank"
-          value={formData.rank}
-          onChange={handleChange}
-          placeholder="Rank"
-        />
+          <FormField
+            label="Current Rank"
+            name="currentRank"
+            value={formData.currentRank}
+            onChange={handleChange}
+            placeholder="e.g., Shodan / Purple"
+          />
 
-        <FormField
-          label="Promotion Date"
-          name="promotionDate"
-          type="date"
-          value={formData.promotionDate}
-          onChange={handleChange}
-        />
+          <FormField
+            label="Start Date"
+            name="startDate"
+            type="date"
+            value={formData.startDate}
+            onChange={handleChange}
+          />
 
-        <FormField
-          label="Division"
-          name="division"
-          value={formData.division}
-          onChange={handleChange}
-          placeholder="Division"
-        />
+          <FormField
+            label="Division"
+            name="division"
+            value={formData.division}
+            onChange={handleChange}
+            placeholder="Division"
+          />
 
-        <FormField
-          label="Weight Class"
-          name="weightClass"
-          value={formData.weightClass}
-          onChange={handleChange}
-          placeholder="Weight Class"
-        />
+          <FormField
+            label="Weight Class"
+            name="weightClass"
+            value={formData.weightClass}
+            onChange={handleChange}
+            placeholder="Weight Class"
+          />
 
-        <div>
-          <label className="block text-sm font-medium mb-2">Grip/Stance</label>
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="grip"
-                value="righty"
-                checked={formData.grip === "righty"}
-                onChange={handleChange}
-              />
-              Righty
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Grip/Stance
             </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="grip"
-                value="lefty"
-                checked={formData.grip === "lefty"}
-                onChange={handleChange}
-              />
-              Lefty
-            </label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="grip"
+                  value="righty"
+                  checked={formData.grip === "righty"}
+                  onChange={handleChange}
+                />
+                Righty
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="grip"
+                  value="lefty"
+                  checked={formData.grip === "lefty"}
+                  onChange={handleChange}
+                />
+                Lefty
+              </label>
+            </div>
+          </div>
+
+          <FormField
+            label="Favorite Technique"
+            name="favoriteTechnique"
+            value={formData.favoriteTechnique}
+            onChange={handleChange}
+            placeholder="Favorite Technique"
+          />
+
+          <div className="flex justify-center pt-4">
+            <Button
+              type="submit"
+              className="btn btn-primary"
+            >
+              {isEdit ? "Update Style" : "Add Style"}
+            </Button>
+          </div>
+        </form>
+      </div>
+
+      {/* Promotions block (only in edit mode) */}
+      {isEdit && (
+        <div className="rounded-xl border border-border bg-card p-5 md:p-6 shadow-xl">
+          <div className="mb-4 space-y-1">
+            <div className="text-sm text-muted-foreground">
+              Current Rank:{" "}
+              <span className="font-medium text-foreground">
+                {style.currentRank || "—"}
+              </span>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Started:{" "}
+              <span className="font-medium text-foreground">
+                {style.startDate
+                  ? format(new Date(style.startDate), "LLL yyyy")
+                  : "—"}
+              </span>
+            </div>
+          </div>
+
+          <h4 className="text-base font-semibold mb-2">Promotion History</h4>
+          <PromotionsList promotions={style.promotions || []} />
+
+          <div className="mt-5">
+            <h4 className="text-base font-semibold mb-2">Add Promotion</h4>
+            <AddPromotionInline
+              userStyleId={style._id}
+              onAdded={(updated) => {
+                // Keep the parent state in sync
+                onSuccess?.(updated);
+              }}
+            />
           </div>
         </div>
-
-        <FormField
-          label="Favorite Technique"
-          name="favoriteTechnique"
-          value={formData.favoriteTechnique}
-          onChange={handleChange}
-          placeholder="Favorite Technique"
-        />
-
-        <div className="flex justify-center pt-4">
-          <Button
-            type="submit"
-            className="btn btn-primary"
-          >
-            {style?._id ? "Update Style" : "Add Style"}
-          </Button>
-        </div>
-      </form>
+      )}
     </div>
   );
 };

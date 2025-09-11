@@ -12,11 +12,11 @@ import { v2 as cloudinary } from "cloudinary";
 export const dynamic = "force-dynamic";
 const isValidId = (id) => !!id && Types.ObjectId.isValid(id);
 
-// GET one family member (must belong to the logged-in user)
+// GET
 export async function GET(_req, { params }) {
   await connectDB();
 
-  const { userId, memberId } = params || {};
+  const { userId, memberId } = await params; // ⬅️ await here
   if (!isValidId(userId) || !isValidId(memberId)) {
     return NextResponse.json({ error: "Invalid ID(s)" }, { status: 400 });
   }
@@ -41,7 +41,6 @@ export async function GET(_req, { params }) {
       );
     }
 
-    // include userId as string for client-side checks
     return NextResponse.json({
       ...member,
       _id: member._id.toString(),
@@ -56,10 +55,11 @@ export async function GET(_req, { params }) {
   }
 }
 
+// PATCH
 export async function PATCH(req, { params }) {
   await connectDB();
 
-  const { userId, memberId } = params || {};
+  const { userId, memberId } = await params; // ⬅️ await here
   if (!isValidId(userId) || !isValidId(memberId)) {
     return NextResponse.json({ error: "Invalid ID(s)" }, { status: 400 });
   }
@@ -109,10 +109,11 @@ export async function PATCH(req, { params }) {
   }
 }
 
+// DELETE
 export async function DELETE(_req, { params }) {
   await connectDB();
 
-  const { userId, memberId } = params || {};
+  const { userId, memberId } = await params; // ⬅️ await here
   if (!isValidId(userId) || !isValidId(memberId)) {
     return NextResponse.json({ error: "Invalid ID(s)" }, { status: 400 });
   }
