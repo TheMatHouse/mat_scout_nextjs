@@ -33,66 +33,104 @@ function SkeletonGrid({ count = 4 }) {
   );
 }
 
+// ---- helpers to normalize API shapes/IDs and filter strictly to the owner ----
+function extractStylesShape(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (payload && Array.isArray(payload.styles)) return payload.styles;
+  if (payload && Array.isArray(payload.userStyles)) return payload.userStyles;
+  if (payload && typeof payload === "object") {
+    const arr = Object.values(payload).find(Array.isArray);
+    if (Array.isArray(arr)) return arr;
+  }
+  return [];
+}
+const toIdString = (v) =>
+  v && typeof v === "object" && v._id ? String(v._id) : v ? String(v) : "";
+function onlyPrimaryUserStyles(arr, userId) {
+  const uid = String(userId);
+  return (Array.isArray(arr) ? arr : []).filter((s) => {
+    const sUid = toIdString(s?.userId);
+    const fam = s?.familyMemberId;
+    const isMine = sUid && sUid === uid;
+    const noFamily =
+      fam == null ||
+      String(fam) === "" ||
+      (typeof fam === "object" && !fam._id);
+    return isMine && noFamily;
+  });
+}
+
 const DashboardStyles = () => {
   const { user } = useUser();
   const [myStyles, setMyStyles] = useState([]);
   const [matchReports, setMatchReports] = useState([]);
   const [open, setOpen] = useState(false);
 
-  // loading flags
   const [loadingStyles, setLoadingStyles] = useState(true);
   const [loadingMatches, setLoadingMatches] = useState(true);
 
-  useEffect(() => {
-    if (!user?._id) return;
-
+  // ---- loaders ----
+  const loadStyles = async (userId) => {
     setLoadingStyles(true);
-    setLoadingMatches(true);
-
-    // kick off both in parallel
-    fetch(`/api/dashboard/${user._id}/userStyles`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error("Failed to fetch user styles");
-        const data = await res.json();
-        setMyStyles(Array.isArray(data) ? data : []);
-      })
-      .catch((err) => {
-        console.error("Error loading user styles:", err);
-        toast.error("Could not load styles.");
-      })
-      .finally(() => setLoadingStyles(false));
-
-    fetch(`/api/dashboard/${user._id}/matchReports`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error("Failed to fetch match reports");
-        const data = await res.json();
-        setMatchReports(Array.isArray(data) ? data : []);
-      })
-      .catch((err) => {
-        console.error("Error loading match reports:", err);
-        toast.error("Could not load match reports.");
-      })
-      .finally(() => setLoadingMatches(false));
-  }, [user]);
-
-  const handleStylesRefresh = async () => {
     try {
-      setLoadingStyles(true);
-      const res = await fetch(`/api/dashboard/${user._id}/userStyles`);
-      if (!res.ok) throw new Error("Failed to fetch updated styles.");
-      const updatedStyles = await res.json();
-      setMyStyles(Array.isArray(updatedStyles) ? updatedStyles : []);
+      const res = await fetch(`/api/dashboard/${userId}/userStyles`, {
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error("Failed to fetch user styles");
+      const data = await res.json();
+      let styles = onlyPrimaryUserStyles(extractStylesShape(data), userId);
+
+      // Optional fallback to unified route; still enforce the same filter
+      if (!styles.length) {
+        const res2 = await fetch(`/api/userStyles`, { cache: "no-store" });
+        if (res2.ok) {
+          const data2 = await res2.json();
+          styles = onlyPrimaryUserStyles(extractStylesShape(data2), userId);
+        }
+      }
+
+      setMyStyles(styles);
     } catch (err) {
-      toast.error("Failed to refresh styles");
+      console.error("Error loading user styles:", err);
+      toast.error("Could not load styles.");
+      setMyStyles([]);
     } finally {
       setLoadingStyles(false);
     }
   };
 
+  const loadMatches = async (userId) => {
+    setLoadingMatches(true);
+    try {
+      const res = await fetch(`/api/dashboard/${userId}/matchReports`, {
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error("Failed to fetch match reports");
+      const data = await res.json();
+      setMatchReports(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error loading match reports:", err);
+      toast.error("Could not load match reports.");
+      setMatchReports([]);
+    } finally {
+      setLoadingMatches(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!user?._id) return;
+    loadStyles(user._id);
+    loadMatches(user._id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?._id]);
+
+  const handleStylesRefresh = async () => {
+    if (!user?._id) return;
+    await loadStyles(user._id);
+  };
+
   const handleDeleteStyle = (deletedStyleId) => {
-    setMyStyles((prevStyles) =>
-      prevStyles.filter((style) => style._id !== deletedStyleId)
-    );
+    setMyStyles((prev) => prev.filter((s) => s._id !== deletedStyleId));
   };
 
   // Compute totals from matchReports
@@ -139,7 +177,7 @@ const DashboardStyles = () => {
         </Button>
       </div>
 
-      {/* Helpful message (you already tweaked the text color; keep your change if you prefer) */}
+      {/* Helper message */}
       <div className="mb-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white/5 dark:bg-black/20 p-4">
         <p className="text-sm">
           Click <span className="font-medium">Add Style</span> to create a
@@ -168,19 +206,17 @@ const DashboardStyles = () => {
 
       <hr className="border-gray-200 dark:border-gray-700 my-4" />
 
-      {/* Loading skeleton */}
+      {/* Loading / Empty / Cards */}
       {isLoading ? (
         <SkeletonGrid />
       ) : myStyles.length === 0 ? (
-        // Empty state only after loading finishes
         <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-8 text-center">
           <p className="text-sm">
             No styles yet. Click “Add Style” to get started.
           </p>
         </div>
       ) : (
-        // Style Cards
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-2">
           {myStyles.map((style) => (
             <StyleCard
               key={style._id}

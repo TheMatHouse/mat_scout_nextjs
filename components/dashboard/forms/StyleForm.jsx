@@ -10,7 +10,13 @@ import FormSelect from "@/components/shared/FormSelect";
 import Spinner from "@/components/shared/Spinner";
 import { format } from "date-fns";
 
-// Safe JSON parser: won't throw on empty body or non-JSON responses
+// helper: no promotions/ranks for Wrestling
+const isNoPromotionStyle = (name) =>
+  String(name ?? "")
+    .trim()
+    .toLowerCase() === "wrestling";
+
+// Safe JSON parser
 async function readJsonSafe(res) {
   const text = await res.text();
   try {
@@ -140,7 +146,6 @@ const AddPromotionInline = ({ userStyleId, onAdded }) => {
   );
 };
 
-// Shows delete button even if subdoc has no _id (falls back to rank+promotedOn)
 const PromotionsList = ({ userStyleId, promotions = [], onDeleted }) => {
   const [busyKey, setBusyKey] = useState(null);
 
@@ -251,7 +256,7 @@ const StyleForm = ({
     favoriteTechnique: "",
   });
 
-  // Prefill (supports legacy rank/promotionDate)
+  // Prefill
   useEffect(() => {
     if (!style) return;
     const toYMD = (d) => {
@@ -318,7 +323,10 @@ const StyleForm = ({
 
     const payload = {
       styleName: formData.styleName,
-      currentRank: formData.currentRank || undefined,
+      // Only send currentRank if this style uses promotions
+      ...(isNoPromotionStyle(formData.styleName)
+        ? {}
+        : { currentRank: formData.currentRank || undefined }),
       startDate: formData.startDate
         ? `${formData.startDate}T00:00:00.000Z`
         : undefined,
@@ -373,6 +381,9 @@ const StyleForm = ({
   }
 
   const isEdit = Boolean(style?._id);
+  const hidePromotionsUI = isNoPromotionStyle(
+    style?.styleName || formData.styleName
+  );
 
   return (
     <div className="space-y-6">
@@ -397,13 +408,16 @@ const StyleForm = ({
             required
           />
 
-          <FormField
-            label="Current Rank"
-            name="currentRank"
-            value={formData.currentRank}
-            onChange={handleChange}
-            placeholder="e.g., Shodan / Purple"
-          />
+          {/* Hide Current Rank when Wrestling */}
+          {!hidePromotionsUI && (
+            <FormField
+              label="Current Rank"
+              name="currentRank"
+              value={formData.currentRank}
+              onChange={handleChange}
+              placeholder="e.g., Shodan / Purple"
+            />
+          )}
 
           <FormField
             label="Start Date"
@@ -476,8 +490,8 @@ const StyleForm = ({
         </form>
       </div>
 
-      {/* Promotions block (only in edit mode) */}
-      {isEdit && (
+      {/* Promotions block (only in edit mode AND not Wrestling) */}
+      {isEdit && !hidePromotionsUI && (
         <div className="rounded-xl border border-border bg-card p-5 md:p-6 shadow-xl">
           <div className="text-center mb-2">
             <h4 className="text-base font-semibold">Add a Promotion</h4>
