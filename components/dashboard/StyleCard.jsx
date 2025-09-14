@@ -16,6 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import StyleForm from "./forms/StyleForm";
+import ModalLayout from "../shared/ModalLayout";
 
 const norm = (v) =>
   String(v ?? "")
@@ -159,14 +160,24 @@ const StyleCard = ({
             </DialogHeader>
 
             {open && (
-              <StyleForm
-                user={user}
-                style={style}
-                userType={userType}
-                setOpen={setOpen}
-                onSuccess={(updated) => setStyle(updated)}
-                member={member}
-              />
+              <ModalLayout
+                isOpen={open}
+                onClose={() => setOpen(false)}
+                title="Edit Style"
+                description={`Update details for ${
+                  style?.styleName || "this style"
+                }.`}
+                withCard={true}
+              >
+                <StyleForm
+                  user={user}
+                  style={style}
+                  userType={userType}
+                  setOpen={setOpen}
+                  onSuccess={(updated) => setStyle(updated)}
+                  member={member}
+                />
+              </ModalLayout>
             )}
           </DialogContent>
         </Dialog>
@@ -177,6 +188,16 @@ const StyleCard = ({
         {/* Hide rank/promotion if Wrestling */}
         {!noPromotions && (
           <>
+            {/* Started {styleName}: only if startDate present (always allowed) */}
+            {style.startDate && (
+              <div>
+                <span className="font-semibold text-slate-300">
+                  Started {style.styleName}:
+                </span>{" "}
+                {moment.utc(style.startDate).format("MMMM YYYY")}
+              </div>
+            )}
+
             <div>
               <span className="font-semibold text-slate-300">Rank:</span>{" "}
               {currentRank}
@@ -206,8 +227,8 @@ const StyleCard = ({
                   <ul className="ml-4 mt-1 space-y-1">
                     {promotionsSorted.map((p, idx) => (
                       <li key={idx}>
-                        {moment.utc(p.promotedOn).format("MMMM D, YYYY")} —{" "}
-                        {p.rank}
+                        {p.rank} —{" "}
+                        {moment.utc(p.promotedOn).format("MMMM D, YYYY")}
                       </li>
                     ))}
                   </ul>
@@ -215,16 +236,6 @@ const StyleCard = ({
               </div>
             )}
           </>
-        )}
-
-        {/* Started {styleName}: only if startDate present (always allowed) */}
-        {style.startDate && (
-          <div>
-            <span className="font-semibold text-slate-300">
-              Started {style.styleName}:
-            </span>{" "}
-            {moment.utc(style.startDate).format("MMMM YYYY")}
-          </div>
         )}
 
         <div>

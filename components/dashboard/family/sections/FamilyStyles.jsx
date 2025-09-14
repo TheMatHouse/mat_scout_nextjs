@@ -1,11 +1,13 @@
+// components/dashboard/family/FamilyStyles.jsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "react-toastify";
 import StyleCard from "../../StyleCard";
 import StyleForm from "../../forms/StyleForm";
 import ModalLayout from "@/components/shared/ModalLayout";
+import PromotionsForm from "../../forms/PromotionsForm";
 
 function SkeletonGrid({ count = 4 }) {
   return (
@@ -24,6 +26,10 @@ const FamilyStyles = ({ member }) => {
   const [styles, setStyles] = useState([]);
   const [open, setOpen] = useState(false);
   const [loadingStyles, setLoadingStyles] = useState(true);
+
+  // Promotions modal state
+  const [promoOpen, setPromoOpen] = useState(false);
+  const [selectedStyleId, setSelectedStyleId] = useState("");
 
   useEffect(() => {
     if (!member?.userId || !member?._id) return;
@@ -70,33 +76,79 @@ const FamilyStyles = ({ member }) => {
 
   const isLoading = loadingStyles;
 
+  const norm = (v) =>
+    String(v ?? "")
+      .trim()
+      .toLowerCase();
+  const styleSupportsPromotions = (s) => norm(s?.styleName) !== "wrestling";
+  const promotableStyles = useMemo(
+    () => styles.filter(styleSupportsPromotions),
+    [styles]
+  );
+
+  const openPromotionModal = () => {
+    setPromoOpen(true);
+    setSelectedStyleId(""); // require explicit selection
+  };
+
+  const handlePromoClose = async () => {
+    await handleStylesRefresh(); // refresh so StyleCards show new promotion history
+    setPromoOpen(false);
+  };
+
+  const onPromotionUpdated = async (updatedStyle) => {
+    // Replace the updated style in-place for immediate feedback
+    if (updatedStyle?._id) {
+      setStyles((prev) =>
+        prev.map((s) =>
+          String(s._id) === String(updatedStyle._id) ? updatedStyle : s
+        )
+      );
+    } else {
+      await handleStylesRefresh();
+    }
+    // keep modal open so multiple adds are possible; closing handled by handlePromoClose
+  };
+
   return (
     <div>
-      {/* Header and Add Button */}
+      {/* Header and Buttons (left-aligned) */}
       <div className="flex flex-col items-start gap-4 mb-4">
         <h1 className="text-2xl font-bold">
           {member.firstName} {member.lastName}’s Styles/Sports
         </h1>
-        <Button
-          className="bg-gray-900 hover:bg-gray-500 text-white border-2 border-gray-500 dark:border-gray-100"
-          onClick={() => setOpen(true)}
-        >
-          Add Style
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            className="btn btn-primary"
+            onClick={() => setOpen(true)}
+          >
+            Add Style
+          </Button>
+          {promotableStyles.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={openPromotionModal}
+              className="btn btn-secondary"
+            >
+              Add Promotion
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Helpful message (keep your preferred colors) */}
+      {/* Helpful message */}
       <div className="mb-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white/5 dark:bg-black/20 p-4">
         <p className="text-sm">
           Click <span className="font-medium">Add Style</span> to create a
           style/sport for {member.firstName} that you can record match results
-          for. For Judo and Brazilian Jiu-Jitsu, edit the style later to add
-          promotion dates and track history. The most recent promotion will be
-          used as the <span className="font-medium">current rank</span>.
+          for. Use <span className="font-medium">Add Promotion</span> to track
+          rank promotions for styles like Judo and Brazilian Jiu-Jitsu. The most
+          recent promotion will be used as the{" "}
+          <span className="font-medium">current rank</span>.
         </p>
       </div>
 
-      {/* Modal */}
+      {/* Add Style Modal */}
       <ModalLayout
         isOpen={open}
         onClose={() => setOpen(false)}
@@ -111,6 +163,54 @@ const FamilyStyles = ({ member }) => {
           setOpen={setOpen}
           onSuccess={handleStylesRefresh}
         />
+      </ModalLayout>
+
+      {/* Add Promotion Modal (with style selector) */}
+      <ModalLayout
+        isOpen={promoOpen}
+        onClose={handlePromoClose}
+        title="Add Promotion"
+        description="Choose a style and update its promotion history."
+        withCard={true}
+      >
+        {promotableStyles.length === 0 ? (
+          <div className="text-sm text-muted-foreground">
+            No styles with promotions to manage yet.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium">Style</label>
+              <select
+                className="border rounded-md px-3 py-2 bg-background"
+                value={selectedStyleId}
+                onChange={(e) => setSelectedStyleId(e.target.value)}
+              >
+                <option value="">Select a style…</option>
+                {promotableStyles.map((s) => (
+                  <option
+                    key={s._id}
+                    value={String(s._id)}
+                  >
+                    {s.styleName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {selectedStyleId ? (
+              <PromotionsForm
+                userStyleId={selectedStyleId}
+                onUpdated={onPromotionUpdated}
+                onClose={handlePromoClose}
+              />
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                Select a style to manage promotions.
+              </div>
+            )}
+          </div>
+        )}
       </ModalLayout>
 
       <hr className="border-gray-200 dark:border-gray-700 my-4" />

@@ -1,3 +1,4 @@
+// components/dashboard/DashboardStyles.jsx
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -7,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import ModalLayout from "@/components/shared/ModalLayout";
 import StyleCard from "./StyleCard";
 import StyleForm from "./forms/StyleForm";
+import PromotionsForm from "./forms/PromotionsForm";
 
 const norm = (v) =>
   String(v ?? "")
@@ -64,7 +66,13 @@ const DashboardStyles = () => {
   const { user } = useUser();
   const [myStyles, setMyStyles] = useState([]);
   const [matchReports, setMatchReports] = useState([]);
+
+  // Add Style modal
   const [open, setOpen] = useState(false);
+
+  // Promotions modal + selection
+  const [promoOpen, setPromoOpen] = useState(false);
+  const [selectedStyleId, setSelectedStyleId] = useState(""); // no default selection
 
   const [loadingStyles, setLoadingStyles] = useState(true);
   const [loadingMatches, setLoadingMatches] = useState(true);
@@ -133,6 +141,46 @@ const DashboardStyles = () => {
     setMyStyles((prev) => prev.filter((s) => s._id !== deletedStyleId));
   };
 
+  const handlePromoClose = async () => {
+    await handleStylesRefresh(); // pulls fresh styles so StyleCard shows the new promotion
+    setPromoOpen(false); // then close the modal
+  };
+  // Styles that support promotions (exclude Wrestling)
+  const promotableStyles = useMemo(
+    () => myStyles.filter((s) => norm(s?.styleName) !== "wrestling"),
+    [myStyles]
+  );
+
+  // Resolve selected style doc (from current list)
+  const selectedStyle = useMemo(
+    () =>
+      promotableStyles.find((s) => String(s._id) === String(selectedStyleId)) ||
+      null,
+    [promotableStyles, selectedStyleId]
+  );
+
+  const openPromotionModal = () => {
+    setPromoOpen(true);
+    setSelectedStyleId(""); // force user to choose, do not auto-select
+  };
+
+  const onPromotionUpdated = async (updatedStyle) => {
+    // Replace just the updated style (or refetch if shape differs)
+    if (updatedStyle?._id) {
+      setMyStyles((prev) =>
+        prev.map((s) =>
+          String(s._id) === String(updatedStyle._id) ? updatedStyle : s
+        )
+      );
+    } else {
+      await handleStylesRefresh();
+    }
+    // Keep the modal open so they can add more if they want
+    // If you prefer to close it after save, uncomment:
+    // setPromoOpen(false);
+    // toast.success("Promotion saved");
+  };
+
   // Compute totals from matchReports
   const styleResultsMap = useMemo(() => {
     const map = {};
@@ -166,42 +214,107 @@ const DashboardStyles = () => {
 
   return (
     <div className="px-4 md:px-6 lg:px-8">
-      {/* Header */}
-      <div className="flex flex-col items-start gap-4 mb-4">
+      {/* Header - left-aligned buttons */}
+      <div className="flex flex-col items-start gap-3 mb-4">
         <h1 className="text-2xl font-bold">My Styles/Sports</h1>
-        <Button
-          className="btn btn-primary"
-          onClick={() => setOpen(true)}
-        >
-          Add Style
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Add Style (first) */}
+          <Button
+            className="btn btn-primary"
+            onClick={() => setOpen(true)}
+          >
+            Add Style
+          </Button>
+          {/* Add Promotion (second) */}
+          {promotableStyles.length > 0 && (
+            <Button
+              onClick={openPromotionModal}
+              className="btn btn-secondary"
+            >
+              Add Promotion
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Helper message */}
       <div className="mb-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white/5 dark:bg-black/20 p-4">
         <p className="text-sm">
-          Click <span className="font-medium">Add Style</span> to create a
-          style/sport you can record match results for. For Judo and Brazilian
-          Jiu-Jitsu, edit the style later to add promotion dates and track your
-          history. The most recent promotion will be set as your{" "}
+          Use <span className="font-medium">Add Style</span> to create a
+          style/sport you can record match results for. Use{" "}
+          <span className="font-medium">Add Promotion</span> to add or edit
+          promotion history for Judo/BJJ. The most recent promotion becomes your{" "}
           <span className="font-medium">current rank</span>.
         </p>
       </div>
 
-      {/* Modal */}
+      {/* Add Style Modal */}
       <ModalLayout
         isOpen={open}
         onClose={() => setOpen(false)}
-        title="Add Style"
         description="Add a new style/sport here. You can edit this style at any time."
         withCard={true}
       >
         <StyleForm
           user={user}
           userType="user"
+          title="Add Promotion"
           setOpen={setOpen}
           onSuccess={handleStylesRefresh}
         />
+      </ModalLayout>
+
+      {/* Promotions Modal (header-level; includes style dropdown, lazy loads content) */}
+      <ModalLayout
+        isOpen={promoOpen}
+        onClose={() => setPromoOpen(false)}
+        title="Add Promotion"
+        description="Choose a style and update its promotion history."
+        withCard={true}
+      >
+        {promotableStyles.length === 0 ? (
+          <div className="text-sm text-muted-foreground">
+            You don’t have any styles that use promotions yet.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Style chooser */}
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium">Style</label>
+              <select
+                className="border rounded-md px-3 py-2 bg-background"
+                value={selectedStyleId}
+                onChange={(e) => setSelectedStyleId(e.target.value)}
+              >
+                <option value="">Select a style…</option>
+                {promotableStyles.map((s) => (
+                  <option
+                    key={s._id}
+                    value={String(s._id)}
+                  >
+                    {s.styleName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Lazy-load the promotions UI only after a style is selected */}
+            {selectedStyleId ? (
+              <PromotionsForm
+                userStyleId={selectedStyleId}
+                onUpdated={onPromotionUpdated}
+                onClose={async () => {
+                  await handleStylesRefresh();
+                  setPromoOpen(false);
+                }}
+              />
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                Select a style to manage promotions.
+              </div>
+            )}
+          </div>
+        )}
       </ModalLayout>
 
       <hr className="border-gray-200 dark:border-gray-700 my-4" />
