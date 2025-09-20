@@ -141,22 +141,20 @@ const DashboardStyles = () => {
     setMyStyles((prev) => prev.filter((s) => s._id !== deletedStyleId));
   };
 
-  const handlePromoClose = async () => {
-    await handleStylesRefresh(); // pulls fresh styles so StyleCard shows the new promotion
-    setPromoOpen(false); // then close the modal
-  };
-  // Styles that support promotions (exclude Wrestling)
-  const promotableStyles = useMemo(
-    () => myStyles.filter((s) => norm(s?.styleName) !== "wrestling"),
+  // Does this style support promotions?
+  const styleSupportsPromotions = (s) => norm(s?.styleName) !== "wrestling";
+
+  // At least one promotable style?
+  const hasPromotable = useMemo(
+    () => myStyles.some(styleSupportsPromotions),
     [myStyles]
   );
 
   // Resolve selected style doc (from current list)
   const selectedStyle = useMemo(
     () =>
-      promotableStyles.find((s) => String(s._id) === String(selectedStyleId)) ||
-      null,
-    [promotableStyles, selectedStyleId]
+      myStyles.find((s) => String(s._id) === String(selectedStyleId)) || null,
+    [myStyles, selectedStyleId]
   );
 
   const openPromotionModal = () => {
@@ -226,10 +224,10 @@ const DashboardStyles = () => {
             Add Style
           </Button>
           {/* Add Promotion (second) */}
-          {promotableStyles.length > 0 && (
+          {hasPromotable && (
             <Button
+              variant="secondary"
               onClick={openPromotionModal}
-              className="btn btn-secondary"
             >
               Add Promotion
             </Button>
@@ -243,7 +241,8 @@ const DashboardStyles = () => {
           Use <span className="font-medium">Add Style</span> to create a
           style/sport you can record match results for. Use{" "}
           <span className="font-medium">Add Promotion</span> to add or edit
-          promotion history for Judo/BJJ. The most recent promotion becomes your{" "}
+          promotion history where applicable (e.g., Judo / BJJ). The most recent
+          promotion becomes your{" "}
           <span className="font-medium">current rank</span>.
         </p>
       </div>
@@ -252,13 +251,13 @@ const DashboardStyles = () => {
       <ModalLayout
         isOpen={open}
         onClose={() => setOpen(false)}
+        title="Add Style"
         description="Add a new style/sport here. You can edit this style at any time."
         withCard={true}
       >
         <StyleForm
           user={user}
           userType="user"
-          title="Add Promotion"
           setOpen={setOpen}
           onSuccess={handleStylesRefresh}
         />
@@ -272,13 +271,13 @@ const DashboardStyles = () => {
         description="Choose a style and update its promotion history."
         withCard={true}
       >
-        {promotableStyles.length === 0 ? (
+        {myStyles.length === 0 ? (
           <div className="text-sm text-muted-foreground">
-            You don’t have any styles that use promotions yet.
+            You don’t have any styles yet.
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Style chooser */}
+            {/* Style chooser (shows ALL styles; Wrestling will be allowed to pick but shows info only) */}
             <div className="flex items-center gap-3">
               <label className="text-sm font-medium">Style</label>
               <select
@@ -287,7 +286,7 @@ const DashboardStyles = () => {
                 onChange={(e) => setSelectedStyleId(e.target.value)}
               >
                 <option value="">Select a style…</option>
-                {promotableStyles.map((s) => (
+                {myStyles.map((s) => (
                   <option
                     key={s._id}
                     value={String(s._id)}
@@ -300,14 +299,21 @@ const DashboardStyles = () => {
 
             {/* Lazy-load the promotions UI only after a style is selected */}
             {selectedStyleId ? (
-              <PromotionsForm
-                userStyleId={selectedStyleId}
-                onUpdated={onPromotionUpdated}
-                onClose={async () => {
-                  await handleStylesRefresh();
-                  setPromoOpen(false);
-                }}
-              />
+              styleSupportsPromotions(selectedStyle) ? (
+                <PromotionsForm
+                  userStyleId={selectedStyleId}
+                  onUpdated={onPromotionUpdated}
+                  onClose={() => setPromoOpen(false)}
+                />
+              ) : (
+                <div className="text-sm text-muted-foreground">
+                  Promotions are not tracked for{" "}
+                  <span className="font-medium">
+                    {selectedStyle?.styleName}
+                  </span>
+                  .
+                </div>
+              )
             ) : (
               <div className="text-sm text-muted-foreground">
                 Select a style to manage promotions.

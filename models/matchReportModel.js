@@ -1,3 +1,4 @@
+// models/matchReportModel.js
 import mongoose from "mongoose";
 
 const matchReportSchema = new mongoose.Schema(
@@ -19,52 +20,64 @@ const matchReportSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+
+    // Style (your style collection name)
     style: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "UserStyle",
+      ref: "styleModel",
     },
-    matchType: {
-      type: String,
-      required: true,
-    },
+
+    matchType: { type: String, required: true },
     eventName: { type: String },
     matchDate: { type: Date, required: true },
-    opponentName: {
-      type: String,
-      required: true,
+
+    // Athlete ranks at time of match (labels)
+    myRank: { type: String },
+    opponentRank: { type: String },
+
+    opponentName: { type: String, required: true },
+
+    // Division & Weights
+    division: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "division", // <- your division model
     },
-    division: { type: String },
-    weightCategory: { type: String },
+    weightCategory: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "weightCategory", // <- category set (e.g., "IJF Senior Men")
+    },
+    weightItemId: { type: String }, // <- EXACT item _id inside weightCategory
+    weightLabel: { type: String }, // <- snapshot label (e.g., "73 kg")
+    weightUnit: { type: String, enum: ["kg", "lb"] }, // <- snapshot unit
+
     opponentClub: { type: String },
     opponentCountry: { type: String },
-    opponentRank: { type: String },
+
     opponentGrip: { type: String },
     opponentAttacks: [String],
     opponentAttackNotes: { type: String },
     athleteAttacks: [String],
     athleteAttackNotes: { type: String },
+
     result: { type: String },
     score: { type: String },
+
     video: {
       videoTitle: { type: String },
       videoNotes: { type: String },
       videoURL: { type: String },
     },
+
     isPublic: {
       type: Boolean,
       default: false,
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-// export const MatchReport =
-//   models.MatchReport || model("MatchReport", matchReportSchema);
+const matchReport =
+  mongoose.models.matchReport ||
+  mongoose.model("matchReport", matchReportSchema);
 
-const MatchReport =
-  mongoose.models.MatchReport ||
-  mongoose.model("MatchReport", matchReportSchema);
-
-export default MatchReport;
+export default matchReport;

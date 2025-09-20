@@ -1,3 +1,4 @@
+// components/dashboard/family/sections/FamilyScoutingReports.jsx
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -11,6 +12,63 @@ import { ArrowUpDown, Eye, Edit, Trash } from "lucide-react";
 import ModalLayout from "@/components/shared/ModalLayout";
 import { normalizeStyles } from "@/lib/normalizeStyles";
 
+/* ---------- helpers to pretty-print Division + Weight ---------- */
+function genderLabel(g) {
+  if (!g) return "";
+  const s = String(g).toLowerCase();
+  if (s === "male") return "Men";
+  if (s === "female") return "Women";
+  if (s === "coed" || s === "open") return "Coed";
+  return s;
+}
+function divisionPrettyFromObj(d) {
+  if (!d) return "";
+  const g = genderLabel(d.gender);
+  return g ? `${d.name} — ${g}` : d.name || "";
+}
+function ensureWeightDisplay(label, unit) {
+  if (!label) return "";
+  const low = String(label).toLowerCase();
+  if (low.includes("kg") || low.includes("lb")) return label;
+  return unit ? `${label} ${unit}` : label;
+}
+function getDivisionId(div) {
+  if (!div) return "";
+  if (typeof div === "string") return div;
+  if (typeof div === "object") {
+    if (div._id) return String(div._id);
+    if (div.id) return String(div.id);
+  }
+  return "";
+}
+async function fetchDivisionWeights(divisionId) {
+  const id = encodeURIComponent(String(divisionId));
+  try {
+    const res = await fetch(`/api/divisions/${id}/weights`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: { accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => ({}));
+    const cat = data?.weightCategory;
+    if (!cat) return null;
+
+    const unit = cat.unit || "";
+    const items = Array.isArray(cat.items) ? cat.items : [];
+    const normItems = items
+      .map((it) => ({
+        _id: String(it._id ?? it.id ?? it.value ?? it.label ?? "").trim(),
+        label: String(it.label ?? it.value ?? "").trim(),
+      }))
+      .filter((x) => x._id && x.label);
+    if (!normItems.length) return null;
+    return { unit, items: normItems };
+  } catch {
+    return null;
+  }
+}
+
 const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
   const router = useRouter();
   const [scoutingReports, setScoutingReports] = useState([]);
@@ -18,7 +76,11 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
 
-  // ✅ Normalize styles for this family member
+  // maps for pretty labels
+  const [divisionMap, setDivisionMap] = useState({});
+  const [weightsMap, setWeightsMap] = useState({});
+
+  // Normalize styles for this family member (for the form)
   const stylesForMember = useMemo(() => {
     const raw = member?.styles?.length
       ? member.styles
@@ -31,6 +93,7 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
   useEffect(() => {
     if (!member?._id || !member?.userId) return;
     fetchReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member?._id, member?.userId]);
 
   const fetchReports = async () => {
@@ -38,43 +101,152 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
       const res = await fetch(
         `/api/dashboard/${member.userId}/family/${
           member._id
-        }/scoutingReports?ts=${Date.now()}`
+        }/scoutingReports?ts=${Date.now()}`,
+        { cache: "no-store", credentials: "same-origin" }
       );
       if (!res.ok) throw new Error("Failed to fetch scouting reports");
       const data = await res.json();
-      setScoutingReports(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setScoutingReports(list);
+
+      // Hydrate pretty maps for division/weights
+      await Promise.all([hydrateDivisionMap(list), hydrateWeightsMap(list)]);
     } catch (err) {
       console.error(err);
       toast.error("Could not load scouting reports.");
     }
   };
 
-  const handleDeleteReport = async (report) => {
-    if (
-      window.confirm("This report will be permanently deleted! Are you sure?")
-    ) {
-      try {
-        const res = await fetch(
-          `/api/dashboard/${member.userId}/family/${member._id}/scoutingReports/${report._id}`,
-          { method: "DELETE", headers: { "Content-Type": "application/json" } }
-        );
-        const data = await res.json();
-        if (res.ok) {
-          toast.success(data.message || "Deleted.");
-          setScoutingReports((prev) =>
-            prev.filter((r) => r._id !== report._id)
-          );
-          setSelectedReport(null);
-          router.refresh();
-        } else {
-          toast.error(data.message || "Failed to delete report");
-        }
-      } catch (err) {
-        console.error(err);
-        toast.error("Error deleting report");
+  const hydrateDivisionMap = async (reports) => {
+    const entries = {};
+    (reports || []).forEach((r) => {
+      const divId = getDivisionId(r?.division);
+      const divObj =
+        r?.division && typeof r.division === "object" ? r.division : null;
+      if (divId && divObj && !entries[divId]) {
+        entries[divId] = divisionPrettyFromObj(divObj);
       }
+    });
+    if (Object.keys(entries).length) {
+      setDivisionMap((prev) => ({ ...prev, ...entries }));
+    }
+
+    // Also fetch catalog per style to cover id-only divisions
+    const styles = Array.from(
+      new Set(
+        (reports || []).map((r) => (r?.matchType || "").trim()).filter(Boolean)
+      )
+    );
+    if (!styles.length) return;
+
+    const fetched = {};
+    await Promise.all(
+      styles.map(async (styleName) => {
+        try {
+          const res = await fetch(
+            `/api/divisions?styleName=${encodeURIComponent(styleName)}`,
+            {
+              cache: "no-store",
+              credentials: "same-origin",
+              headers: { accept: "application/json" },
+            }
+          );
+          const data = await res.json().catch(() => ({}));
+          const divs = Array.isArray(data?.divisions) ? data.divisions : [];
+          divs.forEach((d) => {
+            if (d?._id) fetched[d._id] = divisionPrettyFromObj(d);
+          });
+        } catch {
+          /* ignore */
+        }
+      })
+    );
+    if (Object.keys(fetched).length) {
+      setDivisionMap((prev) => ({ ...prev, ...fetched }));
     }
   };
+
+  const hydrateWeightsMap = async (reports) => {
+    const divIds = Array.from(
+      new Set(
+        (reports || []).map((r) => getDivisionId(r?.division)).filter(Boolean)
+      )
+    );
+    if (!divIds.length) return;
+
+    const entries = {};
+    await Promise.all(
+      divIds.map(async (id) => {
+        const weights = await fetchDivisionWeights(id);
+        if (weights) entries[id] = weights;
+      })
+    );
+    if (Object.keys(entries).length) {
+      setWeightsMap((prev) => ({ ...prev, ...entries }));
+    }
+  };
+
+  const handleDeleteReport = async (report) => {
+    if (
+      !window.confirm("This report will be permanently deleted! Are you sure?")
+    )
+      return;
+    try {
+      const res = await fetch(
+        `/api/dashboard/${member.userId}/family/${member._id}/scoutingReports/${report._id}`,
+        { method: "DELETE", headers: { "Content-Type": "application/json" } }
+      );
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message || "Deleted.");
+        setScoutingReports((prev) => prev.filter((r) => r._id !== report._id));
+        setSelectedReport(null);
+        router.refresh();
+      } else {
+        toast.error(data.message || "Failed to delete report");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error deleting report");
+    }
+  };
+
+  // Derive pretty division/weight for the table and mobile cards
+  const tableData = useMemo(() => {
+    return (scoutingReports || []).map((r) => {
+      const divDisplay =
+        (r?.division && typeof r.division === "object"
+          ? divisionPrettyFromObj(r.division)
+          : r?.division && typeof r.division === "string"
+          ? divisionMap[r.division] || "—"
+          : "—") || "—";
+
+      let weightDisplay = "—";
+      if (r?.weightLabel && String(r.weightLabel).trim()) {
+        weightDisplay = ensureWeightDisplay(
+          String(r.weightLabel).trim(),
+          r?.weightUnit
+        );
+      } else {
+        const divId = getDivisionId(r?.division);
+        const w = divId ? weightsMap[divId] : null;
+        if (w && Array.isArray(w.items) && r?.weightItemId) {
+          const item = w.items.find(
+            (it) =>
+              String(it._id) === String(r.weightItemId) ||
+              String(it.label).toLowerCase() ===
+                String(r.weightItemId).toLowerCase()
+          );
+          if (item?.label) {
+            const unit = r?.weightUnit || w.unit || "";
+            weightDisplay = ensureWeightDisplay(item.label, unit);
+          }
+        }
+      }
+
+      return { ...r, divisionDisplay: divDisplay, weightDisplay };
+    });
+  }, [scoutingReports, divisionMap, weightsMap]);
 
   const columns = [
     {
@@ -118,18 +290,43 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
         </Button>
       ),
     },
+    // Pretty strings, not IDs
     {
-      accessorKey: "division",
-      header: "Division",
+      accessorKey: "divisionDisplay",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Division <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
       meta: { className: "hidden md:table-cell" },
+      sortingFn: (rowA, rowB) =>
+        String(rowA.getValue("divisionDisplay")).localeCompare(
+          String(rowB.getValue("divisionDisplay")),
+          undefined,
+          { sensitivity: "base" }
+        ),
     },
     {
-      accessorKey: "weightCategory",
-      header: "Weight Class",
+      accessorKey: "weightDisplay",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Weight Class <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
       meta: { className: "hidden md:table-cell" },
+      sortingFn: (rowA, rowB) =>
+        String(rowA.getValue("weightDisplay")).localeCompare(
+          String(rowB.getValue("weightDisplay")),
+          undefined,
+          { numeric: true }
+        ),
     },
-
-    // ✅ Created By (sortable) — placed before Actions
     {
       accessorKey: "createdByName",
       header: ({ column }) => (
@@ -142,8 +339,6 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
       ),
       cell: ({ row }) => row.original.createdByName || "—",
     },
-
-    // ✅ Actions column
     {
       id: "actions",
       header: "Actions",
@@ -185,20 +380,40 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
     },
   ];
 
+  const excelHref = `/api/records/scouting?download=1&familyMemberId=${encodeURIComponent(
+    String(member?._id || "")
+  )}&ts=${Date.now()}`;
+
   return (
     <div>
-      {/* Header with Add Button */}
-      <div className="flex flex-col items-start gap-4 mb-4">
+      {/* Header: Title + Add on the LEFT, Export on the RIGHT */}
+      <div className="mb-4">
+        {/* Row 1: title only */}
         <h1 className="text-2xl font-bold">Family Member Scouting</h1>
-        <Button
-          className="bg-gray-900 hover:bg-gray-500 text-white border-2 border-gray-500 dark:border-gray-100"
-          onClick={() => {
-            setSelectedReport(null);
-            setOpen(true);
-          }}
-        >
-          Add Scouting Report
-        </Button>
+
+        {/* Row 2: buttons (left/right) */}
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 items-center gap-2">
+          <div>
+            <Button
+              className="btn btn-primary"
+              onClick={() => {
+                setSelectedReport(null);
+                setOpen(true);
+              }}
+            >
+              Add Scouting Report
+            </Button>
+          </div>
+          <div className="flex sm:justify-end">
+            <a
+              href={excelHref}
+              className="btn btn-outline"
+              title="Export to Excel"
+            >
+              Export to Excel
+            </a>
+          </div>
+        </div>
       </div>
 
       {/* Modal */}
@@ -217,7 +432,6 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
             setOpen={setOpen}
             onSuccess={fetchReports}
             userType="family"
-            // ✅ Pass styles so the style dropdown is populated
             styles={stylesForMember}
           />
         ) : (
@@ -239,10 +453,10 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
         )}
       </ModalLayout>
 
-      {/* Mobile Cards */}
+      {/* Mobile cards (use pretty strings) */}
       <div className="grid grid-cols-1 sm:hidden gap-4 mb-6">
-        {scoutingReports.length > 0 ? (
-          scoutingReports.map((report) => (
+        {tableData.length > 0 ? (
+          tableData.map((report) => (
             <div
               key={report._id}
               className="bg-gray-900 text-white p-4 rounded-xl shadow-md border border-gray-700"
@@ -258,10 +472,10 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
                 <strong>Country:</strong> {report.athleteCountry}
               </p>
               <p>
-                <strong>Division:</strong> {report.division}
+                <strong>Division:</strong> {report.divisionDisplay}
               </p>
               <p>
-                <strong>Weight Class:</strong> {report.weightCategory}
+                <strong>Weight Class:</strong> {report.weightDisplay}
               </p>
 
               <div className="flex justify-end gap-4 mt-4">
@@ -305,7 +519,7 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
         <div className="min-w-[800px]">
           <ReportDataTable
             columns={columns}
-            data={scoutingReports}
+            data={tableData}
             onView={(report) => {
               setSelectedReport(report);
               setPreviewOpen(true);

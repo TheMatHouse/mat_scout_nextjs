@@ -8,7 +8,7 @@ export function middleware(req) {
   if (
     pathname === "/" ||
     pathname === "/teams" ||
-    pathname.startsWith("/teams/") || // <-- public team detail pages
+    pathname.startsWith("/teams/") || // public team detail pages
     pathname === "/login" ||
     pathname === "/register" ||
     pathname === "/forgot-password" ||
@@ -30,7 +30,7 @@ export function middleware(req) {
     return NextResponse.next();
   }
 
-  // --- Optionally allow other public APIs here (health checks, og images, etc.) ---
+  // --- Optionally allow other public APIs here ---
   if (pathname.startsWith("/api/og")) {
     return NextResponse.next();
   }
@@ -42,16 +42,20 @@ export function middleware(req) {
     "/account",
     "/team", // internal team management area
     "/settings",
-    "/scouting", // example protected areas—adjust to your app
+    "/scouting", // adjust to your app
   ];
 
   const requiresAuth = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
 
   if (requiresAuth) {
-    // Minimal session check. If you use a different cookie/header, adjust here.
+    // 👇 Add all cookie names your app might set
     const hasSession =
       req.cookies.get("session")?.value ||
       req.cookies.get("token")?.value ||
+      req.cookies.get("ms_session")?.value || // example
+      req.cookies.get("jwt")?.value || // example
+      req.cookies.get("next-auth.session-token")?.value || // NextAuth dev
+      req.cookies.get("__Secure-next-auth.session-token")?.value || // NextAuth prod
       req.headers.get("authorization");
 
     if (!hasSession) {
@@ -65,7 +69,7 @@ export function middleware(req) {
   return NextResponse.next();
 }
 
-// Run on most paths but skip common static assets by default
+// Run on most paths but skip common static assets
 export const config = {
   matcher: [
     "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)",

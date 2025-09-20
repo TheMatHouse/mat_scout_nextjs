@@ -10,34 +10,26 @@ import {
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 32, // ⬅️ add a little space above the logo
+    paddingTop: 32,
     paddingBottom: 40,
     paddingHorizontal: 36,
     fontSize: 11,
   },
 
-  // Clean header (no background bar)
+  // Header
   header: { marginBottom: 12 },
   logo: {
     width: 160,
     height: 42,
     objectFit: "contain",
     marginBottom: 6,
-    alignSelf: "flex-start", // logo stays left
+    alignSelf: "flex-start",
   },
-  titleBlock: { alignItems: "center" }, // center title + subtitle
-  title: {
-    fontSize: 18,
-    fontWeight: 700,
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 11,
-    color: "#666",
-    textAlign: "center",
-    marginTop: 2,
-  },
+  titleBlock: { alignItems: "center" },
+  title: { fontSize: 18, fontWeight: 700, textAlign: "center" },
+  subtitle: { fontSize: 11, color: "#666", textAlign: "center", marginTop: 2 },
 
+  // Table
   table: {
     display: "table",
     width: "auto",
@@ -75,34 +67,41 @@ export default function StyleRecordPDF({
   wins,
   losses,
   matches,
-  includeStyleColumn = false,
+  includeStyleColumn = false, // optional; table adapts widths if true
 }) {
   const title = `${styleName} Record`;
   const subtitle = `${userName} • Wins ${wins}, Losses ${losses}`;
 
+  // Always-landscape column sets that include rank columns
   const headers = includeStyleColumn
     ? [
-        { key: "style", label: "Style", width: "12%" },
-        { key: "date", label: "Date", width: "12%" },
+        { key: "style", label: "Style", width: "8%" },
+        { key: "date", label: "Date", width: "8%" },
         { key: "eventName", label: "Event", width: "22%" },
-        { key: "opponent", label: "Opponent", width: "20%" },
-        { key: "result", label: "Result", width: "10%" },
-        { key: "division", label: "Division", width: "12%" },
-        { key: "weight", label: "Weight", width: "12%" },
+        { key: "opponent", label: "Opponent", width: "14%" },
+        { key: "opponentRank", label: "Opp. Rank", width: "11%" },
+        { key: "myRank", label: "My Rank", width: "11%" },
+        { key: "result", label: "Result", width: "6%" },
+        { key: "division", label: "Division", width: "10%" },
+        { key: "weight", label: "Weight", width: "10%" },
       ]
     : [
-        { key: "date", label: "Date", width: "14%" },
-        { key: "eventName", label: "Event", width: "22%" },
-        { key: "opponent", label: "Opponent", width: "22%" },
-        { key: "result", label: "Result", width: "12%" },
-        { key: "division", label: "Division", width: "14%" },
-        { key: "weight", label: "Weight", width: "16%" },
+        { key: "date", label: "Date", width: "8%" },
+        { key: "eventName", label: "Event", width: "24%" },
+        { key: "opponent", label: "Opponent", width: "16%" },
+        { key: "opponentRank", label: "Opp. Rank", width: "12%" },
+        { key: "myRank", label: "My Rank", width: "12%" },
+        { key: "result", label: "Result", width: "6%" },
+        { key: "division", label: "Division", width: "11%" },
+        { key: "weight", label: "Weight", width: "11%" },
       ];
 
   return (
     <Document>
+      {/* ⬇⬇⬇ force landscape here */}
       <Page
         size="LETTER"
+        orientation="landscape"
         style={styles.page}
       >
         {/* Header */}
@@ -145,7 +144,7 @@ export default function StyleRecordPDF({
                     key={h.key}
                     style={[styles.cell, { width: h.width }]}
                   >
-                    {String(m[h.key] ?? "")}
+                    {String(m[h.key] ?? "") || "—"}
                   </Text>
                 ))}
               </View>

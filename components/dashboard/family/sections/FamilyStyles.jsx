@@ -139,11 +139,10 @@ const FamilyStyles = ({ member }) => {
       {/* Helpful message */}
       <div className="mb-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white/5 dark:bg-black/20 p-4">
         <p className="text-sm">
-          Click <span className="font-medium">Add Style</span> to create a
-          style/sport for {member.firstName} that you can record match results
-          for. Use <span className="font-medium">Add Promotion</span> to track
-          rank promotions for styles like Judo and Brazilian Jiu-Jitsu. The most
-          recent promotion will be used as the{" "}
+          Use <span className="font-medium">Add Style</span> to create a
+          style/sport you can record match results for. Use{" "}
+          <span className="font-medium">Add Promotion</span> to add or edit
+          promotion history for Judo/BJJ. The most recent promotion becomes your{" "}
           <span className="font-medium">current rank</span>.
         </p>
       </div>

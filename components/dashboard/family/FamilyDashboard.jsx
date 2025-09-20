@@ -1,7 +1,7 @@
 // components/dashboard/FamilyDashboard.jsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import ModalLayout from "@/components/shared/ModalLayout";
 import AddFamilyForm from "./forms/FamilyMemberForm";
@@ -28,27 +28,50 @@ const FamilyDashboard = () => {
   const [open, setOpen] = useState(false);
   const [loadingMembers, setLoadingMembers] = useState(true);
 
-  const fetchFamilyMembers = async () => {
+  const coerceMembers = useCallback((res) => {
+    // Accept several response shapes:
+    // 1) Array
+    if (Array.isArray(res)) return res;
+
+    // 2) { ok, rows: [...] }
+    if (res && Array.isArray(res.rows)) return res.rows;
+
+    // 3) { ok, members: [...] }
+    if (res && Array.isArray(res.members)) return res.members;
+
+    // 4) { data: [...] }
+    if (res && Array.isArray(res.data)) return res.data;
+
+    // 5) { results: [...] }
+    if (res && Array.isArray(res.results)) return res.results;
+
+    return [];
+  }, []);
+
+  const fetchFamilyMembers = useCallback(async () => {
+    if (!user?._id) {
+      setFamilyMembers([]);
+      setLoadingMembers(false);
+      return;
+    }
     try {
       setLoadingMembers(true);
-      const res = await apiFetch(`/api/dashboard/${user._id}/family`);
-      setFamilyMembers(Array.isArray(res) ? res : []);
+      const res = await apiFetch(`/api/dashboard/${user._id}/family`, {
+        cache: "no-store",
+      });
+      const members = coerceMembers(res);
+      setFamilyMembers(members);
     } catch (error) {
       console.error("Failed to fetch family members", error);
       setFamilyMembers([]);
     } finally {
       setLoadingMembers(false);
     }
-  };
+  }, [user?._id, coerceMembers]);
 
   useEffect(() => {
-    if (!user?._id) {
-      setLoadingMembers(false);
-      return;
-    }
     fetchFamilyMembers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?._id]);
+  }, [fetchFamilyMembers]);
 
   const handleDelete = (deletedId) => {
     setFamilyMembers((prev) => prev.filter((m) => m._id !== deletedId));
@@ -96,7 +119,7 @@ const FamilyDashboard = () => {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-2">
           {familyMembers.map((member) => (
             <FamilyCard
               key={member._id}

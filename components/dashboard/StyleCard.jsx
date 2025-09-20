@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import moment from "moment";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";
@@ -22,14 +22,180 @@ const norm = (v) =>
   String(v ?? "")
     .trim()
     .toLowerCase();
-
-// Wrestling has no promotions/ranks
 const isNoPromotionStyle = (name) => norm(name) === "wrestling";
+
+/** Looser outcome parsing: handles "Won by Ippon", "W", "Victory", etc. */
+function parseOutcome(r) {
+  const text = (r.result ?? r.outcome ?? r.decision ?? r.status ?? "")
+    .toString()
+    .toLowerCase();
+
+  // explicit booleans win/loss
+  if (r.isWin === true) return "win";
+  if (r.isLoss === true) return "loss";
+
+  if (!text) return "unknown";
+  if (text.includes("draw") || text.includes("tie")) return "draw";
+
+  // win-ish
+  if (
+    text.startsWith("w") || // "w", "win", "won"
+    text.includes("win") ||
+    text.includes("won") ||
+    text.includes("victory") ||
+    text.includes("ipp") || // "ippon"
+    text.includes("submission") ||
+    text.includes("sub")
+  ) {
+    return "win";
+  }
+
+  // loss-ish
+  if (
+    text.startsWith("l") || // "l", "loss", "lost"
+    text.includes("loss") ||
+    text.includes("lost") ||
+    text.includes("defeat")
+  ) {
+    return "loss";
+  }
+
+  return "unknown";
+}
+
+/** Try to extract a family member id from a report in many shapes. */
+function getReportFamilyId(r) {
+  // Most likely fields first
+  if (r.familyMemberId) return String(r.familyMemberId);
+  if (r.family) return String(r.family);
+  // Some routes store the participant generically:
+  if (r.athleteType === "family" && r.athleteId) return String(r.athleteId);
+  // Defensive: nested shapes (rare)
+  if (r.athlete?.type === "family" && r.athlete?.id)
+    return String(r.athlete.id);
+  return null;
+}
+
+/** Does a report belong to this style? (by userStyleId OR name-like) */
+function matchesStyle(r, idKey, lowerNameKey) {
+  const rUserStyleId = r.userStyleId ? String(r.userStyleId) : null;
+  if (idKey && rUserStyleId && rUserStyleId === idKey) return true;
+
+  const rName =
+    r.styleName ||
+    r.style ||
+    r.style_type ||
+    r.styleLabel ||
+    r?.style?.name ||
+    "";
+  if (lowerNameKey && norm(rName) === lowerNameKey) return true;
+
+  return false;
+}
+
+/** Resolve totals with multiple key paths + legacy compute. */
+function resolveTotals({ style, member, styleResultsMap, styleResults }) {
+  const empty = {
+    wins: 0,
+    losses: 0,
+    draws: 0,
+    _debugKey: "none",
+    _matchedReports: [],
+    _availableMapKeys: Object.keys(styleResultsMap || {}),
+  };
+  if (!style) return empty;
+
+  const idKey = style?._id ? String(style._id) : null;
+  const nameKey = style?.styleName || null;
+  const lowerNameKey = norm(style?.styleName || "");
+  const famId = member?._id ? String(member._id) : null;
+
+  // 1) Prefer map keyed by userStyleId/_id
+  if (
+    idKey &&
+    styleResultsMap &&
+    Object.prototype.hasOwnProperty.call(styleResultsMap, idKey)
+  ) {
+    return {
+      ...(styleResultsMap[idKey] || empty),
+      _debugKey: `_id:${idKey}`,
+      _matchedReports: [],
+    };
+  }
+
+  // 2) Exact styleName in map
+  if (
+    nameKey &&
+    styleResultsMap &&
+    Object.prototype.hasOwnProperty.call(styleResultsMap, nameKey)
+  ) {
+    return {
+      ...(styleResultsMap[nameKey] || empty),
+      _debugKey: `name:${nameKey}`,
+      _matchedReports: [],
+    };
+  }
+
+  // 3) Case-insensitive key in map
+  if (lowerNameKey && styleResultsMap) {
+    const foundKey = Object.keys(styleResultsMap).find(
+      (k) => norm(k) === lowerNameKey
+    );
+    if (foundKey) {
+      return {
+        ...(styleResultsMap[foundKey] || empty),
+        _debugKey: `iname:${foundKey}`,
+        _matchedReports: [],
+      };
+    }
+  }
+
+  // 4) Compute from legacy array (and log exactly what matched)
+  const matched = [];
+  let wins = 0,
+    losses = 0,
+    draws = 0;
+
+  if (Array.isArray(styleResults) && styleResults.length > 0) {
+    for (const r of styleResults) {
+      if (!matchesStyle(r, idKey, lowerNameKey)) continue;
+
+      // If on a family card, ensure it’s THIS family member’s report
+      if (famId) {
+        const rFam = getReportFamilyId(r);
+        if (!rFam || rFam !== famId) continue;
+      }
+
+      const outcome = parseOutcome(r);
+      if (outcome === "win") wins += 1;
+      else if (outcome === "loss") losses += 1;
+      else if (outcome === "draw") draws += 1;
+
+      matched.push({
+        _id: r._id,
+        userStyleId: r.userStyleId,
+        style: r.style || r.styleName,
+        result: r.result || r.outcome,
+        parsed: outcome,
+        familyMemberId: getReportFamilyId(r),
+      });
+    }
+  }
+
+  return {
+    wins,
+    losses,
+    draws,
+    _debugKey: "computed:legacyArray",
+    _matchedReports: matched,
+    _availableMapKeys: Object.keys(styleResultsMap || {}),
+  };
+}
 
 const StyleCard = ({
   style: initialStyle,
-  styleResultsMap, // preferred prop
-  styleResults, // (legacy) not used now, but kept for compatibility
+  styleResultsMap,
+  styleResults,
   user,
   userType,
   onDelete,
@@ -41,6 +207,52 @@ const StyleCard = ({
   const [open, setOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const { refreshUser } = useUser();
+
+  const resolved = useMemo(
+    () =>
+      resolveTotals({
+        style,
+        member,
+        styleResultsMap: styleResultsMap || {},
+        styleResults: styleResults || [],
+      }),
+    [style, member, styleResultsMap, styleResults]
+  );
+
+  const { wins, losses, draws, _debugKey, _matchedReports, _availableMapKeys } =
+    resolved;
+
+  // Deep debug so we can see exactly what's happening for your son's card
+  if (process.env.NODE_ENV !== "production") {
+    // eslint-disable-next-line no-console
+    console.groupCollapsed(
+      `StyleCard<${style?.styleName}> totals via ${_debugKey}`
+    );
+    // eslint-disable-next-line no-console
+    console.log({
+      styleId: style?._id,
+      memberId: member?._id,
+      wins,
+      losses,
+      draws,
+    });
+    if (_matchedReports?.length) {
+      // eslint-disable-next-line no-console
+      console.table(_matchedReports);
+    } else {
+      // eslint-disable-next-line no-console
+      console.log(
+        "No matched reports in fallback compute. Map keys available:",
+        _availableMapKeys
+      );
+      // eslint-disable-next-line no-console
+      console.log(
+        "If styleResultsMap is intended, confirm its keys (userStyleId vs styleName)."
+      );
+    }
+    // eslint-disable-next-line no-console
+    console.groupEnd();
+  }
 
   const handleDeleteStyle = async () => {
     if (!window.confirm(`Delete ${style.styleName}?`)) return;
@@ -68,26 +280,12 @@ const StyleCard = ({
     }
   };
 
-  // Totals come from parent (already computed from matchReports)
-  const key = norm(style.styleName);
-  const totalsRow = styleResultsMap?.[key] ||
-    styleResultsMap?.[style.styleName] ||
-    styleResultsMap?.[
-      Object.keys(styleResultsMap || {}).find((k) => norm(k) === key) || ""
-    ] || { wins: 0, losses: 0, draws: 0 };
-  const wins = Number(totalsRow.wins || 0);
-  const losses = Number(totalsRow.losses || 0);
-
   // PDF links
   const styleParam = style?.styleName || style?._id || "Judo";
   const resolvedLogo = logoUrl || process.env.NEXT_PUBLIC_PDF_LOGO || "";
   const qs = new URLSearchParams();
   if (resolvedLogo) qs.set("logo", resolvedLogo);
-
-  // Always pass the exact userStyle doc id (bullet-proof for PDFs)
   if (style?._id) qs.set("userStyleId", String(style._id));
-
-  // Robust family member propagation (from style doc or page context)
   const familyId = style?.familyMemberId || member?._id || null;
   if (familyId) qs.set("familyMemberId", String(familyId));
 
@@ -95,14 +293,12 @@ const StyleCard = ({
     qs.toString() ? `?${qs.toString()}` : ""
   }`;
 
-  // Promotions PDF via ?view=promotions (only if the style uses promotions)
   const qsPromos = new URLSearchParams(qs.toString());
   qsPromos.set("view", "promotions");
   const pdfPromotionsHref = `/api/records/style/${encodeURIComponent(
     styleParam
   )}${qsPromos.toString() ? `?${qsPromos.toString()}` : ""}`;
 
-  // ---- derived fields & safe fallbacks ----
   const currentRankRaw = style?.currentRank ?? style?.rank ?? "";
   const currentRank =
     currentRankRaw && String(currentRankRaw).trim() !== ""
@@ -185,10 +381,8 @@ const StyleCard = ({
 
       {/* Content */}
       <div className="p-5 space-y-3 text-sm sm:text-base leading-relaxed">
-        {/* Hide rank/promotion if Wrestling */}
         {!noPromotions && (
           <>
-            {/* Started {styleName}: only if startDate present (always allowed) */}
             {style.startDate && (
               <div>
                 <span className="font-semibold text-slate-300">
@@ -262,10 +456,19 @@ const StyleCard = ({
           </span>
           <div className="ml-4 space-y-1">
             <div>
-              <strong>Wins:</strong> {wins}
+              <strong>Wins:</strong> {Number(wins || 0)}
             </div>
             <div>
-              <strong>Losses:</strong> {losses}
+              <strong>Losses:</strong> {Number(losses || 0)}
+            </div>
+            {!!draws && (
+              <div>
+                <strong>Draws:</strong> {Number(draws || 0)}
+              </div>
+            )}
+            {/* Tiny on-card hint for debug */}
+            <div className="text-xs text-slate-400 mt-1">
+              <em>calc: {_debugKey}</em>
             </div>
           </div>
         </div>
@@ -285,7 +488,6 @@ const StyleCard = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Hide Promotions PDF for Wrestling */}
           {!noPromotions && (
             <a
               href={pdfPromotionsHref}

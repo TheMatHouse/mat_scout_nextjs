@@ -1,159 +1,159 @@
 // app/api/dashboard/[userId]/matchReports/route.js
-import { NextResponse } from "next/server";
-import { Types } from "mongoose";
-import { connectDB } from "@/lib/mongo";
-import MatchReport from "@/models/matchReportModel";
-import User from "@/models/userModel";
-import { ensureTechniques } from "@/lib/ensureTechniques";
-
 export const dynamic = "force-dynamic";
 
-// ---------- Helpers ----------
-function normalizeYouTubeUrl(url) {
-  if (!url) return "";
+import { NextResponse } from "next/server";
+import { connectDB } from "@/lib/mongo";
+import matchReport from "@/models/matchReportModel";
+
+const inferGenderFromName = (nameRaw) => {
+  const name = String(nameRaw || "").toLowerCase();
+  if (/\b(men|male|boys?)\b/.test(name)) return "male";
+  if (/\b(women|female|girls?)\b/.test(name)) return "female";
+  if (/\bM[0-9]+\b/i.test(name)) return "male";
+  if (/\bF[0-9]+\b/i.test(name)) return "female";
+  if (/\bcoed\b/.test(name)) return "coed";
+  if (
+    /\b(u[0-9]+|under\s*[0-9]+|bantam|intermediate|juvenile|cadet|junior)\b/.test(
+      name
+    )
+  )
+    return "coed";
+  return "coed";
+};
+const genderWord = (g) =>
+  g === "male" ? "Men" : g === "female" ? "Women" : "Coed";
+
+export async function GET(_req, ctx) {
   try {
-    const short = url.match(/youtu\.be\/([\w-]+)/)?.[1];
-    const norm = url.match(/[?&]v=([\w-]+)/)?.[1];
-    const id = short || norm;
-    return id ? `https://www.youtube.com/watch?v=${id}` : url;
-  } catch {
-    return url;
-  }
-}
-
-const cleanList = (arr) => [
-  ...new Set((arr || []).map((s) => String(s || "").trim()).filter(Boolean)),
-];
-
-const asLower = (arr) => arr.map((s) => s.toLowerCase());
-
-// ---------- GET: all match reports for a user ----------
-export async function GET(_request, context) {
-  await connectDB();
-  const { userId } = await context.params; // <-- Next 15 requires await
-
-  try {
-    if (!userId || !Types.ObjectId.isValid(userId)) {
-      return NextResponse.json(
-        { message: "Invalid or missing user ID" },
-        { status: 400 }
-      );
+    const { userId } = ctx.params || {};
+    if (!userId) {
+      return NextResponse.json({ message: "Missing userId" }, { status: 400 });
     }
 
-    const user = await User.findById(userId).lean();
-    if (!user) {
-      return NextResponse.json({ message: "User not found" }, { status: 404 });
-    }
+    await connectDB();
 
-    const matchReports = await MatchReport.find({
-      athleteId: userId,
-      athleteType: "user",
-    }).sort({ matchDate: -1 });
+    const docs = await matchReport
+      // If you ONLY want the parent’s own reports, keep createdById.
+      // If you also want rows where they’re the athlete, switch to $or below.
+      .find({ createdById: userId })
+      // If your schema marks these as select:false, the +fields force-include them:
+      .select(
+        "+opponentAttacks +athleteAttacks +opponentAttackNotes +athleteAttackNotes"
+      )
+      .populate({ path: "division", select: "name gender" })
+      .populate({
+        path: "weightCategory",
+        select: "unit items._id items.label",
+      })
+      .sort({ matchDate: -1, createdAt: -1 })
+      .lean();
 
-    return NextResponse.json(matchReports, { status: 200 });
-  } catch (error) {
+    const result = (docs || []).map((d) => {
+      let divisionDisplay = "—";
+      if (d?.division?.name) {
+        const g = d?.division?.gender || inferGenderFromName(d.division.name);
+        divisionDisplay = `${d.division.name} — ${genderWord(g)}`;
+      }
+
+      let weightDisplay =
+        d?.weightLabel && d.weightLabel.trim()
+          ? `${d.weightLabel}${d?.weightUnit ? ` ${d.weightUnit}` : ""}`
+          : "";
+
+      if (!weightDisplay && d?.weightItemId && d?.weightCategory?.items) {
+        const found = d.weightCategory.items.find(
+          (it) => String(it._id) === String(d.weightItemId)
+        );
+        if (found?.label) {
+          const unit = d.weightCategory?.unit || "";
+          weightDisplay = `${found.label}${unit ? ` ${unit}` : ""}`;
+        }
+      }
+
+      // Return the full doc plus the derived fields
+      return { ...d, divisionDisplay, weightDisplay: weightDisplay || "—" };
+    });
+
+    return NextResponse.json(result, { status: 200 });
+  } catch (err) {
+    console.error("GET /api/dashboard/[userId]/matchReports error:", err);
     return NextResponse.json(
-      { message: "Error getting match reports", error: error.message },
+      { message: "Failed to fetch match reports" },
       { status: 500 }
     );
   }
 }
 
-// ---------- POST: create a new match report ----------
-export async function POST(request, context) {
-  await connectDB();
-  const { userId } = await context.params; // <-- Next 15 requires await
-
+export async function POST(req, ctx) {
   try {
-    if (!userId || !Types.ObjectId.isValid(userId)) {
-      return NextResponse.json(
-        { message: "Invalid or missing user ID" },
-        { status: 400 }
-      );
+    const { userId } = ctx.params || {};
+    if (!userId) {
+      return NextResponse.json({ message: "Missing userId" }, { status: 400 });
     }
 
-    const user = await User.findById(userId);
-    if (!user) {
-      return NextResponse.json({ message: "User not found" }, { status: 404 });
-    }
+    await connectDB();
 
-    const body = await request.json();
-    const {
-      matchType,
-      eventName,
-      matchDate,
-      division,
-      weightCategory,
-      opponentName,
-      opponentClub,
-      opponentRank,
-      opponentCountry,
-      opponentGrip,
-      opponentAttacks,
-      opponentAttackNotes,
-      athleteAttacks,
-      athleteAttackNotes,
-      result,
-      score,
-      isPublic,
-      videoTitle,
-      videoURL,
-    } = body || {};
+    const body = await req.json();
 
-    // Clean & normalize attacks for report storage (lowercase)
-    const oppAttacksClean = asLower(cleanList(opponentAttacks));
-    const athAttacksClean = asLower(cleanList(athleteAttacks));
+    const doc = await matchReport.create({
+      // who
+      createdById: userId,
+      createdByName: body.createdByName || "",
+      athleteId: body.athlete || body.familyMemberId || userId,
+      athleteType: body.familyMemberId ? "family" : "user",
 
-    // Ensure any typed techniques exist (create if missing; no dup if unapproved exists)
-    await ensureTechniques([
-      ...cleanList(opponentAttacks),
-      ...cleanList(athleteAttacks),
-    ]);
+      // context
+      style: body.style, // optional
+      matchType: body.matchType,
+      eventName: body.eventName,
+      matchDate: body.matchDate,
 
-    const newMatchReport = await MatchReport.create({
-      athleteId: user._id,
-      athleteType: "user",
-      createdById: user._id,
-      createdByName: `${user.firstName} ${user.lastName}`,
-      matchType,
-      eventName,
-      matchDate: matchDate ? new Date(matchDate) : undefined,
-      division,
-      weightCategory,
-      opponentName,
-      opponentClub,
-      opponentRank,
-      opponentCountry,
-      opponentGrip,
-      opponentAttacks: oppAttacksClean,
-      opponentAttackNotes,
-      athleteAttacks: athAttacksClean,
-      athleteAttackNotes,
-      result,
-      score,
+      // ranks (labels from form)
+      myRank: body.myRank || "",
+      opponentRank: body.opponentRank || "",
+
+      // opponent
+      opponentName: body.opponentName || "",
+      opponentClub: body.opponentClub || "",
+      opponentCountry: body.opponentCountry ?? "", // <-- ensure string
+      opponentGrip: body.opponentGrip || "",
+      opponentAttacks: Array.isArray(body.opponentAttacks)
+        ? body.opponentAttacks
+        : [],
+      opponentAttackNotes: body.opponentAttackNotes || "",
+      athleteAttacks: Array.isArray(body.athleteAttacks)
+        ? body.athleteAttacks
+        : [],
+      athleteAttackNotes: body.athleteAttackNotes || "",
+
+      // result
+      result: body.result || "",
+      score: body.score || "",
+
+      // video
       video: {
-        videoTitle: videoTitle || "",
-        videoURL: normalizeYouTubeUrl(videoURL || ""),
+        videoTitle: body.video?.videoTitle || body.videoTitle || "",
+        videoURL: body.video?.videoURL || body.videoURL || "",
       },
-      isPublic: !!isPublic,
-    });
 
-    // Link the report to the user
-    await User.findByIdAndUpdate(user._id, {
-      $addToSet: { matchReports: newMatchReport._id },
+      isPublic: !!body.isPublic,
+
+      // division + weight refs + snapshot
+      division: body.division || null,
+      weightCategory: body.weightCategory || null,
+      weightItemId: body.weightItemId || null,
+      weightLabel: body.weightLabel || "",
+      weightUnit: body.weightUnit || "",
     });
 
     return NextResponse.json(
-      {
-        message: "Match report created successfully",
-        matchReportId: newMatchReport._id,
-      },
+      { ok: true, message: "Match report created", id: String(doc._id) },
       { status: 201 }
     );
-  } catch (error) {
-    console.error("Match report creation error:", error);
+  } catch (err) {
+    console.error("POST /api/dashboard/[userId]/matchReports error:", err);
     return NextResponse.json(
-      { message: "Server error", error: error.message },
+      { message: "Failed to create match report" },
       { status: 500 }
     );
   }

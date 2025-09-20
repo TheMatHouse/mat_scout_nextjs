@@ -1,12 +1,12 @@
 // components/dashboard/forms/PromotionsForm.jsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 
-// Safe JSON parser
+/* ---------------- helpers ---------------- */
 async function readJsonSafe(res) {
   const text = await res.text();
   try {
@@ -20,7 +20,88 @@ function SpinnerInline() {
   return <div className="text-sm text-muted-foreground">Loading…</div>;
 }
 
-const AddPromotionInline = ({ userStyleId, onAdded, onClose }) => {
+function styleKeyFromStyleName(name) {
+  const s = String(name || "").toLowerCase();
+  if (s.includes("judo")) return "judo";
+  if (s.includes("bjj") || s.includes("jiu")) return "bjj";
+  return null;
+}
+
+const JUDO_KYU_LABELS = {
+  white: "White Belt",
+  yellow: "Yellow Belt (Gokyu / 5th Kyu)",
+  orange: "Orange Belt (Yonkyu / 4th Kyu)",
+  green: "Green Belt (Sankyu / 3rd Kyu)",
+  blue: "Blue Belt (Nikyu / 2nd Kyu)",
+  brown: "Brown Belt (Ikkyu / 1st Kyu)",
+};
+const JUDO_DAN_ROMAJI = {
+  1: "Shodan",
+  2: "Nidan",
+  3: "Sandan",
+  4: "Yondan",
+  5: "Godan",
+  6: "Rokudan",
+  7: "Shichidan",
+  8: "Hachidan",
+  9: "Kudan",
+  10: "Judan",
+};
+const ordinal = (n) => {
+  const v = n % 100;
+  if (v >= 11 && v <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1:
+      return `${n}st`;
+    case 2:
+      return `${n}nd`;
+    case 3:
+      return `${n}rd`;
+    default:
+      return `${n}th`;
+  }
+};
+const titleCase = (w) =>
+  String(w || "")
+    .toLowerCase()
+    .replace(/\b\w/g, (m) => m.toUpperCase());
+
+function friendlyRankLabel(rank, styleKey) {
+  if (rank?.label) return rank.label;
+
+  const code = String(rank?.code || "").toLowerCase();
+  if (!styleKey || !code) return rank?.code || "";
+
+  if (styleKey === "judo") {
+    if (JUDO_KYU_LABELS[code]) return JUDO_KYU_LABELS[code];
+    if (code === "black") return "Black Belt";
+    if (code.startsWith("black-")) {
+      const n = parseInt(code.split("-")[1], 10);
+      const romaji = JUDO_DAN_ROMAJI[n] || "";
+      return `${ordinal(n)} Degree Black Belt${romaji ? ` (${romaji})` : ""}`;
+    }
+    return rank?.code || "";
+  }
+
+  if (styleKey === "bjj") {
+    if (code === "black") return "Black Belt";
+    if (code.startsWith("black-")) {
+      const n = parseInt(code.split("-")[1], 10);
+      return `${ordinal(n)} Degree Black Belt`;
+    }
+    return `${titleCase(code)} Belt`;
+  }
+
+  return rank?.code || "";
+}
+
+/* ---------------- child components ---------------- */
+const AddPromotionInline = ({
+  userStyleId,
+  onAdded,
+  onClose,
+  rankOptions, // [{ value: label, label }]
+}) => {
   const [form, setForm] = useState({
     rank: "",
     promotedOn: "",
@@ -30,18 +111,27 @@ const AddPromotionInline = ({ userStyleId, onAdded, onClose }) => {
   });
   const [saving, setSaving] = useState(false);
 
-  const onChange = (e) =>
-    setForm((s) => ({ ...s, [e.target.name]: e.target.value }));
+  const hasRankOptions = Array.isArray(rankOptions) && rankOptions.length > 0;
 
   const submit = async (e) => {
     e.preventDefault();
     if (!userStyleId) return;
+
+    if (!form.rank) {
+      toast.error("Please select a rank.");
+      return;
+    }
+    if (!form.promotedOn) {
+      toast.error("Please select a promotion date.");
+      return;
+    }
+
     setSaving(true);
     try {
       const res = await fetch(`/api/userStyles/${userStyleId}/promotions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(form), // store human-readable label
       });
       const json = await readJsonSafe(res);
       if (!res.ok || !json?.style) {
@@ -71,15 +161,41 @@ const AddPromotionInline = ({ userStyleId, onAdded, onClose }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium">New Rank</label>
-          <input
-            name="rank"
-            className="mt-1 w-full rounded border p-2 bg-background"
-            value={form.rank}
-            onChange={onChange}
-            placeholder="e.g., Shodan / Brown"
-            required
-          />
+
+          {hasRankOptions ? (
+            <select
+              className="mt-1 w-full rounded border p-2 bg-background"
+              value={form.rank}
+              onChange={(e) =>
+                setForm((s) => ({
+                  ...s,
+                  rank: e.target.value, // label == value
+                }))
+              }
+              required
+            >
+              <option value="">Select rank…</option>
+              {rankOptions.map((opt) => (
+                <option
+                  key={opt.value}
+                  value={opt.value}
+                >
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              name="rank"
+              className="mt-1 w-full rounded border p-2 bg-background"
+              value={form.rank}
+              onChange={(e) => setForm((s) => ({ ...s, rank: e.target.value }))}
+              placeholder="e.g., Shodan / Brown"
+              required
+            />
+          )}
         </div>
+
         <div>
           <label className="block text-sm font-medium">Promotion Date</label>
           <input
@@ -87,7 +203,9 @@ const AddPromotionInline = ({ userStyleId, onAdded, onClose }) => {
             name="promotedOn"
             className="mt-1 w-full rounded border p-2 bg-background"
             value={form.promotedOn}
-            onChange={onChange}
+            onChange={(e) =>
+              setForm((s) => ({ ...s, promotedOn: e.target.value }))
+            }
             required
           />
         </div>
@@ -102,7 +220,9 @@ const AddPromotionInline = ({ userStyleId, onAdded, onClose }) => {
             name="awardedBy"
             className="mt-1 w-full rounded border p-2 bg-background"
             value={form.awardedBy}
-            onChange={onChange}
+            onChange={(e) =>
+              setForm((s) => ({ ...s, awardedBy: e.target.value }))
+            }
           />
         </div>
         <div>
@@ -113,7 +233,9 @@ const AddPromotionInline = ({ userStyleId, onAdded, onClose }) => {
             name="proofUrl"
             className="mt-1 w-full rounded border p-2 bg-background"
             value={form.proofUrl}
-            onChange={onChange}
+            onChange={(e) =>
+              setForm((s) => ({ ...s, proofUrl: e.target.value }))
+            }
             placeholder="https://..."
           />
         </div>
@@ -125,11 +247,10 @@ const AddPromotionInline = ({ userStyleId, onAdded, onClose }) => {
           name="note"
           className="mt-1 w-full rounded border p-2 bg-background"
           value={form.note}
-          onChange={onChange}
+          onChange={(e) => setForm((s) => ({ ...s, note: e.target.value }))}
         />
       </div>
 
-      {/* Action row: Centered, Add Promotion left, Close right */}
       <div className="flex items-center justify-center gap-4 pt-2">
         <Button
           type="submit"
@@ -256,7 +377,9 @@ const PromotionsList = ({ userStyleId, promotions = [], onDeleted }) => {
 export default function PromotionsForm({ userStyleId, onUpdated, onClose }) {
   const [loading, setLoading] = useState(false);
   const [styleDoc, setStyleDoc] = useState(null);
+  const [allRanks, setAllRanks] = useState([]); // fetched from /api/ranks
 
+  // Load the userStyle doc
   useEffect(() => {
     let alive = true;
     async function load() {
@@ -284,11 +407,45 @@ export default function PromotionsForm({ userStyleId, onUpdated, onClose }) {
     };
   }, [userStyleId]);
 
+  // Fetch standardized ranks once
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/ranks", { cache: "no-store" });
+        const data = await readJsonSafe(res);
+        if (alive) setAllRanks(Array.isArray(data) ? data : []);
+      } catch {
+        if (alive) setAllRanks([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // 🔒 Always call hooks before any conditional return
+  const styleKey = styleKeyFromStyleName(styleDoc?.styleName);
+  const rankOptions = useMemo(() => {
+    if (!styleKey) return [];
+    const filtered = (allRanks || []).filter(
+      (r) => String(r.style || "").toLowerCase() === styleKey
+    );
+    // Use label as both label+value so the select stays controlled by the same string we save
+    return filtered
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .map((r) => {
+        const label = friendlyRankLabel(r, styleKey);
+        return { value: label, label };
+      });
+  }, [allRanks, styleKey]);
+
   const handleUpdated = (updated) => {
     setStyleDoc(updated);
     onUpdated?.(updated);
   };
 
+  // ✅ Now it’s safe to conditionally return (hook order already fixed)
   if (!userStyleId) {
     return (
       <div className="text-sm text-muted-foreground">
@@ -346,7 +503,14 @@ export default function PromotionsForm({ userStyleId, onUpdated, onClose }) {
           userStyleId={userStyleId}
           onAdded={handleUpdated}
           onClose={onClose}
+          rankOptions={rankOptions}
         />
+        {styleKey == null && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            This style doesn’t have a standardized rank list yet. Enter the new
+            rank manually.
+          </p>
+        )}
       </div>
     </div>
   );

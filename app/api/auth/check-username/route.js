@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
+import FamilyMember from "@/models/familyMemberModel"; // 👈 added
 import { sanitizeUsername, USERNAME_REGEX, RESERVED } from "@/lib/identifiers";
 
 function noStoreJson(body, status = 200) {
@@ -22,6 +23,7 @@ export async function GET(request) {
   const raw =
     url.searchParams.get("username") ?? url.searchParams.get("u") ?? "";
   const wantDebug = url.searchParams.get("debug") === "1";
+
   const normalized = sanitizeUsername(raw).toLowerCase();
 
   if (!normalized) {
@@ -57,8 +59,7 @@ export async function GET(request) {
     });
   }
 
-  // TEMP: hardcoded probe to separate UI vs API issues.
-  // If the UI ever shows "taken" for this value, the issue is in the client mapping.
+  // Probe that should ALWAYS be available (for client debugging)
   if (normalized === "zzztestavailable123") {
     return noStoreJson({
       ok: true,
@@ -75,23 +76,39 @@ export async function GET(request) {
   try {
     await connectDB();
 
-    // Exact case-insensitive match via collation
-    let existing = null;
+    // --- Check Users (case-insensitive) ---
+    let userHit = null;
     try {
-      existing = await User.findOne({ username: normalized })
+      userHit = await User.findOne({ username: normalized })
         .collation({ locale: "en", strength: 2 })
         .select({ _id: 1, username: 1 })
         .lean();
     } catch {
       // Fallback: anchored case-insensitive regex
-      existing = await User.findOne({
+      userHit = await User.findOne({
         username: { $regex: `^${normalized}$`, $options: "i" },
       })
         .select({ _id: 1, username: 1 })
         .lean();
     }
 
-    const available = !existing;
+    // --- Check Family Members (case-insensitive) ---
+    let familyHit = null;
+    try {
+      familyHit = await FamilyMember.findOne({ username: normalized })
+        .collation({ locale: "en", strength: 2 })
+        .select({ _id: 1, username: 1 })
+        .lean();
+    } catch {
+      familyHit = await FamilyMember.findOne({
+        username: { $regex: `^${normalized}$`, $options: "i" },
+      })
+        .select({ _id: 1, username: 1 })
+        .lean();
+    }
+
+    const exists = !!(userHit || familyHit);
+    const available = !exists;
 
     return noStoreJson({
       ok: true,
@@ -104,8 +121,9 @@ export async function GET(request) {
             debug: {
               raw,
               normalized,
-              exists: !!existing,
-              hit: existing?.username ?? null,
+              exists,
+              userHit: userHit?.username ?? null,
+              familyHit: familyHit?.username ?? null,
             },
           }
         : {}),

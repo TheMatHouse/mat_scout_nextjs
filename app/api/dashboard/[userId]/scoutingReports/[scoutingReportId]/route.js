@@ -1,177 +1,190 @@
+// app/api/dashboard/[userId]/scoutingReports/[reportId]/route.js
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import { connectDB } from "@/lib/mongo";
 import ScoutingReport from "@/models/scoutingReportModel";
-import Video from "@/models/videoModel";
-import User from "@/models/userModel";
-import { getCurrentUserFromCookies } from "@/lib/auth-server";
-import { ensureTechniques } from "@/lib/ensureTechniques";
 
 export const dynamic = "force-dynamic";
 
-// ---- helpers ----
-const cleanList = (arr) => [
-  ...new Set((arr || []).map((s) => String(s || "").trim()).filter(Boolean)),
-];
-const asLower = (arr) => arr.map((s) => s.toLowerCase());
-const isValidId = (id) => !!id && Types.ObjectId.isValid(id);
+/* ---------------- helpers ---------------- */
+const first24Hex = (v) =>
+  typeof v === "string" ? (v.match(/[a-f0-9]{24}/i) || [])[0] : null;
 
-// PATCH: Update a scouting report
-export async function PATCH(request, context) {
-  await connectDB();
-  const { userId, scoutingReportId } = context.params || {};
-  const currentUser = await getCurrentUserFromCookies();
+const safeStr = (v) => (v == null ? "" : String(v)).trim();
 
-  if (!isValidId(userId) || !isValidId(scoutingReportId)) {
-    return NextResponse.json({ message: "Invalid ID(s)" }, { status: 400 });
+// pull a param value robustly from params OR from the URL path as a fallback
+const extractReportId = async (req, context) => {
+  const p = (await context?.params) || context?.params || {};
+  const keys = Object.keys(p || {});
+  // try known names
+  const fromParams =
+    p.reportId ||
+    p.id ||
+    p.scoutingReportId ||
+    p.scoutingReportsId ||
+    (keys.length === 1 ? p[keys[0]] : null);
+  if (fromParams) return safeStr(fromParams);
+
+  // fallback: use the last segment of the path
+  try {
+    const path = new URL(req.url).pathname;
+    const seg = safeStr(path.split("/").filter(Boolean).pop());
+    return seg;
+  } catch {
+    return "";
   }
-  if (!currentUser || String(currentUser._id) !== String(userId)) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+};
+
+// Build filters that match either ObjectId _or_ string _id (covers legacy docs)
+const buildIdCandidates = (rawId) => {
+  const candidates = [];
+  const idStr = safeStr(rawId);
+  if (!idStr) return candidates;
+
+  const hex = first24Hex(idStr);
+  if (hex) {
+    try {
+      candidates.push({ _id: new Types.ObjectId(hex) });
+    } catch {
+      /* ignore cast error; we'll still try string form */
+    }
+  }
+  // Always also try raw string form
+  candidates.push({ _id: idStr });
+  return candidates;
+};
+
+/* ---------------- PATCH ---------------- */
+export async function PATCH(req, context) {
+  await connectDB();
+
+  const rawReportId = await extractReportId(req, context);
+  const candidates = buildIdCandidates(rawReportId);
+
+  if (!candidates.length) {
+    return NextResponse.json(
+      { message: "Invalid report ID", debug: { rawReportId } },
+      { status: 400 }
+    );
   }
 
   try {
-    const body = await request.json();
+    const body = await req.json();
 
-    // Ensure techniques exist (create missing; no dup if an unapproved exists)
-    if (Array.isArray(body.athleteAttacks)) {
-      await ensureTechniques(cleanList(body.athleteAttacks));
-    }
-
-    // Update existing videos
-    if (Array.isArray(body.updatedVideos)) {
-      for (const v of body.updatedVideos) {
-        if (v?._id && Types.ObjectId.isValid(v._id)) {
-          await Video.findByIdAndUpdate(v._id, {
-            $set: {
-              title: v.title ?? "",
-              notes: v.notes ?? "",
-              url: v.url ?? "",
-            },
-          });
-        }
-      }
-    }
-
-    // Delete removed videos
-    if (Array.isArray(body.deletedVideos) && body.deletedVideos.length) {
-      await Video.deleteMany({ _id: { $in: body.deletedVideos } });
-      await ScoutingReport.findByIdAndUpdate(scoutingReportId, {
-        $pull: { videos: { $in: body.deletedVideos } },
-      });
-    }
-
-    // Add new videos
-    if (Array.isArray(body.newVideos) && body.newVideos.length) {
-      const created = await Video.insertMany(
-        body.newVideos.map((n) => ({
-          title: n.title || "",
-          notes: n.notes || "",
-          url: n.url || "",
-          // IMPORTANT: use the same field you use in POST; earlier we used "report"
-          report: scoutingReportId,
-          createdBy: userId,
-        })),
-        { ordered: false }
-      );
-      await ScoutingReport.findByIdAndUpdate(scoutingReportId, {
-        $push: { videos: { $each: created.map((x) => x._id) } },
-      });
-    }
-
-    // Remove video arrays from main update, normalize attacks
-    const {
-      updatedVideos,
-      deletedVideos,
-      newVideos,
-      videos, // ignore direct overwrite
-      athleteAttacks,
-      ...rest
-    } = body;
-
-    const updateDoc = {
-      ...rest,
-      updatedAt: new Date(),
-    };
-
-    if (Array.isArray(athleteAttacks)) {
-      updateDoc.athleteAttacks = asLower(cleanList(athleteAttacks));
-    }
-
-    const updated = await ScoutingReport.findOneAndUpdate(
-      { _id: scoutingReportId, createdById: userId },
-      { $set: updateDoc },
-      { new: true }
-    );
-
-    if (!updated) {
+    // Find doc by either id representation
+    const doc = await ScoutingReport.findOne({ $or: candidates });
+    if (!doc) {
       return NextResponse.json(
-        { message: "Scouting report not found" },
+        { message: "Report not found", debug: { rawReportId, candidates } },
         { status: 404 }
       );
     }
 
+    // Build update doc from allowed fields
+    const update = {
+      ...(body.matchType !== undefined && { matchType: body.matchType }),
+
+      ...(body.athleteFirstName !== undefined && {
+        athleteFirstName: body.athleteFirstName,
+      }),
+      ...(body.athleteLastName !== undefined && {
+        athleteLastName: body.athleteLastName,
+      }),
+      ...(body.athleteNationalRank !== undefined && {
+        athleteNationalRank: body.athleteNationalRank,
+      }),
+      ...(body.athleteWorldRank !== undefined && {
+        athleteWorldRank: body.athleteWorldRank,
+      }),
+
+      ...(body.division !== undefined && { division: body.division }),
+      ...(body.athleteClub !== undefined && { athleteClub: body.athleteClub }),
+      ...(body.athleteCountry !== undefined && {
+        athleteCountry: body.athleteCountry,
+      }),
+      ...(body.athleteRank !== undefined && { athleteRank: body.athleteRank }),
+      ...(body.athleteGrip !== undefined && { athleteGrip: body.athleteGrip }),
+      ...(body.athleteAttacks !== undefined && {
+        athleteAttacks: body.athleteAttacks,
+      }),
+      ...(body.athleteAttackNotes !== undefined && {
+        athleteAttackNotes: body.athleteAttackNotes,
+      }),
+      ...(body.accessList !== undefined && { accessList: body.accessList }),
+    };
+
+    // weight fields (keep alias in sync)
+    if (body.weightCategory !== undefined) {
+      update.weightCategory = body.weightCategory;
+      update.weightItemId = body.weightCategory;
+    }
+    if (body.weightLabel !== undefined) update.weightLabel = body.weightLabel;
+    if (body.weightUnit !== undefined) update.weightUnit = body.weightUnit;
+
+    await ScoutingReport.updateOne({ _id: doc._id }, { $set: update });
+
     return NextResponse.json(
-      { message: "Report updated", report: updated },
+      { message: "Scouting report updated." },
       { status: 200 }
     );
-  } catch (error) {
-    console.error("Error updating scouting report:", error);
+  } catch (err) {
+    console.error("PATCH scoutingReport error:", err);
     return NextResponse.json(
-      { message: "Failed to update report", error: error.message },
+      { message: "Failed to update scouting report", error: err.message },
       { status: 500 }
     );
   }
 }
 
-// DELETE: Delete a scouting report (+ associated videos) and unlink from user
-export async function DELETE(_request, context) {
+/* ---------------- DELETE ---------------- */
+export async function DELETE(req, context) {
   await connectDB();
-  const { userId, scoutingReportId } = context.params || {};
 
-  if (!isValidId(userId) || !isValidId(scoutingReportId)) {
+  const rawReportId = await extractReportId(req, context);
+  const candidates = buildIdCandidates(rawReportId);
+
+  if (!candidates.length) {
     return NextResponse.json(
-      { message: "Invalid ID(s) provided" },
+      { message: "Invalid report ID", debug: { rawReportId } },
       { status: 400 }
     );
   }
 
-  const currentUser = await getCurrentUserFromCookies();
-  if (!currentUser || String(currentUser._id) !== String(userId)) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
-
   try {
-    const report = await ScoutingReport.findOne({
-      _id: scoutingReportId,
-      createdById: userId,
-    });
-
-    if (!report) {
+    // 1) Confirm it exists using either id representation
+    const doc = await ScoutingReport.findOne({ $or: candidates }).lean();
+    if (!doc) {
       return NextResponse.json(
-        { message: "Scouting report not found" },
+        {
+          message: "Report not found",
+          debug: {
+            rawReportId,
+            candidates,
+            // NOTE: keep this debug while fixing; remove later
+          },
+        },
         { status: 404 }
       );
     }
 
-    const videoIds = Array.isArray(report.videos) ? report.videos : [];
-    if (videoIds.length) {
-      await Video.deleteMany({ _id: { $in: videoIds } });
+    // 2) Delete by the same $or candidates
+    const res = await ScoutingReport.deleteOne({ $or: candidates });
+
+    if (res.deletedCount !== 1) {
+      return NextResponse.json(
+        { message: "Report not found", debug: { rawReportId, candidates } },
+        { status: 404 }
+      );
     }
 
-    await report.deleteOne();
-    // Detach from user doc
-    await User.findByIdAndUpdate(userId, {
-      $pull: { scoutingReports: report._id },
-    });
-
     return NextResponse.json(
-      { message: "Scouting report and associated videos deleted successfully" },
+      { message: "Scouting report deleted." },
       { status: 200 }
     );
-  } catch (error) {
-    console.error("Error deleting scouting report:", error);
+  } catch (err) {
+    console.error("DELETE scoutingReport error:", err);
     return NextResponse.json(
-      { message: "Failed to delete scouting report" },
+      { message: "Failed to delete scouting report", error: err.message },
       { status: 500 }
     );
   }

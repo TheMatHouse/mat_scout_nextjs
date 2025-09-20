@@ -1,7 +1,7 @@
 // components/dashboard/DashboardMatches.jsx
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import moment from "moment";
 import { toast } from "react-toastify";
@@ -11,13 +11,47 @@ import MatchReportForm from "./forms/MatchReportForm";
 import PreviewReportModal from "./PreviewReportModal";
 
 import { Button } from "@/components/ui/button";
-import { ArrowUpDown, Eye, Edit, Trash } from "lucide-react";
+import { ArrowUpDown, Eye, Edit, Trash, Printer } from "lucide-react";
 import ModalLayout from "@/components/shared/ModalLayout";
 import Spinner from "@/components/shared/Spinner";
+
+/* ---------------- helpers to normalize styles shapes ---------------- */
+const toIdString = (v) =>
+  v && typeof v === "object" && v._id ? String(v._id) : v ? String(v) : "";
+
+function extractStylesShape(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (payload && Array.isArray(payload.styles)) return payload.styles;
+  if (payload && Array.isArray(payload.userStyles)) return payload.userStyles;
+  if (payload && typeof payload === "object") {
+    const arr = Object.values(payload).find(Array.isArray);
+    if (Array.isArray(arr)) return arr;
+  }
+  return [];
+}
+
+function onlyPrimaryUserStyles(arr, userId) {
+  const uid = String(userId || "");
+  return (Array.isArray(arr) ? arr : []).filter((s) => {
+    const sUid = toIdString(s?.userId);
+    const fam = s?.familyMemberId;
+    const isMine = sUid && sUid === uid;
+    const noFamily =
+      fam == null ||
+      String(fam) === "" ||
+      (typeof fam === "object" && !fam._id);
+    return isMine && noFamily;
+  });
+}
+/* ------------------------------------------------------------------- */
+
+const genderWord = (g) =>
+  g === "male" ? "Men" : g === "female" ? "Women" : g === "coed" ? "Coed" : "";
 
 const DashboardMatches = ({ user }) => {
   const router = useRouter();
   const [matchReports, setMatchReports] = useState([]);
+  const [matchesLoading, setMatchesLoading] = useState(true);
 
   // Modal state
   const [open, setOpen] = useState(false);
@@ -31,26 +65,55 @@ const DashboardMatches = ({ user }) => {
   // resolve a default logo (used in the PDF header)
   const logoUrl =
     process.env.NEXT_PUBLIC_PDF_LOGO ||
-    "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png";
+    "https://res.cloudinary.com/matscout/image/upload/v1755958032/matScout_logo_bg_blue_vsebxm.png";
 
   useEffect(() => {
     if (!user?._id) return;
     fetchMatches();
-  }, [user]);
+  }, [user?._id]);
 
   const fetchMatches = async () => {
+    setMatchesLoading(true);
     try {
-      const res = await fetch(`/api/dashboard/${user._id}/matchReports`);
+      const res = await fetch(`/api/dashboard/${user._id}/matchReports`, {
+        cache: "no-store",
+      });
       if (!res.ok) throw new Error("Failed to fetch match reports");
       const data = await res.json();
-      setMatchReports(data);
+      setMatchReports(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
       toast.error("Could not load match reports.");
+    } finally {
+      setMatchesLoading(false);
     }
   };
 
-  // Fetch the current user's styles specifically for the form (fresh, not from user object)
+  // Build derived display fields for Division & Weight (expects API to populate division)
+  const tableData = useMemo(() => {
+    return (matchReports || []).map((m) => {
+      const divObj =
+        m?.division && typeof m.division === "object" ? m.division : null;
+
+      const divisionDisplay = divObj
+        ? `${divObj.name ?? ""}${
+            divObj.gender ? ` — ${genderWord(divObj.gender)}` : ""
+          }` || "—"
+        : typeof m?.division === "string" && m.division
+        ? m.division
+        : "—";
+
+      // ✅ Weight: show ONLY the snapshot; never print an ObjectId string
+      const weightDisplay =
+        m?.weightLabel && m?.weightLabel.trim()
+          ? `${m.weightLabel}${m.weightUnit ? ` ${m.weightUnit}` : ""}`
+          : "—";
+
+      return { ...m, divisionDisplay, weightDisplay };
+    });
+  }, [matchReports]);
+
+  // Fetch the current user's styles specifically for the form
   const loadStylesForModal = useCallback(async () => {
     if (!user?._id) {
       setStylesForForm([]);
@@ -58,10 +121,36 @@ const DashboardMatches = ({ user }) => {
     }
     setStylesLoading(true);
     try {
-      const res = await fetch(`/api/dashboard/${user._id}/userStyles`);
-      if (!res.ok) throw new Error("Failed to load styles");
-      const data = await res.json();
-      setStylesForForm(Array.isArray(data) ? data : []);
+      let list = [];
+
+      // 1) Try dashboard userStyles endpoint
+      try {
+        const res = await fetch(`/api/dashboard/${user._id}/userStyles`, {
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          list = extractStylesShape(data);
+        }
+      } catch (_) {
+        // ignore and fall through
+      }
+
+      // 2) Fallback to generic /api/userStyles
+      if (!Array.isArray(list) || list.length === 0) {
+        try {
+          const res2 = await fetch(`/api/userStyles`, { cache: "no-store" });
+          if (res2.ok) {
+            const data2 = await res2.json();
+            list = extractStylesShape(data2);
+          }
+        } catch (_) {}
+      }
+
+      // Keep only this user's primary (non-family) styles
+      const filtered = onlyPrimaryUserStyles(list, user._id);
+
+      setStylesForForm(filtered);
     } catch (e) {
       console.error("Failed to load styles:", e);
       setStylesForForm([]);
@@ -87,7 +176,7 @@ const DashboardMatches = ({ user }) => {
           toast.success(data.message);
           fetchMatches();
         } else {
-          toast.error(data.message);
+          toast.error(data.message || "Failed to delete match report.");
         }
       } catch (err) {
         console.error(err);
@@ -131,10 +220,60 @@ const DashboardMatches = ({ user }) => {
       ),
       cell: ({ getValue }) => moment.utc(getValue()).format("MMMM D, YYYY"),
     },
+
+    // ✅ Division (derived)
     {
-      accessorKey: "division",
-      header: "Division",
+      accessorKey: "divisionDisplay",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Division <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
       meta: { className: "hidden md:table-cell" },
+    },
+
+    // ✅ Weight (derived)
+    {
+      accessorKey: "weightDisplay",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Weight <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      meta: { className: "hidden md:table-cell" },
+    },
+
+    // My Rank
+    {
+      accessorKey: "myRank",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          My Rank <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      meta: { className: "hidden md:table-cell" },
+    },
+    // Opponent Rank
+    {
+      accessorKey: "opponentRank",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Opponent Rank <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      meta: { className: "hidden lg:table-cell" },
     },
     { accessorKey: "opponentName", header: "Opponent" },
     {
@@ -148,12 +287,32 @@ const DashboardMatches = ({ user }) => {
       header: "Actions",
       enableSorting: false,
       cell: ({ row }) => {
-        const match = row.original;
+        const minimal = row.original;
+
+        // fetch the full report so the form has opponent/athleteAttacks, ranks, etc.
+        const fetchFullReport = async () => {
+          if (!user?._id || !minimal?._id) return minimal;
+          try {
+            const res = await fetch(
+              `/api/dashboard/${encodeURIComponent(
+                String(user._id)
+              )}/matchReports/${encodeURIComponent(String(minimal._id))}`,
+              { cache: "no-store", credentials: "same-origin" }
+            );
+            if (!res.ok) return minimal;
+            const data = await res.json().catch(() => ({}));
+            return data?.report || minimal;
+          } catch {
+            return minimal;
+          }
+        };
+
         return (
           <div className="flex justify-center gap-3">
             <button
-              onClick={() => {
-                setSelectedMatch(match);
+              onClick={async () => {
+                const full = await fetchFullReport();
+                setSelectedMatch(full);
                 setPreviewOpen(true);
               }}
               title="View Match Details"
@@ -161,19 +320,25 @@ const DashboardMatches = ({ user }) => {
             >
               <Eye className="w-5 h-5 text-blue-500" />
             </button>
+
             <button
               onClick={async () => {
-                setSelectedMatch(match);
+                // load styles while we fetch the full report
+                const [full] = await Promise.all([
+                  fetchFullReport(),
+                  loadStylesForModal(),
+                ]);
+                setSelectedMatch(full);
                 setOpen(true);
-                await loadStylesForModal();
               }}
               title="Edit Match"
               className="icon-btn"
             >
               <Edit className="w-5 h-5 text-green-500" />
             </button>
+
             <button
-              onClick={() => handleDeleteMatch(match)}
+              onClick={() => handleDeleteMatch(minimal)}
               title="Delete Match"
               className="icon-btn"
             >
@@ -185,11 +350,26 @@ const DashboardMatches = ({ user }) => {
     },
   ];
 
-  const printAllHref = (() => {
+  // ---------- Print controls ----------
+  const [printStyle, setPrintStyle] = useState("__all__");
+
+  const printableStyles = useMemo(() => {
+    const names = (matchReports || []).map((r) => r?.matchType).filter(Boolean);
+    return Array.from(new Set(names)).sort((a, b) =>
+      String(a).localeCompare(String(b))
+    );
+  }, [matchReports]);
+
+  const handlePrint = () => {
+    const base =
+      printStyle === "__all__"
+        ? `/api/records/style/all`
+        : `/api/records/style/${encodeURIComponent(printStyle)}`;
+
     const qs = new URLSearchParams();
-    if (logoUrl) qs.set("logo", logoUrl);
-    return `/api/records/style/all${qs.toString() ? `?${qs.toString()}` : ""}`;
-  })();
+    const url = qs.toString() ? `${base}?${qs.toString()}` : base;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <div className="px-4 md:px-6 lg:px-8">
@@ -220,7 +400,7 @@ const DashboardMatches = ({ user }) => {
           <div className="flex items-center justify-center py-10">
             <Spinner size={40} />
           </div>
-        ) : stylesForForm.length > 0 ? (
+        ) : (
           <MatchReportForm
             athlete={user}
             styles={stylesForForm}
@@ -229,121 +409,153 @@ const DashboardMatches = ({ user }) => {
             onSuccess={fetchMatches}
             userType="user"
           />
-        ) : (
-          <div className="p-6 text-center">
-            <p className="text-base text-muted-foreground mb-4">
-              You must add a style/sport before creating a match report.
-            </p>
-            <Button
-              onClick={() => {
-                setOpen(false);
-                router.push("/dashboard/styles");
-              }}
-              className="bg-ms-blue-gray hover:bg-ms-blue text-white"
-            >
-              Go to Styles
-            </Button>
-          </div>
         )}
       </ModalLayout>
 
+      {/* Print controls (right-aligned) */}
       <div className="mb-4 flex justify-start md:justify-end">
-        <a
-          href={printAllHref}
-          target="_blank"
-          rel="noopener"
-          className="btn-white-sm"
-          title="Print all matches as a PDF"
-        >
-          Print All Matches (PDF)
-        </a>
-      </div>
-
-      {/* Cards for Mobile */}
-      <div className="block md:hidden space-y-4">
-        {matchReports.length > 0 ? (
-          matchReports.map((match) => (
-            <div
-              key={match._id}
-              className="card p-4 rounded-lg shadow-md"
+        <div className="flex flex-col items-end gap-2">
+          <h3 className="text-sm font-semibold">Print matches to PDF</h3>
+          <div className="flex items-center gap-2">
+            <select
+              value={printStyle}
+              onChange={(e) => setPrintStyle(e.target.value)}
+              className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-900"
+              title="Choose a style to print"
             >
-              <p>
-                <strong>Type:</strong> {match.matchType}
-              </p>
-              <p>
-                <strong>Event:</strong> {match.eventName}
-              </p>
-              <p>
-                <strong>Date:</strong>{" "}
-                {moment(match.matchDate).format("MMM D, YYYY")}
-              </p>
-              <p>
-                <strong>Opponent:</strong> {match.opponentName}
-              </p>
-              <p>
-                <strong>Result:</strong>{" "}
-                {match.result === "Won" ? (
-                  <span className="text-[var(--color-success)]">Win</span>
-                ) : (
-                  <span className="text-[var(--color-danger)]">Loss</span>
-                )}
-              </p>
-              <div className="flex justify-end gap-3 mt-3">
-                <button
-                  onClick={() => {
-                    setSelectedMatch(match);
-                    setPreviewOpen(true);
-                  }}
-                  title="View Details"
-                  className="icon-btn"
+              <option value="__all__">All Styles</option>
+              {printableStyles.map((name) => (
+                <option
+                  key={name}
+                  value={name}
                 >
-                  <Eye size={18} />
-                </button>
-                <button
-                  onClick={async () => {
-                    setSelectedMatch(match);
-                    setOpen(true);
-                    await loadStylesForModal();
-                  }}
-                  title="Edit"
-                  className="icon-btn"
-                >
-                  <Edit size={18} />
-                </button>
-                <button
-                  onClick={() => handleDeleteMatch(match)}
-                  title="Delete"
-                  className="icon-btn"
-                >
-                  <Trash size={18} />
-                </button>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="text-gray-400">No match reports found.</p>
-        )}
-      </div>
-
-      {/* Table for Desktop */}
-      <div className="hidden md:block overflow-x-auto">
-        <div className="min-w-[800px]">
-          <ReportDataTable
-            columns={columns}
-            data={matchReports}
-            onView={(match) => {
-              setSelectedMatch(match);
-              setPreviewOpen(true);
-            }}
-            onEdit={async (match) => {
-              setSelectedMatch(match);
-              setOpen(true);
-              await loadStylesForModal();
-            }}
-            onDelete={(match) => handleDeleteMatch(match)}
-          />
+                  {name}
+                </option>
+              ))}
+            </select>
+            <Button
+              className="bg-gray-900 hover:bg-gray-500 text-white border-2 border-gray-500 dark:border-gray-100"
+              onClick={handlePrint}
+              title="Open a PDF of the selected matches"
+            >
+              <Printer className="mr-2 h-4 w-4" />
+              Print
+            </Button>
+          </div>
+          <p className="text-xs text-gray-900 dark:text-gray-100">
+            Select a style or All Styles, then click Print.
+          </p>
         </div>
       </div>
+
+      {matchesLoading ? (
+        <div className="flex flex-col justify-center items-center h-[70vh] bg-background">
+          <Spinner size={64} />
+          <p className="text-gray-400 dark:text-gray-300 mt-2 text-lg">
+            Loading your matches...
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Cards for Mobile */}
+          <div className="block md:hidden space-y-4">
+            {tableData.length > 0 ? (
+              tableData.map((match) => (
+                <div
+                  key={match._id}
+                  className="card p-4 rounded-lg shadow-md"
+                >
+                  <p>
+                    <strong>Type:</strong> {match.matchType}
+                  </p>
+                  <p>
+                    <strong>Event:</strong> {match.eventName}
+                  </p>
+                  <p>
+                    <strong>Date:</strong>{" "}
+                    {moment(match.matchDate).format("MMM D, YYYY")}
+                  </p>
+                  <p>
+                    <strong>Division:</strong> {match.divisionDisplay}
+                  </p>
+                  <p>
+                    <strong>Weight:</strong> {match.weightDisplay}
+                  </p>
+                  <p>
+                    <strong>Opponent:</strong> {match.opponentName}
+                  </p>
+                  <p>
+                    <strong>My Rank:</strong> {match.myRank || "—"}
+                  </p>
+                  <p>
+                    <strong>Opponent Rank:</strong> {match.opponentRank || "—"}
+                  </p>
+                  <p>
+                    <strong>Result:</strong>{" "}
+                    {match.result === "Won" ? (
+                      <span className="text-[var(--color-success)]">Win</span>
+                    ) : (
+                      <span className="text-[var(--color-danger)]">Loss</span>
+                    )}
+                  </p>
+                  <div className="flex justify-end gap-3 mt-3">
+                    <button
+                      onClick={() => {
+                        setSelectedMatch(match);
+                        setPreviewOpen(true);
+                      }}
+                      title="View Details"
+                      className="icon-btn"
+                    >
+                      <Eye size={18} />
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setSelectedMatch(match);
+                        setOpen(true);
+                        await loadStylesForModal();
+                      }}
+                      title="Edit"
+                      className="icon-btn"
+                    >
+                      <Edit size={18} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteMatch(match)}
+                      title="Delete"
+                      className="icon-btn"
+                    >
+                      <Trash size={18} />
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-400">No match reports found.</p>
+            )}
+          </div>
+
+          {/* Table for Desktop */}
+          <div className="hidden md:block overflow-x-auto">
+            <div className="min-w-[1100px]">
+              <ReportDataTable
+                columns={columns}
+                data={tableData}
+                onView={(match) => {
+                  setSelectedMatch(match);
+                  setPreviewOpen(true);
+                }}
+                onEdit={async (match) => {
+                  setSelectedMatch(match);
+                  setOpen(true);
+                  await loadStylesForModal();
+                }}
+                onDelete={(match) => handleDeleteMatch(match)}
+              />
+            </div>
+          </div>
+        </>
+      )}
 
       {previewOpen && selectedMatch && (
         <PreviewReportModal

@@ -1,3 +1,4 @@
+// components/dashboard/PreviewReportModal.jsx
 "use client";
 
 import {
@@ -7,7 +8,46 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
+import moment from "moment";
+
+/* ---------- tiny helpers ---------- */
+const safe = (v) => (v == null || v === "" ? "" : String(v));
+const divName = (report) =>
+  (report?.division &&
+    typeof report.division === "object" &&
+    report.division.name) ||
+  (typeof report?.division === "string" ? report.division : "") ||
+  "";
+const weightDisplay = (report) => {
+  if (report?.weightLabel) {
+    return `${report.weightLabel}${
+      report.weightUnit ? ` ${report.weightUnit}` : ""
+    }`;
+  }
+  // legacy: plain string
+  if (typeof report?.weightCategory === "string" && report.weightCategory) {
+    return report.weightCategory;
+  }
+  return "";
+};
+const videoUrl = (report) => report?.video?.videoURL || report?.videoURL || "";
+const videoTitle = (report) =>
+  report?.video?.videoTitle || report?.videoTitle || "";
+
+const Info = ({ label, value }) => {
+  if (value == null || value === "") return null;
+  return (
+    <div className="flex justify-between gap-4 text-sm py-1">
+      <span className="text-gray-700 dark:text-gray-300 font-medium">
+        {label}:
+      </span>
+      <span className="text-gray-900 dark:text-white font-semibold text-right">
+        {value}
+      </span>
+    </div>
+  );
+};
 
 const PreviewReportModal = ({
   previewOpen,
@@ -16,6 +56,7 @@ const PreviewReportModal = ({
   reportType,
 }) => {
   if (!report) return null;
+
   const dialogContentRef = useRef(null);
 
   useEffect(() => {
@@ -27,15 +68,35 @@ const PreviewReportModal = ({
         setPreviewOpen(false);
       }
     };
-
     if (previewOpen) {
       document.addEventListener("mousedown", handleClickOutside);
     }
-
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [previewOpen, setPreviewOpen]);
+
+  const derived = useMemo(() => {
+    return {
+      divisionDisplay: divName(report) || "—",
+      weightDisplay: weightDisplay(report) || "—",
+      eventDateDisplay: report?.matchDate
+        ? moment.utc(report.matchDate).format("MMMM D, YYYY")
+        : "—",
+      resultDisplay: report?.result || "—",
+      scoreDisplay: report?.score || "—",
+      createdByDisplay: report?.createdByName || "—",
+      isPublicDisplay: report?.isPublic ? "Yes" : "No",
+      opponentTechs: Array.isArray(report?.opponentAttacks)
+        ? report.opponentAttacks
+        : [],
+      athleteTechs: Array.isArray(report?.athleteAttacks)
+        ? report.athleteAttacks
+        : [],
+      videoURL: videoUrl(report),
+      videoTitle: videoTitle(report),
+    };
+  }, [report]);
 
   return (
     <Dialog
@@ -53,77 +114,112 @@ const PreviewReportModal = ({
             </DialogTitle>
           </div>
           <DialogDescription>
-            View detailed match report including opponent details, attacks, and
-            video.
+            View detailed match report including match context, opponent info,
+            techniques, and video.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-6 px-2 text-sm sm:text-base">
-          {/* Opponent Info + Attacks */}
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 py-6 px-2 text-sm sm:text-base">
+          {/* ===== Match Details ===== */}
+          <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow p-6">
             <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4 border-b border-gray-300 dark:border-gray-700 pb-2">
-              Opponent Information
+              Match Details
             </h3>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Info
-                label="Name"
-                value={report.opponentName}
-              />
-              <Info
-                label="Country"
-                value={report.opponentCountry}
-              />
-              <Info
-                label="National Rank"
-                value={report.opponentNationalRank}
-              />
-              <Info
-                label="World Rank"
-                value={report.opponentWorldRank}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Info
                 label="Match Type"
-                value={report.matchType}
+                value={safe(report.matchType)}
+              />
+              <Info
+                label="Event"
+                value={safe(report.eventName)}
+              />
+              <Info
+                label="Date"
+                value={derived.eventDateDisplay}
+              />
+              <Info
+                label="Created By"
+                value={derived.createdByDisplay}
               />
               <Info
                 label="Division"
-                value={report.division}
+                value={derived.divisionDisplay}
               />
               <Info
                 label="Weight Class"
-                value={report.weightCategory}
+                value={derived.weightDisplay}
               />
               <Info
-                label="Rank"
-                value={report.opponentRank}
+                label="Result"
+                value={derived.resultDisplay}
               />
               <Info
-                label="Grip/Stance"
-                value={report.opponentGrip}
+                label="Score"
+                value={derived.scoreDisplay}
+              />
+              <Info
+                label="Public"
+                value={derived.isPublicDisplay}
+              />
+            </div>
+          </section>
+
+          {/* ===== Opponent / Athlete Info & Techniques ===== */}
+          <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow p-6">
+            <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4 border-b border-gray-300 dark:border-gray-700 pb-2">
+              Opponent & Athlete
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Info
+                label="Opponent Name"
+                value={safe(report.opponentName)}
+              />
+              <Info
+                label="Opponent Country"
+                value={safe(report.opponentCountry)}
+              />
+              <Info
+                label="Opponent Club"
+                value={safe(report.opponentClub)}
+              />
+              <Info
+                label="Opponent Rank"
+                value={safe(report.opponentRank)}
+              />
+              <Info
+                label="Opponent Grip/Stance"
+                value={safe(report.opponentGrip)}
+              />
+              <Info
+                label="My Rank (at match)"
+                value={safe(report.myRank)}
               />
             </div>
 
-            {report?.opponentAttacks?.length > 0 && (
+            {/* Opponent techs */}
+            {derived.opponentTechs.length > 0 && (
               <div className="mt-4">
                 <h4 className="font-semibold text-gray-800 dark:text-gray-200">
-                  Opponent's Attacks Used:
+                  Opponent’s Techniques Used
                 </h4>
                 <ul className="list-disc list-inside ml-2 text-sm mt-1">
-                  {report.opponentAttacks.map((a, i) => (
-                    <li key={i}>{a}</li>
+                  {derived.opponentTechs.map((a, i) => (
+                    <li key={`opp-${i}`}>{a}</li>
                   ))}
                 </ul>
               </div>
             )}
 
+            {/* Opponent notes (HTML) */}
             {report.opponentAttackNotes && (
-              <div className="mt-4">
+              <div className="mt-3">
                 <h4 className="font-semibold text-gray-800 dark:text-gray-200">
-                  Opponent Notes:
+                  Opponent Notes
                 </h4>
                 <div
                   className="prose dark:prose-invert max-w-none text-sm"
+                  // Ensure this HTML comes from your own Editor control (trusted source)
                   dangerouslySetInnerHTML={{
                     __html: report.opponentAttackNotes,
                   }}
@@ -131,23 +227,25 @@ const PreviewReportModal = ({
               </div>
             )}
 
-            {report?.athleteAttacks?.length > 0 && (
+            {/* Athlete techs */}
+            {derived.athleteTechs.length > 0 && (
               <div className="mt-6">
                 <h4 className="font-semibold text-gray-800 dark:text-gray-200">
-                  My Attacks Used:
+                  My Techniques Used
                 </h4>
                 <ul className="list-disc list-inside ml-2 text-sm mt-1">
-                  {report.athleteAttacks.map((a, i) => (
-                    <li key={i}>{a}</li>
+                  {derived.athleteTechs.map((a, i) => (
+                    <li key={`me-${i}`}>{a}</li>
                   ))}
                 </ul>
               </div>
             )}
 
+            {/* Athlete notes (HTML) */}
             {report.athleteAttackNotes && (
-              <div className="mt-4">
+              <div className="mt-3">
                 <h4 className="font-semibold text-gray-800 dark:text-gray-200">
-                  My Notes:
+                  My Notes
                 </h4>
                 <div
                   className="prose dark:prose-invert max-w-none text-sm"
@@ -157,25 +255,25 @@ const PreviewReportModal = ({
                 />
               </div>
             )}
-          </div>
+          </section>
 
-          {/* Match Video */}
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow p-6">
+          {/* ===== Video (right column) ===== */}
+          <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow p-6 lg:col-span-2">
             <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4 border-b border-gray-300 dark:border-gray-700 pb-2">
               Match Video
             </h3>
-            {report?.video?.videoURL ? (
+            {derived.videoURL ? (
               <div className="space-y-4">
-                {report.video.videoTitle && (
+                {derived.videoTitle && (
                   <h4 className="font-bold text-lg text-gray-900 dark:text-white">
-                    {report.video.videoTitle}
+                    {derived.videoTitle}
                   </h4>
                 )}
                 <div className="aspect-video w-full rounded-lg shadow overflow-hidden">
                   <iframe
                     className="w-full h-full"
-                    src={report.video.videoURL}
-                    title={report.video.videoTitle}
+                    src={derived.videoURL}
+                    title={derived.videoTitle || "Match Video"}
                     allowFullScreen
                   />
                 </div>
@@ -185,24 +283,10 @@ const PreviewReportModal = ({
                 No video provided.
               </p>
             )}
-          </div>
+          </section>
         </div>
       </DialogContent>
     </Dialog>
-  );
-};
-
-const Info = ({ label, value }) => {
-  if (!value) return null;
-  return (
-    <div className="flex justify-between text-sm py-1">
-      <span className="text-gray-700 dark:text-gray-300 font-medium">
-        {label}:
-      </span>
-      <span className="text-gray-900 dark:text-white font-semibold">
-        {value}
-      </span>
-    </div>
   );
 };
 

@@ -1,146 +1,148 @@
+// app/api/dashboard/[userId]/family/[memberId]/matchReports/route.js
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
-import MatchReport from "@/models/matchReportModel";
-import FamilyMember from "@/models/familyMemberModel";
-import User from "@/models/userModel";
-import { Types } from "mongoose";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
-import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
-// GET: Return match reports for a family member
-export async function GET(req, context) {
-  const { userId, memberId } = await context.params;
+import matchReport from "@/models/matchReportModel";
+import division from "@/models/divisionModel"; // alias in your codebase may be "@/models/division"
+import weightCategory from "@/models/weightCategoryModel"; // if you renamed to "@/models/weightCategory", update import
 
+function err(status, message) {
+  return NextResponse.json({ ok: false, message }, { status });
+}
+
+// GET: list all family match reports (returns an ARRAY)
+export async function GET(_req, ctx) {
   try {
+    const { userId, memberId } = await ctx.params; // Next 15
     await connectDB();
 
-    if (
-      !userId ||
-      !memberId ||
-      !Types.ObjectId.isValid(userId) ||
-      !Types.ObjectId.isValid(memberId)
-    ) {
-      return NextResponse.json(
-        { message: "Invalid or missing userId/memberId" },
-        { status: 400 }
-      );
+    const currentUser = await getCurrentUserFromCookies();
+    if (!currentUser || String(currentUser._id) !== String(userId)) {
+      return err(401, "Unauthorized");
     }
 
-    const user = await User.findById(userId);
-    if (!user) {
-      return NextResponse.json({ message: "User not found" }, { status: 404 });
-    }
+    const rows = await matchReport
+      .find(
+        { athleteType: "family", athleteId: memberId },
+        {
+          // project the main fields you show in tables/cards
+          matchType: 1,
+          eventName: 1,
+          matchDate: 1,
+          division: 1,
+          weightCategory: 1,
+          weightLabel: 1,
+          weightUnit: 1,
+          myRank: 1,
+          opponentRank: 1,
+          opponentName: 1,
+          opponentCountry: 1,
+          result: 1,
+          score: 1,
+          video: 1,
+          createdAt: 1,
+        }
+      )
+      .sort({ matchDate: -1, createdAt: -1 })
+      .lean();
 
-    const reports = await MatchReport.find({
-      athleteId: memberId,
-      athleteType: "family",
-    }).sort({ matchDate: -1 });
-
-    return NextResponse.json(reports);
-  } catch (err) {
-    return NextResponse.json(
-      { message: "Failed to load match reports", error: err.message },
-      { status: 500 }
-    );
+    return NextResponse.json(rows, { status: 200 });
+  } catch (e) {
+    console.error("GET family match reports error:", e);
+    return err(500, "Failed to fetch match reports");
   }
 }
 
-// POST: Create a new match report for a family member
-export async function POST(request, context) {
-  await connectDB();
-
-  const { memberId } = await context.params;
-  const currentUser = await getCurrentUserFromCookies();
-
-  if (!memberId || !Types.ObjectId.isValid(memberId)) {
-    return NextResponse.json(
-      { message: "Invalid or missing member ID" },
-      { status: 400 }
-    );
-  }
-
-  const familyMember = await FamilyMember.findOne({
-    _id: memberId,
-    userId: currentUser._id, // ensure it's their family member
-  });
-
-  if (!familyMember) {
-    return NextResponse.json(
-      { error: "Family member not found or unauthorized" },
-      { status: 404 }
-    );
-  }
-
-  const body = await request.json();
-
-  const {
-    matchType,
-    eventName,
-    matchDate,
-    division,
-    weightCategory,
-    opponentName,
-    opponentClub,
-    opponentRank,
-    opponentCountry,
-    opponentGrip,
-    opponentAttacks,
-    opponentAttackNotes,
-    athleteAttacks,
-    athleteAttackNotes,
-    result,
-    score,
-    isPublic,
-    videoTitle,
-    videoURL,
-  } = body;
-
-  // ✅ Save any new techniques to DB
-  await saveUnknownTechniques([
-    ...(Array.isArray(athleteAttacks) ? athleteAttacks : []),
-    ...(Array.isArray(opponentAttacks) ? opponentAttacks : []),
-  ]);
-
-  const newReport = await MatchReport.create({
-    athleteId: memberId,
-    athleteType: "family",
-    createdById: currentUser._id,
-    createdByName: `${currentUser.firstName} ${currentUser.lastName}`,
-    matchType,
-    eventName,
-    matchDate: matchDate ? new Date(matchDate) : undefined,
-    division,
-    weightCategory,
-    opponentName,
-    opponentClub,
-    opponentRank,
-    opponentCountry,
-    opponentGrip,
-    opponentAttacks,
-    opponentAttackNotes,
-    athleteAttacks,
-    athleteAttackNotes,
-    result,
-    score,
-    video: {
-      videoTitle: videoTitle || "",
-      videoURL: normalizeYouTubeUrl(videoURL || ""),
-    },
-    isPublic,
-  });
-
-  return NextResponse.json(newReport, { status: 201 });
-}
-
-// Helper to normalize YouTube share URLs
-function normalizeYouTubeUrl(url) {
-  if (!url) return "";
+// POST: create a family match report
+export async function POST(req, ctx) {
   try {
-    const shortMatch = url.match(/youtu\.be\/([\w-]+)/);
-    const normalMatch = url.match(/v=([\w-]+)/);
-    const id = shortMatch?.[1] || normalMatch?.[1];
-    return id ? `https://www.youtube.com/watch?v=${id}` : url;
-  } catch {
-    return url;
+    const { userId, memberId } = await ctx.params;
+    await connectDB();
+
+    const currentUser = await getCurrentUserFromCookies();
+    if (!currentUser || String(currentUser._id) !== String(userId)) {
+      return err(401, "Unauthorized");
+    }
+
+    const body = await req.json();
+
+    // Basic payload; front-end already sends validated fields.
+    const doc = {
+      athleteType: "family",
+      athleteId: memberId,
+
+      createdById: currentUser._id,
+      createdByName: `${currentUser.firstName || ""} ${
+        currentUser.lastName || ""
+      }`.trim(),
+
+      // match context
+      matchType: body.matchType,
+      eventName: body.eventName,
+      matchDate: body.matchDate ? new Date(body.matchDate) : new Date(),
+
+      // ranks (already label strings from form)
+      myRank: body.myRank || "",
+      opponentRank: body.opponentRank || "",
+
+      // opponent
+      opponentName: body.opponentName,
+      opponentClub: body.opponentClub || "",
+      opponentCountry: body.opponentCountry || "",
+      opponentGrip: body.opponentGrip || "",
+      opponentAttacks: Array.isArray(body.opponentAttacks)
+        ? body.opponentAttacks
+        : [],
+      opponentAttackNotes: body.opponentAttackNotes || "",
+
+      // athlete notes
+      athleteAttacks: Array.isArray(body.athleteAttacks)
+        ? body.athleteAttacks
+        : [],
+      athleteAttackNotes: body.athleteAttackNotes || "",
+
+      // result
+      result: body.result || "",
+      score: body.score || "",
+
+      // video (store in nested object like your model)
+      video: {
+        videoTitle: body.videoTitle || "",
+        videoNotes: body.videoNotes || "",
+        videoURL: body.videoURL || "",
+      },
+
+      // division & weight refs
+      division: body.division || null,
+      weightCategory: body.weightCategory || null,
+
+      // snapshot
+      weightLabel: body.weightLabel || "",
+      weightUnit: body.weightUnit || "",
+
+      isPublic: !!body.isPublic,
+    };
+
+    // Optional server-side sanity checks:
+    if (doc.division) {
+      const d = await division.findById(doc.division).lean();
+      if (!d) return err(400, "Invalid division");
+    }
+    if (doc.weightCategory) {
+      const wc = await weightCategory.findById(doc.weightCategory).lean();
+      if (!wc) return err(400, "Invalid weight category");
+    }
+
+    const saved = await matchReport.create(doc);
+    return NextResponse.json(
+      { ok: true, message: "Match report saved", id: String(saved._id) },
+      { status: 201 }
+    );
+  } catch (e) {
+    console.error("POST family match report error:", e);
+    return err(500, "Failed to save match report");
   }
 }

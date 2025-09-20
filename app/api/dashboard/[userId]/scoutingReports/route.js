@@ -3,147 +3,102 @@ import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import { connectDB } from "@/lib/mongo";
 import ScoutingReport from "@/models/scoutingReportModel";
-import Video from "@/models/videoModel";
-import User from "@/models/userModel";
-import { ensureTechniques } from "@/lib/ensureTechniques";
+import Division from "@/models/divisionModel";
 
 export const dynamic = "force-dynamic";
 
-const cleanList = (arr) => [
-  ...new Set((arr || []).map((s) => String(s || "").trim()).filter(Boolean)),
-];
+// GET: list current user's scouting reports
+export async function GET(_req, context) {
+  const { userId } = (await context.params) ?? {};
+  if (!userId || !Types.ObjectId.isValid(userId)) {
+    return NextResponse.json({ message: "Invalid userId" }, { status: 400 });
+  }
 
-const asLower = (arr) => arr.map((s) => s.toLowerCase());
-
-// ---------- POST: create a scouting report ----------
-export async function POST(req, context) {
   await connectDB();
-  const { userId } = context.params || {};
-  let body;
 
   try {
-    if (!userId || !Types.ObjectId.isValid(userId)) {
+    const reports = await ScoutingReport.find({ createdById: userId })
+      .populate({ path: "division", model: Division, select: "name gender" })
+      .lean();
+
+    return NextResponse.json(reports ?? [], { status: 200 });
+  } catch (err) {
+    console.error("GET scoutingReports error:", err);
+    return NextResponse.json({ message: "Server error" }, { status: 500 });
+  }
+}
+
+// POST: create a new scouting report
+export async function POST(req, context) {
+  const { userId } = (await context.params) ?? {};
+  if (!userId || !Types.ObjectId.isValid(userId)) {
+    return NextResponse.json({ message: "Invalid userId" }, { status: 400 });
+  }
+
+  await connectDB();
+
+  try {
+    const body = await req.json();
+
+    if (!body?.matchType) {
       return NextResponse.json(
-        { message: "Invalid or missing user ID" },
+        { message: "matchType (style) is required" },
         { status: 400 }
       );
     }
 
-    body = await req.json();
+    const division =
+      typeof body.division === "string" && Types.ObjectId.isValid(body.division)
+        ? body.division
+        : undefined;
 
-    const {
-      reportFor = [],
-      createdByName,
-      matchType,
-      athleteFirstName,
-      athleteLastName,
-      athleteNationalRank,
-      athleteWorldRank,
-      division,
-      weightCategory,
-      athleteClub,
-      athleteCountry,
-      athleteRank,
-      athleteGrip,
-      athleteAttacks = [],
-      athleteAttackNotes,
-      accessList = [],
-      videos = [],
-      newVideos = [],
-    } = body || {};
+    const weightCategory =
+      body.weightCategory ?? body.weightItemId ?? undefined;
+    const weightLabel = body.weightLabel ?? undefined;
+    const weightUnit = body.weightUnit ?? undefined;
 
-    // Normalize attacks (store lowercase in report)
-    const athleteAttacksClean = asLower(cleanList(athleteAttacks));
-
-    // Ensure techniques exist (approved-only suggestions are handled elsewhere)
-    await ensureTechniques(cleanList(athleteAttacks));
-
-    // Create the report first (without videos)
-    const report = await ScoutingReport.create({
-      reportFor,
+    const doc = new ScoutingReport({
+      reportFor: Array.isArray(body.reportFor) ? body.reportFor : [],
       createdById: userId,
-      createdByName: createdByName,
-      matchType,
-      athleteFirstName,
-      athleteLastName,
-      athleteNationalRank,
-      athleteWorldRank,
+      createdByName: body.createdByName ?? "",
+      matchType: body.matchType,
+
       division,
       weightCategory,
-      athleteClub,
-      athleteCountry,
-      athleteRank,
-      athleteGrip,
-      athleteAttacks: athleteAttacksClean,
-      athleteAttackNotes,
-      accessList,
-      videos: [],
+      weightItemId: weightCategory,
+      weightLabel,
+      weightUnit,
+
+      athleteFirstName: body.athleteFirstName ?? "",
+      athleteLastName: body.athleteLastName ?? "",
+      athleteNationalRank: body.athleteNationalRank ?? "",
+      athleteWorldRank: body.athleteWorldRank ?? "",
+      athleteClub: body.athleteClub ?? "",
+      athleteCountry: body.athleteCountry ?? "",
+      athleteRank: body.athleteRank ?? "",
+      athleteGrip: body.athleteGrip ?? "",
+      athleteAttacks: Array.isArray(body.athleteAttacks)
+        ? body.athleteAttacks
+        : [],
+      athleteAttackNotes: body.athleteAttackNotes ?? "",
+      accessList: Array.isArray(body.accessList) ? body.accessList : [],
+
+      videos: [
+        ...(Array.isArray(body.updatedVideos) ? body.updatedVideos : []),
+        ...(Array.isArray(body.newVideos) ? body.newVideos : []),
+      ],
     });
 
-    // Link the report to the user
-    await User.findByIdAndUpdate(userId, {
-      $addToSet: { scoutingReports: report._id },
-    });
-
-    // Save and link videos (accept either body.videos or body.newVideos)
-    const incoming =
-      Array.isArray(videos) && videos.length
-        ? videos
-        : Array.isArray(newVideos)
-        ? newVideos
-        : [];
-    if (incoming.length) {
-      const created = await Video.insertMany(
-        incoming.map((v) => ({
-          title: v.title || "",
-          notes: v.notes || "",
-          url: v.url || "",
-          report: report._id,
-          createdBy: userId,
-        })),
-        { ordered: false }
-      );
-
-      await ScoutingReport.findByIdAndUpdate(report._id, {
-        $set: { videos: created.map((x) => x._id) },
-      });
-    }
+    await doc.save();
 
     return NextResponse.json(
-      { message: "Scouting report created successfully." },
+      { message: "Scouting report created.", id: String(doc._id) },
       { status: 201 }
     );
   } catch (err) {
     console.error("POST scoutingReports error:", err);
     return NextResponse.json(
-      { message: "Server error", error: err.message, body },
-      { status: 500 }
-    );
-  }
-}
-
-// ---------- GET: all scouting reports created by this user ----------
-export async function GET(_request, context) {
-  await connectDB();
-  const { userId } = (await context.params) || {};
-
-  try {
-    if (!userId || !Types.ObjectId.isValid(userId)) {
-      return NextResponse.json(
-        { message: "Invalid or missing user ID" },
-        { status: 400 }
-      );
-    }
-
-    const scoutingReports = await ScoutingReport.find({ createdById: userId })
-      .populate("videos")
-      .sort({ createdAt: -1 });
-
-    return NextResponse.json(scoutingReports, { status: 200 });
-  } catch (err) {
-    console.error("GET scoutingReports error:", err);
-    return NextResponse.json(
-      { message: "Failed to fetch scouting reports", error: err.message },
+      { message: "Failed to create scouting report", error: err.message },
       { status: 500 }
     );
   }

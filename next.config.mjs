@@ -10,10 +10,8 @@ const nextConfig = {
     ],
   },
 
-  // 👇 Add this block
-  experimental: {
-    serverComponentsExternalPackages: ["@google-analytics/data"],
-  },
+  // ✅ Next 15: use top-level serverExternalPackages
+  serverExternalPackages: ["@google-analytics/data"],
 };
 
 export default withSentryConfig(nextConfig, {

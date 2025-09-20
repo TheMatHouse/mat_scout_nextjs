@@ -2,6 +2,7 @@
   "name": "mat_scout_nextjs",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "engines": {
     "node": ">=22.11.0"
   },
@@ -12,7 +13,8 @@
     "lint": "next lint",
     "clean": "rm -rf .next dist out",
     "find:unused": "next-unused",
-    "migrate:techniques": "node scripts/migrateTechniques.mjs"
+    "migrate:techniques": "node scripts/migrateTechniques.mjs",
+    "seed:ranks": "node seedRanks.js"
   },
   "dependencies": {
     "@google-analytics/data": "^5.2.0",
@@ -55,6 +57,7 @@
     "date-fns": "^4.1.0",
     "dompurify": "^3.2.6",
     "embla-carousel-react": "^8.5.2",
+    "exceljs": "^4.4.0",
     "express-mongo-sanitize": "^2.2.0",
     "file-saver": "^2.0.5",
     "framer-motion": "^12.23.12",

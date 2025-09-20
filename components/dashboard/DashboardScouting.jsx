@@ -2,9 +2,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { toast } from "react-toastify";
-import { ArrowUpDown, Eye, Edit, Trash } from "lucide-react";
+import { ArrowUpDown, Eye, Edit, Trash, FileDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ReportDataTable } from "../shared/report-data-table";
@@ -13,11 +13,99 @@ import ScoutingReportForm from "./forms/ScoutingReportForm";
 import ModalLayout from "@/components/shared/ModalLayout";
 import Spinner from "@/components/shared/Spinner";
 
+/* ---------- helpers ---------- */
+function extractArray(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (payload && Array.isArray(payload.userStyles)) return payload.userStyles;
+  if (payload && Array.isArray(payload.styles)) return payload.styles;
+  if (payload && Array.isArray(payload.items)) return payload.items;
+  if (payload && Array.isArray(payload.data)) return payload.data;
+  if (payload && Array.isArray(payload.results)) return payload.results;
+  return [];
+}
+
+function genderLabel(g) {
+  if (!g) return "";
+  const s = String(g).toLowerCase();
+  if (s === "male") return "Men";
+  if (s === "female") return "Women";
+  if (s === "coed" || s === "open") return "Coed";
+  return s;
+}
+
+function divisionPrettyFromObj(d) {
+  if (!d) return "";
+  const g = genderLabel(d.gender);
+  return g ? `${d.name} — ${g}` : d.name || "";
+}
+
+function ensureWeightDisplay(label, unit) {
+  if (!label) return "";
+  const low = String(label).toLowerCase();
+  if (low.includes("kg") || low.includes("lb")) return label;
+  return unit ? `${label} ${unit}` : label;
+}
+
+function getDivisionId(div) {
+  if (!div) return "";
+  if (typeof div === "string") return div;
+  if (typeof div === "object") {
+    if (div._id) return String(div._id);
+    if (div.id) return String(div.id);
+  }
+  return "";
+}
+
+// Fetch weights for a division via the canonical route
+async function fetchDivisionWeights(divisionId) {
+  const id = encodeURIComponent(String(divisionId));
+  const url = `/api/divisions/${id}/weights`;
+  try {
+    const res = await fetch(url, {
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: { accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => ({}));
+    const wc =
+      data?.weightCategory ||
+      data?.weights ||
+      data?.weight ||
+      data?.data ||
+      data?.category ||
+      data;
+    if (!wc) return null;
+
+    const unit = wc.unit || wc.weightUnit || "";
+    const items = Array.isArray(wc.items) ? wc.items : [];
+    const normItems = items
+      .map((it) => ({
+        _id: String(it._id ?? it.id ?? it.value ?? it.label ?? "").trim(),
+        label: String(it.label ?? it.value ?? "").trim(),
+      }))
+      .filter((x) => x._id && x.label);
+    if (!normItems.length) return null;
+    return { unit, items: normItems };
+  } catch {
+    return null;
+  }
+}
+
 const DashboardScouting = ({ user }) => {
   const router = useRouter();
 
-  // table data
+  // raw reports
   const [scoutingReports, setScoutingReports] = useState([]);
+
+  // pretty division map: { divisionId: "IJF Junior (U21) — Women" }
+  const [divisionMap, setDivisionMap] = useState({});
+
+  // per-division weights cache: { divisionId: { unit, items: [{_id,label}] } }
+  const [weightsMap, setWeightsMap] = useState({});
+
+  // loading state for the list
+  const [reportsLoading, setReportsLoading] = useState(false);
 
   // modal state
   const [open, setOpen] = useState(false);
@@ -32,41 +120,200 @@ const DashboardScouting = ({ user }) => {
   const [techniquesLoading, setTechniquesLoading] = useState(false);
   const [techniquesForForm, setTechniquesForForm] = useState([]);
 
+  // StrictMode guard so we don't double-fetch in dev
+  const didFetchRef = useRef(false);
+  // Skip component spinner on first mount (route-level loading.tsx likely shows)
+  const firstLoadRef = useRef(true);
+
   useEffect(() => {
     if (!user?._id) return;
-    fetchReports();
+    if (didFetchRef.current) return;
+    didFetchRef.current = true;
+    fetchReports({ showSpinner: false }).finally(() => {
+      firstLoadRef.current = false;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?._id]);
 
-  const fetchReports = async () => {
+  const fetchReports = async ({ showSpinner = true } = {}) => {
+    if (showSpinner) setReportsLoading(true);
+
+    const is24Hex = (v) => typeof v === "string" && /^[a-f0-9]{24}$/i.test(v);
+
     try {
-      const res = await fetch(`/api/dashboard/${user._id}/scoutingReports`);
-      if (!res.ok) throw new Error("Failed to fetch scouting reports");
-      const data = await res.json();
-      setScoutingReports(Array.isArray(data) ? data : []);
+      const uid = encodeURIComponent(String(user._id));
+      const res = await fetch(`/api/dashboard/${uid}/scoutingReports`, {
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { accept: "application/json" },
+      });
+      if (!res.ok)
+        throw new Error(
+          `Failed to fetch scouting reports (HTTP ${res.status})`
+        );
+
+      const raw = await res.json();
+
+      // De-ghost + de-dupe by _id
+      const byId = new Map();
+      (Array.isArray(raw) ? raw : []).forEach((r) => {
+        const id = String(r?._id ?? "");
+        if (!is24Hex(id)) return;
+        if (byId.has(id)) return;
+        byId.set(id, r);
+      });
+
+      // Optional: newest first if createdAt exists
+      const cleaned = Array.from(byId.values()).sort((a, b) => {
+        const ta = Date.parse(a?.createdAt || 0) || 0;
+        const tb = Date.parse(b?.createdAt || 0) || 0;
+        return tb - ta;
+      });
+
+      // Normalize for the table
+      const normalized = cleaned.map((r) => ({
+        ...r,
+        divisionId: r?.division?._id || r?.division || null,
+        divisionName: r?.division?.name || r?.divisionName || "",
+        weightText: r?.weightLabel
+          ? `${r.weightLabel}${r?.weightUnit ? ` ${r.weightUnit}` : ""}`
+          : "",
+        athleteFullName: [r?.athleteFirstName, r?.athleteLastName]
+          .filter(Boolean)
+          .join(" "),
+      }));
+
+      setScoutingReports(normalized);
+
+      await Promise.all([
+        hydrateDivisionMap(normalized),
+        hydrateWeightsMap(normalized),
+      ]);
     } catch (err) {
-      console.error(err);
-      toast.error("Could not load scouting reports.");
+      console.error("[fetchReports] error:", err);
+      toast.error("Failed to fetch scouting reports");
+    } finally {
+      if (showSpinner) setReportsLoading(false);
     }
   };
 
-  // load styles fresh (same idea as DashboardMatches)
+  const hydrateDivisionMap = async (reports) => {
+    const entries = {};
+    (reports || []).forEach((r) => {
+      const divId = getDivisionId(r?.division);
+      const divObj =
+        r?.division && typeof r.division === "object" ? r.division : null;
+      if (divId && divObj && !entries[divId]) {
+        entries[divId] = divisionPrettyFromObj(divObj);
+      }
+    });
+
+    setDivisionMap((prev) => ({ ...prev, ...entries }));
+
+    const styles = Array.from(
+      new Set(
+        (reports || []).map((r) => (r?.matchType || "").trim()).filter(Boolean)
+      )
+    );
+    if (!styles.length) return;
+
+    const fetched = {};
+    await Promise.all(
+      styles.map(async (styleName) => {
+        try {
+          const res = await fetch(
+            `/api/divisions?styleName=${encodeURIComponent(styleName)}`,
+            {
+              cache: "no-store",
+              credentials: "same-origin",
+              headers: { accept: "application/json" },
+            }
+          );
+          const data = await res.json().catch(() => ({}));
+          const divs = Array.isArray(data?.divisions) ? data.divisions : [];
+          divs.forEach((d) => {
+            if (d?._id) fetched[d._id] = divisionPrettyFromObj(d);
+          });
+        } catch {
+          /* non-fatal */
+        }
+      })
+    );
+    if (Object.keys(fetched).length) {
+      setDivisionMap((prev) => ({ ...prev, ...fetched }));
+    }
+  };
+
+  const hydrateWeightsMap = async (reports) => {
+    const divIds = Array.from(
+      new Set(
+        (reports || []).map((r) => getDivisionId(r?.division)).filter(Boolean)
+      )
+    );
+    if (!divIds.length) return;
+
+    const entries = {};
+    await Promise.all(
+      divIds.map(async (id) => {
+        const weights = await fetchDivisionWeights(id);
+        if (weights) entries[id] = weights;
+      })
+    );
+    if (Object.keys(entries).length) {
+      setWeightsMap((prev) => ({ ...prev, ...entries }));
+    }
+  };
+
+  // ===== Styles & Techniques for the form =====
   const loadStylesForModal = useCallback(async () => {
     if (!user?._id) return;
     setStylesLoading(true);
     try {
-      const res = await fetch(`/api/dashboard/${user._id}/userStyles`);
-      if (!res.ok) throw new Error("Failed to load styles");
-      const data = await res.json();
-      setStylesForForm(Array.isArray(data) ? data : []);
+      if (Array.isArray(user.userStyles) && user.userStyles.length > 0) {
+        setStylesForForm(user.userStyles);
+        return;
+      }
+      const res1 = await fetch(`/api/dashboard/${user._id}/userStyles`, {
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { accept: "application/json" },
+      });
+      let arr = [];
+      if (res1.ok) {
+        const data1 = await res1.json();
+        arr = extractArray(data1);
+      }
+      if (!arr.length) {
+        const res2 = await fetch(`/api/userStyles`, {
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: { accept: "application/json" },
+        });
+        if (res2.ok) {
+          const data2 = await res2.json();
+          arr = extractArray(data2);
+        }
+      }
+      if (!arr.length) {
+        const res3 = await fetch(`/api/dashboard/${user._id}/styles`, {
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: { accept: "application/json" },
+        });
+        if (res3.ok) {
+          const data3 = await res3.json();
+          arr = extractArray(data3);
+        }
+      }
+      setStylesForForm(arr);
     } catch (e) {
       console.error("Failed to load styles:", e);
       setStylesForForm([]);
     } finally {
       setStylesLoading(false);
     }
-  }, [user?._id]);
+  }, [user?._id, user?.userStyles]);
 
-  // load techniques for the tag input suggestions
   const loadTechniquesForModal = useCallback(async () => {
     setTechniquesLoading(true);
     try {
@@ -81,18 +328,7 @@ const DashboardScouting = ({ user }) => {
       } catch {
         data = [];
       }
-      const arr = Array.isArray(data)
-        ? data
-        : Array.isArray(data?.techniques)
-        ? data.techniques
-        : Array.isArray(data?.items)
-        ? data.items
-        : Array.isArray(data?.data)
-        ? data.data
-        : Array.isArray(data?.results)
-        ? data.results
-        : [];
-      setTechniquesForForm(arr);
+      setTechniquesForForm(extractArray(data));
     } catch (e) {
       console.error("Failed to load techniques:", e);
       setTechniquesForForm([]);
@@ -101,163 +337,276 @@ const DashboardScouting = ({ user }) => {
     }
   }, []);
 
+  // ----- Delete handler -----
   const handleDeleteReport = async (report) => {
     if (
-      !window.confirm(`This report will be permanently deleted! Are you sure?`)
+      !window.confirm("This report will be permanently deleted! Are you sure?")
     )
       return;
+
+    const uid = encodeURIComponent(String(user._id));
+    const rid = encodeURIComponent(String(report._id));
+    const url = `/api/dashboard/${uid}/scoutingReports/${rid}`;
+
     try {
-      const response = await fetch(
-        `/api/dashboard/${user._id}/scoutingReports/${report._id}`,
-        { method: "DELETE", headers: { "Content-Type": "application/json" } }
-      );
-      const data = await response.json();
-      if (response.ok) {
-        toast.success(data.message);
-        setScoutingReports((prev) => prev.filter((r) => r._id !== report._id));
+      const resp = await fetch(url, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+      });
+
+      let data = {};
+      try {
+        if (resp.headers.get("content-type")?.includes("application/json")) {
+          data = await resp.json();
+        }
+      } catch {}
+
+      if (resp.status === 200) {
+        toast.success(data?.message || "Scouting report deleted.");
+        setScoutingReports((prev) =>
+          prev.filter((r) => String(r._id) !== String(report._id))
+        );
         setSelectedReport(null);
-        router.refresh();
-      } else {
-        toast.error(data.message || "Failed to delete report");
+        await fetchReports({ showSpinner: false });
+        return;
       }
+
+      if (resp.status === 404) {
+        toast.error(data?.message || "Report not found.");
+        return;
+      }
+
+      if (resp.status === 403) {
+        toast.error(data?.message || "Not allowed to delete this report.");
+        return;
+      }
+
+      toast.error(
+        data?.message || `Failed to delete report (HTTP ${resp.status}).`
+      );
     } catch (err) {
-      console.error(err);
-      toast.error("Error deleting report");
+      console.error("Delete error:", err);
+      toast.error("Network error while deleting report.");
     }
   };
 
-  const columns = [
-    {
-      accessorKey: "matchType",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Type <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-    },
-    {
-      accessorKey: "athleteFirstName",
-      header: "Athlete First",
-    },
-    {
-      accessorKey: "athleteLastName",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Athlete Last <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-    },
-    { accessorKey: "athleteNationalRank", header: "National Rank" },
-    { accessorKey: "athleteWorldRank", header: "World Rank" },
-    {
-      accessorKey: "athleteClub",
-      header: "Club",
-      meta: { className: "hidden md:table-cell" },
-    },
-    {
-      accessorKey: "athleteCountry",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Country <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-    },
-    {
-      accessorKey: "division",
-      header: "Division",
-      meta: { className: "hidden md:table-cell" },
-    },
-    {
-      accessorKey: "weightCategory",
-      header: "Weight Class",
-      meta: { className: "hidden md:table-cell" },
-    },
+  // ----- Derive table rows -----
+  const tableData = useMemo(() => {
+    return (scoutingReports || []).map((r) => {
+      const divDisplay =
+        (r?.division && typeof r.division === "object"
+          ? divisionPrettyFromObj(r.division)
+          : r?.division && typeof r.division === "string"
+          ? divisionMap[r.division] || "—"
+          : "—") || "—";
 
-    // Created By (sortable)
-    {
-      accessorKey: "createdByName",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Created By <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-      cell: ({ row }) => row.original.createdByName || "—",
-    },
-
-    {
-      id: "actions",
-      header: "Actions",
-      enableSorting: false,
-      cell: ({ row }) => {
-        const report = row.original;
-        return (
-          <div className="flex justify-center gap-3">
-            <button
-              onClick={() => {
-                setSelectedReport(report);
-                setPreviewOpen(true);
-              }}
-              title="View Details"
-              className="icon-btn"
-            >
-              <Eye className="w-5 h-5 text-blue-500" />
-            </button>
-            <button
-              onClick={async () => {
-                setSelectedReport(report);
-                setOpen(true);
-                await Promise.all([
-                  loadStylesForModal(),
-                  loadTechniquesForModal(),
-                ]);
-              }}
-              title="Edit Report"
-              className="icon-btn"
-            >
-              <Edit className="w-5 h-5 text-green-500" />
-            </button>
-            <button
-              onClick={() => handleDeleteReport(report)}
-              title="Delete Report"
-              className="icon-btn"
-            >
-              <Trash className="w-5 h-5 text-red-500" />
-            </button>
-          </div>
+      let weightDisplay = "—";
+      if (r?.weightLabel && String(r.weightLabel).trim()) {
+        weightDisplay = ensureWeightDisplay(
+          String(r.weightLabel).trim(),
+          r?.weightUnit
         );
+      } else {
+        const divId = getDivisionId(r?.division);
+        const w = divId ? weightsMap[divId] : null;
+        if (w && Array.isArray(w.items) && r?.weightItemId) {
+          const item = w.items.find(
+            (it) =>
+              String(it._id) === String(r.weightItemId) ||
+              String(it.label).toLowerCase() ===
+                String(r.weightItemId).toLowerCase()
+          );
+          if (item?.label) {
+            const unit = r?.weightUnit || w.unit || "";
+            weightDisplay = ensureWeightDisplay(item.label, unit);
+          }
+        }
+      }
+
+      return { ...r, divisionDisplay: divDisplay, weightDisplay };
+    });
+  }, [scoutingReports, divisionMap, weightsMap]);
+
+  // ===== Columns =====
+  // Order: Style → First Name → Last Name → (rest unchanged)
+  const columns = useMemo(
+    () => [
+      {
+        accessorKey: "matchType",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Type <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
       },
-    },
-  ];
+      { accessorKey: "athleteFirstName", header: "Athlete First" },
+      {
+        accessorKey: "athleteLastName",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Athlete Last <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+      },
+      { accessorKey: "athleteNationalRank", header: "National Rank" },
+      { accessorKey: "athleteWorldRank", header: "World Rank" },
+      {
+        accessorKey: "athleteClub",
+        header: "Club",
+        meta: { className: "hidden md:table-cell" },
+      },
+      {
+        accessorKey: "athleteCountry",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Country <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+      },
+      {
+        accessorKey: "divisionDisplay",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Division <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+        meta: { className: "hidden md:table-cell" },
+        sortingFn: (rowA, rowB) =>
+          String(rowA.getValue("divisionDisplay")).localeCompare(
+            String(rowB.getValue("divisionDisplay")),
+            undefined,
+            { sensitivity: "base" }
+          ),
+      },
+      {
+        accessorKey: "weightDisplay",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Weight Class <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+        meta: { className: "hidden md:table-cell" },
+        sortingFn: (rowA, rowB) =>
+          String(rowA.getValue("weightDisplay")).localeCompare(
+            String(rowB.getValue("weightDisplay")),
+            undefined,
+            { numeric: true }
+          ),
+      },
+      {
+        accessorKey: "createdByName",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Created By <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+        cell: ({ row }) => row.original.createdByName || "—",
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        enableSorting: false,
+        cell: ({ row }) => {
+          const report = row.original;
+          return (
+            <div className="flex justify-center gap-3">
+              <button
+                onClick={() => {
+                  setSelectedReport(report);
+                  setPreviewOpen(true);
+                }}
+                title="View Details"
+                className="icon-btn"
+              >
+                <Eye className="w-5 h-5 text-blue-500" />
+              </button>
+              <button
+                onClick={async () => {
+                  setSelectedReport(report);
+                  setOpen(true);
+                  await Promise.all([
+                    loadStylesForModal(),
+                    loadTechniquesForModal(),
+                  ]);
+                }}
+                title="Edit Report"
+                className="icon-btn"
+              >
+                <Edit className="w-5 h-5 text-green-500" />
+              </button>
+              <button
+                onClick={() => handleDeleteReport(report)}
+                title="Delete Report"
+                className="icon-btn"
+              >
+                <Trash className="w-5 h-5 text-red-500" />
+              </button>
+            </div>
+          );
+        },
+      },
+    ],
+    [loadStylesForModal, loadTechniquesForModal]
+  );
 
   const openingModal = stylesLoading || techniquesLoading;
 
+  // Excel export URL for the signed-in user
+  const exportUrl = `/api/records/scouting?download=1`;
+
   return (
     <div className="px-4 md:px-6 lg:px-8">
-      {/* Header */}
-      <div className="flex flex-col items-start gap-4 mb-4">
-        <h1 className="text-2xl font-bold">My Scouting Reports</h1>
-        <Button
-          className="btn btn-primary"
-          onClick={async () => {
-            setSelectedReport(null);
-            setOpen(true);
-            await Promise.all([loadStylesForModal(), loadTechniquesForModal()]);
-          }}
-        >
-          Add Scouting Report
-        </Button>
+      {/* Header: title + add (left), export (right) */}
+      <div className="flex flex-col gap-3 mb-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold">My Scouting Reports</h1>
+          <Button
+            className="btn btn-primary"
+            onClick={async () => {
+              setSelectedReport(null);
+              setOpen(true);
+              await Promise.all([
+                loadStylesForModal(),
+                loadTechniquesForModal(),
+              ]);
+            }}
+          >
+            Add Scouting Report
+          </Button>
+        </div>
+
+        <div className="flex items-center">
+          <Button
+            variant="outline"
+            onClick={() =>
+              window.open(exportUrl, "_blank", "noopener,noreferrer")
+            }
+            className="flex items-center gap-2 md:ml-auto"
+            title="Export my scouting reports to Excel"
+          >
+            <FileDown className="w-4 h-4" />
+            Export to Excel
+          </Button>
+        </div>
       </div>
 
       {/* Modal */}
@@ -280,7 +629,7 @@ const DashboardScouting = ({ user }) => {
             userType="user"
             report={selectedReport}
             setOpen={setOpen}
-            onSuccess={fetchReports}
+            onSuccess={() => fetchReports({ showSpinner: false })}
           />
         ) : (
           <div className="p-6 text-center">
@@ -300,83 +649,95 @@ const DashboardScouting = ({ user }) => {
         )}
       </ModalLayout>
 
-      {/* Mobile cards (unchanged) */}
-      <div className="grid grid-cols-1 sm:hidden gap-4 mb-6">
-        {scoutingReports.length > 0 ? (
-          scoutingReports.map((report) => (
-            <div
-              key={report._id}
-              className="bg-gray-900 text-white p-4 rounded-xl shadow-md border border-gray-700"
-            >
-              <p>
-                <strong>Type:</strong> {report.matchType}
-              </p>
-              <p>
-                <strong>Athlete:</strong> {report.athleteFirstName}{" "}
-                {report.athleteLastName}
-              </p>
-              <p>
-                <strong>Country:</strong> {report.athleteCountry}
-              </p>
-              <p>
-                <strong>Division:</strong> {report.division}
-              </p>
-              <p>
-                <strong>Weight Class:</strong> {report.weightCategory}
-              </p>
-              <p>
-                <strong>Created By:</strong> {report.createdByName || "—"}
-              </p>
-
-              <div className="flex justify-end gap-4 mt-4">
-                <button
-                  onClick={() => {
-                    setSelectedReport(report);
-                    setPreviewOpen(true);
-                  }}
-                  title="View Details"
-                  className="text-blue-400 hover:text-blue-300"
-                >
-                  <Eye size={18} />
-                </button>
-                <button
-                  onClick={async () => {
-                    setSelectedReport(report);
-                    setOpen(true);
-                    await Promise.all([
-                      loadStylesForModal(),
-                      loadTechniquesForModal(),
-                    ]);
-                  }}
-                  title="Edit"
-                  className="text-green-400 hover:text-green-300"
-                >
-                  <Edit size={18} />
-                </button>
-                <button
-                  onClick={() => handleDeleteReport(report)}
-                  title="Delete"
-                  className="text-red-500 hover:text-red-400"
-                >
-                  <Trash size={18} />
-                </button>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="text-gray-400">No scouting reports found.</p>
-        )}
-      </div>
-
-      {/* Desktop table */}
-      <div className="hidden md:block overflow-x-auto">
-        <div className="min-w-[800px]">
-          <ReportDataTable
-            columns={columns}
-            data={scoutingReports}
-          />
+      {/* Unified loading state */}
+      {reportsLoading ? (
+        <div className="flex flex-col justify-center items-center h-[40vh]">
+          <Spinner size={52} />
+          <p className="mt-2 text-base text-muted-foreground">
+            Loading scouting reports…
+          </p>
         </div>
-      </div>
+      ) : (
+        <>
+          {/* Mobile cards */}
+          <div className="grid grid-cols-1 sm:hidden gap-4 mb-6">
+            {tableData.length > 0 ? (
+              tableData.map((report) => (
+                <div
+                  key={report._id}
+                  className="bg-gray-900 text-white p-4 rounded-xl shadow-md border border-gray-700"
+                >
+                  <p>
+                    <strong>Type:</strong> {report.matchType}
+                  </p>
+                  <p>
+                    <strong>Athlete:</strong> {report.athleteFirstName}{" "}
+                    {report.athleteLastName}
+                  </p>
+                  <p>
+                    <strong>Country:</strong> {report.athleteCountry}
+                  </p>
+                  <p>
+                    <strong>Division:</strong> {report.divisionDisplay}
+                  </p>
+                  <p>
+                    <strong>Weight Class:</strong> {report.weightDisplay}
+                  </p>
+                  <p>
+                    <strong>Created By:</strong> {report.createdByName || "—"}
+                  </p>
+
+                  <div className="flex justify-end gap-4 mt-4">
+                    <button
+                      onClick={() => {
+                        setSelectedReport(report);
+                        setPreviewOpen(true);
+                      }}
+                      title="View Details"
+                      className="text-blue-400 hover:text-blue-300"
+                    >
+                      <Eye size={18} />
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setSelectedReport(report);
+                        setOpen(true);
+                        await Promise.all([
+                          loadStylesForModal(),
+                          loadTechniquesForModal(),
+                        ]);
+                      }}
+                      title="Edit"
+                      className="text-green-400 hover:text-green-300"
+                    >
+                      <Edit size={18} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteReport(report)}
+                      title="Delete"
+                      className="text-red-500 hover:text-red-400"
+                    >
+                      <Trash size={18} />
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-400">No scouting reports found.</p>
+            )}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
+            <div className="min-w-[800px]">
+              <ReportDataTable
+                columns={columns}
+                data={tableData}
+              />
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Preview modal */}
       {previewOpen && selectedReport && (
