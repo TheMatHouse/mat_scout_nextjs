@@ -1,7 +1,7 @@
 // components/dashboard/family/sections/FamilyScoutingReports.jsx
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { ReportDataTable } from "@/components/shared/report-data-table";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowUpDown, Eye, Edit, Trash } from "lucide-react";
 import ModalLayout from "@/components/shared/ModalLayout";
 import { normalizeStyles } from "@/lib/normalizeStyles";
+import Spinner from "@/components/shared/Spinner";
 
 /* ---------- helpers to pretty-print Division + Weight ---------- */
 function genderLabel(g) {
@@ -80,15 +81,17 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
   const [divisionMap, setDivisionMap] = useState({});
   const [weightsMap, setWeightsMap] = useState({});
 
-  // Normalize styles for this family member (for the form)
+  // styles for the form (fetched on-demand)
+  const [stylesLoading, setStylesLoading] = useState(false);
+  const [stylesForForm, setStylesForForm] = useState([]);
+
+  // Baseline styles from the member prop (fallback only)
   const stylesForMember = useMemo(() => {
     const raw = member?.styles?.length
       ? member.styles
       : member?.userStyles || [];
     return normalizeStyles(raw || []);
   }, [member?.styles, member?.userStyles]);
-
-  const hasStyles = stylesForMember.length > 0;
 
   useEffect(() => {
     if (!member?._id || !member?.userId) return;
@@ -210,6 +213,39 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
       toast.error("Error deleting report");
     }
   };
+
+  // ===== Load styles (family endpoint) when opening the modal =====
+  const loadStylesForModal = useCallback(async () => {
+    if (!member?.userId || !member?._id) {
+      setStylesForForm([]);
+      return;
+    }
+    setStylesLoading(true);
+    try {
+      const res = await fetch(
+        `/api/dashboard/${member.userId}/family/${member._id}/styles`,
+        {
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: { accept: "application/json" },
+        }
+      );
+      let list = [];
+      if (res.ok) {
+        const data = await res.json().catch(() => []);
+        list = Array.isArray(data)
+          ? data
+          : data.userStyles || data.styles || [];
+      }
+      const normalized = normalizeStyles(list);
+      setStylesForForm(normalized.length ? normalized : stylesForMember);
+    } catch (e) {
+      console.error("Failed to load family styles:", e);
+      setStylesForForm(stylesForMember);
+    } finally {
+      setStylesLoading(false);
+    }
+  }, [member?.userId, member?._id, stylesForMember]);
 
   // Derive pretty division/weight for the table and mobile cards
   const tableData = useMemo(() => {
@@ -358,9 +394,10 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
               <Eye className="w-5 h-5 text-blue-500" />
             </button>
             <button
-              onClick={() => {
+              onClick={async () => {
                 setSelectedReport(report);
                 setOpen(true);
+                await loadStylesForModal();
               }}
               title="Edit Scouting Report"
               className="icon-btn"
@@ -388,17 +425,16 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
     <div>
       {/* Header: Title + Add on the LEFT, Export on the RIGHT */}
       <div className="mb-4">
-        {/* Row 1: title only */}
         <h1 className="text-2xl font-bold">Family Member Scouting</h1>
 
-        {/* Row 2: buttons (left/right) */}
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 items-center gap-2">
           <div>
             <Button
               className="btn btn-primary"
-              onClick={() => {
+              onClick={async () => {
                 setSelectedReport(null);
                 setOpen(true);
+                await loadStylesForModal();
               }}
             >
               Add Scouting Report
@@ -424,7 +460,11 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
         description="Fill out all scouting details below."
         withCard={true}
       >
-        {hasStyles ? (
+        {stylesLoading ? (
+          <div className="flex items-center justify-center py-10">
+            <Spinner size={40} />
+          </div>
+        ) : stylesForForm.length > 0 ? (
           <ScoutingReportForm
             key={selectedReport?._id}
             athlete={member}
@@ -432,23 +472,26 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
             setOpen={setOpen}
             onSuccess={fetchReports}
             userType="family"
-            styles={stylesForMember}
+            styles={stylesForForm}
           />
         ) : (
           <div className="p-6 text-center">
             <p className="text-base text-muted-foreground mb-4">
-              You must add a style/sport to this profile before creating a
-              scouting report.
+              This family member doesn’t have any styles yet. Please go to the{" "}
+              <strong>Styles</strong> tab on this profile and add a style before
+              creating a scouting report.
             </p>
-            <Button
-              onClick={() => {
-                setOpen(false);
-                if (typeof onSwitchToStyles === "function") onSwitchToStyles();
-              }}
-              className="bg-ms-blue-gray hover:bg-ms-blue text-white"
-            >
-              Add Style
-            </Button>
+            {typeof onSwitchToStyles === "function" && (
+              <Button
+                onClick={() => {
+                  setOpen(false);
+                  onSwitchToStyles();
+                }}
+                className="bg-ms-blue-gray hover:bg-ms-blue text-white"
+              >
+                Go to Styles
+              </Button>
+            )}
           </div>
         )}
       </ModalLayout>
@@ -490,9 +533,10 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
                   <Eye size={18} />
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     setSelectedReport(report);
                     setOpen(true);
+                    await loadStylesForModal();
                   }}
                   title="Edit"
                   className="text-green-400 hover:text-green-300"
@@ -524,9 +568,10 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
               setSelectedReport(report);
               setPreviewOpen(true);
             }}
-            onEdit={(report) => {
+            onEdit={async (report) => {
               setSelectedReport(report);
               setOpen(true);
+              await loadStylesForModal();
             }}
             onDelete={(report) => handleDeleteReport(report)}
           />

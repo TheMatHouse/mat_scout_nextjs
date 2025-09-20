@@ -1,7 +1,7 @@
 // components/dashboard/forms/ScoutingReportForm.jsx
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
@@ -76,7 +76,7 @@ const InfoBox = ({ children }) => (
 const ScoutingReportForm = ({
   athlete,
   report,
-  styles, // provided by DashboardScouting
+  styles, // provided by dashboard container
   techniques, // optional
   userType, // "user" | "family"
   setOpen,
@@ -104,20 +104,57 @@ const ScoutingReportForm = ({
   const [weightOptions, setWeightOptions] = useState([]); // [{value,label}]
   const [weightCategoryId, setWeightCategoryId] = useState(
     report?.weightCategory || ""
-  ); // ← control by id
+  ); // control by id
   const [weightLabel, setWeightLabel] = useState(report?.weightLabel || "");
   const [weightUnit, setWeightUnit] = useState(report?.weightUnit || "");
   const [weightsLoading, setWeightsLoading] = useState(false);
   const [weightsError, setWeightsError] = useState("");
 
-  // Gate: only field visible initially
-  const [matchType, setMatchType] = useState("");
+  // Gate: style
+  const [matchType, setMatchType] = useState(
+    report?.matchType || report?.style || report?.styleName || ""
+  );
 
-  // Load divisions AFTER a style is chosen
+  // --- include current report style in options if it isn't in the list ---
+  const styleOptions = useMemo(() => {
+    const base = (normalizedStyles || []).map((s) => ({
+      value: s.styleName,
+      label: s.styleName,
+    }));
+    if (
+      matchType &&
+      !base.some(
+        (o) => String(o.value).toLowerCase() === String(matchType).toLowerCase()
+      )
+    ) {
+      base.unshift({ value: matchType, label: `${matchType} (from report)` });
+    }
+    return base;
+  }, [normalizedStyles, matchType]);
+
+  // Refs to apply saved division/weight exactly once on edit
+  const initialDivisionId = report?.division ? String(report.division) : "";
+  const initialWeightCategoryId = report?.weightCategory
+    ? String(report.weightCategory)
+    : "";
+  const initialWeightLabelRef = useRef(report?.weightLabel || "");
+  const initialWeightUnitRef = useRef(report?.weightUnit || "");
+  const appliedInitialDivisionRef = useRef(false);
+  const appliedInitialWeightRef = useRef(false);
+
+  // ------------- DIVISIONS after style -------------
   useEffect(() => {
     let alive = true;
 
-    // reset chain when style changes
+    const isEditingSameStyle =
+      !!report &&
+      !!matchType &&
+      String(matchType).toLowerCase() ===
+        String(
+          report.matchType || report.style || report.styleName || ""
+        ).toLowerCase();
+
+    // reset chain before fetch
     setDivisions([]);
     setDivisionId("");
     setWeightOptions([]);
@@ -125,6 +162,8 @@ const ScoutingReportForm = ({
     setWeightLabel("");
     setWeightUnit("");
     setWeightsError("");
+    appliedInitialDivisionRef.current = false;
+    appliedInitialWeightRef.current = false;
 
     const name = (matchType || "").trim();
     if (!name) return;
@@ -149,6 +188,16 @@ const ScoutingReportForm = ({
           gender: d.gender || null,
         }));
         setDivisions(opts);
+
+        // ✅ Auto-apply saved division on edit
+        if (
+          isEditingSameStyle &&
+          initialDivisionId &&
+          !appliedInitialDivisionRef.current
+        ) {
+          setDivisionId(initialDivisionId);
+          appliedInitialDivisionRef.current = true;
+        }
       } catch (err) {
         console.error("[ScoutingReportForm] divisions fetch error:", err);
         if (!alive) return;
@@ -161,9 +210,10 @@ const ScoutingReportForm = ({
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchType]);
 
-  // ---------------- Load weights AFTER a division is chosen ----------------
+  // ------------- WEIGHTS after division -------------
   useEffect(() => {
     let alive = true;
 
@@ -173,6 +223,7 @@ const ScoutingReportForm = ({
     setWeightLabel("");
     setWeightUnit("");
     setWeightsError("");
+    appliedInitialWeightRef.current = false;
 
     const id = String(divisionId || "");
     if (!id) return;
@@ -200,25 +251,22 @@ const ScoutingReportForm = ({
           return;
         }
 
-        // parse JSON safely
         let data;
         try {
           data = await res.json();
         } catch (e) {
           if (!alive) return;
-          console.error("[ScoutingReportForm] weights JSON parse error", e);
+          console.error("[ScoutingReportForm] weights JSON parse error:", e);
           setWeightsError("Weights endpoint did not return JSON.");
           return;
         }
         if (!alive) return;
 
-        // ---- EXPECTED SHAPE { weightCategory: { _id, unit, items: [] } }
         const wc = data?.weightCategory || {};
-        let unit = wc?.unit || data?.unit || "";
-        let items = Array.isArray(wc?.items) ? wc.items : [];
+        const unit = wc?.unit || data?.unit || "";
+        const items = Array.isArray(wc?.items) ? wc.items : [];
 
-        // Normalize options
-        const opts = (Array.isArray(items) ? items : [])
+        const opts = items
           .map((i, idx) => {
             let lbl =
               (typeof i === "string" && i) ||
@@ -238,8 +286,6 @@ const ScoutingReportForm = ({
             }
             lbl = String(lbl || "").trim();
             if (!lbl) return null;
-
-            // Prefer DB id for value
             const val = String(i?._id ?? i?.value ?? i?.id ?? lbl ?? idx);
             return { value: val, label: lbl };
           })
@@ -248,8 +294,29 @@ const ScoutingReportForm = ({
         setWeightOptions(opts);
         setWeightUnit(String(unit || ""));
 
+        // ✅ Auto-apply saved weight on edit
+        if (initialWeightCategoryId && !appliedInitialWeightRef.current) {
+          setWeightCategoryId(String(initialWeightCategoryId));
+
+          // Prefer snapshot label from saved report
+          const snap = initialWeightLabelRef.current;
+          if (snap) {
+            setWeightLabel(snap);
+          } else {
+            const opt = opts.find(
+              (o) => String(o.value) === String(initialWeightCategoryId)
+            );
+            setWeightLabel(opt?.label ?? "");
+          }
+
+          if (initialWeightUnitRef.current) {
+            setWeightUnit(initialWeightUnitRef.current);
+          }
+
+          appliedInitialWeightRef.current = true;
+        }
+
         if (!opts.length) {
-          console.warn("[ScoutingReportForm] No weight options parsed.", data);
           setWeightsError("No weight categories found for this division.");
         }
       } catch (err) {
@@ -285,16 +352,6 @@ const ScoutingReportForm = ({
     report?.athleteWorldRank || ""
   );
 
-  // If editing: prefill (style gating still applies when switching)
-  useEffect(() => {
-    if (report?.division && !divisionId) setDivisionId(String(report.division));
-    if (report?.weightCategory && !weightCategoryId)
-      setWeightCategoryId(String(report.weightCategory));
-    if (report?.weightLabel && !weightLabel) setWeightLabel(report.weightLabel);
-    if (report?.weightUnit && !weightUnit) setWeightUnit(report.weightUnit);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const [athleteClub, setAthleteClub] = useState(report?.athleteClub || "");
   const [athleteCountry, setAthleteCountry] = useState(
     report?.athleteCountry || ""
@@ -311,8 +368,11 @@ const ScoutingReportForm = ({
   const [athleteSelected, setAthleteSelected] = useState(
     report?.athleteAttacks?.map((item, i) => ({ value: i, label: item })) || []
   );
-  const [videos, setVideos] = useState(report?.videos || []);
-  const [newVideos, setNewVideos] = useState([]);
+
+  // ----- videos -----
+  const [videos, setVideos] = useState(report?.videos || []); // existing (with _id)
+  const [newVideos, setNewVideos] = useState([]); // new entries from form
+  const [deletedVideos, setDeletedVideos] = useState([]); // _ids marked for deletion
 
   useEffect(() => {
     const fromProps = (() => {
@@ -405,9 +465,11 @@ const ScoutingReportForm = ({
       athleteAttacks: athleteSelected.map((item) => item.label.toLowerCase()),
       athleteAttackNotes,
       accessList,
-      updatedVideos: videos.filter((v) => v._id),
+
+      // videos
+      updatedVideos: (videos || []).filter((v) => v && v._id),
       newVideos,
-      deletedVideos: [],
+      deletedVideos,
     };
 
     const method = report ? "PATCH" : "POST";
@@ -463,11 +525,22 @@ const ScoutingReportForm = ({
 
   const noStyles = (normalizedStyles || []).length === 0;
   if (noStyles) {
-    const stylesHref =
-      userType === "family" && athlete?.userId && athlete?._id
-        ? `/dashboard/${athlete.userId}/family/${athlete._id}/styles`
-        : `/dashboard/styles`;
+    // Family members edit styles via an internal tab, so don't deep-link.
+    if (userType === "family") {
+      return (
+        <div className="rounded-lg border p-4 bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+          <p className="font-semibold">
+            You need a style/sport to add a scouting report.
+          </p>
+          <p className="text-sm mt-1">
+            Please go to the <strong>Styles</strong> tab for this family member
+            and add a style before creating a scouting report.
+          </p>
+        </div>
+      );
+    }
 
+    const stylesHref = `/dashboard/styles`;
     return (
       <div className="rounded-lg border p-4 bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
         <p className="font-semibold">
@@ -504,10 +577,7 @@ const ScoutingReportForm = ({
         placeholder="Select style/sport..."
         value={matchType}
         onChange={(val) => setMatchType(val)}
-        options={normalizedStyles.map((s) => ({
-          value: s.styleName,
-          label: s.styleName,
-        }))}
+        options={styleOptions}
       />
 
       {/* Everything else appears ONLY after a style is selected */}
@@ -664,6 +734,103 @@ const ScoutingReportForm = ({
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-2">Videos</h3>
 
+            {/* Existing videos (editable) */}
+            {(videos || []).map((vid, idx) => {
+              // Only render editable UI if we have an object (populated). If it's just an id string, show a placeholder.
+              const isIdOnly = typeof vid === "string";
+              const title = isIdOnly ? "" : vid.title || vid.videoTitle || "";
+              const notes = isIdOnly ? "" : vid.notes || vid.videoNotes || "";
+              const url = isIdOnly ? "" : vid.url || vid.videoURL || "";
+
+              // derive YouTube embed
+              const idMatch = (url || "").match(
+                /(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/
+              );
+              const embedId = idMatch ? idMatch[1] : null;
+
+              return (
+                <div
+                  key={vid._id ?? idx}
+                  className="bg-muted p-4 rounded-lg mb-4"
+                >
+                  {isIdOnly ? (
+                    <div className="text-sm text-muted-foreground">
+                      This report has an existing video (ID: {vid}). It can't be
+                      edited here because only an id was loaded. It will be kept
+                      on save.
+                    </div>
+                  ) : (
+                    <>
+                      <FormField
+                        label="Video Title"
+                        value={title}
+                        onChange={(e) => {
+                          const next = [...videos];
+                          next[idx] = {
+                            ...(next[idx] || {}),
+                            title: e.target.value,
+                          };
+                          setVideos(next);
+                        }}
+                      />
+                      <Editor
+                        name={`existing_notes_${idx}`}
+                        text={notes}
+                        onChange={(val) => {
+                          const next = [...videos];
+                          next[idx] = { ...(next[idx] || {}), notes: val };
+                          setVideos(next);
+                        }}
+                        label="Video Notes"
+                      />
+                      <FormField
+                        label="YouTube URL"
+                        value={url}
+                        onChange={(e) => {
+                          const next = [...videos];
+                          next[idx] = {
+                            ...(next[idx] || {}),
+                            url: e.target.value,
+                          };
+                          setVideos(next);
+                        }}
+                      />
+                      {embedId && (
+                        <iframe
+                          className="mt-3 w-full h-52"
+                          src={`https://www.youtube.com/embed/${embedId}`}
+                          allowFullScreen
+                        />
+                      )}
+
+                      <div className="mt-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            // mark for deletion if it has an _id
+                            if (vid._id) {
+                              setDeletedVideos((prev) => [
+                                ...prev,
+                                String(vid._id),
+                              ]);
+                            }
+                            // remove from the editable list
+                            setVideos((prev) =>
+                              prev.filter((_, i) => i !== idx)
+                            );
+                          }}
+                        >
+                          Remove This Video
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* New videos */}
             {newVideos.map((vid, idx) => {
               const idMatch = (vid.url || "").match(
                 /(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/
@@ -672,7 +839,7 @@ const ScoutingReportForm = ({
 
               return (
                 <div
-                  key={idx}
+                  key={`new-${idx}`}
                   className="bg-muted p-4 rounded-lg mb-4"
                 >
                   <FormField
@@ -713,6 +880,18 @@ const ScoutingReportForm = ({
                       allowFullScreen
                     />
                   )}
+
+                  <div className="mt-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        setNewVideos((prev) => prev.filter((_, i) => i !== idx))
+                      }
+                    >
+                      Remove
+                    </Button>
+                  </div>
                 </div>
               );
             })}

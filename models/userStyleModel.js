@@ -1,115 +1,116 @@
-// models/userStylesModel.js
+// models/userStyleModel.js
 import mongoose from "mongoose";
 
-const { Schema } = mongoose;
-
-const PromotionSchema = new Schema(
+const PromotionSchema = new mongoose.Schema(
   {
-    rank: { type: String, required: true }, // e.g., "Shodan", "Purple", "Blue"
-    promotedOn: { type: Date, required: true }, // date of promotion
-    awardedBy: { type: String }, // optional
-    note: { type: String }, // optional
-    proofUrl: { type: String }, // optional (link to certificate/photo)
+    rank: { type: String, required: true, trim: true },
+    promotedOn: { type: Date, required: true },
+    awardedBy: { type: String, default: "", trim: true },
+    note: { type: String, default: "", trim: true },
+    proofUrl: { type: String, default: "", trim: true },
   },
   { _id: false }
 );
 
-const userStyleSchema = new Schema(
+const UserStyleSchema = new mongoose.Schema(
   {
-    // You currently store the style as a string name; keeping that as-is.
-    styleName: {
-      type: String,
-      required: true,
-    },
-
-    // NEW: start date for the style (e.g., Aug 1988)
-    startDate: {
-      type: Date,
-    },
-
-    // NEW: denormalized latest rank for quick reads
-    currentRank: {
-      type: String,
-    },
-
-    // NEW: full promotion history; last entry defines currentRank
-    promotions: {
-      type: [PromotionSchema],
-      default: [],
-    },
-
-    // NEW: denormalized latest promotion date for easy sorting/filtering
-    lastPromotedOn: {
-      type: Date,
-      index: true,
-    },
-
-    // Existing fields you already had — kept intact
-    weightClass: {
-      type: String,
-    },
-    division: {
-      type: String,
-    },
-    grip: {
-      type: String,
-    },
-    favoriteTechnique: {
-      type: String,
-    },
-
-    // Ownership
     userId: {
-      type: Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
       index: true,
     },
+    // present when this style belongs to a family member profile
     familyMemberId: {
-      type: Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.ObjectId,
       ref: "FamilyMember",
-      default: null,
       index: true,
+      default: null,
     },
+
+    styleName: { type: String, required: true, trim: true, index: true },
+
+    // promotions-centric
+    startDate: { type: Date, default: null },
+    currentRank: { type: String, default: "", trim: true }, // shown in StyleCard; auto-filled from promotions if empty
+    promotions: { type: [PromotionSchema], default: [] },
+
+    // kept: user-facing preferences
+    grip: { type: String, default: "", trim: true },
+    favoriteTechnique: { type: String, default: "", trim: true },
+
+    // 🔥 removed legacy fields:
+    // division, weightClass, weightCategory, weightUnit, weightItemId, etc.
   },
   {
     timestamps: true,
+    strict: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
 
-// Optional (uncomment if you want to enforce one record per user/family/styleName):
-// userStyleSchema.index({ userId: 1, familyMemberId: 1, styleName: 1 }, { unique: true });
+// Most-recent promotion date (computed)
+UserStyleSchema.virtual("lastPromotedOn").get(function () {
+  if (!Array.isArray(this.promotions) || this.promotions.length === 0)
+    return null;
+  const mostRecent = this.promotions.reduce(
+    (acc, p) =>
+      !acc || (p?.promotedOn && p.promotedOn > acc.promotedOn) ? p : acc,
+    null
+  );
+  return mostRecent ? mostRecent.promotedOn : null;
+});
 
-/**
- * Keep currentRank and lastPromotedOn in sync with the latest promotion.
- * If promotions is empty and currentRank is set manually, we leave lastPromotedOn
- * undefined (or you could default to startDate/createdAt if you prefer).
- */
-userStyleSchema.pre("save", function (next) {
-  if (this.isModified("promotions")) {
-    if (Array.isArray(this.promotions) && this.promotions.length > 0) {
-      const last = this.promotions[this.promotions.length - 1];
-      this.currentRank = last?.rank ?? this.currentRank ?? undefined;
-      this.lastPromotedOn =
-        last?.promotedOn ?? this.lastPromotedOn ?? undefined;
-    } else {
-      this.lastPromotedOn = undefined;
-    }
-  }
-
-  // If currentRank changed but promotions is empty, optionally backfill lastPromotedOn:
+// If currentRank is empty, derive it from most recent promotion
+UserStyleSchema.pre("save", function (next) {
   if (
-    this.isModified("currentRank") &&
-    (!this.promotions || this.promotions.length === 0)
+    (!this.currentRank || !String(this.currentRank).trim()) &&
+    Array.isArray(this.promotions) &&
+    this.promotions.length
   ) {
-    this.lastPromotedOn =
-      this.lastPromotedOn ?? this.startDate ?? this.createdAt ?? undefined;
+    const mostRecent = this.promotions.reduce(
+      (acc, p) =>
+        !acc || (p?.promotedOn && p.promotedOn > acc.promotedOn) ? p : acc,
+      null
+    );
+    if (mostRecent?.rank) this.currentRank = mostRecent.rank;
   }
-
   next();
 });
 
-const UserStyle =
-  mongoose.models.UserStyle || mongoose.model("UserStyle", userStyleSchema);
+// Helpful static for later maintenance/migrations
+UserStyleSchema.statics.fillCurrentRankFromPromotions = async function (
+  ids = []
+) {
+  const q = ids.length
+    ? { _id: { $in: ids } }
+    : { $or: [{ currentRank: { $exists: false } }, { currentRank: "" }] };
+  const docs = await this.find(q, { promotions: 1 }).lean();
+  const ops = [];
+  for (const d of docs) {
+    const promos = Array.isArray(d.promotions) ? d.promotions : [];
+    if (!promos.length) continue;
+    const mostRecent = promos.reduce(
+      (acc, p) =>
+        !acc ||
+        (p?.promotedOn && new Date(p.promotedOn) > new Date(acc.promotedOn))
+          ? p
+          : acc,
+      null
+    );
+    if (mostRecent?.rank) {
+      ops.push({
+        updateOne: {
+          filter: { _id: d._id },
+          update: { $set: { currentRank: mostRecent.rank } },
+        },
+      });
+    }
+  }
+  if (ops.length) await this.bulkWrite(ops);
+};
 
+const UserStyle =
+  mongoose.models.UserStyle || mongoose.model("UserStyle", UserStyleSchema);
 export default UserStyle;

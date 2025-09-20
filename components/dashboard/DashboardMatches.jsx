@@ -69,11 +69,12 @@ const DashboardMatches = ({ user }) => {
 
   useEffect(() => {
     if (!user?._id) return;
-    fetchMatches();
+    fetchMatches(); // initial load shows spinner
   }, [user?._id]);
 
-  const fetchMatches = async () => {
-    setMatchesLoading(true);
+  // add showSpinner flag so we can do silent refresh after edits/deletes
+  const fetchMatches = async ({ showSpinner = true } = {}) => {
+    if (showSpinner) setMatchesLoading(true);
     try {
       const res = await fetch(`/api/dashboard/${user._id}/matchReports`, {
         cache: "no-store",
@@ -85,7 +86,7 @@ const DashboardMatches = ({ user }) => {
       console.error(err);
       toast.error("Could not load match reports.");
     } finally {
-      setMatchesLoading(false);
+      if (showSpinner) setMatchesLoading(false);
     }
   };
 
@@ -103,7 +104,7 @@ const DashboardMatches = ({ user }) => {
         ? m.division
         : "—";
 
-      // ✅ Weight: show ONLY the snapshot; never print an ObjectId string
+      // Snapshot only
       const weightDisplay =
         m?.weightLabel && m?.weightLabel.trim()
           ? `${m.weightLabel}${m.weightUnit ? ` ${m.weightUnit}` : ""}`
@@ -159,29 +160,61 @@ const DashboardMatches = ({ user }) => {
     }
   }, [user?._id]);
 
-  const handleDeleteMatch = async (match) => {
-    if (
-      window.confirm(`This report will be permanently deleted! Are you sure?`)
-    ) {
+  // fetch the full report so the preview/edit has opponent/athlete attacks, etc.
+  const fetchFullReportById = useCallback(
+    async (reportId) => {
+      if (!user?._id || !reportId) return null;
       try {
         const res = await fetch(
-          `/api/dashboard/${user._id}/matchReports/${match._id}`,
-          {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-          }
+          `/api/dashboard/${encodeURIComponent(
+            String(user._id)
+          )}/matchReports/${encodeURIComponent(String(reportId))}`,
+          { cache: "no-store", credentials: "same-origin" }
         );
-        const data = await res.json();
-        if (res.ok) {
-          toast.success(data.message);
-          fetchMatches();
-        } else {
-          toast.error(data.message || "Failed to delete match report.");
-        }
-      } catch (err) {
-        console.error(err);
-        toast.error("Failed to delete match report.");
+        if (!res.ok) return null;
+        const data = await res.json().catch(() => ({}));
+        return data?.report || null;
+      } catch {
+        return null;
       }
+    },
+    [user?._id]
+  );
+
+  const handleDeleteMatch = async (match) => {
+    if (
+      !window.confirm("This report will be permanently deleted! Are you sure?")
+    )
+      return;
+
+    try {
+      const res = await fetch(
+        `/api/dashboard/${user._id}/matchReports/${match._id}`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+      let data = {};
+      try {
+        data = await res.json();
+      } catch {}
+
+      if (res.ok) {
+        toast.success(data.message || "Deleted.");
+        // optimistic update
+        setMatchReports((prev) =>
+          prev.filter((r) => String(r._id) !== String(match._id))
+        );
+        setSelectedMatch(null);
+        // silent refresh to keep list perfect
+        await fetchMatches({ showSpinner: false });
+      } else {
+        toast.error(data.message || "Failed to delete match report.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to delete match report.");
     }
   };
 
@@ -221,7 +254,7 @@ const DashboardMatches = ({ user }) => {
       cell: ({ getValue }) => moment.utc(getValue()).format("MMMM D, YYYY"),
     },
 
-    // ✅ Division (derived)
+    // Division (derived)
     {
       accessorKey: "divisionDisplay",
       header: ({ column }) => (
@@ -235,7 +268,7 @@ const DashboardMatches = ({ user }) => {
       meta: { className: "hidden md:table-cell" },
     },
 
-    // ✅ Weight (derived)
+    // Weight (derived)
     {
       accessorKey: "weightDisplay",
       header: ({ column }) => (
@@ -289,7 +322,7 @@ const DashboardMatches = ({ user }) => {
       cell: ({ row }) => {
         const minimal = row.original;
 
-        // fetch the full report so the form has opponent/athleteAttacks, ranks, etc.
+        // fetch full report so the form has all nested fields
         const fetchFullReport = async () => {
           if (!user?._id || !minimal?._id) return minimal;
           try {
@@ -323,7 +356,6 @@ const DashboardMatches = ({ user }) => {
 
             <button
               onClick={async () => {
-                // load styles while we fetch the full report
                 const [full] = await Promise.all([
                   fetchFullReport(),
                   loadStylesForModal(),
@@ -406,7 +438,7 @@ const DashboardMatches = ({ user }) => {
             styles={stylesForForm}
             match={selectedMatch}
             setOpen={setOpen}
-            onSuccess={fetchMatches}
+            onSuccess={() => fetchMatches({ showSpinner: false })}
             userType="user"
           />
         )}
@@ -463,8 +495,46 @@ const DashboardMatches = ({ user }) => {
               tableData.map((match) => (
                 <div
                   key={match._id}
-                  className="card p-4 rounded-lg shadow-md"
+                  className="relative card p-4 rounded-lg shadow-md"
                 >
+                  {/* Floating action rail (top-right) */}
+                  <div className="absolute top-3 right-3 z-10 flex flex-col gap-2">
+                    <button
+                      onClick={async () => {
+                        const full =
+                          (await fetchFullReportById(match?._id)) || match;
+                        setSelectedMatch(full);
+                        setPreviewOpen(true);
+                      }}
+                      title="View Details"
+                      className="h-9 w-9 grid place-items-center rounded-lg border border-slate-600 bg-slate-800/70 text-blue-400 hover:bg-slate-700"
+                    >
+                      <Eye size={18} />
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const [full] = await Promise.all([
+                          fetchFullReportById(match?._id),
+                          loadStylesForModal(),
+                        ]);
+                        setSelectedMatch(full || match);
+                        setOpen(true);
+                      }}
+                      title="Edit"
+                      className="h-9 w-9 grid place-items-center rounded-lg border border-slate-600 bg-slate-800/70 text-green-400 hover:bg-slate-700"
+                    >
+                      <Edit size={18} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteMatch(match)}
+                      title="Delete"
+                      className="h-9 w-9 grid place-items-center rounded-lg border border-slate-600 bg-slate-800/70 text-red-400 hover:bg-slate-700"
+                    >
+                      <Trash size={18} />
+                    </button>
+                  </div>
+
+                  {/* Card content */}
                   <p>
                     <strong>Type:</strong> {match.matchType}
                   </p>
@@ -498,36 +568,11 @@ const DashboardMatches = ({ user }) => {
                       <span className="text-[var(--color-danger)]">Loss</span>
                     )}
                   </p>
-                  <div className="flex justify-end gap-3 mt-3">
-                    <button
-                      onClick={() => {
-                        setSelectedMatch(match);
-                        setPreviewOpen(true);
-                      }}
-                      title="View Details"
-                      className="icon-btn"
-                    >
-                      <Eye size={18} />
-                    </button>
-                    <button
-                      onClick={async () => {
-                        setSelectedMatch(match);
-                        setOpen(true);
-                        await loadStylesForModal();
-                      }}
-                      title="Edit"
-                      className="icon-btn"
-                    >
-                      <Edit size={18} />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteMatch(match)}
-                      title="Delete"
-                      className="icon-btn"
-                    >
-                      <Trash size={18} />
-                    </button>
-                  </div>
+
+                  {/* Optional bottom action row (keep if you want larger targets) */}
+                  {/* <div className="flex justify-end gap-3 mt-3">
+          ...
+        </div> */}
                 </div>
               ))
             ) : (

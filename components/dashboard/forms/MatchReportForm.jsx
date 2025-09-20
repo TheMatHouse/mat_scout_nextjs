@@ -78,76 +78,6 @@ function styleKeyFromMatchType(matchTypeRaw) {
   return null; // default: no ranks for unknown styles
 }
 
-// ordinals for degree labels
-function ordinal(n) {
-  const v = n % 100;
-  if (v >= 11 && v <= 13) return `${n}th`;
-  switch (n % 10) {
-    case 1:
-      return `${n}st`;
-    case 2:
-      return `${n}nd`;
-    case 3:
-      return `${n}rd`;
-    default:
-      return `${n}th`;
-  }
-}
-
-/* ----- Judo label formatters (kyu/dan) ----- */
-const JUDO_KYU_LABELS = {
-  white: "White Belt",
-  yellow: "Yellow Belt (Gokyu / 5th Kyu)",
-  orange: "Orange Belt (Yonkyu / 4th Kyu)",
-  green: "Green Belt (Sankyu / 3rd Kyu)",
-  blue: "Blue Belt (Nikyu / 2nd Kyu)",
-  brown: "Brown Belt (Ikkyu / 1st Kyu)",
-};
-
-const JUDO_DAN_ROMAJI = {
-  1: "Shodan",
-  2: "Nidan",
-  3: "Sandan",
-  4: "Yondan",
-  5: "Godan",
-  6: "Rokudan",
-  7: "Shichidan",
-  8: "Hachidan",
-  9: "Kudan",
-  10: "Judan",
-};
-
-function formatJudoLabelFromCode(code) {
-  if (!code) return "";
-  const c = String(code).toLowerCase();
-  if (JUDO_KYU_LABELS[c]) return JUDO_KYU_LABELS[c];
-  if (c.startsWith("black-")) {
-    const n = parseInt(c.split("-")[1], 10);
-    const romaji = JUDO_DAN_ROMAJI[n] || "";
-    return `${ordinal(n)} Degree Black Belt${romaji ? ` (${romaji})` : ""}`;
-  }
-  if (c === "black") return "Black Belt";
-  return code; // fallback
-}
-
-/* ----- BJJ label formatter ----- */
-function titleCase(word) {
-  return String(word || "")
-    .toLowerCase()
-    .replace(/\b\w/g, (m) => m.toUpperCase());
-}
-
-function formatBjjLabelFromCode(code) {
-  if (!code) return "";
-  const c = String(code).toLowerCase();
-  if (c.startsWith("black-")) {
-    const n = parseInt(c.split("-")[1], 10);
-    return `${ordinal(n)} Degree Black Belt`;
-  }
-  if (c === "black") return "Black Belt";
-  return `${titleCase(c)} Belt`;
-}
-
 /* ---- division label helpers ---- */
 const genderWord = (g) =>
   g === "male" ? "Men" : g === "female" ? "Women" : "Coed";
@@ -423,7 +353,7 @@ const MatchReportForm = ({
     []
   );
 
-  /* --------------------- rank filtering & labels ---------------------- */
+  /* --------------------- ranks (verbatim labels from DB) ---------------------- */
   const rankStyle = useMemo(
     () => styleKeyFromMatchType(matchType),
     [matchType]
@@ -436,21 +366,15 @@ const MatchReportForm = ({
     );
   }, [ranks, rankStyle]);
 
+  // Use DB labels as-is
   const friendlyLabelForRank = useCallback(
-    (rank) => {
-      const code = rank?.code ?? "";
-      if (rankStyle === "judo") return formatJudoLabelFromCode(code);
-      if (rankStyle === "bjj") return formatBjjLabelFromCode(code);
-      return (
-        rank?.label ?? rank?.formalLabel ?? rank?.altLabel ?? rank?.code ?? ""
-      );
-    },
-    [rankStyle]
+    (rank) => rank?.label || rank?.code || "",
+    []
   );
 
   const rankOptions = useMemo(() => {
     return filteredRanks.map((r) => {
-      const label = friendlyLabelForRank(r) || String(r.label || r.code || "");
+      const label = friendlyLabelForRank(r);
       const value = `${r.style}:${r.code ?? r._id ?? label}`;
       return { value, label };
     });
@@ -709,7 +633,7 @@ const MatchReportForm = ({
       matchDate,
       opponentName,
       opponentClub,
-      // ranks as human-readable labels
+      // ranks as human-readable labels (verbatim from DB)
       opponentRank:
         (rankOptions.find((o) => o.value === opponentRank)?.label ?? "") ||
         opponentRank ||
@@ -817,11 +741,23 @@ const MatchReportForm = ({
   // If there are no styles, show ONLY the notice (NOT the form)
   const noStyles = normalizedStyles.length === 0;
   if (noStyles) {
-    const stylesHref =
-      userType === "family" && athlete?.userId && athlete?._id
-        ? `/dashboard/${athlete.userId}/family/${athlete._id}/styles`
-        : `/dashboard/styles`;
+    if (userType === "family") {
+      // Family: no link, just instruct to use the Styles tab
+      return (
+        <div className="rounded-lg border p-4 bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+          <p className="font-semibold">
+            You need a style/sport to add a match report.
+          </p>
+          <p className="text-sm mt-1">
+            This family member’s styles are managed on the{" "}
+            <span className="font-semibold">Styles</span> tab in this profile.
+            Please add a style there before creating a match report.
+          </p>
+        </div>
+      );
+    }
 
+    // User: keep the link to Styles
     return (
       <div className="rounded-lg border p-4 bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
         <p className="font-semibold">
@@ -832,7 +768,7 @@ const MatchReportForm = ({
         </p>
         <div className="mt-3">
           <Link
-            href={stylesHref}
+            href="/dashboard/styles"
             onClick={() => setOpen?.(false)}
             className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium underline hover:no-underline"
           >
@@ -1006,24 +942,7 @@ const MatchReportForm = ({
                 placeholder="Select rank..."
                 value={myRank}
                 onChange={setMyRank}
-                options={ranks
-                  .filter((r) => String(r.style).toLowerCase() === rankStyle)
-                  .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-                  .map((r) => {
-                    const label =
-                      (rankStyle === "judo"
-                        ? formatJudoLabelFromCode(r.code)
-                        : rankStyle === "bjj"
-                        ? formatBjjLabelFromCode(r.code)
-                        : r.label) ||
-                      r.label ||
-                      r.code ||
-                      "";
-                    return {
-                      value: `${r.style}:${r.code ?? r._id ?? label}`,
-                      label,
-                    };
-                  })}
+                options={rankOptions}
               />
 
               <FormSelect
@@ -1031,24 +950,7 @@ const MatchReportForm = ({
                 placeholder="Select rank..."
                 value={opponentRank}
                 onChange={setOpponentRank}
-                options={ranks
-                  .filter((r) => String(r.style).toLowerCase() === rankStyle)
-                  .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-                  .map((r) => {
-                    const label =
-                      (rankStyle === "judo"
-                        ? formatJudoLabelFromCode(r.code)
-                        : rankStyle === "bjj"
-                        ? formatBjjLabelFromCode(r.code)
-                        : r.label) ||
-                      r.label ||
-                      r.code ||
-                      "";
-                    return {
-                      value: `${r.style}:${r.code ?? r._id ?? label}`,
-                      label,
-                    };
-                  })}
+                options={rankOptions}
               />
             </>
           )}

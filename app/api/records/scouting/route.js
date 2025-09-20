@@ -1,291 +1,226 @@
-// app/api/records/scouting/route.js
-import { NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongo";
-import { isValidObjectId } from "mongoose";
-import { getCurrentUser } from "@/lib/auth-server";
-
-import User from "@/models/userModel";
-import FamilyMember from "@/models/familyMemberModel";
-import ScoutingReport from "@/models/scoutingReportModel";
-import Division from "@/models/divisionModel";
-import WeightCategory from "@/models/weightCategoryModel";
-
-import ExcelJS from "exceljs";
-
-export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+import { NextResponse } from "next/server";
+import ExcelJS from "exceljs";
+
+import { connectDB } from "@/lib/mongo";
+import { getCurrentUserFromCookies } from "@/lib/auth-server";
+import ScoutingReport from "@/models/scoutingReportModel";
+import User from "@/models/userModel";
+
 /* ---------------- helpers ---------------- */
-const genderLabel = (g) => {
-  const s = String(g || "").toLowerCase();
-  if (s === "male") return "Men";
-  if (s === "female") return "Women";
-  if (s === "coed" || s === "open") return "Coed";
-  return s || "";
-};
-const divisionPretty = (div) => {
-  if (!div || typeof div !== "object") return "";
-  const name = div.name || "";
-  const g = genderLabel(div.gender);
-  return name ? (g ? `${name} — ${g}` : name) : "";
-};
-const ensureWeightDisplay = (label, unit) => {
-  if (!label) return "";
-  const low = String(label).toLowerCase();
-  if (low.includes("kg") || low.includes("lb")) return label;
-  return unit ? `${label} ${unit}` : label;
-};
 const stripHtml = (html = "") =>
   String(html || "")
     .replace(/<[^>]*>/g, "")
-    .replace(/\s+/g, " ")
+    .replace(/\s+\n/g, "\n")
     .trim();
 
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const dateFmt = (d) => {
+  try {
+    const dt = new Date(d);
+    if (isNaN(dt.getTime())) return "";
+    // Excel likes ISO or JS Date objects; we'll write text
+    return dt.toISOString().slice(0, 10);
+  } catch {
+    return "";
+  }
+};
+
+// Make a best-effort YouTube watch URL if we only captured an id or embed URL
+const toWatchUrl = (raw = "") => {
+  const v = String(raw || "").trim();
+  if (!v) return "";
+  // already a normal https link
+  if (/^https?:\/\//i.test(v)) return v;
+
+  // bare YouTube id
+  if (/^[A-Za-z0-9_-]{6,}$/i.test(v))
+    return `https://www.youtube.com/watch?v=${v}`;
+
+  // embed urls become watch
+  const m = v.match(/(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/i);
+  if (m && m[1]) return `https://www.youtube.com/watch?v=${m[1]}`;
+
+  return v;
+};
+
+function buildFilters(searchParams, currentUserId) {
+  const familyMemberId = searchParams.get("familyMemberId");
+  // Default: "my scouting reports" (createdBy me)
+  const base = { createdById: currentUserId };
+
+  if (familyMemberId) {
+    // Restrict to this family member
+    return {
+      ...base,
+      reportFor: {
+        $elemMatch: { athleteId: familyMemberId, athleteType: "family" },
+      },
+    };
+  }
+
+  // If you ever support exporting all visible reports, adjust here.
+  return base;
 }
 
-/* ---------------- route ---------------- */
+/* ---------------- GET -> Excel (.xlsx) ---------------- */
 export async function GET(req) {
   try {
     await connectDB();
 
-    const url = new URL(req.url);
-    const username = url.searchParams.get("username"); // optional public view
-    const familyMemberId = url.searchParams.get("familyMemberId") || null; // optional
-    const styleName =
-      url.searchParams.get("style") ||
-      url.searchParams.get("matchType") ||
-      null; // optional
-    const from = url.searchParams.get("from"); // optional (ISO)
-    const to = url.searchParams.get("to"); // optional (ISO)
-    const download = url.searchParams.get("download") === "1"; // default: inline
+    const { searchParams } = new URL(req.url);
+    const download = searchParams.get("download") === "1";
 
-    // 1) Resolve owner (parent) user
-    let userDoc;
-    if (username) {
-      userDoc = await User.findOne({ username }).select(
-        "_id firstName lastName username allowPublic"
-      );
-      if (!userDoc)
-        return NextResponse.json({ error: "User not found" }, { status: 404 });
-    } else {
-      const me = await getCurrentUser();
-      if (!me)
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      userDoc = await User.findById(me._id).select(
-        "_id firstName lastName username"
-      );
-      if (!userDoc)
-        return NextResponse.json({ error: "User not found" }, { status: 404 });
+    const currentUser = await getCurrentUserFromCookies();
+    if (!currentUser) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    // 2) Optional family member (for naming only, filter later)
-    let fam = null;
-    if (familyMemberId && isValidObjectId(familyMemberId)) {
-      fam = await FamilyMember.findOne({
-        _id: familyMemberId,
-        userId: userDoc._id,
-      }).lean();
+    // Verify user exists (defensive)
+    const user = await User.findById(currentUser._id).lean();
+    if (!user) {
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
     }
 
-    // 3) Build query
-    const q = {
-      // created by this user (matches your dashboard filter)
-      createdById: { $in: [userDoc._id, String(userDoc._id)] },
-    };
+    const filters = buildFilters(searchParams, String(currentUser._id));
 
-    if (familyMemberId) {
-      // reports with reportFor[].athleteId OR legacy athleteId field
-      q.$or = [
-        {
-          "reportFor.athleteId": {
-            $in: [familyMemberId, String(familyMemberId)],
-          },
-        },
-        { athleteId: { $in: [familyMemberId, String(familyMemberId)] } },
-      ];
-    }
-
-    if (styleName) {
-      q.matchType = new RegExp(`^\\s*${escapeRegex(styleName)}\\s*$`, "i");
-    }
-
-    // date filter (createdAt)
-    const dateFilter = {};
-    if (from) dateFilter.$gte = new Date(from);
-    if (to) dateFilter.$lte = new Date(to);
-    if (Object.keys(dateFilter).length) q.createdAt = dateFilter;
-
-    // 4) Fetch + populate division
-    const reports = await ScoutingReport.find(q)
+    // Populate videos so we can export titles/notes/urls
+    const reports = await ScoutingReport.find(filters)
+      .populate("videos") // Video model has {title, notes (HTML), url, ...}
       .sort({ createdAt: -1 })
-      .populate({ path: "division", model: Division, select: "name gender" })
       .lean();
 
-    // 5) Weight category cache (fallback when no snapshot)
-    const needWeights = reports.filter(
-      (r) => !r?.weightLabel && r?.weightCategory && r?.weightItemId
-    );
-    const uniqueCatIds = Array.from(
-      new Set(
-        needWeights
-          .map((r) => String(r.weightCategory))
-          .filter((id) => isValidObjectId(id))
-      )
-    );
-    let weightCatMap = new Map();
-    if (uniqueCatIds.length) {
-      const cats = await WeightCategory.find({ _id: { $in: uniqueCatIds } })
-        .select("_id unit items")
-        .lean();
-      weightCatMap = new Map(cats.map((c) => [String(c._id), c]));
+    if (!download) {
+      // Non-download fallback returns JSON (handy for debugging)
+      return NextResponse.json(
+        { count: reports.length, reports },
+        { status: 200 }
+      );
     }
 
-    // 6) Prepare rows
-    const reportRows = [];
-    const videoRows = [];
-
-    for (const r of reports) {
-      const divisionDisplay =
-        typeof r.division === "object" && r.division
-          ? divisionPretty(r.division)
-          : "";
-
-      let weightDisplay = ensureWeightDisplay(r.weightLabel, r.weightUnit);
-      if (!weightDisplay && r.weightCategory && r.weightItemId) {
-        const cat = weightCatMap.get(String(r.weightCategory));
-        if (cat && Array.isArray(cat.items)) {
-          const item =
-            cat.items.find(
-              (it) =>
-                String(it._id) === String(r.weightItemId) ||
-                String(it.label).toLowerCase() ===
-                  String(r.weightItemId).toLowerCase()
-            ) || null;
-          if (item?.label) {
-            const unit = r.weightUnit || cat.unit || "";
-            weightDisplay = ensureWeightDisplay(item.label, unit);
-          }
-        }
-      }
-
-      const attacks = Array.isArray(r.athleteAttacks)
-        ? r.athleteAttacks.join(", ")
-        : "";
-      const createdOn = r.createdAt ? new Date(r.createdAt) : null;
-
-      reportRows.push({
-        reportId: String(r._id),
-        style: r.matchType || "",
-        division: divisionDisplay || "",
-        weight: weightDisplay || "",
-        athleteFirstName: r.athleteFirstName || "",
-        athleteLastName: r.athleteLastName || "",
-        athleteCountry: r.athleteCountry || "",
-        athleteClub: r.athleteClub || "",
-        nationalRank: r.athleteNationalRank || "",
-        worldRank: r.athleteWorldRank || "",
-        myRank: r.athleteRank || "", // if you standardize later, populate from canonical code/label
-        grip: r.athleteGrip || "",
-        attacks,
-        notes: stripHtml(r.athleteAttackNotes || ""),
-        createdBy: r.createdByName || "",
-        createdAt: createdOn
-          ? `${createdOn.toLocaleDateString(
-              "en-US"
-            )} ${createdOn.toLocaleTimeString("en-US")}`
-          : "",
-      });
-
-      const vids = Array.isArray(r.videos) ? r.videos : [];
-      vids.forEach((v, idx) => {
-        videoRows.push({
-          reportId: String(r._id),
-          style: r.matchType || "",
-          athlete: [r.athleteFirstName, r.athleteLastName]
-            .filter(Boolean)
-            .join(" "),
-          index: idx + 1,
-          title: v?.title || "",
-          url: v?.url || "",
-          notes: stripHtml(v?.notes || ""),
-        });
-      });
-    }
-
-    // 7) Build workbook
+    // ---------- Build workbook ----------
     const wb = new ExcelJS.Workbook();
     wb.creator = "MatScout";
     wb.created = new Date();
 
-    // Sheet 1: Scouting Reports
-    const ws1 = wb.addWorksheet("Scouting Reports", {
-      views: [{ state: "frozen", ySplit: 1 }],
+    const ws = wb.addWorksheet("Scouting Reports", {
+      properties: { defaultColWidth: 22 },
+      pageSetup: { fitToPage: true, orientation: "landscape" },
     });
 
-    ws1.columns = [
-      { header: "Report ID", key: "reportId", width: 24 },
-      { header: "Style", key: "style", width: 16 },
-      { header: "Division", key: "division", width: 24 },
-      { header: "Weight", key: "weight", width: 16 },
+    ws.columns = [
+      { header: "Match Type", key: "matchType", width: 18 },
+      { header: "Division", key: "division", width: 26 },
+      { header: "Weight", key: "weight", width: 18 },
+
       { header: "Athlete First", key: "athleteFirstName", width: 16 },
       { header: "Athlete Last", key: "athleteLastName", width: 16 },
-      { header: "Country", key: "athleteCountry", width: 14 },
-      { header: "Club", key: "athleteClub", width: 20 },
-      { header: "National Rank", key: "nationalRank", width: 14 },
-      { header: "World Rank", key: "worldRank", width: 14 },
-      { header: "My Rank", key: "myRank", width: 16 },
-      { header: "Grip", key: "grip", width: 10 },
-      { header: "Known Attacks", key: "attacks", width: 28 },
-      { header: "Notes", key: "notes", width: 40 },
-      { header: "Created By", key: "createdBy", width: 20 },
-      { header: "Created At", key: "createdAt", width: 22 },
+      { header: "National Rank", key: "athleteNationalRank", width: 14 },
+      { header: "World Rank", key: "athleteWorldRank", width: 12 },
+      { header: "Club", key: "athleteClub", width: 18 },
+      { header: "Country", key: "athleteCountry", width: 12 },
+      { header: "Grip", key: "athleteGrip", width: 10 },
+
+      { header: "Known Attacks", key: "athleteAttacks", width: 24 },
+      { header: "Attack Notes (text)", key: "athleteAttackNotes", width: 40 },
+
+      // ✅ New video columns (support multiple videos)
+      { header: "Video Titles", key: "videoTitles", width: 28 },
+      { header: "Video Notes (text)", key: "videoNotes", width: 40 },
+      { header: "Video Links", key: "videoLinks", width: 42 },
+
+      { header: "Created By", key: "createdByName", width: 18 },
+      { header: "Created At", key: "createdAt", width: 14 },
+      { header: "Updated At", key: "updatedAt", width: 14 },
     ];
 
-    ws1.getRow(1).font = { bold: true };
-    reportRows.forEach((row) => ws1.addRow(row));
+    // Header style
+    ws.getRow(1).font = { bold: true };
 
-    // Sheet 2: Videos (one row per video)
-    const ws2 = wb.addWorksheet("Videos", {
-      views: [{ state: "frozen", ySplit: 1 }],
-    });
+    for (const r of reports) {
+      // Division pretty
+      const divLabel =
+        (r?.division && typeof r.division === "object" && r.division.name) ||
+        (typeof r?.division === "string" ? r.division : "") ||
+        "";
 
-    ws2.columns = [
-      { header: "Report ID", key: "reportId", width: 24 },
-      { header: "Style", key: "style", width: 16 },
-      { header: "Athlete", key: "athlete", width: 24 },
-      { header: "#", key: "index", width: 6 },
-      { header: "Title", key: "title", width: 32 },
-      { header: "URL", key: "url", width: 42 },
-      { header: "Notes", key: "notes", width: 50 },
-    ];
-    ws2.getRow(1).font = { bold: true };
-    videoRows.forEach((row) => ws2.addRow(row));
+      // Weight snapshot
+      const weightSnap = r?.weightLabel
+        ? `${r.weightLabel}${r?.weightUnit ? ` ${r.weightUnit}` : ""}`
+        : "";
 
-    // 8) Output
-    const buffer = await wb.xlsx.writeBuffer();
-    return new Response(buffer, {
+      // Techniques
+      const techs = Array.isArray(r?.athleteAttacks)
+        ? r.athleteAttacks.join(", ")
+        : "";
+
+      // Notes (plain text)
+      const notesText = stripHtml(r?.athleteAttackNotes);
+
+      // ✅ Videos (array) → titles / notes / urls (multi-line)
+      const vids = Array.isArray(r?.videos) ? r.videos : [];
+      const vidTitles = vids
+        .map((v) => (v?.title || "").trim())
+        .filter(Boolean);
+      const vidNotes = vids
+        .map((v) => stripHtml(v?.notes || ""))
+        .filter(Boolean);
+      const vidUrls = vids
+        .map((v) => (v?.url ? toWatchUrl(v.url) : ""))
+        .filter(Boolean);
+
+      // Row
+      const row = ws.addRow({
+        matchType: r.matchType || "",
+        division: divLabel,
+        weight: weightSnap,
+
+        athleteFirstName: r.athleteFirstName || "",
+        athleteLastName: r.athleteLastName || "",
+        athleteNationalRank: r.athleteNationalRank || "",
+        athleteWorldRank: r.athleteWorldRank || "",
+        athleteClub: r.athleteClub || "",
+        athleteCountry: r.athleteCountry || "",
+        athleteGrip: r.athleteGrip || "",
+
+        athleteAttacks: techs,
+        athleteAttackNotes: notesText,
+
+        // Multi-video fields (newline separated; wrap enabled below)
+        videoTitles: vidTitles.join("\n"),
+        videoNotes: vidNotes.join("\n---\n"),
+        videoLinks: vidUrls.join("\n"),
+
+        createdByName: r.createdByName || "",
+        createdAt: dateFmt(r.createdAt),
+        updatedAt: dateFmt(r.updatedAt),
+      });
+
+      // Wrap text for the larger cells
+      ["athleteAttackNotes", "videoTitles", "videoNotes", "videoLinks"].forEach(
+        (k) => {
+          const cell = row.getCell(k);
+          cell.alignment = { wrapText: true, vertical: "top" };
+        }
+      );
+    }
+
+    const buf = await wb.xlsx.writeBuffer();
+    const filename = `scouting_reports_${Date.now()}.xlsx`;
+
+    return new NextResponse(buf, {
       status: 200,
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `${
-          download ? "attachment" : "inline"
-        }; filename="${encodeURIComponent(
-          `${
-            fam
-              ? `${userDoc.username}_${fam.firstName || fam.name || "family"}`
-              : userDoc.username
-          }_scouting_reports.xlsx`
-        )}"`,
+        "Content-Disposition": `attachment; filename="${filename}"`,
         "Cache-Control": "no-store",
       },
     });
   } catch (err) {
-    console.error("GET /api/records/scouting Excel failed:", err);
+    console.error("Export scouting reports error:", err);
     return NextResponse.json(
-      { error: "Failed to generate Excel" },
+      { message: "Failed to export scouting reports" },
       { status: 500 }
     );
   }

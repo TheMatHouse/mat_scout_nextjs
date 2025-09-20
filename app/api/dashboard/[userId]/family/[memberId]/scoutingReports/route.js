@@ -1,14 +1,16 @@
+// app/api/dashboard/[userId]/family/[memberId]/scoutingReports/route.js
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import ScoutingReport from "@/models/scoutingReportModel";
 import Video from "@/models/videoModel";
-import Technique from "@/models/techniquesModel";
+import Technique from "@/models/techniquesModel"; // (kept if you need elsewhere)
 import User from "@/models/userModel";
 import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 export async function POST(req, context) {
   let body;
-
   try {
     const { userId, memberId } = await context.params;
     body = await req.json();
@@ -19,52 +21,70 @@ export async function POST(req, context) {
       return NextResponse.json({ message: "User not found" }, { status: 404 });
     }
 
-    // Step 1: Create the scouting report
-    const report = new ScoutingReport({
+    // 1) Create the report first
+    const report = await ScoutingReport.create({
       ...body,
       createdById: userId,
-      createdByName: `${user.firstName} ${user.lastName}`,
+      createdByName: `${user.firstName} ${user.lastName}`.trim(),
       reportFor: [{ athleteId: memberId, athleteType: "family" }],
       athleteId: memberId,
       athleteType: "family",
-      videos: [],
+      videos: [], // will fill below
     });
 
-    await report.save();
-
-    // Optional: link report to user
+    // 2) Link report to user (optional)
     await User.findByIdAndUpdate(userId, {
       $push: { scoutingReports: report._id },
     });
 
-    // ✅ Step 2: Store new techniques via utility
+    // 3) Save any unknown techniques
     await saveUnknownTechniques(
       Array.isArray(body.athleteAttacks) ? body.athleteAttacks : []
     );
 
-    // Step 3: Save videos (from body.newVideos or body.videos)
-    const incomingVideos = body.newVideos || body.videos || [];
-    const videoIds = [];
+    // 4) Create videos and attach to report
+    const incoming =
+      (Array.isArray(body?.newVideos) && body.newVideos) ||
+      (Array.isArray(body?.videos) && body.videos) ||
+      [];
 
-    for (const vid of incomingVideos) {
-      const newVideo = await Video.create({
-        ...vid,
-        scoutingReport: report._id,
-        createdBy: userId,
-      });
-      videoIds.push(newVideo._id);
+    const toCreate = incoming
+      .map((v) => ({
+        title: (v.title ?? v.videoTitle ?? "").trim(),
+        notes: (v.notes ?? v.videoNotes ?? "").trim(),
+        url: (v.url ?? v.videoURL ?? "").trim(),
+      }))
+      .filter((v) => v.url); // require URL
+
+    let videoIds = [];
+    if (toCreate.length) {
+      const created = await Video.insertMany(
+        toCreate.map((v) => ({
+          ...v,
+          scoutingReport: report._id,
+          createdBy: userId,
+        }))
+      );
+      videoIds = created.map((d) => d._id);
+
+      // One atomic update to attach all ids
+      await ScoutingReport.updateOne(
+        { _id: report._id },
+        { $set: { videos: videoIds } }
+      );
     }
 
-    if (videoIds.length) {
-      report.videos = videoIds;
-      await report.save();
-    }
-
-    return NextResponse.json({
-      message: "Family scouting report created successfully.",
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        id: String(report._id),
+        message: "Family scouting report created successfully.",
+        videosLinked: videoIds.length,
+      },
+      { status: 201 }
+    );
   } catch (err) {
-    console.error("Body (if parsed):", JSON.stringify(body, null, 2));
+    console.error("Body (if parsed):", JSON.stringify(body ?? {}, null, 2));
     console.error("POST family scoutingReports error:", err);
     return NextResponse.json(
       { message: "Server error: " + err.message },

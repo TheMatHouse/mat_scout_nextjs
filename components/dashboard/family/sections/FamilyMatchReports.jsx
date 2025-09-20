@@ -42,6 +42,7 @@ function ensureWeightDisplay(label, unit) {
 const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
   const [matchReports, setMatchReports] = useState([]);
   const [matchesLoading, setMatchesLoading] = useState(true);
+
   // modal state
   const [open, setOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -64,13 +65,14 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
 
   useEffect(() => {
     if (!member?.userId || !member?._id) return;
+    // initial load shows spinner
     fetchMatches();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member?.userId, member?._id]);
 
-  // ✅ Use the working user-list endpoint and filter client-side to this family member.
-  const fetchMatches = async () => {
-    setMatchesLoading(true);
+  // add showSpinner flag so updates can be silent
+  const fetchMatches = async ({ showSpinner = true } = {}) => {
+    if (showSpinner) setMatchesLoading(true);
     try {
       const res = await fetch(
         `/api/dashboard/${member.userId}/family/${
@@ -86,7 +88,7 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
       console.error("Fetch error:", err);
       toast.error("Could not load match reports.");
     } finally {
-      setMatchesLoading(false);
+      if (showSpinner) setMatchesLoading(false);
     }
   };
 
@@ -169,24 +171,35 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
 
   const handleDeleteMatch = async (match) => {
     if (
-      window.confirm(`This report will be permanently deleted! Are you sure?`)
-    ) {
+      !window.confirm("This report will be permanently deleted! Are you sure?")
+    )
+      return;
+
+    try {
+      const res = await fetch(
+        `/api/dashboard/${member.userId}/family/${member._id}/matchReports/${match._id}`,
+        { method: "DELETE", headers: { "Content-Type": "application/json" } }
+      );
+      let data = {};
       try {
-        const res = await fetch(
-          `/api/dashboard/${member.userId}/family/${member._id}/matchReports/${match._id}`,
-          { method: "DELETE", headers: { "Content-Type": "application/json" } }
+        data = await res.json();
+      } catch {}
+
+      if (res.ok) {
+        toast.success(data.message || "Deleted.");
+        // optimistic update
+        setMatchReports((prev) =>
+          prev.filter((r) => String(r._id) !== String(match._id))
         );
-        const data = await res.json();
-        if (res.ok) {
-          toast.success(data.message || "Deleted.");
-          fetchMatches();
-        } else {
-          toast.error(data.message || "Failed to delete match report.");
-        }
-      } catch (err) {
-        console.error(err);
-        toast.error("Failed to delete match report.");
+        setSelectedMatch(null);
+        // silent refresh to ensure consistency
+        await fetchMatches({ showSpinner: false });
+      } else {
+        toast.error(data.message || "Failed to delete match report.");
       }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to delete match report.");
     }
   };
 
@@ -197,6 +210,8 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
         const res = await fetch(
           `/api/dashboard/${encodeURIComponent(
             String(member.userId)
+          )}/family/${encodeURIComponent(
+            String(member._id)
           )}/matchReports/${encodeURIComponent(String(reportId))}`,
           { cache: "no-store", credentials: "same-origin" }
         );
@@ -207,7 +222,7 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
         return null;
       }
     },
-    [member.userId]
+    [member.userId, member._id]
   );
 
   // Render helpers that prefer server-provided display strings
@@ -468,14 +483,14 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
       >
         {stylesLoading ? (
           <div className="flex items-center justify-center py-10">
-            Loading styles…
+            <Spinner size={40} />
           </div>
         ) : (
           <MatchReportForm
             athlete={member}
             match={selectedMatch}
             setOpen={setOpen}
-            onSuccess={fetchMatches}
+            onSuccess={() => fetchMatches({ showSpinner: false })}
             userType="family"
             styles={stylesForForm.length ? stylesForForm : stylesForMemberProp}
           />

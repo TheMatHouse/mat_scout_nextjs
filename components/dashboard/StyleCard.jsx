@@ -30,29 +30,26 @@ function parseOutcome(r) {
     .toString()
     .toLowerCase();
 
-  // explicit booleans win/loss
   if (r.isWin === true) return "win";
   if (r.isLoss === true) return "loss";
 
   if (!text) return "unknown";
   if (text.includes("draw") || text.includes("tie")) return "draw";
 
-  // win-ish
   if (
-    text.startsWith("w") || // "w", "win", "won"
+    text.startsWith("w") ||
     text.includes("win") ||
     text.includes("won") ||
     text.includes("victory") ||
-    text.includes("ipp") || // "ippon"
+    text.includes("ipp") ||
     text.includes("submission") ||
     text.includes("sub")
   ) {
     return "win";
   }
 
-  // loss-ish
   if (
-    text.startsWith("l") || // "l", "loss", "lost"
+    text.startsWith("l") ||
     text.includes("loss") ||
     text.includes("lost") ||
     text.includes("defeat")
@@ -65,12 +62,9 @@ function parseOutcome(r) {
 
 /** Try to extract a family member id from a report in many shapes. */
 function getReportFamilyId(r) {
-  // Most likely fields first
   if (r.familyMemberId) return String(r.familyMemberId);
   if (r.family) return String(r.family);
-  // Some routes store the participant generically:
   if (r.athleteType === "family" && r.athleteId) return String(r.athleteId);
-  // Defensive: nested shapes (rare)
   if (r.athlete?.type === "family" && r.athlete?.id)
     return String(r.athlete.id);
   return null;
@@ -110,7 +104,6 @@ function resolveTotals({ style, member, styleResultsMap, styleResults }) {
   const lowerNameKey = norm(style?.styleName || "");
   const famId = member?._id ? String(member._id) : null;
 
-  // 1) Prefer map keyed by userStyleId/_id
   if (
     idKey &&
     styleResultsMap &&
@@ -123,7 +116,6 @@ function resolveTotals({ style, member, styleResultsMap, styleResults }) {
     };
   }
 
-  // 2) Exact styleName in map
   if (
     nameKey &&
     styleResultsMap &&
@@ -136,7 +128,6 @@ function resolveTotals({ style, member, styleResultsMap, styleResults }) {
     };
   }
 
-  // 3) Case-insensitive key in map
   if (lowerNameKey && styleResultsMap) {
     const foundKey = Object.keys(styleResultsMap).find(
       (k) => norm(k) === lowerNameKey
@@ -150,7 +141,6 @@ function resolveTotals({ style, member, styleResultsMap, styleResults }) {
     }
   }
 
-  // 4) Compute from legacy array (and log exactly what matched)
   const matched = [];
   let wins = 0,
     losses = 0,
@@ -160,7 +150,6 @@ function resolveTotals({ style, member, styleResultsMap, styleResults }) {
     for (const r of styleResults) {
       if (!matchesStyle(r, idKey, lowerNameKey)) continue;
 
-      // If on a family card, ensure it’s THIS family member’s report
       if (famId) {
         const rFam = getReportFamilyId(r);
         if (!rFam || rFam !== famId) continue;
@@ -190,6 +179,33 @@ function resolveTotals({ style, member, styleResultsMap, styleResults }) {
     _matchedReports: matched,
     _availableMapKeys: Object.keys(styleResultsMap || {}),
   };
+}
+
+/* ---------- promotions helpers ---------- */
+function toDateOrNull(v) {
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function normalizePromotions(arr) {
+  // Accept objects with { rank, promotedOn } or legacy keys like { rank, date } etc.
+  return (Array.isArray(arr) ? arr : [])
+    .map((p) => {
+      const rank = String(p?.rank ?? p?.title ?? p?.label ?? "").trim();
+      const when =
+        p?.promotedOn ?? p?.datePromoted ?? p?.date ?? p?.at ?? p?.on ?? null;
+      const dt = toDateOrNull(when);
+      return rank && dt ? { rank, promotedOn: dt.toISOString() } : null;
+    })
+    .filter(Boolean);
+}
+
+function mostRecentPromotion(promos) {
+  if (!Array.isArray(promos) || promos.length === 0) return null;
+  // choose max by date
+  return [...promos].sort(
+    (a, b) => new Date(b.promotedOn) - new Date(a.promotedOn)
+  )[0];
 }
 
 const StyleCard = ({
@@ -222,37 +238,53 @@ const StyleCard = ({
   const { wins, losses, draws, _debugKey, _matchedReports, _availableMapKeys } =
     resolved;
 
-  // Deep debug so we can see exactly what's happening for your son's card
-  if (process.env.NODE_ENV !== "production") {
-    // eslint-disable-next-line no-console
-    console.groupCollapsed(
-      `StyleCard<${style?.styleName}> totals via ${_debugKey}`
-    );
-    // eslint-disable-next-line no-console
-    console.log({
-      styleId: style?._id,
-      memberId: member?._id,
-      wins,
-      losses,
-      draws,
-    });
-    if (_matchedReports?.length) {
-      // eslint-disable-next-line no-console
-      console.table(_matchedReports);
-    } else {
-      // eslint-disable-next-line no-console
-      console.log(
-        "No matched reports in fallback compute. Map keys available:",
-        _availableMapKeys
-      );
-      // eslint-disable-next-line no-console
-      console.log(
-        "If styleResultsMap is intended, confirm its keys (userStyleId vs styleName)."
-      );
-    }
-    // eslint-disable-next-line no-console
-    console.groupEnd();
-  }
+  // Promotions (derive current from most recent if not explicitly set)
+  const noPromotions = isNoPromotionStyle(style?.styleName);
+  const promotions = useMemo(
+    () => normalizePromotions(style?.promotions),
+    [style?.promotions]
+  );
+  const mostRecent = useMemo(
+    () => mostRecentPromotion(promotions),
+    [promotions]
+  );
+
+  const currentRankExplicit = String(
+    style?.currentRank ?? style?.rank ?? ""
+  ).trim();
+  const currentRank =
+    !noPromotions && currentRankExplicit
+      ? currentRankExplicit
+      : !noPromotions && mostRecent?.rank
+      ? mostRecent.rank
+      : currentRankExplicit || "—";
+
+  // Promotion date mirrors current derived rank when we derived it
+  const explicitPromoDate =
+    style?.lastPromotedOn ?? style?.promotionDate ?? null;
+  const latestPromotionISO =
+    !noPromotions && mostRecent?.promotedOn
+      ? mostRecent.promotedOn
+      : explicitPromoDate || null;
+  const latestPromotionText = latestPromotionISO
+    ? moment.utc(latestPromotionISO).format("MMMM D, YYYY")
+    : "—";
+
+  // Sorted history (oldest → newest)
+  const promotionsSorted = useMemo(
+    () =>
+      [...promotions].sort(
+        (a, b) => new Date(a.promotedOn) - new Date(b.promotedOn)
+      ),
+    [promotions]
+  );
+
+  const grip =
+    style?.grip && String(style.grip).trim() !== "" ? style.grip : "—";
+  const favoriteTechnique =
+    style?.favoriteTechnique && String(style.favoriteTechnique).trim() !== ""
+      ? style.favoriteTechnique
+      : "—";
 
   const handleDeleteStyle = async () => {
     if (!window.confirm(`Delete ${style.styleName}?`)) return;
@@ -298,39 +330,6 @@ const StyleCard = ({
   const pdfPromotionsHref = `/api/records/style/${encodeURIComponent(
     styleParam
   )}${qsPromos.toString() ? `?${qsPromos.toString()}` : ""}`;
-
-  const currentRankRaw = style?.currentRank ?? style?.rank ?? "";
-  const currentRank =
-    currentRankRaw && String(currentRankRaw).trim() !== ""
-      ? currentRankRaw
-      : "—";
-
-  const latestPromotion = style?.lastPromotedOn ?? style?.promotionDate ?? null;
-  const latestPromotionText = latestPromotion
-    ? moment.utc(latestPromotion).format("MMMM D, YYYY")
-    : "—";
-
-  const promotions = Array.isArray(style?.promotions) ? style.promotions : [];
-  const promotionsSorted = [...promotions].sort(
-    (a, b) => new Date(a.promotedOn) - new Date(b.promotedOn)
-  );
-
-  const division =
-    style?.division && String(style.division).trim() !== ""
-      ? style.division
-      : "—";
-  const weightClass =
-    style?.weightClass && String(style.weightClass).trim() !== ""
-      ? style.weightClass
-      : "—";
-  const grip =
-    style?.grip && String(style.grip).trim() !== "" ? style.grip : "—";
-  const favoriteTechnique =
-    style?.favoriteTechnique && String(style.favoriteTechnique).trim() !== ""
-      ? style.favoriteTechnique
-      : "—";
-
-  const noPromotions = isNoPromotionStyle(style?.styleName);
 
   return (
     <div className="rounded-2xl border border-slate-700 bg-slate-800/80 dark:bg-slate-900/80 text-white shadow-xl backdrop-blur-md ring-1 ring-slate-700 hover:ring-2 hover:ring-[#ef233c] transition-all duration-200 transform hover:scale-[1.02]">
@@ -381,7 +380,7 @@ const StyleCard = ({
 
       {/* Content */}
       <div className="p-5 space-y-3 text-sm sm:text-base leading-relaxed">
-        {!noPromotions && (
+        {!isNoPromotionStyle(style?.styleName) && (
           <>
             {style.startDate && (
               <div>
@@ -394,7 +393,7 @@ const StyleCard = ({
 
             <div>
               <span className="font-semibold text-slate-300">Rank:</span>{" "}
-              {currentRank}
+              {currentRank || "—"}
             </div>
 
             <div>
@@ -432,14 +431,7 @@ const StyleCard = ({
           </>
         )}
 
-        <div>
-          <span className="font-semibold text-slate-300">Division:</span>{" "}
-          {division}
-        </div>
-        <div>
-          <span className="font-semibold text-slate-300">Weight Class:</span>{" "}
-          {weightClass}
-        </div>
+        {/* Removed Division & Weight Class per your spec */}
         <div>
           <span className="font-semibold text-slate-300">Grip:</span> {grip}
         </div>
@@ -466,7 +458,6 @@ const StyleCard = ({
                 <strong>Draws:</strong> {Number(draws || 0)}
               </div>
             )}
-            {/* Tiny on-card hint for debug */}
             <div className="text-xs text-slate-400 mt-1">
               <em>calc: {_debugKey}</em>
             </div>
@@ -488,7 +479,7 @@ const StyleCard = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {!noPromotions && (
+          {!isNoPromotionStyle(style?.styleName) && (
             <a
               href={pdfPromotionsHref}
               target="_blank"

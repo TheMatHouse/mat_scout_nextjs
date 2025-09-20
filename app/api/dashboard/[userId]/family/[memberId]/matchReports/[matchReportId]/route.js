@@ -1,5 +1,6 @@
-// app/api/dashboard/[userId]/family/[memberId]/matchReports/[reportId]/route.js
+// app/api/dashboard/[userId]/family/[memberId]/matchReports/[matchReportId]/route.js
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
@@ -64,12 +65,13 @@ function buildUpdate(body) {
 }
 
 /* ---------------- GET (single family report) ---------------- */
-// GET /api/dashboard/:userId/family/:memberId/matchReports/:reportId
-export async function GET(_req, { params }) {
+// GET /api/dashboard/:userId/family/:memberId/matchReports/:matchReportId
+export async function GET(_req, ctx) {
   try {
-    const userId = sid(params?.userId);
-    const memberId = sid(params?.memberId);
-    const reportId = sid(params?.reportId);
+    const p = await ctx.params; // ✅ Next.js 15: params can be a Promise
+    const userId = sid(p?.userId);
+    const memberId = sid(p?.memberId);
+    const reportId = sid(p?.matchReportId);
 
     if (!userId || !memberId || !reportId) {
       return NextResponse.json(
@@ -102,7 +104,7 @@ export async function GET(_req, { params }) {
     return NextResponse.json({ ok: true, report: doc }, { status: 200 });
   } catch (err) {
     console.error(
-      "GET /api/dashboard/[userId]/family/[memberId]/matchReports/[reportId] error:",
+      "GET /api/dashboard/[userId]/family/[memberId]/matchReports/[matchReportId] error:",
       err
     );
     return NextResponse.json(
@@ -113,16 +115,16 @@ export async function GET(_req, { params }) {
 }
 
 /* ---------------- PATCH (update family report) ---------------- */
-// PATCH /api/dashboard/:userId/family/:memberId/matchReports/:reportId
-export async function PATCH(req, { params }) {
+// PATCH /api/dashboard/:userId/family/:memberId/matchReports/:matchReportId
+export async function PATCH(req, ctx) {
   try {
     const body = await safeJson(req);
 
-    const userId = sid(params?.userId || body?.userId);
-    const memberId = sid(
-      params?.memberId || body?.familyMemberId || body?.athleteId
-    );
-    const reportId = sid(params?.reportId || body?.reportId);
+    const p = await ctx.params; // ✅
+    const userId = sid(p?.userId) || sid(body?.userId);
+    const memberId =
+      sid(p?.memberId) || sid(body?.familyMemberId) || sid(body?.athleteId);
+    const reportId = sid(p?.matchReportId) || sid(body?.reportId);
 
     if (!userId || !memberId || !reportId) {
       return NextResponse.json(
@@ -135,7 +137,6 @@ export async function PATCH(req, { params }) {
 
     const update = buildUpdate(body);
 
-    // Require ownership: parent created it AND it belongs to this family member
     const doc = await matchReport.findOneAndUpdate(
       { _id: reportId, createdById: userId, athleteId: memberId },
       update,
@@ -155,7 +156,7 @@ export async function PATCH(req, { params }) {
     );
   } catch (err) {
     console.error(
-      "PATCH /api/dashboard/[userId]/family/[memberId]/matchReports/[reportId] error:",
+      "PATCH /api/dashboard/[userId]/family/[memberId]/matchReports/[matchReportId] error:",
       err
     );
     return NextResponse.json(
@@ -166,12 +167,13 @@ export async function PATCH(req, { params }) {
 }
 
 /* ---------------- DELETE (remove family report) ---------------- */
-// DELETE /api/dashboard/:userId/family/:memberId/matchReports/:reportId
-export async function DELETE(_req, { params }) {
+// DELETE /api/dashboard/:userId/family/:memberId/matchReports/:matchReportId
+export async function DELETE(_req, ctx) {
   try {
-    const userId = sid(params?.userId);
-    const memberId = sid(params?.memberId);
-    const reportId = sid(params?.reportId);
+    const p = await ctx.params; // ✅
+    const userId = sid(p?.userId);
+    const memberId = sid(p?.memberId);
+    const reportId = sid(p?.matchReportId);
 
     if (!userId || !memberId || !reportId) {
       return NextResponse.json(
@@ -201,7 +203,7 @@ export async function DELETE(_req, { params }) {
     );
   } catch (err) {
     console.error(
-      "DELETE /api/dashboard/[userId]/family/[memberId]/matchReports/[reportId] error:",
+      "DELETE /api/dashboard/[userId]/family/[memberId]/matchReports/[matchReportId] error:",
       err
     );
     return NextResponse.json(

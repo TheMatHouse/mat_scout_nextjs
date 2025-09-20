@@ -1,9 +1,12 @@
-// app/api/dashboard/[userId]/matchReports/route.js
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import matchReport from "@/models/matchReportModel";
+
+/* helpers */
+const sid = (v) => (v == null ? "" : String(v).trim());
 
 const inferGenderFromName = (nameRaw) => {
   const name = String(nameRaw || "").toLowerCase();
@@ -16,16 +19,27 @@ const inferGenderFromName = (nameRaw) => {
     /\b(u[0-9]+|under\s*[0-9]+|bantam|intermediate|juvenile|cadet|junior)\b/.test(
       name
     )
-  )
+  ) {
     return "coed";
+  }
   return "coed";
 };
 const genderWord = (g) =>
   g === "male" ? "Men" : g === "female" ? "Women" : "Coed";
 
+// user owns a report if they created it OR they are the athlete
+const ownerFilter = (userId) => ({
+  $or: [
+    { createdById: { $in: [userId, String(userId)] } },
+    { athleteId: { $in: [userId, String(userId)] } },
+  ],
+});
+
+/* GET /api/dashboard/:userId/matchReports  (list) */
 export async function GET(_req, ctx) {
   try {
-    const { userId } = ctx.params || {};
+    const p = await ctx.params;
+    const userId = sid(p?.userId);
     if (!userId) {
       return NextResponse.json({ message: "Missing userId" }, { status: 400 });
     }
@@ -33,13 +47,7 @@ export async function GET(_req, ctx) {
     await connectDB();
 
     const docs = await matchReport
-      // If you ONLY want the parent’s own reports, keep createdById.
-      // If you also want rows where they’re the athlete, switch to $or below.
-      .find({ createdById: userId })
-      // If your schema marks these as select:false, the +fields force-include them:
-      .select(
-        "+opponentAttacks +athleteAttacks +opponentAttackNotes +athleteAttackNotes"
-      )
+      .find(ownerFilter(userId))
       .populate({ path: "division", select: "name gender" })
       .populate({
         path: "weightCategory",
@@ -70,7 +78,6 @@ export async function GET(_req, ctx) {
         }
       }
 
-      // Return the full doc plus the derived fields
       return { ...d, divisionDisplay, weightDisplay: weightDisplay || "—" };
     });
 
@@ -84,26 +91,35 @@ export async function GET(_req, ctx) {
   }
 }
 
+/* POST /api/dashboard/:userId/matchReports  (create) */
 export async function POST(req, ctx) {
   try {
-    const { userId } = ctx.params || {};
+    const p = await ctx.params;
+    const userId = sid(p?.userId);
     if (!userId) {
       return NextResponse.json({ message: "Missing userId" }, { status: 400 });
     }
 
     await connectDB();
 
-    const body = await req.json();
+    let body = {};
+    try {
+      body = await req.json();
+    } catch {
+      body = {};
+    }
+
+    const athleteId = sid(body.athlete) || sid(body.athleteId) || sid(userId); // regular-user route → default to self
 
     const doc = await matchReport.create({
       // who
       createdById: userId,
       createdByName: body.createdByName || "",
-      athleteId: body.athlete || body.familyMemberId || userId,
-      athleteType: body.familyMemberId ? "family" : "user",
+      athleteId,
+      athleteType: "user",
 
       // context
-      style: body.style, // optional
+      style: body.style || undefined,
       matchType: body.matchType,
       eventName: body.eventName,
       matchDate: body.matchDate,
@@ -115,7 +131,7 @@ export async function POST(req, ctx) {
       // opponent
       opponentName: body.opponentName || "",
       opponentClub: body.opponentClub || "",
-      opponentCountry: body.opponentCountry ?? "", // <-- ensure string
+      opponentCountry: body.opponentCountry ?? "",
       opponentGrip: body.opponentGrip || "",
       opponentAttacks: Array.isArray(body.opponentAttacks)
         ? body.opponentAttacks

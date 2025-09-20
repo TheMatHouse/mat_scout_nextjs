@@ -69,7 +69,11 @@ export async function POST(req, ctx) {
 
     const body = await req.json();
 
-    // Basic payload; front-end already sends validated fields.
+    // Pull video fields from either nested { video: {...} } or flat keys
+    const videoTitle = body?.video?.videoTitle ?? body?.videoTitle ?? "";
+    const videoURL = body?.video?.videoURL ?? body?.videoURL ?? "";
+    const videoNotes = body?.video?.videoNotes ?? body?.videoNotes ?? "";
+
     const doc = {
       athleteType: "family",
       athleteId: memberId,
@@ -84,7 +88,7 @@ export async function POST(req, ctx) {
       eventName: body.eventName,
       matchDate: body.matchDate ? new Date(body.matchDate) : new Date(),
 
-      // ranks (already label strings from form)
+      // ranks (labels)
       myRank: body.myRank || "",
       opponentRank: body.opponentRank || "",
 
@@ -108,11 +112,11 @@ export async function POST(req, ctx) {
       result: body.result || "",
       score: body.score || "",
 
-      // video (store in nested object like your model)
+      // ✅ video (now reads nested or flat)
       video: {
-        videoTitle: body.videoTitle || "",
-        videoNotes: body.videoNotes || "",
-        videoURL: body.videoURL || "",
+        videoTitle,
+        videoURL, // already normalized by the client
+        videoNotes,
       },
 
       // division & weight refs
@@ -120,13 +124,14 @@ export async function POST(req, ctx) {
       weightCategory: body.weightCategory || null,
 
       // snapshot
+      weightItemId: body.weightItemId || null, // (optional but useful)
       weightLabel: body.weightLabel || "",
       weightUnit: body.weightUnit || "",
 
       isPublic: !!body.isPublic,
     };
 
-    // Optional server-side sanity checks:
+    // Optional sanity checks
     if (doc.division) {
       const d = await division.findById(doc.division).lean();
       if (!d) return err(400, "Invalid division");
