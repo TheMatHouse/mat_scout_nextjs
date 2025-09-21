@@ -63,13 +63,11 @@ export default function UserProfileClient({ username }) {
     async function fetchData() {
       setApiError("");
       try {
-        // 1) Fetch the profile user by username
         const res = await fetch(`/api/users/${encodeURIComponent(username)}`, {
           cache: "no-store",
         });
 
         if (res.status === 404) {
-          // actual 404 → show Next's notFound page
           setProfileUser(null);
           setLoading(false);
           return;
@@ -88,7 +86,6 @@ export default function UserProfileClient({ username }) {
           const data = await res.json().catch(() => ({}));
           const baseUser = data?.user || undefined;
 
-          // Normalize styles if they’re present
           const userStyles = extractStyles(baseUser?.userStyles).map(
             normalizeStyleName
           );
@@ -108,7 +105,6 @@ export default function UserProfileClient({ username }) {
         setProfileUser(undefined);
       }
 
-      // 2) Fetch the current logged-in user safely
       try {
         const viewerRes = await fetch("/api/auth/me", { cache: "no-store" });
         if (viewerRes.ok) {
@@ -139,10 +135,8 @@ export default function UserProfileClient({ username }) {
     );
   }
 
-  // Only show 404 when the API truly returned 404
   if (profileUser === null) return notFound();
 
-  // If API errored (500, etc.), keep the page and show a soft error
   if (!profileUser) {
     return (
       <div className="max-w-2xl mx-auto text-center mt-20">
@@ -167,7 +161,6 @@ export default function UserProfileClient({ username }) {
     );
   }
 
-  // Build W/L per style from matchReports
   const styleResults = {};
   if (Array.isArray(profileUser.userStyles)) {
     profileUser.userStyles.forEach((style) => {
@@ -177,15 +170,12 @@ export default function UserProfileClient({ username }) {
         profileUser.matchReports?.filter(
           (r) => (r.matchType || "").trim().toLowerCase() === key
         ) || [];
-
       const wins = reports.filter((r) => r.result === "Won").length || 0;
       const losses = reports.filter((r) => r.result === "Lost").length || 0;
-
       styleResults[key] = { Wins: wins, Losses: losses };
     });
   }
 
-  // Avatar (guaranteed non-empty)
   const EMERGENCY_DEFAULT =
     "https://res.cloudinary.com/matscout/image/upload/v1747956346/default_user_rval6s.jpg";
 
@@ -193,10 +183,9 @@ export default function UserProfileClient({ username }) {
     if (profileUser?.avatarType === "google") return profileUser?.googleAvatar;
     if (profileUser?.avatarType === "facebook")
       return profileUser?.facebookAvatar;
-    return profileUser?.avatar; // "default" or "uploaded"
+    return profileUser?.avatar;
   })();
 
-  console.log(profileUser);
   const selectedUrl = [typeUrl, profileUser?.avatar, EMERGENCY_DEFAULT]
     .map((v) => (typeof v === "string" ? v.trim() : ""))
     .find((v) => v.length > 0);
@@ -228,14 +217,13 @@ export default function UserProfileClient({ username }) {
         {profileUser.teams?.length > 0 && (
           <div className="text-left space-y-2 mt-4">
             <h3 className="text-sm font-semibold text-black dark:text-white">
-              My Teams
+              Teams
             </h3>
             <ul className="space-y-1">
               {profileUser.teams.map((team) => {
                 const rawLogo = team.logoURL || "/default-team.png";
                 const logoUrl =
                   cld(rawLogo, "w_56,h_56,c_fill,g_auto,dpr_auto") || rawLogo;
-
                 return (
                   <li
                     key={team._id}
@@ -251,7 +239,7 @@ export default function UserProfileClient({ username }) {
                       sizes="36px"
                     />
                     <Link
-                      href={`/teams/${team.teamSlug || team.teamName}`}
+                      href={`/teams/${team.teamSlug}`}
                       className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                     >
                       {team.teamName}
@@ -260,6 +248,18 @@ export default function UserProfileClient({ username }) {
                 );
               })}
             </ul>
+          </div>
+        )}
+
+        {/* 🔥 Dashboard/Settings Link at bottom */}
+        {isMyProfile && (
+          <div className="mt-6 pt-4 border-t border-border">
+            <Link
+              href="/dashboard/settings"
+              className="inline-block w-full px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition"
+            >
+              Go to Dashboard Settings
+            </Link>
           </div>
         )}
       </div>
