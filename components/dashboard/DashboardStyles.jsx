@@ -10,10 +10,12 @@ import StyleCard from "./StyleCard";
 import StyleForm from "./forms/StyleForm";
 import PromotionsForm from "./forms/PromotionsForm";
 
+/* --------------------- small utils --------------------- */
 const norm = (v) =>
   String(v ?? "")
     .trim()
     .toLowerCase();
+
 const normalizeResult = (val) => {
   const v = norm(val);
   if (["won", "win", "w"].includes(v)) return "win";
@@ -35,35 +37,99 @@ function SkeletonGrid({ count = 4 }) {
   );
 }
 
-// ---- helpers to normalize API shapes/IDs and filter strictly to the owner ----
+/* -------------- shape + ownership normalization -------------- */
+
+// Determine if an object looks like a style
+const looksLikeStyle = (x) =>
+  x &&
+  typeof x === "object" &&
+  (typeof x.styleName === "string" ||
+    typeof x.name === "string" ||
+    (x.style && typeof x.style.name === "string"));
+
+// Extract array of styles from common API shapes (but do NOT grab random arrays)
 function extractStylesShape(payload) {
-  if (Array.isArray(payload)) return payload;
-  if (payload && Array.isArray(payload.styles)) return payload.styles;
-  if (payload && Array.isArray(payload.userStyles)) return payload.userStyles;
-  if (payload && typeof payload === "object") {
-    const arr = Object.values(payload).find(Array.isArray);
-    if (Array.isArray(arr)) return arr;
+  if (Array.isArray(payload) && payload.every(looksLikeStyle)) return payload;
+  if (
+    payload &&
+    Array.isArray(payload.styles) &&
+    payload.styles.every(looksLikeStyle)
+  ) {
+    return payload.styles;
+  }
+  if (
+    payload &&
+    Array.isArray(payload.userStyles) &&
+    payload.userStyles.every(looksLikeStyle)
+  ) {
+    return payload.userStyles;
+  }
+  if (
+    payload &&
+    Array.isArray(payload.data) &&
+    payload.data.every(looksLikeStyle)
+  ) {
+    return payload.data;
+  }
+  if (
+    payload &&
+    Array.isArray(payload.items) &&
+    payload.items.every(looksLikeStyle)
+  ) {
+    return payload.items;
   }
   return [];
 }
-const toIdString = (v) =>
-  v && typeof v === "object" && v._id ? String(v._id) : v ? String(v) : "";
+
+// Normalize a style's display name into style.styleName (non-destructive)
+function normalizeStyleName(style) {
+  if (!style) return style;
+  const name =
+    style.styleName || style.name || (style.style && style.style.name) || "";
+  return { ...style, styleName: name };
+}
+
+// Get the "owner" id from various shapes: userId | user | owner (id or populated)
+function getOwnerId(style) {
+  const v = style?.userId ?? style?.user ?? style?.owner ?? null;
+
+  if (!v) return "";
+
+  if (typeof v === "string") return v;
+  if (typeof v === "object") {
+    if (typeof v._id === "string") return v._id;
+    if (v._id != null) return String(v._id);
+  }
+  try {
+    return String(v);
+  } catch {
+    return "";
+  }
+}
+
+// Enforce that styles are owned by the primary user (exclude family proxy items)
 function onlyPrimaryUserStyles(arr, userId) {
   const uid = String(userId);
   return (Array.isArray(arr) ? arr : []).filter((s) => {
-    const sUid = toIdString(s?.userId);
+    const owner = getOwnerId(s);
+    const isMine = owner && String(owner) === uid;
+
+    // Keep your original intent: allow no family member link or empty family id
     const fam = s?.familyMemberId;
-    const isMine = sUid && sUid === uid;
     const noFamily =
       fam == null ||
       String(fam) === "" ||
       (typeof fam === "object" && !fam._id);
+
     return isMine && noFamily;
   });
 }
 
-const DashboardStyles = () => {
+/* --------------------- component --------------------- */
+
+function DashboardStyles() {
   const { user } = useUser();
+
   const [myStyles, setMyStyles] = useState([]);
   const [matchReports, setMatchReports] = useState([]);
 
@@ -72,32 +138,57 @@ const DashboardStyles = () => {
 
   // Promotions modal + selection
   const [promoOpen, setPromoOpen] = useState(false);
-  const [selectedStyleId, setSelectedStyleId] = useState(""); // no default selection
+  const [selectedStyleId, setSelectedStyleId] = useState("");
 
   const [loadingStyles, setLoadingStyles] = useState(true);
   const [loadingMatches, setLoadingMatches] = useState(true);
 
-  // ---- loaders ----
+  /* ---------------------- loaders ---------------------- */
+
+  // Canonical endpoint first; 2 strict fallbacks only if needed.
   const loadStyles = async (userId) => {
     setLoadingStyles(true);
     try {
-      const res = await fetch(`/api/dashboard/${userId}/userStyles`, {
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error("Failed to fetch user styles");
-      const data = await res.json();
-      let styles = onlyPrimaryUserStyles(extractStylesShape(data), userId);
+      // ordered candidates; all will be strictly normalized + filtered
+      const candidates = [
+        `/api/dashboard/${userId}/userStyles`, // canonical
+        `/api/userStyles?userId=${encodeURIComponent(userId)}`,
+        `/api/styles?userId=${encodeURIComponent(userId)}`,
+      ];
 
-      // Optional fallback to unified route; still enforce the same filter
-      if (!styles.length) {
-        const res2 = await fetch(`/api/userStyles`, { cache: "no-store" });
-        if (res2.ok) {
-          const data2 = await res2.json();
-          styles = onlyPrimaryUserStyles(extractStylesShape(data2), userId);
+      let styles = [];
+      for (const url of candidates) {
+        try {
+          const res = await fetch(url, { cache: "no-store" });
+          if (!res.ok) {
+            // 404 or other: try next one
+            const body = await res.text().catch(() => "");
+            console.warn(`[styles] ${res.status} ${url}`, body);
+            continue;
+          }
+          const payload = await res.json().catch(() => null);
+          const extracted = extractStylesShape(payload).map(normalizeStyleName);
+          const mine = onlyPrimaryUserStyles(extracted, userId);
+
+          // stop at first endpoint that returns *anything* owned by me
+          if (mine.length > 0) {
+            styles = mine;
+            break;
+          }
+          // if it returned an empty list, keep looking at the other endpoints
+        } catch (e) {
+          console.warn("[styles] network error:", e);
+          // try next
         }
       }
 
       setMyStyles(styles);
+      if (styles.length === 0) {
+        // Soft info to help debug in console; no user-facing toast unless you want one
+        console.info(
+          "[styles] No owned styles found after normalization/filters."
+        );
+      }
     } catch (err) {
       console.error("Error loading user styles:", err);
       toast.error("Could not load styles.");
@@ -107,18 +198,32 @@ const DashboardStyles = () => {
     }
   };
 
+  // Match reports: use your dashboard route; never throw — log & fallback
   const loadMatches = async (userId) => {
     setLoadingMatches(true);
     try {
       const res = await fetch(`/api/dashboard/${userId}/matchReports`, {
         cache: "no-store",
       });
-      if (!res.ok) throw new Error("Failed to fetch match reports");
-      const data = await res.json();
-      setMatchReports(Array.isArray(data) ? data : []);
+
+      if (res.status === 404) {
+        console.warn(
+          `[match-reports] 404 at /api/dashboard/${userId}/matchReports`
+        );
+        setMatchReports([]);
+      } else if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        console.warn(
+          `[match-reports] ${res.status} at /api/dashboard/${userId}/matchReports`,
+          body
+        );
+        setMatchReports([]);
+      } else {
+        const data = await res.json().catch(() => []);
+        setMatchReports(Array.isArray(data) ? data : []);
+      }
     } catch (err) {
       console.error("Error loading match reports:", err);
-      toast.error("Could not load match reports.");
       setMatchReports([]);
     } finally {
       setLoadingMatches(false);
@@ -138,19 +243,18 @@ const DashboardStyles = () => {
   };
 
   const handleDeleteStyle = (deletedStyleId) => {
-    setMyStyles((prev) => prev.filter((s) => s._id !== deletedStyleId));
+    setMyStyles((prev) =>
+      prev.filter((s) => String(s._id) !== String(deletedStyleId))
+    );
   };
 
-  // Does this style support promotions?
   const styleSupportsPromotions = (s) => norm(s?.styleName) !== "wrestling";
 
-  // At least one promotable style?
   const hasPromotable = useMemo(
     () => myStyles.some(styleSupportsPromotions),
     [myStyles]
   );
 
-  // Resolve selected style doc (from current list)
   const selectedStyle = useMemo(
     () =>
       myStyles.find((s) => String(s._id) === String(selectedStyleId)) || null,
@@ -159,27 +263,24 @@ const DashboardStyles = () => {
 
   const openPromotionModal = () => {
     setPromoOpen(true);
-    setSelectedStyleId(""); // force user to choose, do not auto-select
+    setSelectedStyleId(""); // force choose
   };
 
   const onPromotionUpdated = async (updatedStyle) => {
-    // Replace just the updated style (or refetch if shape differs)
     if (updatedStyle?._id) {
       setMyStyles((prev) =>
         prev.map((s) =>
-          String(s._id) === String(updatedStyle._id) ? updatedStyle : s
+          String(s._id) === String(updatedStyle._id)
+            ? normalizeStyleName(updatedStyle)
+            : s
         )
       );
     } else {
       await handleStylesRefresh();
     }
-    // Keep the modal open so they can add more if they want
-    // If you prefer to close it after save, uncomment:
-    // setPromoOpen(false);
-    // toast.success("Promotion saved");
   };
 
-  // Compute totals from matchReports
+  // Build W/L map keyed by normalized styleName, and ensure every style has a bucket
   const styleResultsMap = useMemo(() => {
     const map = {};
     for (const r of matchReports) {
@@ -212,18 +313,16 @@ const DashboardStyles = () => {
 
   return (
     <div className="px-4 md:px-6 lg:px-8">
-      {/* Header - left-aligned buttons */}
+      {/* Header */}
       <div className="flex flex-col items-start gap-3 mb-4">
         <h1 className="text-2xl font-bold">My Styles/Sports</h1>
         <div className="flex items-center gap-2">
-          {/* Add Style (first) */}
           <Button
             className="btn btn-primary"
             onClick={() => setOpen(true)}
           >
             Add Style
           </Button>
-          {/* Add Promotion (second) */}
           {hasPromotable && (
             <Button
               variant="secondary"
@@ -263,7 +362,7 @@ const DashboardStyles = () => {
         />
       </ModalLayout>
 
-      {/* Promotions Modal (header-level; includes style dropdown, lazy loads content) */}
+      {/* Promotions Modal */}
       <ModalLayout
         isOpen={promoOpen}
         onClose={() => setPromoOpen(false)}
@@ -277,7 +376,6 @@ const DashboardStyles = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Style chooser (shows ALL styles; Wrestling will be allowed to pick but shows info only) */}
             <div className="flex items-center gap-3">
               <label className="text-sm font-medium">Style</label>
               <select
@@ -297,9 +395,8 @@ const DashboardStyles = () => {
               </select>
             </div>
 
-            {/* Lazy-load the promotions UI only after a style is selected */}
             {selectedStyleId ? (
-              styleSupportsPromotions(selectedStyle) ? (
+              norm(selectedStyle?.styleName) !== "wrestling" ? (
                 <PromotionsForm
                   userStyleId={selectedStyleId}
                   onUpdated={onPromotionUpdated}
@@ -343,13 +440,18 @@ const DashboardStyles = () => {
               user={user}
               userType="user"
               styleResultsMap={styleResultsMap}
-              onDelete={handleDeleteStyle}
+              onDelete={(deletedId) => {
+                // keep UI in sync on delete
+                setMyStyles((prev) =>
+                  prev.filter((s) => String(s._id) !== String(deletedId))
+                );
+              }}
             />
           ))}
         </div>
       )}
     </div>
   );
-};
+}
 
 export default DashboardStyles;

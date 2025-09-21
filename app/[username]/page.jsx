@@ -1,20 +1,28 @@
 // app/[username]/page.jsx
+export const dynamic = "force-dynamic";
+
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
-
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
-// Ensure referenced schemas are registered for populate on this page too:
+// Ensure models are registered for populate elsewhere
 import "@/models/userStyleModel";
 import "@/models/matchReportModel";
 
 import UserProfileClient from "@/components/profile/UserProfileClient";
 
-export async function generateMetadata({ params }) {
-  const { username } = await params;
+/** Escape helper for safe regex building */
+function escapeRegex(s = "") {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
+export async function generateMetadata({ params }) {
+  const { username } = await params; // ← await params (Next 15+)
   await connectDB();
-  const member = await User.findOne({ username }).lean();
+
+  const member = await User.findOne({
+    username: { $regex: `^${escapeRegex(username)}$`, $options: "i" },
+  }).lean();
 
   if (!member) {
     return {
@@ -30,27 +38,26 @@ export async function generateMetadata({ params }) {
     member.firstName || member.username
   }'s grappling profile on MatScout.`;
 
-  return {
-    title: `${title} | MatScout`,
-    description,
-  };
+  return { title: `${title} | MatScout`, description };
 }
 
 export default async function UserProfilePage({ params }) {
-  const { username } = await params;
-
+  const { username } = await params; // ← await params (Next 15+)
   await connectDB();
 
-  // Fetch minimal doc here just to decide visibility & 404
-  const user = await User.findOne({ username }).lean();
+  // Case-insensitive lookup so /Judo2000 works too
+  const user = await User.findOne({
+    username: { $regex: `^${escapeRegex(username)}$`, $options: "i" },
+  }).lean();
 
   if (!user) {
-    // ✅ Only 404 if user truly doesn't exist
     notFound();
   }
 
-  // Determine if viewer is the owner
-  const token = (await cookies()).get("token")?.value;
+  // Determine if the viewer is the owner (cookies() is async now)
+  const cookieStore = await cookies(); // ← await cookies()
+  const token = cookieStore.get("token")?.value;
+
   let isMyProfile = false;
   if (token) {
     try {
@@ -61,12 +68,14 @@ export default async function UserProfilePage({ params }) {
         isMyProfile = true;
       }
     } catch {
-      // ignore bad/expired token
+      /* ignore bad/expired token */
     }
   }
 
-  // If private and not owner, render the private message (no 404)
-  if (!isMyProfile && !user.allowPublic) {
+  const isPublic =
+    user.allowPublic === true || user.allowPublic === "Public" ? true : false;
+
+  if (!isMyProfile && !isPublic) {
     return (
       <div className="w-full flex justify-center py-20">
         <h1 className="text-2xl font-bold text-gray-700 dark:text-gray-200">
@@ -76,6 +85,11 @@ export default async function UserProfilePage({ params }) {
     );
   }
 
-  // Let the client component fetch the rich profile data via the API route
-  return <UserProfileClient username={username} />;
+  // Pass isMyProfile so the client can show the “Back to Settings” button
+  return (
+    <UserProfileClient
+      username={user.username}
+      isMyProfile={isMyProfile}
+    />
+  );
 }

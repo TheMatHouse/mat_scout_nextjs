@@ -2,7 +2,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Pencil, Camera, Copy, Share } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SettingsForm from "./forms/SettingsForm";
@@ -32,6 +32,20 @@ export default function DashboardSettings({ user, refreshUser }) {
   useEffect(() => {
     setViewUser(user);
   }, [user]);
+
+  // Build environment-aware public profile URL
+  const profileUrl = useMemo(() => {
+    const envBase = (
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      process.env.NEXT_PUBLIC_BASE_URL ||
+      ""
+    ).trim();
+    const base =
+      envBase || (typeof window !== "undefined" ? window.location.origin : "");
+    const cleanBase = (base || "").replace(/\/$/, "");
+    const uname = encodeURIComponent(viewUser?.username || "");
+    return uname ? `${cleanBase}/${uname}` : cleanBase;
+  }, [viewUser?.username]);
 
   if (!viewUser) {
     return (
@@ -253,12 +267,11 @@ export default function DashboardSettings({ user, refreshUser }) {
           <div>
             <p className="font-semibold">Your Public Profile</p>
             <a
-              href={`https://matscout.com/${viewUser.username}`}
-              target="_blank"
+              href={profileUrl}
               rel="noopener noreferrer"
               className="text-blue-600 dark:text-blue-400 underline break-all"
             >
-              https://matscout.com/{viewUser.username}
+              {profileUrl}
             </a>
           </div>
           <div className="flex gap-2">
@@ -266,9 +279,7 @@ export default function DashboardSettings({ user, refreshUser }) {
               variant="ghost"
               size="icon"
               onClick={() => {
-                navigator.clipboard.writeText(
-                  `https://matscout.com/${viewUser.username}`
-                );
+                navigator.clipboard.writeText(profileUrl);
                 toast.success("Copied profile link");
               }}
             >
@@ -281,7 +292,7 @@ export default function DashboardSettings({ user, refreshUser }) {
                 onClick={() =>
                   navigator.share({
                     title: "Check out my MatScout profile",
-                    url: `https://matscout.com/${viewUser.username}`,
+                    url: profileUrl,
                   })
                 }
               >

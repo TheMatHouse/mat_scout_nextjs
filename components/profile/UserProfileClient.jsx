@@ -7,35 +7,110 @@ import StyleCard from "@/components/profile/StyleCard";
 import { notFound } from "next/navigation";
 import Spinner from "../shared/Spinner";
 
-// Cloudinary delivery helper: inject f_auto,q_auto (+ optional transforms)
+// Cloudinary helper
 function cld(url, extra = "") {
   if (!url || typeof url !== "string") return url;
-  if (!url.includes("/upload/")) return url; // skip non-Cloudinary URLs
+  if (!url.includes("/upload/")) return url;
   const parts = ["f_auto", "q_auto"];
   if (extra) parts.push(extra);
   return url.replace("/upload/", `/upload/${parts.join(",")}/`);
 }
 
+// styles payload normalizers
+const looksLikeStyle = (x) =>
+  x &&
+  typeof x === "object" &&
+  (typeof x.styleName === "string" ||
+    typeof x.name === "string" ||
+    (x.style && typeof x.style.name === "string"));
+
+const extractStyles = (payload) => {
+  if (Array.isArray(payload) && payload.every(looksLikeStyle)) return payload;
+  if (
+    payload?.styles &&
+    Array.isArray(payload.styles) &&
+    payload.styles.every(looksLikeStyle)
+  )
+    return payload.styles;
+  if (
+    payload?.userStyles &&
+    Array.isArray(payload.userStyles) &&
+    payload.userStyles.every(looksLikeStyle)
+  )
+    return payload.userStyles;
+  if (
+    payload?.data &&
+    Array.isArray(payload.data) &&
+    payload.data.every(looksLikeStyle)
+  )
+    return payload.data;
+  return [];
+};
+
+const normalizeStyleName = (s) => {
+  if (!s) return s;
+  const styleName = s.styleName || s.name || s.style?.name || "";
+  return { ...s, styleName };
+};
+
 export default function UserProfileClient({ username }) {
   const [profileUser, setProfileUser] = useState();
   const [currentUser, setCurrentUser] = useState(undefined);
   const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState("");
 
   useEffect(() => {
     async function fetchData() {
+      setApiError("");
       try {
-        // ✅ Fetch the profile user by username
-        const res = await fetch(`/api/users/${username}`);
-        const data = await res.json();
-        setProfileUser(data?.user || null);
+        // 1) Fetch the profile user by username
+        const res = await fetch(`/api/users/${encodeURIComponent(username)}`, {
+          cache: "no-store",
+        });
+
+        if (res.status === 404) {
+          // actual 404 → show Next's notFound page
+          setProfileUser(null);
+          setLoading(false);
+          return;
+        }
+
+        if (!res.ok) {
+          const bodyText = await res.text().catch(() => "");
+          console.error(
+            "GET /api/users/[username] failed:",
+            res.status,
+            bodyText
+          );
+          setApiError("Sorry, we couldn’t load this profile right now.");
+          setProfileUser(undefined);
+        } else {
+          const data = await res.json().catch(() => ({}));
+          const baseUser = data?.user || undefined;
+
+          // Normalize styles if they’re present
+          const userStyles = extractStyles(baseUser?.userStyles).map(
+            normalizeStyleName
+          );
+          const matchReports = Array.isArray(baseUser?.matchReports)
+            ? baseUser.matchReports
+            : [];
+
+          setProfileUser({
+            ...baseUser,
+            userStyles,
+            matchReports,
+          });
+        }
       } catch (err) {
         console.error("Error fetching profile:", err);
-        setProfileUser(null);
+        setApiError("Sorry, we couldn’t load this profile right now.");
+        setProfileUser(undefined);
       }
 
+      // 2) Fetch the current logged-in user safely
       try {
-        // ✅ Fetch the current logged-in user safely
-        const viewerRes = await fetch("/api/auth/me");
+        const viewerRes = await fetch("/api/auth/me", { cache: "no-store" });
         if (viewerRes.ok) {
           const viewerData = await viewerRes.json();
           setCurrentUser(viewerData.user || null);
@@ -64,7 +139,20 @@ export default function UserProfileClient({ username }) {
     );
   }
 
-  if (!profileUser) return notFound();
+  // Only show 404 when the API truly returned 404
+  if (profileUser === null) return notFound();
+
+  // If API errored (500, etc.), keep the page and show a soft error
+  if (!profileUser) {
+    return (
+      <div className="max-w-2xl mx-auto text-center mt-20">
+        <h1 className="text-2xl font-semibold mb-3">Profile unavailable</h1>
+        <p className="text-gray-600 dark:text-gray-400">
+          {apiError || "Please try again later."}
+        </p>
+      </div>
+    );
+  }
 
   const isMyProfile = currentUser?.username === profileUser.username;
 
@@ -79,45 +167,53 @@ export default function UserProfileClient({ username }) {
     );
   }
 
+  // Build W/L per style from matchReports
   const styleResults = {};
   if (Array.isArray(profileUser.userStyles)) {
     profileUser.userStyles.forEach((style) => {
-      const normalizedStyleName = style.styleName?.trim().toLowerCase();
-      const reports = profileUser.matchReports?.filter(
-        (report) =>
-          report.matchType?.trim().toLowerCase() === normalizedStyleName
-      );
+      const key = (style.styleName || "").trim().toLowerCase();
+      if (!key) return;
+      const reports =
+        profileUser.matchReports?.filter(
+          (r) => (r.matchType || "").trim().toLowerCase() === key
+        ) || [];
 
-      const wins = reports?.filter((r) => r.result === "Won").length || 0;
-      const losses = reports?.filter((r) => r.result === "Lost").length || 0;
+      const wins = reports.filter((r) => r.result === "Won").length || 0;
+      const losses = reports.filter((r) => r.result === "Lost").length || 0;
 
-      styleResults[normalizedStyleName] = { Wins: wins, Losses: losses };
+      styleResults[key] = { Wins: wins, Losses: losses };
     });
   }
 
-  // Avatar (request 200x200; render 100x100 for crisp 2x)
-  const rawAvatar =
-    profileUser.avatar ||
+  // Avatar (guaranteed non-empty)
+  const EMERGENCY_DEFAULT =
     "https://res.cloudinary.com/matscout/image/upload/v1747956346/default_user_rval6s.jpg";
+
+  const typeUrl = (() => {
+    if (profileUser?.avatarType === "google") return profileUser?.googleAvatar;
+    if (profileUser?.avatarType === "facebook")
+      return profileUser?.facebookAvatar;
+    return profileUser?.avatar; // "default" or "uploaded"
+  })();
+
+  console.log(profileUser);
+  const selectedUrl = [typeUrl, profileUser?.avatar, EMERGENCY_DEFAULT]
+    .map((v) => (typeof v === "string" ? v.trim() : ""))
+    .find((v) => v.length > 0);
+
   const avatarUrl =
-    cld(rawAvatar, "w_200,h_200,c_fill,g_auto,dpr_auto") || rawAvatar;
+    cld(selectedUrl, "w_200,h_200,c_fill,g_auto,dpr_auto") || selectedUrl;
 
   return (
     <section className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-4 gap-6">
       {/* Left Sidebar */}
       <div className="md:col-span-1 bg-white dark:bg-gray-900 rounded-xl shadow border border-border p-6 text-center space-y-4 self-start">
         <Image
-          src={
-            profileUser.avatar
-              ? `${profileUser.avatar}${
-                  profileUser.avatar.includes("?") ? "&" : "?"
-                }f_auto,q_auto`
-              : "/default-avatar.png"
-          }
+          src={avatarUrl}
           alt={profileUser.firstName || "User avatar"}
           width={100}
           height={100}
-          className="rounded-full mx-auto border border-border"
+          className="rounded-full mx-auto border border-border object-cover"
           loading="lazy"
           sizes="100px"
         />
@@ -132,12 +228,11 @@ export default function UserProfileClient({ username }) {
         {profileUser.teams?.length > 0 && (
           <div className="text-left space-y-2 mt-4">
             <h3 className="text-sm font-semibold text-black dark:text-white">
-              Teams
+              My Teams
             </h3>
             <ul className="space-y-1">
               {profileUser.teams.map((team) => {
                 const rawLogo = team.logoURL || "/default-team.png";
-                // Request 56x56; render 28x28 for crisp 2x
                 const logoUrl =
                   cld(rawLogo, "w_56,h_56,c_fill,g_auto,dpr_auto") || rawLogo;
 
@@ -149,14 +244,14 @@ export default function UserProfileClient({ username }) {
                     <Image
                       src={logoUrl}
                       alt={team.teamName}
-                      width={28}
-                      height={28}
+                      width={36}
+                      height={36}
                       className="rounded-full border border-border object-cover"
                       loading="lazy"
-                      sizes="28px"
+                      sizes="36px"
                     />
                     <Link
-                      href={`/teams/${team.teamSlug}`}
+                      href={`/teams/${team.teamSlug || team.teamName}`}
                       className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                     >
                       {team.teamName}
@@ -174,10 +269,10 @@ export default function UserProfileClient({ username }) {
         {profileUser.userStyles?.length > 0 ? (
           profileUser.userStyles.map((style) => (
             <StyleCard
-              key={style._id || style}
+              key={style._id || style.styleName || "style"}
               style={style}
               styleResults={
-                styleResults[style.styleName?.trim().toLowerCase()] || {}
+                styleResults[(style.styleName || "").trim().toLowerCase()] || {}
               }
               username={profileUser.username}
             />

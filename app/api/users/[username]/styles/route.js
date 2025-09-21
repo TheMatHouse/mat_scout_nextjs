@@ -27,6 +27,7 @@ export async function GET(_req, { params }) {
     .select("_id allowPublic username")
     .lean();
 
+  console.log("target ", target);
   if (!target) return json({ error: "User not found" }, 404);
 
   const viewer = await getCurrentUser().catch(() => null);
@@ -37,7 +38,11 @@ export async function GET(_req, { params }) {
     return json({ styles: [] }, 403);
   }
 
-  const styles = await UserStyle.find({ userId: target._id })
+  // ✅ Only the user’s own styles (exclude any with familyMemberId set)
+  const styles = await UserStyle.find({
+    userId: target._id,
+    $or: [{ familyMemberId: null }],
+  })
     .sort({ createdAt: -1 })
     .lean();
 
@@ -94,7 +99,7 @@ export async function POST(req, { params }) {
   }
 
   const doc = await UserStyle.create({
-    userId: target._id, // derive from :username; ignore any body.userId
+    userId: target._id, // derive from :username
     familyMemberId: fmId,
     styleName: styleName.trim(),
     rank: rank || "",

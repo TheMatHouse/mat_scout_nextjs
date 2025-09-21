@@ -5,6 +5,10 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import matchReport from "@/models/matchReportModel";
 
+// ✅ Ensure populated refs are registered with Mongoose:
+import "@/models/divisionModel"; // registers model used by path: "division"
+import "@/models/weightCategoryModel"; // registers model used by path: "weightCategory"
+
 /* helpers */
 const sid = (v) => (v == null ? "" : String(v).trim());
 
