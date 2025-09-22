@@ -13,48 +13,67 @@ function cld(url, extra = "") {
   return url.replace("/upload/", `/upload/${parts.join(",")}/`);
 }
 
-function pickAvatar(u) {
-  const EMERGENCY =
-    "https://res.cloudinary.com/matscout/image/upload/v1747956346/default_user_rval6s.jpg";
+const EMERGENCY =
+  "https://res.cloudinary.com/matscout/image/upload/v1747956346/default_user_rval6s.jpg";
+
+function pickAvatar(entity) {
+  if (entity.type === "family") {
+    const chosen = (entity.avatar || "").trim() || EMERGENCY;
+    return cld(chosen, "w_200,h_200,c_fill,g_auto,dpr_auto") || chosen;
+  }
   const typeUrl =
-    u?.avatarType === "google"
-      ? u?.googleAvatar
-      : u?.avatarType === "facebook"
-      ? u?.facebookAvatar
-      : u?.avatar;
-  const selected = [typeUrl, u?.avatar, EMERGENCY]
+    entity?.avatarType === "google"
+      ? entity?.googleAvatar
+      : entity?.avatarType === "facebook"
+      ? entity?.facebookAvatar
+      : entity?.avatar;
+  const selected = [typeUrl, entity?.avatar, EMERGENCY]
     .map((v) => (typeof v === "string" ? v.trim() : ""))
     .find((v) => v.length > 0);
   return cld(selected, "w_200,h_200,c_fill,g_auto,dpr_auto") || selected;
 }
 
-function UserCard({ user }) {
-  const avatarUrl = pickAvatar(user);
-  const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ");
-  const location = [user.city, user.state].filter(Boolean).join(", ");
-  const styles = user.styles || [];
+function UserCard({ entity }) {
+  const avatarUrl = pickAvatar(entity);
+  const fullName = [entity.firstName, entity.lastName]
+    .filter(Boolean)
+    .join(" ");
+  const location = [entity.city, entity.state].filter(Boolean).join(", ");
+  const styles = entity.styles || [];
+  const link =
+    entity.profileUrl ||
+    (entity.type === "user"
+      ? `/${entity.username}`
+      : `/family/${entity.username}`); // now username is the family member handle
 
   return (
     <div className="rounded-xl border border-border bg-white dark:bg-gray-900 shadow hover:shadow-lg transition overflow-hidden">
       <div className="p-4 flex gap-3 items-center">
         <Image
           src={avatarUrl}
-          alt={fullName || user.username}
+          alt={fullName || entity.username || "Profile"}
           width={56}
           height={56}
           sizes="56px"
           className="rounded-full border border-border object-cover"
         />
         <div className="min-w-0">
-          <Link
-            href={`/${user.username}`}
-            className="block font-semibold text-blue-600 dark:text-blue-400 truncate"
-            title={fullName || user.username}
-          >
-            {fullName || `@${user.username}`}
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href={link}
+              className="block font-semibold text-blue-600 dark:text-blue-400 truncate"
+              title={fullName || entity.username}
+            >
+              {fullName || `@${entity.username}`}
+            </Link>
+            {entity.type === "family" && (
+              <span className="px-2 py-0.5 text-[10px] rounded-full border border-border text-muted-foreground">
+                Family
+              </span>
+            )}
+          </div>
           <div className="text-xs text-muted-foreground truncate">
-            @{user.username}
+            @{entity.username}
           </div>
           {location && (
             <div className="text-xs text-muted-foreground truncate">
@@ -97,11 +116,10 @@ export default function UsersDirectory() {
   const [page, setPage] = useState(1);
 
   const [loading, setLoading] = useState(true);
-  const [users, setUsers] = useState([]);
+  const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [limit, setLimit] = useState(24);
 
-  // build query string
   const qs = useMemo(() => {
     const p = new URLSearchParams();
     if (q) p.set("q", q);
@@ -116,7 +134,6 @@ export default function UsersDirectory() {
     return p.toString();
   }, [q, firstName, lastName, city, state, style, sort, page, limit]);
 
-  // fetch
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -127,13 +144,13 @@ export default function UsersDirectory() {
         });
         const data = await res.json();
         if (!cancelled) {
-          setUsers(data.users || []);
+          setItems(data.users || []);
           setTotal(data.total || 0);
           setLimit(data.limit || 24);
         }
-      } catch (e) {
+      } catch {
         if (!cancelled) {
-          setUsers([]);
+          setItems([]);
           setTotal(0);
         }
       } finally {
@@ -145,10 +162,7 @@ export default function UsersDirectory() {
     };
   }, [qs]);
 
-  // basic pagination calc
   const totalPages = Math.max(Math.ceil(total / limit), 1);
-
-  // debounced handlers (simple)
   const onChange = (setter) => (e) => {
     setter(e.target.value);
     setPage(1);
@@ -229,7 +243,7 @@ export default function UsersDirectory() {
             />
           ))}
         </div>
-      ) : users.length === 0 ? (
+      ) : items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-8 text-center">
           <p className="text-sm text-muted-foreground">
             No users match your filters.
@@ -237,10 +251,10 @@ export default function UsersDirectory() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {users.map((u) => (
+          {items.map((entity) => (
             <UserCard
-              key={u._id}
-              user={u}
+              key={`${entity.type}:${entity._id}`}
+              entity={entity}
             />
           ))}
         </div>

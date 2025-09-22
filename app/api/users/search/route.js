@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
 import UserStyle from "@/models/userStyleModel";
+import FamilyMember from "@/models/familyMemberModel";
 
 function json(data, status = 200) {
   return new NextResponse(JSON.stringify(data), {
@@ -16,9 +17,12 @@ function json(data, status = 200) {
   });
 }
 
-// helper: exclude family styles in JS (covers undefined, null, "")
-const excludeFamily = (arr) =>
+// exclude family rows by checking presence (no Mongo cast to ObjectId)
+const excludeFamilyRows = (arr) =>
   (Array.isArray(arr) ? arr : []).filter((s) => !s.familyMemberId);
+
+const onlyFamilyRows = (arr) =>
+  (Array.isArray(arr) ? arr : []).filter((s) => !!s.familyMemberId);
 
 export async function GET(req) {
   try {
@@ -39,36 +43,31 @@ export async function GET(req) {
     );
     const skip = (page - 1) * limit;
 
-    // Base filter: public profiles only
-    const filter = { allowPublic: true };
-
-    // Name query (q matches first/last/username)
+    // ---------- Build base filters ----------
+    // USERS (public)
+    const userFilter = { allowPublic: true };
     if (q) {
-      filter.$or = [
+      userFilter.$or = [
         { firstName: { $regex: q, $options: "i" } },
         { lastName: { $regex: q, $options: "i" } },
         { username: { $regex: q, $options: "i" } },
       ];
     }
-    if (firstName) filter.firstName = { $regex: firstName, $options: "i" };
-    if (lastName) filter.lastName = { $regex: lastName, $options: "i" };
+    if (firstName) userFilter.firstName = { $regex: firstName, $options: "i" };
+    if (lastName) userFilter.lastName = { $regex: lastName, $options: "i" };
 
-    // City filter: support both address.city and city
     if (city) {
-      filter.$and ??= [];
-      filter.$and.push({
+      userFilter.$and ??= [];
+      userFilter.$and.push({
         $or: [
           { "address.city": { $regex: city, $options: "i" } },
           { city: { $regex: city, $options: "i" } },
         ],
       });
     }
-
-    // State filter: support both address.state and state
     if (state) {
-      // exact match (case-insensitive), but across both paths
-      filter.$and ??= [];
-      filter.$and.push({
+      userFilter.$and ??= [];
+      userFilter.$and.push({
         $or: [
           { "address.state": { $regex: `^${state}$`, $options: "i" } },
           { state: { $regex: `^${state}$`, $options: "i" } },
@@ -76,46 +75,60 @@ export async function GET(req) {
       });
     }
 
-    // Sorting
-    const sortSpec =
-      sort === "alpha"
-        ? { lastName: 1, firstName: 1, username: 1 }
-        : { createdAt: -1, _id: -1 }; // recent first
-
-    // --- Style prefilter (BEFORE querying users) ---
-    // If style is requested, find userIds that have that style (excluding family styles),
-    // then restrict the users query to those IDs.
-    if (style) {
-      const raw = await UserStyle.find(
-        {
-          styleName: { $regex: `^${style}$`, $options: "i" },
-        },
-        { _id: 1, userId: 1, styleName: 1, familyMemberId: 1 }
-      ).lean();
-
-      const withStyle = excludeFamily(raw);
-      const userIds = Array.from(
-        new Set(withStyle.map((s) => String(s.userId)))
-      );
-
-      if (userIds.length === 0) {
-        // No matches; short-circuit
-        return json({
-          page,
-          limit,
-          total: 0,
-          count: 0,
-          users: [],
-        });
-      }
-
-      // Restrict to these userIds
-      filter._id = { $in: userIds };
+    // FAMILY MEMBERS (public)
+    const famFilter = { allowPublic: true };
+    if (q) {
+      famFilter.$or = [
+        { firstName: { $regex: q, $options: "i" } },
+        { lastName: { $regex: q, $options: "i" } },
+        { username: { $regex: q, $options: "i" } }, // allow direct handle search
+      ];
+    }
+    if (firstName) famFilter.firstName = { $regex: firstName, $options: "i" };
+    if (lastName) famFilter.lastName = { $regex: lastName, $options: "i" };
+    if (city) {
+      famFilter.$and ??= [];
+      famFilter.$and.push({
+        $or: [
+          { "address.city": { $regex: city, $options: "i" } },
+          { city: { $regex: city, $options: "i" } },
+        ],
+      });
+    }
+    if (state) {
+      famFilter.$and ??= [];
+      famFilter.$and.push({
+        $or: [
+          { "address.state": { $regex: `^${state}$`, $options: "i" } },
+          { state: { $regex: `^${state}$`, $options: "i" } },
+        ],
+      });
     }
 
-    // Query users with all filters applied
-    const [users, total] = await Promise.all([
-      User.find(filter, {
+    // ---------- Style prefilter (applies to both) ----------
+    if (style) {
+      const raw = await UserStyle.find(
+        { styleName: { $regex: `^${style}$`, $options: "i" } },
+        { userId: 1, familyMemberId: 1, styleName: 1 }
+      ).lean();
+
+      const userRows = excludeFamilyRows(raw);
+      const famRows = onlyFamilyRows(raw);
+
+      const userIdSet = new Set(userRows.map((r) => String(r.userId)));
+      const famIdSet = new Set(famRows.map((r) => String(r.familyMemberId)));
+
+      if (userIdSet.size === 0 && famIdSet.size === 0) {
+        return json({ page, limit, total: 0, count: 0, users: [] });
+      }
+
+      userFilter._id = { $in: Array.from(userIdSet) };
+      famFilter._id = { $in: Array.from(famIdSet) };
+    }
+
+    // ---------- Fetch both sets (unpaginated) ----------
+    const [usersRaw, familiesRaw] = await Promise.all([
+      User.find(userFilter, {
         _id: 1,
         username: 1,
         firstName: 1,
@@ -124,71 +137,152 @@ export async function GET(req) {
         avatar: 1,
         googleAvatar: 1,
         facebookAvatar: 1,
-        // support both nested and flat location fields
         "address.city": 1,
         "address.state": 1,
         city: 1,
         state: 1,
         createdAt: 1,
-      })
-        .sort(sortSpec)
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      User.countDocuments(filter),
+      }).lean(),
+      FamilyMember.find(famFilter, {
+        _id: 1,
+        userId: 1,
+        username: 1,
+        firstName: 1,
+        lastName: 1,
+        avatar: 1,
+        "address.city": 1,
+        "address.state": 1,
+        city: 1,
+        state: 1,
+        createdAt: 1,
+      }).lean(),
     ]);
 
-    if (!users.length) {
-      return json({
-        page,
-        limit,
-        total,
-        count: 0,
-        users: [],
-      });
-    }
+    // Map parent usernames for family profile links
+    const parentIdSet = new Set(
+      familiesRaw.map((f) => String(f.userId)).filter(Boolean)
+    );
+    const parents = parentIdSet.size
+      ? await User.find(
+          { _id: { $in: Array.from(parentIdSet) } },
+          { _id: 1, username: 1 }
+        ).lean()
+      : [];
+    const parentUsernameById = new Map(
+      parents.map((p) => [String(p._id), p.username])
+    );
 
-    // Build style badges for this page of users (exclude family in JS)
-    const pageUserIds = users.map((u) => u._id);
-    const rawStyles = await UserStyle.find(
-      {
-        userId: { $in: pageUserIds },
+    // Combine
+    const combined = [
+      ...usersRaw.map((u) => ({
+        type: "user",
+        _id: String(u._id),
+        username: u.username,
+        firstName: u.firstName || "",
+        lastName: u.lastName || "",
+        city: (u.city ?? u.address?.city) || "",
+        state: (u.state ?? u.address?.state) || "",
+        avatarType: u.avatarType,
+        avatar: u.avatar,
+        googleAvatar: u.googleAvatar,
+        facebookAvatar: u.facebookAvatar,
+        createdAt: u.createdAt ? new Date(u.createdAt).toISOString() : null,
+        profileUrl: `/${u.username}`,
+      })),
+      ...familiesRaw.map((f) => {
+        const parentUsername = parentUsernameById.get(String(f.userId)) || "";
+        const famUsername = f.username || "";
+        return {
+          type: "family",
+          _id: String(f._id),
+          username: famUsername, // child's handle
+          parentUserId: String(f.userId || ""),
+          parentUsername, // for optional display
+          firstName: f.firstName || "",
+          lastName: f.lastName || "",
+          city: (f.city ?? f.address?.city) || "",
+          state: (f.state ?? f.address?.state) || "",
+          avatar: f.avatar || "",
+          createdAt: f.createdAt ? new Date(f.createdAt).toISOString() : null,
+          profileUrl: famUsername ? `/family/${famUsername}` : "",
+        };
+      }),
+    ];
+
+    // Sort
+    combined.sort((a, b) => {
+      if (sort === "alpha") {
+        const ak = (a.lastName || "").toLowerCase();
+        const bk = (b.lastName || "").toLowerCase();
+        if (ak !== bk) return ak < bk ? -1 : 1;
+        const an = (a.firstName || "").toLowerCase();
+        const bn = (b.firstName || "").toLowerCase();
+        if (an !== bn) return an < bn ? -1 : 1;
+        return (a.username || "").toLowerCase() <
+          (b.username || "").toLowerCase()
+          ? -1
+          : 1;
+      }
+      const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return bd - ad;
+    });
+
+    const total = combined.length;
+    const pageItems = combined.slice(skip, skip + limit);
+
+    // Style badges for the current page
+    const pageUserIds = pageItems
+      .filter((x) => x.type === "user")
+      .map((x) => x._id);
+    const pageFamilyIds = pageItems
+      .filter((x) => x.type === "family")
+      .map((x) => x._id);
+
+    const [userStylesRaw, famStylesRaw] = await Promise.all([
+      pageUserIds.length
+        ? UserStyle.find(
+            { userId: { $in: pageUserIds } },
+            { userId: 1, familyMemberId: 1, styleName: 1 }
+          ).lean()
+        : [],
+      pageFamilyIds.length
+        ? UserStyle.find(
+            { familyMemberId: { $in: pageFamilyIds } },
+            { userId: 1, familyMemberId: 1, styleName: 1 }
+          ).lean()
+        : [],
+    ]);
+
+    const userStyleBadges = excludeFamilyRows(userStylesRaw).reduce(
+      (acc, s) => {
+        const k = String(s.userId);
+        acc[k] ??= [];
+        if (s.styleName && !acc[k].includes(s.styleName))
+          acc[k].push(s.styleName);
+        return acc;
       },
-      { _id: 1, userId: 1, styleName: 1, familyMemberId: 1 }
-    ).lean();
-    const flatStyles = excludeFamily(rawStyles);
+      {}
+    );
 
-    const stylesByUser = flatStyles.reduce((acc, s) => {
-      const k = String(s.userId);
+    const familyStyleBadges = onlyFamilyRows(famStylesRaw).reduce((acc, s) => {
+      const k = String(s.familyMemberId);
       acc[k] ??= [];
       if (s.styleName && !acc[k].includes(s.styleName))
         acc[k].push(s.styleName);
       return acc;
     }, {});
 
-    // Build response payload
-    const items = users.map((u) => ({
-      _id: String(u._id),
-      username: u.username,
-      firstName: u.firstName || "",
-      lastName: u.lastName || "",
-      // prefer flat city/state if present, else nested
-      city: (u.city ?? u.address?.city) || "",
-      state: (u.state ?? u.address?.state) || "",
-      avatarType: u.avatarType,
-      avatar: u.avatar,
-      googleAvatar: u.googleAvatar,
-      facebookAvatar: u.facebookAvatar,
-      styles: stylesByUser[String(u._id)] || [],
-    }));
-
-    return json({
-      page,
-      limit,
-      total,
-      count: items.length,
-      users: items,
+    const items = pageItems.map((x) => {
+      const base = { ...x };
+      base.styles =
+        x.type === "user"
+          ? userStyleBadges[x._id] || []
+          : familyStyleBadges[x._id] || [];
+      return base;
     });
+
+    return json({ page, limit, total, count: items.length, users: items });
   } catch (err) {
     console.error("GET /api/users/search error:", err);
     return json({ error: "Server error" }, 500);
