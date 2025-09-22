@@ -96,7 +96,6 @@ export default function FamilyMatchReportsPage({ params }) {
     }
   };
 
-  console.log("REPORTS ", reports);
   if (loading) {
     return (
       <div className="p-6 text-white text-center">

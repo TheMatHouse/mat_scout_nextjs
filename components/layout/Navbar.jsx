@@ -29,7 +29,12 @@ const Navbar = () => {
               >
                 Dashboard
               </Link>
-
+              <Link
+                href="/users"
+                className="hover:underline"
+              >
+                Users
+              </Link>
               <Link
                 href="/contact"
                 className="hover:underline"
@@ -51,6 +56,12 @@ const Navbar = () => {
                 className="hover:underline"
               >
                 About
+              </Link>
+              <Link
+                href="/users"
+                className="hover:underline"
+              >
+                Users
               </Link>
               <Link
                 href="/teams"

@@ -16,6 +16,8 @@ const ADMIN_LINKS = [
   { href: "/admin/teams", label: "Teams" },
   { href: "/admin/reports", label: "Reports" },
   { href: "/admin/settings", label: "Settings" },
+  { href: "/admin/analytics", label: "Analytics" },
+  { href: "/admin/messages", label: "Messages" },
 ];
 
 function SectionRow({ label, href, isOpen, setOpen, active, onNavigate }) {
@@ -167,6 +169,18 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
                 )}
               </div>
 
+              {/* ➕ Users (logged-in) */}
+              <Link
+                href="/users"
+                onClick={onClose}
+                className={cn(
+                  "block text-lg font-medium hover:text-ms-light-red transition",
+                  pathname === "/users" && "text-ms-light-red"
+                )}
+              >
+                Users
+              </Link>
+
               {/* Profile */}
               <Link
                 href={`/${user.username}`}
@@ -242,6 +256,20 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
               className="block hover:text-white transition"
             >
               About
+            </Link>
+            <Link
+              href="/users"
+              onClick={onClose}
+              className="block hover:text-white transition"
+            >
+              Users
+            </Link>
+            <Link
+              href="/users"
+              onClick={onClose}
+              className="block hover:text-white transition"
+            >
+              Users
             </Link>
             <Link
               href="/teams"

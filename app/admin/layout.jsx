@@ -13,6 +13,7 @@ const adminLinks = [
   { href: "/admin/settings", label: "Settings" },
   { href: "/admin/analytics", label: "Analytics" },
   { href: "/admin/messages", label: "Messages" },
+  { href: "/admin/techniques", label: "Techniques" },
 ];
 
 export default async function AdminLayout({ children }) {

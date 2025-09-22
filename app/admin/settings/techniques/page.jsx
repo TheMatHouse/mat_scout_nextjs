@@ -1,4 +1,4 @@
-// app/dashboard/settings/techniques/page.jsx
+// app/admin/settings/techniques/page.jsx
 import TechniquesAdmin from "@/components/admin/techniques/TechniquesAdmin";
 
 export const dynamic = "force-dynamic";

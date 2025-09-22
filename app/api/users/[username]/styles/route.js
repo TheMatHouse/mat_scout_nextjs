@@ -27,7 +27,6 @@ export async function GET(_req, { params }) {
     .select("_id allowPublic username")
     .lean();
 
-  console.log("target ", target);
   if (!target) return json({ error: "User not found" }, 404);
 
   const viewer = await getCurrentUser().catch(() => null);
