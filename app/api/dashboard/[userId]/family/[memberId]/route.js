@@ -8,6 +8,7 @@ import FamilyMember from "@/models/familyMemberModel";
 import "@/models/userStyleModel";
 // (optional) only if you actually delete Cloudinary avatars in DELETE
 import { v2 as cloudinary } from "cloudinary";
+import { notifyFamilyFollowers } from "@/lib/notify-family-followers";
 
 export const dynamic = "force-dynamic";
 const isValidId = (id) => !!id && Types.ObjectId.isValid(id);
@@ -71,6 +72,8 @@ export async function PATCH(req, { params }) {
 
   try {
     const updates = await req.json();
+
+    // Allowed fields (existing) + profile fields (new)
     const allowed = [
       "firstName",
       "lastName",
@@ -78,9 +81,28 @@ export async function PATCH(req, { params }) {
       "avatar",
       "avatarId",
       "notes",
+      // profile fields we want to notify on:
+      "gender",
+      "location",
+      "bio",
+      "allowPublic",
     ];
+
     const $set = {};
-    for (const k of allowed) if (k in updates) $set[k] = updates[k];
+    for (const k of allowed) {
+      if (k in updates) $set[k] = updates[k];
+    }
+
+    if (Object.keys($set).length === 0) {
+      return NextResponse.json(
+        { error: "No valid fields to update" },
+        { status: 400 }
+      );
+    }
+
+    // Track if any profile-notify fields were part of this update
+    const profileKeys = ["gender", "location", "bio", "allowPublic"];
+    const profileChanged = profileKeys.some((k) => k in $set);
 
     const member = await FamilyMember.findOneAndUpdate(
       { _id: memberId, userId: currentUser._id },
@@ -93,6 +115,20 @@ export async function PATCH(req, { params }) {
         { error: "Family member not found" },
         { status: 404 }
       );
+    }
+
+    // Fan-out only if profile fields were updated
+    if (profileChanged) {
+      try {
+        await notifyFamilyFollowers({
+          familyId: memberId, // helper can resolve ObjectId string
+          type: "family_profile_updated",
+          actorUserId: currentUser._id,
+        });
+      } catch (fanoutErr) {
+        console.warn("[notifyFamilyFollowers profile] failed:", fanoutErr);
+        // don't fail the request on notification issues
+      }
     }
 
     return NextResponse.json({

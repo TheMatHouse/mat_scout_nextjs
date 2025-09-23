@@ -1,13 +1,15 @@
+// app/api/dashboard/[userId]/matchReports/route.js
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import matchReport from "@/models/matchReportModel";
+import { notifyFollowers } from "@/lib/notify-followers";
 
 // ✅ Ensure populated refs are registered with Mongoose:
-import "@/models/divisionModel"; // registers model used by path: "division"
-import "@/models/weightCategoryModel"; // registers model used by path: "weightCategory"
+import "@/models/divisionModel";
+import "@/models/weightCategoryModel";
 
 /* helpers */
 const sid = (v) => (v == null ? "" : String(v).trim());
@@ -113,7 +115,7 @@ export async function POST(req, ctx) {
       body = {};
     }
 
-    const athleteId = sid(body.athlete) || sid(body.athleteId) || sid(userId); // regular-user route → default to self
+    const athleteId = sid(body.athlete) || sid(body.athleteId) || sid(userId);
 
     const doc = await matchReport.create({
       // who
@@ -165,6 +167,18 @@ export async function POST(req, ctx) {
       weightLabel: body.weightLabel || "",
       weightUnit: body.weightUnit || "",
     });
+
+    // Fan-out to followers (actor is the user who created it)
+    try {
+      await notifyFollowers(userId, "followed.match_report.created", {
+        matchReportId: String(doc._id),
+        matchType: doc.matchType || "",
+        eventName: doc.eventName || "",
+        matchDate: doc.matchDate || null,
+      });
+    } catch (e) {
+      console.warn("[notifyFollowers] match report create fanout failed:", e);
+    }
 
     return NextResponse.json(
       { ok: true, message: "Match report created", id: String(doc._id) },

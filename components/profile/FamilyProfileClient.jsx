@@ -1,12 +1,14 @@
 // components/profile/FamilyProfileClient.jsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import Spinner from "../shared/Spinner";
+import Spinner from "@/components/shared/Spinner";
 import StyleCard from "@/components/profile/StyleCard";
+import FollowButton from "@/components/shared/FollowButton";
+import FollowListModal from "@/components/profile/FollowListModal";
 
 function cld(url, extra = "") {
   if (!url || typeof url !== "string") return url;
@@ -23,6 +25,35 @@ export default function FamilyProfileClient({ username }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState("");
+
+  // followers count + modal open flag
+  const [followersTotal, setFollowersTotal] = useState(0);
+  const [followersOpen, setFollowersOpen] = useState(false);
+
+  const refreshFollowersCount = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/family/${encodeURIComponent(username)}/followers?limit=1`,
+        { cache: "no-store" }
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      setFollowersTotal(Number(data?.total || 0));
+    } catch {
+      // ignore transient errors
+    }
+  }, [username]);
+
+  // When follow state changes (from the button), update the count and then refresh from server
+  const handleFollowChange = useCallback(
+    async (nowFollowing) => {
+      // optimistic update
+      setFollowersTotal((n) => Math.max(0, n + (nowFollowing ? 1 : -1)));
+      // authoritative refresh
+      await refreshFollowersCount();
+    },
+    [refreshFollowersCount]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -82,7 +113,12 @@ export default function FamilyProfileClient({ username }) {
     };
   }, [username]);
 
-  // Loading gate (no longer blocks on currentUser being undefined)
+  // initial followers count
+  useEffect(() => {
+    refreshFollowersCount();
+  }, [refreshFollowersCount]);
+
+  // Loading gate
   if (loading) {
     return (
       <div className="flex flex-col justify-center items-center h-[70vh] bg-background">
@@ -94,10 +130,10 @@ export default function FamilyProfileClient({ username }) {
     );
   }
 
-  // True 404 → Next.js notFound page
+  // True 404
   if (profile === null) return notFound();
 
-  // Soft failure (500/other)
+  // Soft failure
   if (!profile) {
     return (
       <div className="max-w-2xl mx-auto text-center mt-20">
@@ -126,11 +162,15 @@ export default function FamilyProfileClient({ username }) {
   }
 
   // Avatar
-  const EMERGENCY =
+  const DEFAULT_AVATAR =
     "https://res.cloudinary.com/matscout/image/upload/v1747956346/default_user_rval6s.jpg";
-  const avatarSrc = (profile.avatar || "").trim() || EMERGENCY;
+  const avatarSrc = (profile.avatar || "").trim() || DEFAULT_AVATAR;
   const avatarUrl =
     cld(avatarSrc, "w_200,h_200,c_fill,g_auto,dpr_auto") || avatarSrc;
+
+  // CORRECT owner check: compare your userId to the family member's userId
+  const isOwnerOfFamilyMember =
+    !!currentUser?._id && String(currentUser._id) === String(profile.userId);
 
   return (
     <section className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -162,6 +202,26 @@ export default function FamilyProfileClient({ username }) {
             </Link>
           </p>
         )}
+
+        {/* Follow button: only for non-owners */}
+        {currentUser && !isOwnerOfFamilyMember && (
+          <div className="mt-2">
+            <FollowButton
+              targetType="family"
+              username={username}
+              className="!bg-blue-600 !text-white hover:!bg-blue-700 focus-visible:!ring-2 focus-visible:!ring-blue-400 mb-2"
+              onChange={handleFollowChange}
+            />
+          </div>
+        )}
+        {/* Followers link: always visible */}
+        <button
+          type="button"
+          onClick={() => setFollowersOpen(true)}
+          className="block mx-auto mt-3 text-xs font-medium text-black dark:text-white hover:underline"
+        >
+          Followers {followersTotal}
+        </button>
       </div>
 
       {/* Right Content */}
@@ -184,6 +244,14 @@ export default function FamilyProfileClient({ username }) {
           </p>
         )}
       </div>
+
+      {/* Follow list modal for family followers */}
+      <FollowListModal
+        open={followersOpen}
+        onClose={() => setFollowersOpen(false)}
+        username={username}
+        targetType="family"
+      />
     </section>
   );
 }

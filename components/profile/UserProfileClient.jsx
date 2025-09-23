@@ -6,6 +6,8 @@ import Link from "next/link";
 import StyleCard from "@/components/profile/StyleCard";
 import { notFound } from "next/navigation";
 import Spinner from "../shared/Spinner";
+import FollowButton from "@/components/shared/FollowButton"; // you already use this
+import FollowListModal from "@/components/profile/FollowListModal";
 
 // Cloudinary helper
 function cld(url, extra = "") {
@@ -59,10 +61,19 @@ export default function UserProfileClient({ username }) {
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState("");
 
+  // NEW: follow counts + status + modal visibility
+  const [followCounts, setFollowCounts] = useState({
+    followers: 0,
+    following: 0,
+  });
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [openList, setOpenList] = useState(null); // 'followers' | 'following' | null
+
   useEffect(() => {
     async function fetchData() {
       setApiError("");
       try {
+        // 1) Profile payload
         const res = await fetch(`/api/users/${encodeURIComponent(username)}`, {
           cache: "no-store",
         });
@@ -86,6 +97,7 @@ export default function UserProfileClient({ username }) {
           const data = await res.json().catch(() => ({}));
           const baseUser = data?.user || undefined;
 
+          // normalize styles
           const userStyles = extractStyles(baseUser?.userStyles).map(
             normalizeStyleName
           );
@@ -105,6 +117,7 @@ export default function UserProfileClient({ username }) {
         setProfileUser(undefined);
       }
 
+      // 2) Viewer
       try {
         const viewerRes = await fetch("/api/auth/me", { cache: "no-store" });
         if (viewerRes.ok) {
@@ -116,6 +129,21 @@ export default function UserProfileClient({ username }) {
       } catch (err) {
         console.error("Error fetching current user:", err);
         setCurrentUser(null);
+      }
+
+      // 3) Follow counts + status (works for own or others)
+      try {
+        const fRes = await fetch(
+          `/api/users/${encodeURIComponent(username)}/follow`,
+          { cache: "no-store" }
+        );
+        if (fRes.ok) {
+          const fJson = await fRes.json();
+          setFollowCounts(fJson?.counts || { followers: 0, following: 0 });
+          setIsFollowing(!!fJson?.isFollowing);
+        }
+      } catch {
+        /* ignore */
       }
 
       setLoading(false);
@@ -135,8 +163,10 @@ export default function UserProfileClient({ username }) {
     );
   }
 
+  // True 404
   if (profileUser === null) return notFound();
 
+  // Soft error (500 etc)
   if (!profileUser) {
     return (
       <div className="max-w-2xl mx-auto text-center mt-20">
@@ -161,6 +191,7 @@ export default function UserProfileClient({ username }) {
     );
   }
 
+  // Build W/L per style from matchReports
   const styleResults = {};
   if (Array.isArray(profileUser.userStyles)) {
     profileUser.userStyles.forEach((style) => {
@@ -170,12 +201,15 @@ export default function UserProfileClient({ username }) {
         profileUser.matchReports?.filter(
           (r) => (r.matchType || "").trim().toLowerCase() === key
         ) || [];
+
       const wins = reports.filter((r) => r.result === "Won").length || 0;
       const losses = reports.filter((r) => r.result === "Lost").length || 0;
+
       styleResults[key] = { Wins: wins, Losses: losses };
     });
   }
 
+  // Avatar (guaranteed non-empty)
   const EMERGENCY_DEFAULT =
     "https://res.cloudinary.com/matscout/image/upload/v1747956346/default_user_rval6s.jpg";
 
@@ -194,95 +228,142 @@ export default function UserProfileClient({ username }) {
     cld(selectedUrl, "w_200,h_200,c_fill,g_auto,dpr_auto") || selectedUrl;
 
   return (
-    <section className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-4 gap-6">
-      {/* Left Sidebar */}
-      <div className="md:col-span-1 bg-white dark:bg-gray-900 rounded-xl shadow border border-border p-6 text-center space-y-4 self-start">
-        <Image
-          src={avatarUrl}
-          alt={profileUser.firstName || "User avatar"}
-          width={100}
-          height={100}
-          className="rounded-full mx-auto border border-border object-cover"
-          loading="lazy"
-          sizes="100px"
-        />
-        <h1 className="text-xl font-bold mt-4">
-          {profileUser.firstName} {profileUser.lastName}
-        </h1>
-        <p className="text-sm text-black dark:text-white">
-          @{profileUser.username}
-        </p>
-
-        {/* Teams */}
-        {profileUser.teams?.length > 0 && (
-          <div className="text-left space-y-2 mt-4">
-            <h3 className="text-sm font-semibold text-black dark:text-white">
-              Teams
-            </h3>
-            <ul className="space-y-1">
-              {profileUser.teams.map((team) => {
-                const rawLogo = team.logoURL || "/default-team.png";
-                const logoUrl =
-                  cld(rawLogo, "w_56,h_56,c_fill,g_auto,dpr_auto") || rawLogo;
-                return (
-                  <li
-                    key={team._id}
-                    className="flex items-center gap-2"
-                  >
-                    <Image
-                      src={logoUrl}
-                      alt={team.teamName}
-                      width={36}
-                      height={36}
-                      className="rounded-full border border-border object-cover"
-                      loading="lazy"
-                      sizes="36px"
-                    />
-                    <Link
-                      href={`/teams/${team.teamSlug}`}
-                      className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                    >
-                      {team.teamName}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-
-        {/* 🔥 Dashboard/Settings Link at bottom */}
-        {isMyProfile && (
-          <div className="mt-6 pt-4 border-t border-border">
-            <Link
-              href="/dashboard/settings"
-              className="inline-block w-full px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition"
-            >
-              Go to Dashboard Settings
-            </Link>
-          </div>
-        )}
-      </div>
-
-      {/* Right Content */}
-      <div className="md:col-span-3 grid gap-6 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
-        {profileUser.userStyles?.length > 0 ? (
-          profileUser.userStyles.map((style) => (
-            <StyleCard
-              key={style._id || style.styleName || "style"}
-              style={style}
-              styleResults={
-                styleResults[(style.styleName || "").trim().toLowerCase()] || {}
-              }
-              username={profileUser.username}
-            />
-          ))
-        ) : (
-          <p className="text-sm text-muted-foreground col-span-full">
-            No styles added yet.
+    <>
+      <section className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-4 gap-6">
+        {/* Left Sidebar */}
+        <div className="md:col-span-1 bg-white dark:bg-gray-900 rounded-xl shadow border border-border p-6 text-center space-y-4 self-start">
+          <Image
+            src={avatarUrl}
+            alt={profileUser.firstName || "User avatar"}
+            width={100}
+            height={100}
+            className="rounded-full mx-auto border border-border object-cover"
+            loading="lazy"
+            sizes="100px"
+          />
+          <h1 className="text-xl font-bold mt-4">
+            {profileUser.firstName} {profileUser.lastName}
+          </h1>
+          <p className="text-sm text-black dark:text-white">
+            @{profileUser.username}
           </p>
-        )}
-      </div>
-    </section>
+
+          {/* Social: Follow/Unfollow button for other people's profiles */}
+          {currentUser && currentUser.username !== profileUser.username && (
+            <div className="mt-2">
+              <FollowButton username={profileUser.username} />
+            </div>
+          )}
+
+          {/* Social: counts + open list */}
+          <div className="mt-4 flex items-center justify-center gap-6">
+            <button
+              type="button"
+              onClick={() => setOpenList("following")}
+              className="text-sm hover:underline"
+              title="View who they follow"
+            >
+              <span className="font-semibold">{followCounts.following}</span>{" "}
+              Following
+            </button>
+            <button
+              type="button"
+              onClick={() => setOpenList("followers")}
+              className="text-sm hover:underline"
+              title="View their followers"
+            >
+              <span className="font-semibold">{followCounts.followers}</span>{" "}
+              Followers
+            </button>
+          </div>
+
+          {/* Teams */}
+          {profileUser.teams?.length > 0 && (
+            <div className="text-left space-y-2 mt-6">
+              <h3 className="text-sm font-semibold text-black dark:text-white">
+                Teams
+              </h3>
+              <ul className="space-y-1">
+                {profileUser.teams.map((team) => {
+                  const rawLogo = team.logoURL || "/default-team.png";
+                  const logoUrl =
+                    cld(rawLogo, "w_64,h_64,c_fill,g_auto,dpr_auto") || rawLogo;
+
+                  return (
+                    <li
+                      key={team._id}
+                      className="flex items-center gap-2"
+                    >
+                      <Image
+                        src={logoUrl}
+                        alt={team.teamName}
+                        width={32}
+                        height={32}
+                        className="rounded-full border border-border object-cover"
+                        loading="lazy"
+                        sizes="32px"
+                      />
+                      <Link
+                        href={`/teams/${team.teamSlug}`}
+                        className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        {team.teamName}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {/* If it's my profile, quick link back to settings */}
+          {currentUser?.username === profileUser.username && (
+            <div className="mt-6 pt-4 border-t border-border">
+              <Link
+                href="/dashboard/settings"
+                className="inline-block text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                Go to Dashboard → Settings
+              </Link>
+            </div>
+          )}
+        </div>
+
+        {/* Right Content */}
+        <div className="md:col-span-3 grid gap-6 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+          {profileUser.userStyles?.length > 0 ? (
+            profileUser.userStyles.map((style) => (
+              <StyleCard
+                key={style._id || style.styleName || "style"}
+                style={style}
+                styleResults={
+                  styleResults[(style.styleName || "").trim().toLowerCase()] ||
+                  {}
+                }
+                username={profileUser.username}
+              />
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground col-span-full">
+              No styles added yet.
+            </p>
+          )}
+        </div>
+      </section>
+
+      {/* Follow lists */}
+      <FollowListModal
+        open={openList === "followers"}
+        onClose={() => setOpenList(null)}
+        username={profileUser.username}
+        type="followers"
+      />
+      <FollowListModal
+        open={openList === "following"}
+        onClose={() => setOpenList(null)}
+        username={profileUser.username}
+        type="following"
+      />
+    </>
   );
 }

@@ -135,6 +135,23 @@ const userSchema = new mongoose.Schema(
         email: { type: Boolean, default: true },
         inApp: { type: Boolean, default: true },
       },
+      followed: {
+        // “someone I follow posted a match report”
+        matchReports: {
+          push: { type: Boolean, default: true },
+          email: { type: Boolean, default: false },
+        },
+        // “someone I follow updated profile fields”
+        profileUpdates: {
+          push: { type: Boolean, default: true },
+          email: { type: Boolean, default: false },
+        },
+        // “someone I follow changed avatar”
+        avatarChanges: {
+          push: { type: Boolean, default: true },
+          email: { type: Boolean, default: false },
+        },
+      },
     },
   },
   {

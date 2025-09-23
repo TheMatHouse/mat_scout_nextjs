@@ -6,16 +6,15 @@ import { Types } from "mongoose";
 import User from "@/models/userModel";
 import { connectDB } from "@/lib/mongo";
 import cloudinary from "@/lib/cloudinary";
+import { notifyFollowers } from "@/lib/notify-followers";
 
-const MAX_BYTES = 5 * 1024 * 1024; // 5MB cap
+const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIME = /^(image\/jpeg|image\/png|image\/webp)$/i;
 
 function approxBytesFromDataUrl(dataUrl) {
-  // data:[mime];base64,XXXX
   const i = dataUrl.indexOf(",");
   if (i === -1) return 0;
   const b64 = dataUrl.slice(i + 1);
-  // ~ 3/4 of base64 length (minus padding)
   return Math.floor((b64.length * 3) / 4);
 }
 
@@ -41,7 +40,6 @@ export const PATCH = async (request, context) => {
 
     const hadUploaded = user.avatarType === "uploaded" && user.avatarId;
 
-    // Switching back to social avatars: remove old uploaded file
     if ((avatarType === "google" || avatarType === "facebook") && hadUploaded) {
       try {
         await cloudinary.uploader.destroy(user.avatarId);
@@ -58,10 +56,8 @@ export const PATCH = async (request, context) => {
       user.avatarType = "facebook";
       user.avatar = user.facebookAvatar || "";
     } else if (avatarType === "uploaded" && image === "use-existing") {
-      // re-use previous uploaded avatar
       user.avatarType = "uploaded";
     } else {
-      // New custom upload via data URL (base64)
       if (!image || typeof image !== "string" || !image.startsWith("data:")) {
         return NextResponse.json(
           { message: "Image must be a data URL" },
@@ -86,7 +82,6 @@ export const PATCH = async (request, context) => {
         );
       }
 
-      // delete prior upload if any
       if (hadUploaded) {
         try {
           await cloudinary.uploader.destroy(user.avatarId);
@@ -105,20 +100,28 @@ export const PATCH = async (request, context) => {
         resource_type: "image",
         allowed_formats: ["jpg", "jpeg", "png", "webp"],
         overwrite: false,
-        transformation: [{ width: 300, height: 300, crop: "fill" }], // soft cap for avatar
+        transformation: [{ width: 300, height: 300, crop: "fill" }],
       });
 
       user.avatarType = "uploaded";
-      user.avatar = result.secure_url; // raw URL
-      user.avatarId = result.public_id; // keep for future deletes
+      user.avatar = result.secure_url;
+      user.avatarId = result.public_id;
     }
 
     await user.save();
 
-    // Provide a fast-delivery URL using f_auto,q_auto for immediate use in UI
     const displayUrl = user.avatar?.includes("/upload/")
       ? user.avatar.replace("/upload/", "/upload/f_auto,q_auto/")
       : user.avatar;
+
+    // 🔔 Fan-out AFTER we know the final URL
+    try {
+      await notifyFollowers(user._id, "followed.avatar.changed", {
+        avatarUrl: displayUrl,
+      });
+    } catch (e) {
+      console.warn("[notifyFollowers] avatar fanout failed:", e);
+    }
 
     return NextResponse.json(
       {

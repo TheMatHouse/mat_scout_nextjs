@@ -1,103 +1,167 @@
 // app/api/settings/notifications/route.js
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
-import { getCurrentUserFromCookies } from "@/lib/auth-server";
+import { getCurrentUser } from "@/lib/auth-server";
 
+/** Keep in sync with UI */
 const DEFAULTS = {
   joinRequests: { inApp: true, email: true },
-  teamUpdates: { inApp: true, email: true },
+  teamUpdates: { inApp: true, email: false },
   scoutingReports: { inApp: true, email: true },
+  followed: {
+    matchReports: { inApp: true, email: false },
+    profileUpdates: { inApp: true, email: false },
+    avatarChanges: { inApp: true, email: false },
+  },
+  followers: {
+    newFollower: { inApp: true, email: false },
+  },
 };
 
-function bool(v, fallback) {
-  return typeof v === "boolean" ? v : !!fallback;
+const bool = (v, fallback = false) =>
+  typeof v === "boolean" ? v : v == null ? fallback : !!v;
+
+const isObject = (x) => x && typeof x === "object" && !Array.isArray(x);
+const isLeaf = (x) => isObject(x) && ("inApp" in x || "email" in x);
+
+function normalizeNode(node) {
+  if (!isObject(node)) return null;
+  if (isLeaf(node)) {
+    return { inApp: bool(node.inApp, false), email: bool(node.email, false) };
+  }
+  const out = {};
+  for (const [k, v] of Object.entries(node)) {
+    const child = normalizeNode(v);
+    if (child) out[k] = child;
+  }
+  return Object.keys(out).length ? out : null;
 }
 
-function normalizeSettings(input) {
-  // accept either {notificationSettings:{...}} or the object itself
-  const src = input?.notificationSettings ?? input ?? {};
-  return {
-    joinRequests: {
-      inApp: bool(src.joinRequests?.inApp, DEFAULTS.joinRequests.inApp),
-      email: bool(src.joinRequests?.email, DEFAULTS.joinRequests.email),
-    },
-    teamUpdates: {
-      inApp: bool(src.teamUpdates?.inApp, DEFAULTS.teamUpdates.inApp),
-      email: bool(src.teamUpdates?.email, DEFAULTS.teamUpdates.email),
-    },
-    scoutingReports: {
-      inApp: bool(src.scoutingReports?.inApp, DEFAULTS.scoutingReports.inApp),
-      email: bool(src.scoutingReports?.email, DEFAULTS.scoutingReports.email),
-    },
-  };
+function sanitizeSettings(obj) {
+  const norm = normalizeNode(obj || {});
+  return norm || {};
+}
+
+function deepMerge(a = {}, b = {}) {
+  if (isLeaf(a) && isLeaf(b)) {
+    return { inApp: bool(b.inApp, a.inApp), email: bool(b.email, a.email) };
+  }
+  if (isLeaf(a) && !isLeaf(b)) return b;
+  if (!isLeaf(a) && isLeaf(b)) return b;
+
+  const out = { ...a };
+  for (const [k, v] of Object.entries(b || {})) {
+    out[k] = k in out ? deepMerge(out[k], v) : v;
+  }
+  return out;
+}
+
+function flattenLeaves(obj, base = "notificationSettings") {
+  const out = {};
+  if (isLeaf(obj)) {
+    out[`${base}.inApp`] = bool(obj.inApp, false);
+    out[`${base}.email`] = bool(obj.email, false);
+    return out;
+  }
+  for (const [k, v] of Object.entries(obj || {})) {
+    if (!isObject(v)) continue;
+    Object.assign(out, flattenLeaves(v, `${base}.${k}`));
+  }
+  return out;
+}
+
+function hasPath(obj, dotPath) {
+  const parts = dotPath.split(".");
+  let cur = obj;
+  for (const p of parts) {
+    if (!isObject(cur) || !(p in cur)) return false;
+    cur = cur[p];
+  }
+  return true;
 }
 
 export async function GET() {
   try {
     await connectDB();
-    const auth = await getCurrentUserFromCookies();
-    if (!auth?._id) {
+    const viewer = await getCurrentUser();
+    if (!viewer?._id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // lean doc is fine for GET
-    const user = await User.findById(auth._id)
-      .select("notificationSettings")
+    const user = await User.findById(viewer._id)
+      .select("_id notificationSettings")
       .lean();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const merged = deepMerge(DEFAULTS, user?.notificationSettings || {});
+
+    // Lazy backfill any missing paths
+    try {
+      const desired = flattenLeaves(merged);
+      const missingSet = {};
+      for (const [path, val] of Object.entries(desired)) {
+        if (!hasPath(user || {}, path)) missingSet[path] = val;
+      }
+      if (Object.keys(missingSet).length) {
+        await User.updateOne(
+          { _id: viewer._id },
+          { $set: missingSet },
+          { strict: false }
+        );
+      }
+    } catch (e) {
+      console.warn("[notifications GET] lazy backfill skipped:", e);
     }
 
-    const settings = {
-      ...DEFAULTS,
-      ...(user.notificationSettings || {}),
-    };
-
     return NextResponse.json(
-      { notificationSettings: settings },
-      { status: 200 }
+      { notificationSettings: merged },
+      { headers: { "Cache-Control": "no-store" } }
     );
-  } catch (err) {
-    console.error("GET notification settings error:", err);
-    return NextResponse.json(
-      { error: "Failed to load settings" },
-      { status: 500 }
-    );
+  } catch (e) {
+    console.error("GET /api/settings/notifications error:", e);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
 
 export async function PATCH(req) {
   try {
     await connectDB();
-    const auth = await getCurrentUserFromCookies();
-    if (!auth?._id) {
+    const viewer = await getCurrentUser();
+    if (!viewer?._id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json().catch(() => ({}));
-    const settings = normalizeSettings(body);
-
-    // ✅ Update atomically; no reliance on user.save()
-    const updated = await User.findByIdAndUpdate(
-      auth._id,
-      { $set: { notificationSettings: settings } },
-      { new: true, runValidators: true, select: "notificationSettings" }
-    );
-
-    if (!updated) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    let body = {};
+    try {
+      body = await req.json();
+    } catch {
+      body = {};
     }
 
-    return NextResponse.json(
-      { success: true, notificationSettings: updated.notificationSettings },
-      { status: 200 }
+    const incoming = sanitizeSettings(body?.notificationSettings);
+
+    const current = await User.findById(viewer._id)
+      .select("_id notificationSettings")
+      .lean();
+
+    const next = deepMerge(current?.notificationSettings || {}, incoming);
+
+    await User.findByIdAndUpdate(
+      viewer._id,
+      { $set: { notificationSettings: next } },
+      { new: true, strict: false }
     );
-  } catch (err) {
-    console.error("PATCH notification settings error:", err);
+
+    const merged = deepMerge(DEFAULTS, next);
+
     return NextResponse.json(
-      { error: "Failed to save settings" },
-      { status: 500 }
+      { ok: true, notificationSettings: merged },
+      { headers: { "Cache-Control": "no-store" } }
     );
+  } catch (e) {
+    console.error("PATCH /api/settings/notifications error:", e);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

@@ -1,9 +1,11 @@
+// app/api/dashboard/[userId]/family/[memberId]/avatar/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import FamilyMember from "@/models/familyMemberModel";
 import cloudinary from "@/lib/cloudinary";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import { Types } from "mongoose";
+import { notifyFamilyFollowers } from "@/lib/notify-family-followers"; // ✅ NEW
 
 export const PATCH = async (req, context) => {
   await connectDB();
@@ -67,6 +69,18 @@ export const PATCH = async (req, context) => {
     member.avatarId = uploadRes.public_id;
     member.avatarType = "uploaded";
     await member.save();
+
+    // ✅ Fan-out to followers: avatar updated (in-app + email as per prefs)
+    try {
+      await notifyFamilyFollowers({
+        familyId: memberId, // helper accepts ObjectId string
+        type: "family_avatar_updated",
+        actorUserId: currentUser._id,
+      });
+    } catch (fanoutErr) {
+      console.warn("[notifyFamilyFollowers avatar] failed:", fanoutErr);
+      // do not fail the request due to notification issues
+    }
 
     return NextResponse.json(
       { message: "Avatar updated successfully", avatar: member.avatar },

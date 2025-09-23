@@ -47,6 +47,7 @@ export default function NotificationDropdown({
                 : "text-gray-800 dark:text-gray-200"
             }`}
           >
+            {n.notificationType === "family_followed" ? "👪 " : "👤 "}
             {n.notificationBody}
           </p>
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">

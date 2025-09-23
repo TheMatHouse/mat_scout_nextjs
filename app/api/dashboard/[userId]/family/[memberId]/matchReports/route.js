@@ -6,8 +6,10 @@ import { connectDB } from "@/lib/mongo";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
 
 import matchReport from "@/models/matchReportModel";
-import division from "@/models/divisionModel"; // alias in your codebase may be "@/models/division"
-import weightCategory from "@/models/weightCategoryModel"; // if you renamed to "@/models/weightCategory", update import
+import division from "@/models/divisionModel";
+import weightCategory from "@/models/weightCategoryModel";
+
+import { notifyFamilyFollowers } from "@/lib/notify-family-followers";
 
 function err(status, message) {
   return NextResponse.json({ ok: false, message }, { status });
@@ -28,7 +30,6 @@ export async function GET(_req, ctx) {
       .find(
         { athleteType: "family", athleteId: memberId },
         {
-          // project the main fields you show in tables/cards
           matchType: 1,
           eventName: 1,
           matchDate: 1,
@@ -76,7 +77,7 @@ export async function POST(req, ctx) {
 
     const doc = {
       athleteType: "family",
-      athleteId: memberId,
+      athleteId: memberId, // may be ObjectId OR username; helper now handles both
 
       createdById: currentUser._id,
       createdByName: `${currentUser.firstName || ""} ${
@@ -112,10 +113,10 @@ export async function POST(req, ctx) {
       result: body.result || "",
       score: body.score || "",
 
-      // ✅ video (now reads nested or flat)
+      // video
       video: {
         videoTitle,
-        videoURL, // already normalized by the client
+        videoURL,
         videoNotes,
       },
 
@@ -124,7 +125,7 @@ export async function POST(req, ctx) {
       weightCategory: body.weightCategory || null,
 
       // snapshot
-      weightItemId: body.weightItemId || null, // (optional but useful)
+      weightItemId: body.weightItemId || null,
       weightLabel: body.weightLabel || "",
       weightUnit: body.weightUnit || "",
 
@@ -142,6 +143,25 @@ export async function POST(req, ctx) {
     }
 
     const saved = await matchReport.create(doc);
+    console.log(
+      "[family match report] created",
+      String(saved._id),
+      "for memberId=",
+      memberId
+    );
+
+    // Fan-out to followers of this family member (owner is the actor)
+    try {
+      await notifyFamilyFollowers({
+        familyId: memberId, // can be id or username; helper resolves either
+        type: "family_match_report_created",
+        actorUserId: currentUser._id,
+        payload: { matchReportId: String(saved._id) },
+      });
+    } catch (fanoutErr) {
+      console.warn("[notifyFamilyFollowers] failed:", fanoutErr);
+    }
+
     return NextResponse.json(
       { ok: true, message: "Match report saved", id: String(saved._id) },
       { status: 201 }

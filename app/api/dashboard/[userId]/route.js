@@ -5,17 +5,30 @@ import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
+import { notifyFollowers } from "@/lib/notify-followers";
 
 const trim = (v) => (typeof v === "string" ? v.trim() : v);
 const notSpecified = (v) => {
-  const s = typeof v === "string" ? v.trim() : "";
+  const s = typeof v === "string" ? String(v).trim() : "";
   return s ? s : "not specified";
+};
+
+// Human labels for notification summary
+const WATCHED_FIELDS = {
+  firstName: "First name",
+  lastName: "Last name",
+  username: "Username",
+  city: "City",
+  state: "State",
+  country: "Country",
+  gender: "Gender",
+  bio: "Bio",
 };
 
 export async function PATCH(request, context) {
   await connectDB();
 
-  const { userId } = await context.params; // ✅ must await in Next 15
+  const { userId } = await context.params; // Next 15: must await
   if (!mongoose.Types.ObjectId.isValid(userId)) {
     return NextResponse.json({ message: "Invalid user ID" }, { status: 400 });
   }
@@ -23,7 +36,29 @@ export async function PATCH(request, context) {
   try {
     const data = await request.json();
 
-    // Build base update (don’t write undefineds)
+    // Load the previous snapshot for diffing
+    const prev = await User.findById(userId, {
+      _id: 1,
+      firstName: 1,
+      lastName: 1,
+      email: 1,
+      username: 1,
+      city: 1,
+      state: 1,
+      country: 1,
+      gender: 1,
+      bMonth: 1,
+      bDay: 1,
+      bYear: 1,
+      allowPublic: 1,
+      bio: 1, // if you add later, diff will include it
+    }).lean();
+
+    if (!prev) {
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
+    }
+
+    // Build base update (no undefined)
     const baseUpdate = {
       firstName: trim(data.firstName),
       lastName: trim(data.lastName),
@@ -31,15 +66,18 @@ export async function PATCH(request, context) {
       username: trim(data.username),
       city: trim(data.city),
       state: trim(data.state),
-      country: notSpecified(data.country), // ✅ normalize blanks
-      gender: notSpecified(data.gender), // ✅ normalize blanks
+      country: notSpecified(data.country),
+      gender: notSpecified(data.gender),
       bMonth: trim(data.bMonth),
       bDay: trim(data.bDay),
       bYear: trim(data.bYear),
       allowPublic:
         data.allowPublic === "Public" || data.allowPublic === true
           ? true
-          : false,
+          : data.allowPublic === "Private" || data.allowPublic === false
+          ? false
+          : undefined,
+      bio: typeof data.bio === "string" ? data.bio : undefined,
     };
 
     // Remove undefined keys so we don't overwrite with undefined
@@ -50,7 +88,7 @@ export async function PATCH(request, context) {
     let updatedUser;
 
     if (data.password) {
-      // ✅ If changing password, use .save() so hashing middleware runs
+      // If changing password, use save() for hashing middleware
       const userDoc = await User.findById(userId);
       if (!userDoc) {
         return NextResponse.json(
@@ -62,7 +100,6 @@ export async function PATCH(request, context) {
       userDoc.password = String(data.password);
       updatedUser = await userDoc.save();
     } else {
-      // ✅ Normal field updates via atomic update
       updatedUser = await User.findByIdAndUpdate(
         userId,
         { $set: baseUpdate },
@@ -72,6 +109,31 @@ export async function PATCH(request, context) {
 
     if (!updatedUser) {
       return NextResponse.json({ message: "User not found" }, { status: 404 });
+    }
+
+    // ---- Compute diff for profile-update notifications ----
+    const changedFields = [];
+    for (const [key, label] of Object.entries(WATCHED_FIELDS)) {
+      const before = prev?.[key] ?? "";
+      const after = updatedUser?.[key] ?? "";
+      // compare as trimmed strings to avoid false negatives from whitespace
+      if (String(before).trim() !== String(after).trim()) {
+        changedFields.push(label);
+      }
+    }
+
+    // Fan-out to followers if meaningful profile fields changed
+    if (changedFields.length > 0) {
+      try {
+        await notifyFollowers(userId, "followed.profile.updated", {
+          changedFields,
+        });
+      } catch (e) {
+        console.warn(
+          "[notifyFollowers] profile updated fanout failed:",
+          e?.message
+        );
+      }
     }
 
     const safe = updatedUser.toObject?.() || updatedUser;
