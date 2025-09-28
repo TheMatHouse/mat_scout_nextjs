@@ -170,7 +170,7 @@ const PreviewReportModal = ({
     >
       <DialogContent
         ref={dialogContentRef}
-        className="overflow-y-auto max-h-screen sm:w-11/12 max-w-6xl"
+        className="overflow-y-auto max-h-screen sm:w-11/12 max-w-6xl bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
       >
         <DialogHeader>
           <div className="flex items-center justify-between">
@@ -178,7 +178,7 @@ const PreviewReportModal = ({
               {reportType === "match" ? "Match Report" : "Scouting Report"}
             </DialogTitle>
           </div>
-          <DialogDescription>
+          <DialogDescription className="px-4 py-2 text-gray-900 dark:text-gray-100 rounded-md">
             View detailed {reportType === "match" ? "match" : "scouting"} report
             including context, opponent info, techniques, and video(s).
           </DialogDescription>

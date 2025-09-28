@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import StyleCard from "@/components/profile/StyleCard";
 import { notFound } from "next/navigation";
 import Spinner from "../shared/Spinner";
-import FollowButton from "@/components/shared/FollowButton"; // you already use this
+import FollowButton from "@/components/shared/FollowButton";
 import FollowListModal from "@/components/profile/FollowListModal";
 
 // Cloudinary helper
@@ -61,7 +61,7 @@ export default function UserProfileClient({ username }) {
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState("");
 
-  // NEW: follow counts + status + modal visibility
+  // follow counts + status + modal visibility
   const [followCounts, setFollowCounts] = useState({
     followers: 0,
     following: 0,
@@ -69,21 +69,51 @@ export default function UserProfileClient({ username }) {
   const [isFollowing, setIsFollowing] = useState(false);
   const [openList, setOpenList] = useState(null); // 'followers' | 'following' | null
 
+  // Small helper to refetch counts/status for THIS profile
+  const refreshCounts = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/users/${encodeURIComponent(username)}/follow`,
+        { cache: "no-store" }
+      );
+      if (!res.ok) return;
+      const json = await res.json();
+      setFollowCounts(json?.counts || { followers: 0, following: 0 });
+      setIsFollowing(!!json?.isFollowing);
+    } catch {
+      /* ignore */
+    }
+  }, [username]);
+
+  // When follow state changes (from the button), optimistically bump THIS profile's followers,
+  // then sync from server (just like your FamilyProfileClient)
+  const handleFollowChange = useCallback(
+    async (nowFollowing) => {
+      // You followed/unfollowed *this* user → their Followers count changes
+      setFollowCounts((c) => ({
+        ...c,
+        followers: Math.max(0, (c.followers || 0) + (nowFollowing ? 1 : -1)),
+      }));
+      setIsFollowing(!!nowFollowing);
+      await refreshCounts();
+    },
+    [refreshCounts]
+  );
+
+  // Initial data load
   useEffect(() => {
     async function fetchData() {
       setApiError("");
       try {
-        // 1) Profile payload
+        // Profile
         const res = await fetch(`/api/users/${encodeURIComponent(username)}`, {
           cache: "no-store",
         });
-
         if (res.status === 404) {
           setProfileUser(null);
           setLoading(false);
           return;
         }
-
         if (!res.ok) {
           const bodyText = await res.text().catch(() => "");
           console.error(
@@ -105,11 +135,7 @@ export default function UserProfileClient({ username }) {
             ? baseUser.matchReports
             : [];
 
-          setProfileUser({
-            ...baseUser,
-            userStyles,
-            matchReports,
-          });
+          setProfileUser({ ...baseUser, userStyles, matchReports });
         }
       } catch (err) {
         console.error("Error fetching profile:", err);
@@ -117,7 +143,7 @@ export default function UserProfileClient({ username }) {
         setProfileUser(undefined);
       }
 
-      // 2) Viewer
+      // Viewer
       try {
         const viewerRes = await fetch("/api/auth/me", { cache: "no-store" });
         if (viewerRes.ok) {
@@ -126,31 +152,18 @@ export default function UserProfileClient({ username }) {
         } else {
           setCurrentUser(null);
         }
-      } catch (err) {
-        console.error("Error fetching current user:", err);
+      } catch {
         setCurrentUser(null);
       }
 
-      // 3) Follow counts + status (works for own or others)
-      try {
-        const fRes = await fetch(
-          `/api/users/${encodeURIComponent(username)}/follow`,
-          { cache: "no-store" }
-        );
-        if (fRes.ok) {
-          const fJson = await fRes.json();
-          setFollowCounts(fJson?.counts || { followers: 0, following: 0 });
-          setIsFollowing(!!fJson?.isFollowing);
-        }
-      } catch {
-        /* ignore */
-      }
+      // Counts + status
+      await refreshCounts();
 
       setLoading(false);
     }
 
     fetchData();
-  }, [username]);
+  }, [username, refreshCounts]);
 
   if (loading || currentUser === undefined) {
     return (
@@ -201,10 +214,8 @@ export default function UserProfileClient({ username }) {
         profileUser.matchReports?.filter(
           (r) => (r.matchType || "").trim().toLowerCase() === key
         ) || [];
-
       const wins = reports.filter((r) => r.result === "Won").length || 0;
       const losses = reports.filter((r) => r.result === "Lost").length || 0;
-
       styleResults[key] = { Wins: wins, Losses: losses };
     });
   }
@@ -251,7 +262,12 @@ export default function UserProfileClient({ username }) {
           {/* Social: Follow/Unfollow button for other people's profiles */}
           {currentUser && currentUser.username !== profileUser.username && (
             <div className="mt-2">
-              <FollowButton username={profileUser.username} />
+              <FollowButton
+                username={profileUser.username}
+                initialIsFollowing={isFollowing}
+                // ⬇️ This is the only addition you need
+                onChange={handleFollowChange}
+              />
             </div>
           )}
 
@@ -356,13 +372,15 @@ export default function UserProfileClient({ username }) {
         open={openList === "followers"}
         onClose={() => setOpenList(null)}
         username={profileUser.username}
-        type="followers"
+        targetType="user"
+        list="followers"
       />
       <FollowListModal
         open={openList === "following"}
         onClose={() => setOpenList(null)}
         username={profileUser.username}
-        type="following"
+        targetType="user"
+        list="following"
       />
     </>
   );

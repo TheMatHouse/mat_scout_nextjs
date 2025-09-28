@@ -1,7 +1,6 @@
 // scripts/migrate_userStyles_v2.js
 /* eslint-disable no-console */
-import "dotenv/config"; // <= loads .env/.env.local
-import mongoose from "mongoose";
+
 import UserStyle from "../models/userStyleModel.js"; // keep this path correct
 
 const { MONGODB_URI } = process.env;

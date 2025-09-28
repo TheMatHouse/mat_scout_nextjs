@@ -23,7 +23,11 @@ function json(data, status = 200) {
   });
 }
 
-async function getTargetUser(username) {
+async function getTargetUser(usernameRaw) {
+  const username = String(usernameRaw || "")
+    .trim()
+    .toLowerCase();
+  if (!username) return null;
   return User.findOne(
     { username },
     {
@@ -37,18 +41,26 @@ async function getTargetUser(username) {
   ).lean();
 }
 
+// counts shown on a *user* profile
 async function countsFor(userId) {
-  const [followers, following] = await Promise.all([
-    Follow.countDocuments({ followingId: userId }),
-    Follow.countDocuments({ followerId: userId }),
-  ]);
+  // Followers of this user = everyone following this user target
+  const followers = await Follow.countDocuments({
+    targetType: "user",
+    followingUserId: userId,
+  });
+
+  // Following (how many things this user follows) = any targetType
+  const following = await Follow.countDocuments({
+    followerId: userId,
+  });
+
   return { followers, following };
 }
 
 const bool = (v, fallback = false) =>
   typeof v === "boolean" ? v : v == null ? fallback : !!v;
 
-/* ---------- helpers ---------- */
+/* ---------- notifications ---------- */
 
 async function createInAppNotification({
   recipientId,
@@ -63,18 +75,15 @@ async function createInAppNotification({
     const profilePath = `/${actorUsername}`;
 
     await Notification.create({
-      // required by your schema
       user: recipientId,
       notificationType: "followers.newFollower",
       notificationBody: body,
 
-      // link fields (use whichever your UI reads)
       notificationLink: profilePath,
       url: profilePath,
       linkUrl: profilePath,
       href: profilePath,
 
-      // handy extras (ignored if not in schema)
       actorId,
       read: false,
       isRead: false,
@@ -87,22 +96,16 @@ async function createInAppNotification({
 
 async function sendNewFollowerEmail({ to, actorUsername, actorName }) {
   if (!to) return;
-  const profileUrl = `${
-    process.env.NEXT_PUBLIC_DOMAIN || process.env.NEXT_PUBLIC_BASE_URL || ""
-  }/${encodeURIComponent(actorUsername)}`;
-
-  const html = buildNewFollowerEmail({
-    actorUsername,
-    actorName,
-    profileUrl,
-  });
-
+  const base =
+    process.env.NEXT_PUBLIC_DOMAIN || process.env.NEXT_PUBLIC_BASE_URL || "";
+  const profileUrl = `${base}/${encodeURIComponent(actorUsername)}`;
   try {
-    await sendEmail({
-      to,
-      subject: newFollowerSubject,
-      html,
+    const html = buildNewFollowerEmail({
+      actorUsername,
+      actorName,
+      profileUrl,
     });
+    await sendEmail({ to, subject: newFollowerSubject, html });
   } catch (e) {
     console.warn("[follow] email send failed:", e?.message);
   }
@@ -122,7 +125,8 @@ export async function GET(_req, { params }) {
   if (viewer?._id) {
     isFollowing = !!(await Follow.findOne({
       followerId: viewer._id,
-      followingId: target._id,
+      targetType: "user",
+      followingUserId: target._id,
     }).lean());
   }
 
@@ -143,20 +147,31 @@ export async function POST(_req, { params }) {
     return json({ error: "Cannot follow yourself" }, 400);
   }
 
-  // create follow; if duplicate, don't notify again
-  let created = false;
-  try {
-    await Follow.create({ followerId: viewer._id, followingId: target._id });
-    created = true;
-  } catch {
-    created = false;
-  }
+  // Idempotent upsert – correct fields for a *user* target
+  const res = await Follow.updateOne(
+    {
+      followerId: viewer._id,
+      targetType: "user",
+      followingUserId: target._id,
+    },
+    {
+      $setOnInsert: {
+        followerId: viewer._id,
+        targetType: "user",
+        followingUserId: target._id,
+        createdAt: new Date(),
+      },
+    },
+    { upsert: true }
+  );
 
-  if (created) {
+  const actuallyInserted = res.upsertedCount > 0;
+
+  // Only notify on first-time follow
+  if (actuallyInserted) {
     const prefs = target?.notificationSettings?.followers?.newFollower;
     const allowInApp = bool(prefs?.inApp, true); // default ON
     const allowEmail = bool(prefs?.email, false); // default OFF
-
     const actorName =
       [viewer.firstName, viewer.lastName].filter(Boolean).join(" ") ||
       viewer.username ||
@@ -181,7 +196,18 @@ export async function POST(_req, { params }) {
   }
 
   const c = await countsFor(target._id);
-  return json({ ok: true, isFollowing: true, counts: c }, 201);
+
+  // Truth from DB
+  const isFollowing = !!(await Follow.exists({
+    followerId: viewer._id,
+    targetType: "user",
+    followingUserId: target._id,
+  }));
+
+  return json(
+    { ok: true, isFollowing, counts: c },
+    actuallyInserted ? 201 : 200
+  );
 }
 
 export async function DELETE(_req, { params }) {
@@ -194,7 +220,18 @@ export async function DELETE(_req, { params }) {
   const target = await getTargetUser(username);
   if (!target) return json({ error: "User not found" }, 404);
 
-  await Follow.deleteOne({ followerId: viewer._id, followingId: target._id });
+  await Follow.deleteOne({
+    followerId: viewer._id,
+    targetType: "user",
+    followingUserId: target._id,
+  });
+
   const c = await countsFor(target._id);
-  return json({ ok: true, isFollowing: false, counts: c });
+  const stillFollowing = !!(await Follow.exists({
+    followerId: viewer._id,
+    targetType: "user",
+    followingUserId: target._id,
+  }));
+
+  return json({ ok: true, isFollowing: !!stillFollowing, counts: c });
 }

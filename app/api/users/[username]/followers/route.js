@@ -16,37 +16,45 @@ function json(data, status = 200) {
   });
 }
 
-export async function GET(_req, { params }) {
+export async function GET(req, { params }) {
   await connectDB();
-  const { username } = await params;
+  const { username: raw } = await params;
+  const username = String(raw || "")
+    .trim()
+    .toLowerCase();
 
   const target = await User.findOne({ username }, { _id: 1 }).lean();
   if (!target) return json({ error: "User not found" }, 404);
 
-  // Followers = people whose followerId -> target._id (they follow the target)
-  const edges = await Follow.find(
-    { followingId: target._id },
-    { followerId: 1 }
-  ).lean();
-  const ids = edges.map((e) => e.followerId).filter(Boolean);
+  const { searchParams } = new URL(req.url);
+  const page = Math.max(parseInt(searchParams.get("page") || "1", 10), 1);
+  const limit = Math.min(
+    Math.max(parseInt(searchParams.get("limit") || "20", 10), 1),
+    100
+  );
+  const skip = (page - 1) * limit;
 
-  if (!ids.length) return json({ users: [] });
+  const filter = { targetType: "user", followingUserId: target._id };
 
-  const users = await User.find(
-    { _id: { $in: ids } },
-    {
-      _id: 1,
-      username: 1,
-      firstName: 1,
-      lastName: 1,
-      avatarType: 1,
-      avatar: 1,
-      googleAvatar: 1,
-      facebookAvatar: 1,
-    }
-  )
-    .sort({ createdAt: -1 })
-    .lean();
+  const [edges, total] = await Promise.all([
+    Follow.find(filter, { followerId: 1 })
+      .sort({ _id: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate({
+        path: "followerId",
+        select:
+          "username displayName firstName lastName avatarUrl avatar googleAvatar facebookAvatar",
+      })
+      .lean(),
+    Follow.countDocuments(filter),
+  ]);
 
-  return json({ users });
+  // Modal expects items like { follower: <User> }
+  const results = edges
+    .map((e) => e?.followerId)
+    .filter(Boolean)
+    .map((u) => ({ follower: u }));
+
+  return json({ ok: true, page, limit, total, results });
 }
