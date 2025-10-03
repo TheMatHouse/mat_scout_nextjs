@@ -1,3 +1,4 @@
+// components/layout/AuthenticatedSidebar.jsx
 "use client";
 export const dynamic = "force-dynamic";
 
@@ -42,19 +43,21 @@ export default function AuthenticatedSidebar() {
     { href: `/${user.username}`, label: "Profile", icon: <User size={18} /> },
   ];
 
+  // ⬇️ Added a dedicated Bio link under Dashboard → Settings
   const dashboardSubLinks = [
     { href: "/dashboard/settings", label: "Settings" },
+    { href: "/dashboard/settings/bio", label: "Bio" }, // NEW
     { href: "/dashboard/styles", label: "Styles/Sports" },
     { href: "/dashboard/matches", label: "Match Reports" },
     { href: "/dashboard/scouting", label: "Scouting Reports" },
     { href: "/dashboard/family", label: "Family" },
   ];
 
-  // ✅ New Teams IA
+  // Teams submenu
   const teamSubLinks = [
     { href: "/teams/mine", label: "My Teams" },
     { href: "/teams/find", label: "Find Teams" },
-    { href: "/teams/new", label: "Create Team" }, // keep /teams/new since it already exists
+    { href: "/teams/new", label: "Create Team" },
   ];
 
   // Highlight logic for main links: active if you're anywhere under that section

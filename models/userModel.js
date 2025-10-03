@@ -60,6 +60,8 @@ const userSchema = new mongoose.Schema(
       enum: ["male", "female", "not specified"],
       default: "not specified",
     },
+    bio: { type: Object, default: null },
+    bioText: { type: String, trim: true, maxlength: 1000 },
     avatar: {
       type: String,
       default:

@@ -1,3 +1,4 @@
+// components/dashboard/family/FamilyMemberDashboard.jsx
 "use client";
 
 import { useState } from "react";
@@ -5,9 +6,11 @@ import FamilyMemberSettings from "./sections/FamilySettings";
 import FamilyStyles from "./sections/FamilyStyles";
 import FamilyMatches from "./sections/FamilyMatchReports";
 import FamilyScoutingReports from "./sections/FamilyScoutingReports";
+import FamilyBio from "./sections/FamilyBio"; // ⬅️ NEW
 
 const TABS = [
   { id: "settings", label: "Settings" },
+  { id: "bio", label: "Bio" }, // ⬅️ NEW
   { id: "styles", label: "Styles" },
   { id: "matches", label: "Match Reports" },
   { id: "scouting", label: "Scouting Reports" },
@@ -24,6 +27,8 @@ export default function FamilyMemberDashboard({ member }) {
     switch (activeTab) {
       case "settings":
         return <FamilyMemberSettings member={member} />;
+      case "bio": // ⬅️ NEW
+        return <FamilyBio member={member} />;
       case "styles":
         return <FamilyStyles member={member} />;
       case "matches":

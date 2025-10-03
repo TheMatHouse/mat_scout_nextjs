@@ -38,7 +38,6 @@ const extractStyles = (payload) => {
   return [];
 };
 
-// Small helper to send JSON
 function json(data, status = 200) {
   return new NextResponse(JSON.stringify(data), {
     status,
@@ -49,19 +48,25 @@ function json(data, status = 200) {
   });
 }
 
+// escape for RegExp building
+function esc(str = "") {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /* ---------------- GET ---------------- */
 export async function GET(req, { params }) {
   try {
     await connectDB();
 
-    const { username } = await params; // Next 15: must await
-    if (!username) {
-      return NextResponse.json({ error: "Missing username" }, { status: 400 });
-    }
+    const { username } = await params; // Next 15: await params
+    if (!username) return json({ error: "Missing username" }, 400);
 
-    // 1) Base user (only fields the profile needs)
+    // 💡 Log incoming username so you can see it in server console
+    console.log("[users/:username] GET username =", username);
+
+    // Case-insensitive lookup to avoid 404s due to casing
     const userDoc = await User.findOne(
-      { username },
+      { username: new RegExp(`^${esc(username)}$`, "i") },
       {
         _id: 1,
         username: 1,
@@ -72,27 +77,31 @@ export async function GET(req, { params }) {
         avatar: 1,
         googleAvatar: 1,
         facebookAvatar: 1,
-        // include gender/city/state if you show them on the card:
         gender: 1,
+        bio: 1, // keep bio (blocks JSON) if you store it here
         city: 1,
         state: 1,
       }
     ).lean();
 
     if (!userDoc) {
+      console.warn("[users/:username] no user found for", username);
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    const uname = userDoc.username; // canonical casing from DB
     const uid = userDoc._id;
     const origin = new URL(req.url).origin;
+
+    // forward cookies to child routes
     const cookie = req.headers.get("cookie") ?? "";
     const commonInit = { cache: "no-store", headers: { cookie } };
 
-    // 2) Styles (forward cookies to child route)
+    // 2) Styles
     let userStyles = [];
     try {
       const sRes = await fetch(
-        `${origin}/api/users/${encodeURIComponent(username)}/styles`,
+        `${origin}/api/users/${encodeURIComponent(uname)}/styles`,
         commonInit
       );
       if (sRes.ok) {
@@ -101,15 +110,15 @@ export async function GET(req, { params }) {
       } else if (sRes.status !== 404) {
         await sRes.text().catch(() => "");
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      console.warn("[users/:username] styles fetch failed:", e);
     }
 
     // 3) Match reports (light)
     let matchReports = [];
     try {
       const mRes = await fetch(
-        `${origin}/api/users/${encodeURIComponent(username)}/match-reports`,
+        `${origin}/api/users/${encodeURIComponent(uname)}/match-reports`,
         commonInit
       );
       if (mRes.ok) {
@@ -118,11 +127,11 @@ export async function GET(req, { params }) {
       } else if (mRes.status !== 404) {
         await mRes.text().catch(() => "");
       }
-    } catch {
-      /* ignore */
+    } catch (e) {
+      console.warn("[users/:username] match reports fetch failed:", e);
     }
 
-    // 4) Teams — fetch memberships by userId, then filter out family rows in JS
+    // 4) Teams — filter out family-linked memberships
     let teams = [];
     try {
       const membershipsAll = await TeamMember.find(
@@ -130,7 +139,6 @@ export async function GET(req, { params }) {
         { _id: 1, role: 1, teamId: 1, team: 1, familyMemberId: 1 }
       ).lean();
 
-      // Exclude family rows (handles undefined/null/empty-string safely)
       const memberships = (membershipsAll || []).filter(
         (m) => !(m.familyMemberId && String(m.familyMemberId).trim())
       );
@@ -167,7 +175,6 @@ export async function GET(req, { params }) {
               teamName,
               teamSlug,
               logoURL,
-              // role: m.role, // add back if you want to display badges
             };
           })
           .filter(Boolean);
@@ -177,7 +184,6 @@ export async function GET(req, { params }) {
       teams = [];
     }
 
-    // 5) Respond
     return NextResponse.json({
       user: {
         ...userDoc,
@@ -192,9 +198,7 @@ export async function GET(req, { params }) {
   }
 }
 
-/* ---------------- PATCH ----------------
-   Update profile fields and notify followers based on settings.
--------------------------------------------------------------- */
+/* ---------------- PATCH (unchanged from your version) ---------------- */
 export async function PATCH(req, { params }) {
   try {
     await connectDB();
@@ -205,15 +209,16 @@ export async function PATCH(req, { params }) {
     const viewer = await getCurrentUser().catch(() => null);
     if (!viewer) return json({ error: "Unauthorized" }, 401);
 
-    // Only the owner (or admin) can edit
-    const target = await User.findOne({ username }).lean();
+    // Owner or admin can edit
+    const target = await User.findOne({
+      username: new RegExp(`^${esc(username)}$`, "i"),
+    }).lean();
     if (!target) return json({ error: "User not found" }, 404);
 
     const isOwner = String(viewer._id) === String(target._id);
     const isAdmin = !!viewer.isAdmin;
     if (!(isOwner || isAdmin)) return json({ error: "Forbidden" }, 403);
 
-    // Parse body
     let body = {};
     try {
       body = await req.json();
@@ -221,7 +226,6 @@ export async function PATCH(req, { params }) {
       return json({ error: "Invalid JSON body" }, 400);
     }
 
-    // Allowed keys (add or remove as fits your schema/UI)
     const allowed = [
       "firstName",
       "lastName",
@@ -245,7 +249,6 @@ export async function PATCH(req, { params }) {
       return json({ error: "No valid fields to update" }, 400);
     }
 
-    // Load doc for diff, then apply updates
     const doc = await User.findById(target._id);
     if (!doc) return json({ error: "User not found" }, 404);
 
@@ -276,18 +279,15 @@ export async function PATCH(req, { params }) {
       avatar: doc.avatar,
       googleAvatar: doc.googleAvatar,
       facebookAvatar: doc.facebookAvatar,
-      city: doc.city,
-      state: doc.state,
-      bio: doc.bio,
+      city: doc.city ?? "",
+      state: doc.state ?? "",
+      bio: doc.bio ?? "",
     };
 
-    // Compute changed keys
-    const changed = Object.keys(after).filter((k) => {
-      // shallow compare enough for primitives/strings we use here
-      return `${before[k] ?? ""}` !== `${after[k] ?? ""}`;
-    });
+    const changed = Object.keys(after).filter(
+      (k) => `${before[k] ?? ""}` !== `${after[k] ?? ""}`
+    );
 
-    // Partition avatar vs. profile fields
     const avatarKeys = new Set([
       "avatarType",
       "avatar",
@@ -295,12 +295,10 @@ export async function PATCH(req, { params }) {
       "facebookAvatar",
     ]);
     const avatarChanged = changed.some((k) => avatarKeys.has(k));
-
     const profileChangedKeys = changed.filter(
       (k) => !avatarKeys.has(k) && k !== "allowPublic"
     );
 
-    // Fire notifications to followers based on what changed
     try {
       if (avatarChanged) {
         await notifyFollowers(doc._id, "followed.avatar.changed", {
@@ -317,7 +315,6 @@ export async function PATCH(req, { params }) {
       console.warn("[notifyFollowers] profile/avatar update fanout failed:", e);
     }
 
-    // Respond with the same shape as GET (fresh minimal fields; styles/teams can be reloaded client-side if needed)
     return json({
       user: {
         _id: doc._id,

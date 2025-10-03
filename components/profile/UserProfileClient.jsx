@@ -1,3 +1,4 @@
+// components/profile/UserProfileClient.jsx
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -18,7 +19,16 @@ function cld(url, extra = "") {
   return url.replace("/upload/", `/upload/${parts.join(",")}/`);
 }
 
-// styles payload normalizers
+// Minimal sanitizer for display HTML (strip scripts & inline handlers)
+function sanitize(html = "") {
+  return String(html)
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/\son\w+="[^"]*"/gi, "")
+    .replace(/\son\w+='[^']*'/gi, "");
+}
+
+// ---- styles payload normalizers ----
 const looksLikeStyle = (x) =>
   x &&
   typeof x === "object" &&
@@ -57,7 +67,7 @@ const normalizeStyleName = (s) => {
 
 export default function UserProfileClient({ username }) {
   const [profileUser, setProfileUser] = useState();
-  const [currentUser, setCurrentUser] = useState(undefined);
+  const [currentUser, setCurrentUser] = useState(null); // ← start at null, not undefined
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState("");
 
@@ -69,7 +79,13 @@ export default function UserProfileClient({ username }) {
   const [isFollowing, setIsFollowing] = useState(false);
   const [openList, setOpenList] = useState(null); // 'followers' | 'following' | null
 
-  // Small helper to refetch counts/status for THIS profile
+  // Bio (display-only)
+  const [bioHtml, setBioHtml] = useState("");
+
+  // Family (display-only)
+  const [familyList, setFamilyList] = useState([]);
+
+  // helper to refetch counts/status for THIS profile
   const refreshCounts = useCallback(async () => {
     try {
       const res = await fetch(
@@ -85,44 +101,46 @@ export default function UserProfileClient({ username }) {
     }
   }, [username]);
 
-  // When follow state changes (from the button), optimistically bump THIS profile's followers,
-  // then sync from server (just like your FamilyProfileClient)
+  // follow button callback: optimistic + authoritative refresh
   const handleFollowChange = useCallback(
     async (nowFollowing) => {
-      // You followed/unfollowed *this* user → their Followers count changes
       setFollowCounts((c) => ({
         ...c,
         followers: Math.max(0, (c.followers || 0) + (nowFollowing ? 1 : -1)),
       }));
       setIsFollowing(!!nowFollowing);
-      await refreshCounts();
+      refreshCounts(); // fire-and-forget
     },
     [refreshCounts]
   );
 
   // Initial data load
   useEffect(() => {
-    async function fetchData() {
+    let cancelled = false;
+
+    (async () => {
       setApiError("");
+      setLoading(true);
+
       try {
         // Profile
         const res = await fetch(`/api/users/${encodeURIComponent(username)}`, {
           cache: "no-store",
         });
+
         if (res.status === 404) {
-          setProfileUser(null);
-          setLoading(false);
-          return;
-        }
-        if (!res.ok) {
+          if (!cancelled) setProfileUser(null); // don't return; still fetch viewer
+        } else if (!res.ok) {
           const bodyText = await res.text().catch(() => "");
           console.error(
             "GET /api/users/[username] failed:",
             res.status,
             bodyText
           );
-          setApiError("Sorry, we couldn’t load this profile right now.");
-          setProfileUser(undefined);
+          if (!cancelled) {
+            setApiError("Sorry, we couldn’t load this profile right now.");
+            setProfileUser(undefined);
+          }
         } else {
           const data = await res.json().catch(() => ({}));
           const baseUser = data?.user || undefined;
@@ -135,39 +153,103 @@ export default function UserProfileClient({ username }) {
             ? baseUser.matchReports
             : [];
 
-          setProfileUser({ ...baseUser, userStyles, matchReports });
+          if (!cancelled) {
+            setProfileUser({ ...baseUser, userStyles, matchReports });
+          }
         }
       } catch (err) {
         console.error("Error fetching profile:", err);
-        setApiError("Sorry, we couldn’t load this profile right now.");
-        setProfileUser(undefined);
+        if (!cancelled) {
+          setApiError("Sorry, we couldn’t load this profile right now.");
+          setProfileUser(undefined);
+        }
       }
 
-      // Viewer
+      // Viewer (never block)
       try {
         const viewerRes = await fetch("/api/auth/me", { cache: "no-store" });
-        if (viewerRes.ok) {
-          const viewerData = await viewerRes.json();
-          setCurrentUser(viewerData.user || null);
-        } else {
-          setCurrentUser(null);
-        }
+        const viewerData = viewerRes.ok ? await viewerRes.json() : null;
+        if (!cancelled) setCurrentUser(viewerData?.user || null);
       } catch {
-        setCurrentUser(null);
+        if (!cancelled) setCurrentUser(null);
       }
 
-      // Counts + status
-      await refreshCounts();
+      // Counts + status — fire and forget
+      refreshCounts();
 
-      setLoading(false);
-    }
+      // Bio — fire and forget
+      (async () => {
+        try {
+          const res = await fetch(
+            `/api/users/${encodeURIComponent(username)}/bio`,
+            { cache: "no-store" }
+          );
+          if (!res.ok) {
+            if (!cancelled) setBioHtml("");
+            return;
+          }
+          const data = await res.json().catch(() => ({}));
+          if (!cancelled) setBioHtml(sanitize(data?.bioHtml || ""));
+        } catch {
+          if (!cancelled) setBioHtml("");
+        }
+      })();
+    })()
+      .catch(() => {
+        // already handled
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false); // ALWAYS flip loading off
+      });
 
-    fetchData();
+    return () => {
+      cancelled = true;
+    };
   }, [username, refreshCounts]);
 
-  if (loading || currentUser === undefined) {
+  // Load family list (separate; not blocking)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/users/${encodeURIComponent(username)}/family`,
+          { cache: "no-store" }
+        );
+        if (!res.ok) {
+          if (!cancelled) setFamilyList([]);
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        const DEFAULT =
+          "https://res.cloudinary.com/matscout/image/upload/v1747956346/default_user_rval6s.jpg";
+        const rows = (data?.results || []).map((m) => {
+          let base = m.avatar || "";
+          if (m.avatarType === "google") base = m.googleAvatar || base;
+          if (m.avatarType === "facebook") base = m.facebookAvatar || base;
+          const raw = (base || "").trim() || DEFAULT;
+          const avatar = cld(raw, "w_64,h_64,c_fill,g_auto,dpr_auto") || raw;
+          const displayName =
+            [m.firstName, m.lastName].filter(Boolean).join(" ") ||
+            m.username ||
+            "Family Member";
+          return { username: m.username, displayName, avatar };
+        });
+        if (!cancelled) setFamilyList(rows);
+      } catch {
+        if (!cancelled) setFamilyList([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [username]);
+
+  // Spinner: only check loading now
+  if (loading) {
     return (
-      <div className="flex flex-col justify-center items-center h-[70vh] bg-background">
+      <div className="relative flex flex-col justify-center items-center h-[70vh] bg-background">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(74,84,109,0.12)_0%,_transparent_65%)]" />
         <Spinner size={64} />
         <p className="text-gray-400 dark:text-gray-300 mt-2 text-lg">
           Loading profile...
@@ -176,10 +258,10 @@ export default function UserProfileClient({ username }) {
     );
   }
 
-  // True 404
+  // 404 page
   if (profileUser === null) return notFound();
 
-  // Soft error (500 etc)
+  // Soft error (500, etc.)
   if (!profileUser) {
     return (
       <div className="max-w-2xl mx-auto text-center mt-20">
@@ -214,8 +296,10 @@ export default function UserProfileClient({ username }) {
         profileUser.matchReports?.filter(
           (r) => (r.matchType || "").trim().toLowerCase() === key
         ) || [];
+
       const wins = reports.filter((r) => r.result === "Won").length || 0;
       const losses = reports.filter((r) => r.result === "Lost").length || 0;
+
       styleResults[key] = { Wins: wins, Losses: losses };
     });
   }
@@ -240,112 +324,152 @@ export default function UserProfileClient({ username }) {
 
   return (
     <>
-      <section className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-4 gap-6">
-        {/* Left Sidebar */}
-        <div className="md:col-span-1 bg-white dark:bg-gray-900 rounded-xl shadow border border-border p-6 text-center space-y-4 self-start">
-          <Image
-            src={avatarUrl}
-            alt={profileUser.firstName || "User avatar"}
-            width={100}
-            height={100}
-            className="rounded-full mx-auto border border-border object-cover"
-            loading="lazy"
-            sizes="100px"
-          />
-          <h1 className="text-xl font-bold mt-4">
-            {profileUser.firstName} {profileUser.lastName}
-          </h1>
-          <p className="text-sm text-black dark:text-white">
-            @{profileUser.username}
-          </p>
+      {/* Top grid: avatar + styles */}
+      <section className="relative max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-4 gap-6">
+        {/* subtle page glow */}
+        <div className="pointer-events-none absolute -z-10 inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(74,84,109,0.12)_0%,_transparent_65%)]" />
 
-          {/* Social: Follow/Unfollow button for other people's profiles */}
-          {currentUser && currentUser.username !== profileUser.username && (
-            <div className="mt-2">
-              <FollowButton
-                username={profileUser.username}
-                initialIsFollowing={isFollowing}
-                // ⬇️ This is the only addition you need
-                onChange={handleFollowChange}
-              />
+        {/* Left Profile Card */}
+        <div className="relative rounded-2xl border border-border bg-white dark:bg-gray-900 shadow-md overflow-hidden text-center self-start transition-transform duration-200 hover:shadow-lg hover:-translate-y-[1px]">
+          {/* Gradient top border – match StyleCard */}
+          <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
+
+          <div className="p-6 space-y-4">
+            <Image
+              src={avatarUrl}
+              alt={profileUser.firstName || "User avatar"}
+              width={100}
+              height={100}
+              className="rounded-full mx-auto border border-border object-cover"
+              loading="lazy"
+              sizes="100px"
+            />
+            <h1 className="text-2xl font-bold mt-2">
+              {profileUser.firstName} {profileUser.lastName}
+            </h1>
+            <p className="text-sm text-gray-400">@{profileUser.username}</p>
+
+            {/* Follow/Unfollow for other users */}
+            {currentUser && currentUser.username !== profileUser.username && (
+              <div className="mt-2">
+                <FollowButton
+                  username={profileUser.username}
+                  initialIsFollowing={isFollowing}
+                  onChange={handleFollowChange}
+                />
+              </div>
+            )}
+
+            {/* Stat pills */}
+            <div className="mt-2 flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => setOpenList("following")}
+                className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-sm bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                title="View who they follow"
+              >
+                <span className="font-semibold">{followCounts.following}</span>{" "}
+                Following
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpenList("followers")}
+                className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-sm bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                title="View their followers"
+              >
+                <span className="font-semibold">{followCounts.followers}</span>{" "}
+                Followers
+              </button>
             </div>
-          )}
 
-          {/* Social: counts + open list */}
-          <div className="mt-4 flex items-center justify-center gap-6">
-            <button
-              type="button"
-              onClick={() => setOpenList("following")}
-              className="text-sm hover:underline"
-              title="View who they follow"
-            >
-              <span className="font-semibold">{followCounts.following}</span>{" "}
-              Following
-            </button>
-            <button
-              type="button"
-              onClick={() => setOpenList("followers")}
-              className="text-sm hover:underline"
-              title="View their followers"
-            >
-              <span className="font-semibold">{followCounts.followers}</span>{" "}
-              Followers
-            </button>
-          </div>
+            {/* Teams */}
+            {profileUser.teams?.length > 0 && (
+              <div className="text-left space-y-2 mt-4">
+                <h3 className="text-sm font-semibold text-black dark:text-white">
+                  Teams
+                </h3>
+                <ul className="space-y-2">
+                  {profileUser.teams.map((team) => {
+                    const rawLogo = team.logoURL || "/default-team.png";
+                    const logoUrl =
+                      cld(rawLogo, "w_64,h_64,c_fill,g_auto,dpr_auto") ||
+                      rawLogo;
 
-          {/* Teams */}
-          {profileUser.teams?.length > 0 && (
-            <div className="text-left space-y-2 mt-6">
-              <h3 className="text-sm font-semibold text-black dark:text-white">
-                Teams
-              </h3>
-              <ul className="space-y-1">
-                {profileUser.teams.map((team) => {
-                  const rawLogo = team.logoURL || "/default-team.png";
-                  const logoUrl =
-                    cld(rawLogo, "w_64,h_64,c_fill,g_auto,dpr_auto") || rawLogo;
+                    return (
+                      <li
+                        key={team._id}
+                        className="flex items-center gap-3"
+                      >
+                        <Image
+                          src={logoUrl}
+                          alt={team.teamName}
+                          width={28}
+                          height={28}
+                          className="rounded-full border border-border object-cover"
+                          loading="lazy"
+                          sizes="28px"
+                        />
+                        <Link
+                          href={`/teams/${team.teamSlug}`}
+                          className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          {team.teamName}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
 
-                  return (
+            {/* Family */}
+            {familyList.length > 0 && (
+              <div className="text-left space-y-2 mt-4">
+                <h3 className="text-sm font-semibold text-black dark:text-white">
+                  Family
+                </h3>
+                <ul className="space-y-2">
+                  {familyList.map((m) => (
                     <li
-                      key={team._id}
-                      className="flex items-center gap-2"
+                      key={m.username}
+                      className="flex items-center gap-3"
                     >
                       <Image
-                        src={logoUrl}
-                        alt={team.teamName}
-                        width={32}
-                        height={32}
+                        src={m.avatar}
+                        alt={m.displayName}
+                        width={28}
+                        height={28}
                         className="rounded-full border border-border object-cover"
                         loading="lazy"
-                        sizes="32px"
+                        sizes="28px"
                       />
                       <Link
-                        href={`/teams/${team.teamSlug}`}
+                        href={`/family/${encodeURIComponent(m.username)}`}
                         className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                       >
-                        {team.teamName}
+                        {m.displayName}
                       </Link>
                     </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
+                  ))}
+                </ul>
+              </div>
+            )}
 
-          {/* If it's my profile, quick link back to settings */}
-          {currentUser?.username === profileUser.username && (
-            <div className="mt-6 pt-4 border-t border-border">
-              <Link
-                href="/dashboard/settings"
-                className="inline-block text-sm text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                Go to Dashboard → Settings
-              </Link>
-            </div>
-          )}
+            {/* Settings link for own profile */}
+            {currentUser?.username === profileUser.username && (
+              <div className="mt-6 pt-4 border-t border-border">
+                <Link
+                  href="/dashboard/settings"
+                  className="inline-block text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Go to Dashboard → Settings
+                </Link>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Right Content */}
+        {/* Right Content: styles */}
         <div className="md:col-span-3 grid gap-6 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
           {profileUser.userStyles?.length > 0 ? (
             profileUser.userStyles.map((style) => (
@@ -366,6 +490,42 @@ export default function UserProfileClient({ username }) {
           )}
         </div>
       </section>
+
+      {/* Bio section (full width, only if there is content) */}
+      {bioHtml && (
+        <section className="max-w-7xl mx-auto px-4 pb-10">
+          <div className="rounded-2xl border border-border bg-white dark:bg-gray-900 shadow-md overflow-hidden transition-transform duration-200 hover:shadow-lg hover:-translate-y-[1px]">
+            {/* Gradient top border – match StyleCard */}
+            <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
+
+            <div className="p-6">
+              <div className="flex items-center gap-2 mb-3">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5 text-blue-600 dark:text-blue-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M7 8h10M7 12h8m-8 4h6M5 6h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2z"
+                  />
+                </svg>
+                <h2 className="text-lg font-semibold text-black dark:text-white">
+                  Bio
+                </h2>
+              </div>
+              <div
+                className="prose dark:prose-invert max-w-none text-[15px] leading-7 text-gray-800 dark:text-gray-200"
+                dangerouslySetInnerHTML={{ __html: sanitize(bioHtml) }}
+              />
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Follow lists */}
       <FollowListModal

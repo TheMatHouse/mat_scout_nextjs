@@ -24,15 +24,23 @@ const normStyle = (s) => {
   return { ...s, styleName };
 };
 
-export async function GET(_req, { params }) {
+const toDateOrNull = (v) => {
+  if (!v) return null;
+  try {
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  } catch {
+    return null;
+  }
+};
+
+export async function GET(req, { params }) {
   try {
     await connectDB();
-
-    // 🔧 IMPORTANT: await params
     const { username } = await params;
     if (!username) return json({ error: "Missing username" }, 400);
 
-    // 1) Strictly fetch FAMILY MEMBER by username
+    // 1) Fetch the family member
     const fam = await FamilyMember.findOne(
       { username },
       {
@@ -43,6 +51,12 @@ export async function GET(_req, { params }) {
         lastName: 1,
         allowPublic: 1,
         avatar: 1,
+        gender: 1,
+        // Include bio fields so the client can show them if present
+        bio: 1, // (Editor.js blocks JSON if you store it)
+        bioText: 1, // (plain text)
+        // Some installs also store bioHtml; if your schema has it, uncomment:
+        // bioHtml: 1,
         city: 1,
         state: 1,
         "address.city": 1,
@@ -53,23 +67,22 @@ export async function GET(_req, { params }) {
     ).lean();
 
     if (!fam) {
-      // No family member with this username → 404 (no fallback to users)
       return json({ error: "Family member not found" }, 404);
     }
 
-    // Optional: honor privacy
-    if (!fam.allowPublic) {
-      return json({ error: "Family profile is private" }, 403);
-    }
+    // ⚠️ IMPORTANT:
+    // Do NOT block with 403 here. Always return 200 and include allowPublic;
+    // let the client decide whether to show details or a privacy message
+    // to avoid dropping into a generic “Profile unavailable” state.
 
-    // 2) Resolve parent (for styles scoping and friendly info)
+    // 2) Parent (to scope styles)
     const parent = await User.findById(fam.userId, {
       _id: 1,
       username: 1,
     }).lean();
     const parentId = parent?._id;
 
-    // 3) Styles for THIS family member: userId = parentId AND familyMemberId = fam._id
+    // 3) Styles for THIS family member (scoped by parent userId + familyMemberId)
     let userStyles = [];
     if (parentId) {
       const raw = await UserStyle.find(
@@ -81,7 +94,6 @@ export async function GET(_req, { params }) {
           styleName: 1,
           name: 1,
           style: 1,
-          // fields your StyleCard may use:
           currentRank: 1,
           promotions: 1,
           rank: 1,
@@ -98,28 +110,30 @@ export async function GET(_req, { params }) {
       userStyles = (raw || []).map(normStyle);
     }
 
-    // 4) Match reports for THIS family member for W/L
+    // 4) Match reports for W/L tallies
     const matchReports =
       (await matchReport
         .find(
           {
             $or: [
               { athleteType: "family", athleteId: fam._id },
-              // tolerate older shapes:
-              { familyMemberId: fam._id },
+              { familyMemberId: fam._id }, // legacy shape
             ],
           },
           { _id: 1, matchType: 1, result: 1 }
         )
         .lean()) || [];
 
-    // 5) Return the exact shape your FamilyProfile client expects
+    // 5) Build response (normalize location)
+    const city = fam.city ?? fam.address?.city ?? "";
+    const state = fam.state ?? fam.address?.state ?? "";
+
     return json({
       family: {
         ...fam,
         parentUsername: parent?.username || "",
-        city: fam.city ?? fam.address?.city ?? "",
-        state: fam.state ?? fam.address?.state ?? "",
+        city,
+        state,
         userStyles,
         matchReports,
       },
