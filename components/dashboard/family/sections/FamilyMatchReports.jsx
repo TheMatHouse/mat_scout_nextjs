@@ -28,14 +28,35 @@ function joinDivision(name, gender) {
   return g ? `${name} - ${g}` : name;
 }
 
-function ensureWeightDisplay(label, unit) {
-  if (!label) return "—";
-  const low = String(label).toLowerCase();
-  const hasKg = low.includes("kg");
-  const hasLb = low.includes("lb");
-  if (hasKg || hasLb) return label; // already has unit
-  if (!unit) return label;
-  return `${label} ${unit}`;
+/** Normalize weight text from a row, avoiding duplicate units like "73kg kg". */
+function normalizeWeight(row) {
+  // 1) Prefer the saved label (usually includes the unit)
+  const label = (row?.weightLabel ?? "").trim();
+  if (label) {
+    // Clean accidental dupes like "kg kg" / "lb lb"
+    return label.replace(/\b(kg|lb)s?\s+\1\b/gi, "$1");
+  }
+
+  // 2) Category label/name if present
+  const catLabel =
+    (row?.weightCategoryLabel ?? "").trim() ||
+    (row?.weightCategory &&
+      typeof row.weightCategory === "object" &&
+      (row.weightCategory.label || row.weightCategory.name || ""));
+  if (typeof catLabel === "string" && catLabel.trim()) {
+    return catLabel.trim();
+  }
+
+  // 3) Last resort: build from number + unit
+  const val = String(row?.weight ?? "").trim();
+  const unit = String(row?.weightUnit ?? "").trim();
+  if (val) return `${val}${unit ? ` ${unit}` : ""}`;
+
+  // 4) Fallback: clean any precomputed display string if provided
+  const raw = String(row?.weightDisplay ?? "").trim();
+  if (raw) return raw.replace(/\b(kg|lb)s?\s+\1\b/gi, "$1");
+
+  return "—";
 }
 /* ----------------------------------------- */
 
@@ -236,10 +257,7 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
     return meta ? joinDivision(meta.name, meta.gender) : "—";
   };
 
-  const renderWeight = (row) => {
-    if (row?.weightDisplay) return row.weightDisplay;
-    return ensureWeightDisplay(row?.weightLabel, row?.weightUnit);
-  };
+  const renderWeight = (row) => normalizeWeight(row);
 
   /* ---------------------- TABLE COLUMNS (with sorting) ---------------------- */
   const columns = [

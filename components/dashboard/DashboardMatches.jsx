@@ -104,11 +104,21 @@ const DashboardMatches = ({ user }) => {
         ? m.division
         : "—";
 
-      // Snapshot only
-      const weightDisplay =
-        m?.weightLabel && m?.weightLabel.trim()
-          ? `${m.weightLabel}${m.weightUnit ? ` ${m.weightUnit}` : ""}`
-          : "—";
+      // --- Weight (snapshot only): prefer label which already includes unit ---
+      const weightDisplay = (() => {
+        const label = (m?.weightLabel ?? "").trim();
+        if (label) return label; // e.g., "73kg" or "73 kg"
+
+        // fallback: some older reports might have a category label
+        const category = (m?.weightCategoryLabel ?? "").trim();
+        if (category) return category;
+
+        // last resort: synthesize from numeric + unit if present
+        const val = (m?.weight ?? "").toString().trim();
+        const unit = (m?.weightUnit ?? "").toString().trim();
+        return val ? `${val}${unit ? ` ${unit}` : ""}` : "—";
+      })();
+      // ----------------------------------------------------------------------
 
       return { ...m, divisionDisplay, weightDisplay };
     });

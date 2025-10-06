@@ -98,7 +98,7 @@ export default function FamilyMatchReportsPage({ params }) {
 
   if (loading) {
     return (
-      <div className="p-6 text-white text-center">
+      <div className="p-6 text-center text-foreground">
         <p>Loading match reports...</p>
       </div>
     );
@@ -106,7 +106,7 @@ export default function FamilyMatchReportsPage({ params }) {
 
   if (error) {
     return (
-      <div className="p-6 text-red-400 text-center">
+      <div className="p-6 text-center text-destructive">
         <p>{error}</p>
       </div>
     );
@@ -114,7 +114,7 @@ export default function FamilyMatchReportsPage({ params }) {
 
   if (filteredReports.length === 0) {
     return (
-      <div className="p-6 text-white text-center">
+      <div className="p-6 text-center text-foreground">
         <BackToProfile
           username={username}
           className="mb-4"
@@ -126,20 +126,20 @@ export default function FamilyMatchReportsPage({ params }) {
 
   return (
     <>
-      <div className="p-4 md:p-6">
+      <div className="p-4 md:p-6 text-foreground">
         <BackToProfile
           username={username}
           className="mb-4"
         />
-        <h1 className="text-2xl font-bold mb-4 text-white">Match Reports</h1>
+        <h1 className="text-2xl font-bold mb-4">Match Reports</h1>
 
-        <div className="mb-4 flex flex-wrap gap-4 items-center text-white">
+        <div className="mb-4 flex flex-wrap gap-4 items-center">
           <div>
             <label className="mr-2 font-semibold">Filter by Style:</label>
             <select
               value={selectedStyle}
               onChange={(e) => setSelectedStyle(e.target.value)}
-              className="bg-background text-white border border-border rounded px-2 py-1"
+              className="bg-background text-foreground border border-border rounded px-2 py-1"
             >
               <option value="All">All</option>
               {[...new Set(reports.map((r) => r.matchType))]
@@ -160,7 +160,7 @@ export default function FamilyMatchReportsPage({ params }) {
             <select
               value={resultFilter}
               onChange={(e) => setResultFilter(e.target.value)}
-              className="bg-background text-white border border-border rounded px-2 py-1"
+              className="bg-background text-foreground border border-border rounded px-2 py-1"
             >
               <option value="All">All</option>
               <option value="Won">Won</option>
@@ -170,7 +170,7 @@ export default function FamilyMatchReportsPage({ params }) {
         </div>
 
         <div className="overflow-x-auto rounded-lg shadow-md border border-border bg-background">
-          <table className="min-w-full divide-y divide-border text-sm md:text-base text-left text-white">
+          <table className="min-w-full divide-y divide-border text-sm md:text-base text-left">
             <thead className="bg-muted text-muted-foreground uppercase tracking-wider">
               <tr>
                 {[
@@ -183,8 +183,16 @@ export default function FamilyMatchReportsPage({ params }) {
                   <th
                     key={key}
                     onClick={() => handleSort(key)}
-                    className="px-4 py-3 cursor-pointer hover:underline"
+                    className="px-4 py-3 cursor-pointer hover:underline select-none"
                     title={`Sort by ${label}`}
+                    scope="col"
+                    aria-sort={
+                      sortBy === key
+                        ? sortDirection === "asc"
+                          ? "ascending"
+                          : "descending"
+                        : "none"
+                    }
                   >
                     {label}
                     {sortBy === key
@@ -194,7 +202,12 @@ export default function FamilyMatchReportsPage({ params }) {
                       : " ↕"}
                   </th>
                 ))}
-                <th className="px-4 py-3 text-center">View</th>
+                <th
+                  className="px-4 py-3 text-center"
+                  scope="col"
+                >
+                  View
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -207,9 +220,13 @@ export default function FamilyMatchReportsPage({ params }) {
                   <td className="px-4 py-3">{report.opponentName}</td>
                   <td className="px-4 py-3 font-semibold">
                     {report.result === "Won" ? (
-                      <span className="text-green-400">Win</span>
+                      <span className="text-green-600 dark:text-green-400">
+                        Win
+                      </span>
                     ) : (
-                      <span className="text-red-400">Loss</span>
+                      <span className="text-red-600 dark:text-red-400">
+                        Loss
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-3">
@@ -224,7 +241,7 @@ export default function FamilyMatchReportsPage({ params }) {
                         setSelectedReport(report);
                         setOpen(true);
                       }}
-                      className="text-blue-400 hover:text-blue-300 transition-colors"
+                      className="underline text-primary hover:opacity-80"
                       title="Preview Report"
                     >
                       <Eye size={18} />

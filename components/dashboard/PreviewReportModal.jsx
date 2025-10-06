@@ -21,17 +21,32 @@ const divName = (report) =>
   (typeof report?.division === "string" ? report.division : "") ||
   "";
 
+// Prefer the saved label (already includes unit). Fall back sensibly.
 const weightDisplay = (report) => {
-  if (report?.weightLabel) {
-    return `${report.weightLabel}${
-      report.weightUnit ? ` ${report.weightUnit}` : ""
-    }`;
+  const label = (report?.weightLabel ?? "").trim();
+  if (label) return label; // e.g., "73kg" or "73 kg"
+
+  // some reports may store a category label/name
+  const catLabel =
+    (report?.weightCategoryLabel ?? "").trim() ||
+    (report?.weightCategory &&
+      typeof report.weightCategory === "object" &&
+      (report.weightCategory.label || report.weightCategory.name || ""));
+
+  if (typeof catLabel === "string" && catLabel.trim()) return catLabel.trim();
+
+  // legacy plain string
+  if (
+    typeof report?.weightCategory === "string" &&
+    report.weightCategory.trim()
+  ) {
+    return report.weightCategory.trim();
   }
-  // legacy: plain string
-  if (typeof report?.weightCategory === "string" && report.weightCategory) {
-    return report.weightCategory;
-  }
-  return "";
+
+  // last resort: synthesize from numeric + unit
+  const val = String(report?.weight ?? "").trim();
+  const unit = String(report?.weightUnit ?? "").trim();
+  return val ? `${val}${unit ? ` ${unit}` : ""}` : "";
 };
 
 // Legacy single-video accessors (match reports & older data)

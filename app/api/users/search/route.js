@@ -24,6 +24,11 @@ const excludeFamilyRows = (arr) =>
 const onlyFamilyRows = (arr) =>
   (Array.isArray(arr) ? arr : []).filter((s) => !!s.familyMemberId);
 
+// escape user-provided text for safe RegExp construction
+function escapeRegex(input) {
+  return String(input).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export async function GET(req) {
   try {
     await connectDB();
@@ -34,7 +39,13 @@ export async function GET(req) {
     const lastName = (searchParams.get("lastName") || "").trim();
     const city = (searchParams.get("city") || "").trim();
     const state = (searchParams.get("state") || "").trim();
-    const style = (searchParams.get("style") || "").trim(); // styleName
+
+    // Style filters:
+    // - style: exact match (backward compatible)
+    // - styleRegex: partial/word-start matches (case-insensitive)
+    const style = (searchParams.get("style") || "").trim();
+    const styleRegexParam = (searchParams.get("styleRegex") || "").trim();
+
     const sort = (searchParams.get("sort") || "recent").trim(); // 'recent' | 'alpha'
     const page = Math.max(parseInt(searchParams.get("page") || "1", 10), 1);
     const limit = Math.min(
@@ -43,7 +54,7 @@ export async function GET(req) {
     );
     const skip = (page - 1) * limit;
 
-    // ---------- Build base filters ----------
+    // ---------- Build base filters ---------- //
     // USERS (public)
     const userFilter = { allowPublic: true };
     if (q) {
@@ -69,8 +80,13 @@ export async function GET(req) {
       userFilter.$and ??= [];
       userFilter.$and.push({
         $or: [
-          { "address.state": { $regex: `^${state}$`, $options: "i" } },
-          { state: { $regex: `^${state}$`, $options: "i" } },
+          {
+            "address.state": {
+              $regex: `^${escapeRegex(state)}$`,
+              $options: "i",
+            },
+          },
+          { state: { $regex: `^${escapeRegex(state)}$`, $options: "i" } },
         ],
       });
     }
@@ -99,16 +115,58 @@ export async function GET(req) {
       famFilter.$and ??= [];
       famFilter.$and.push({
         $or: [
-          { "address.state": { $regex: `^${state}$`, $options: "i" } },
-          { state: { $regex: `^${state}$`, $options: "i" } },
+          {
+            "address.state": {
+              $regex: `^${escapeRegex(state)}$`,
+              $options: "i",
+            },
+          },
+          { state: { $regex: `^${escapeRegex(state)}$`, $options: "i" } },
         ],
       });
     }
 
-    // ---------- Style prefilter (applies to both) ----------
-    if (style) {
+    // ---------- Style prefilter (applies to both) ---------- //
+    let stylePrefilterApplied = false;
+
+    // Try partial/word-start first if provided
+    if (styleRegexParam) {
+      let rx = null;
+      try {
+        // guardrail: cap length to avoid pathological regex
+        if (styleRegexParam.length <= 80) {
+          rx = new RegExp(styleRegexParam, "i");
+        }
+      } catch (_) {
+        rx = null;
+      }
+
+      if (rx) {
+        const raw = await UserStyle.find(
+          { styleName: { $regex: rx } },
+          { userId: 1, familyMemberId: 1, styleName: 1 }
+        ).lean();
+
+        const userRows = excludeFamilyRows(raw);
+        const famRows = onlyFamilyRows(raw);
+
+        const userIdSet = new Set(userRows.map((r) => String(r.userId)));
+        const famIdSet = new Set(famRows.map((r) => String(r.familyMemberId)));
+
+        if (userIdSet.size === 0 && famIdSet.size === 0) {
+          return json({ page, limit, total: 0, count: 0, users: [] });
+        }
+
+        userFilter._id = { $in: Array.from(userIdSet) };
+        famFilter._id = { $in: Array.from(famIdSet) };
+        stylePrefilterApplied = true;
+      }
+    }
+
+    // Fallback to exact style name (backward compatible)
+    if (!stylePrefilterApplied && style) {
       const raw = await UserStyle.find(
-        { styleName: { $regex: `^${style}$`, $options: "i" } },
+        { styleName: { $regex: `^${escapeRegex(style)}$`, $options: "i" } },
         { userId: 1, familyMemberId: 1, styleName: 1 }
       ).lean();
 
@@ -126,7 +184,7 @@ export async function GET(req) {
       famFilter._id = { $in: Array.from(famIdSet) };
     }
 
-    // ---------- Fetch both sets (unpaginated) ----------
+    // ---------- Fetch both sets (unpaginated) ---------- //
     const [usersRaw, familiesRaw] = await Promise.all([
       User.find(userFilter, {
         _id: 1,
@@ -197,7 +255,7 @@ export async function GET(req) {
           _id: String(f._id),
           username: famUsername, // child's handle
           parentUserId: String(f.userId || ""),
-          parentUsername, // for optional display
+          parentUsername,
           firstName: f.firstName || "",
           lastName: f.lastName || "",
           city: (f.city ?? f.address?.city) || "",

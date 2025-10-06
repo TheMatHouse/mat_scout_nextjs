@@ -44,7 +44,7 @@ function UserCard({ entity }) {
     entity.profileUrl ||
     (entity.type === "user"
       ? `/${entity.username}`
-      : `/family/${entity.username}`); // now username is the family member handle
+      : `/family/${entity.username}`);
 
   return (
     <div className="rounded-xl border border-border bg-white dark:bg-gray-900 shadow hover:shadow-lg transition overflow-hidden">
@@ -105,6 +105,10 @@ function UserCard({ entity }) {
   );
 }
 
+function escapeRegex(input) {
+  return String(input).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export default function UsersDirectory() {
   const [q, setQ] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -127,7 +131,14 @@ export default function UsersDirectory() {
     if (lastName) p.set("lastName", lastName);
     if (city) p.set("city", city);
     if (state) p.set("state", state);
-    if (style) p.set("style", style);
+    if (style) {
+      // Keep existing exact param for backward compatibility…
+      p.set("style", style);
+      // …and add a regex param so the API can do prefix/word-start matches.
+      // Example: style="j" -> styleRegex="(?:^|\\s)j"
+      const s = escapeRegex(style.trim());
+      if (s) p.set("styleRegex", `(?:^|\\s)${s}`);
+    }
     if (sort && sort !== "recent") p.set("sort", sort);
     if (page > 1) p.set("page", String(page));
     p.set("limit", String(limit));
