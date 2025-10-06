@@ -5,19 +5,41 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
-// Ensure models are registered for populate elsewhere
-import "@/models/userStyleModel";
+import UserStyle from "@/models/userStyleModel";
 import "@/models/matchReportModel";
 
 import UserProfileClient from "@/components/profile/UserProfileClient";
 
-/** Escape helper for safe regex building */
 function escapeRegex(s = "") {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function plainifyStyles(docs = []) {
+  return (docs || []).map((s) => ({
+    id: String(s._id),
+    styleName: s.styleName ?? "",
+    currentRank: s.currentRank ?? "",
+    startDate: s.startDate ? new Date(s.startDate).toISOString() : null,
+    grip: s.grip ?? "",
+    favoriteTechnique: s.favoriteTechnique ?? "",
+    promotions: Array.isArray(s.promotions)
+      ? s.promotions.map((p) => ({
+          rank: p?.rank ?? "",
+          promotedOn: p?.promotedOn
+            ? new Date(p.promotedOn).toISOString()
+            : null,
+          awardedBy: p?.awardedBy ?? "",
+          note: p?.note ?? "",
+          proofUrl: p?.proofUrl ?? "",
+        }))
+      : [],
+    createdAt: s.createdAt ? new Date(s.createdAt).toISOString() : null,
+    updatedAt: s.updatedAt ? new Date(s.updatedAt).toISOString() : null,
+  }));
+}
+
 export async function generateMetadata({ params }) {
-  const { username } = await params; // ← await params (Next 15+)
+  const { username } = params;
   await connectDB();
 
   const member = await User.findOne({
@@ -42,20 +64,19 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function UserProfilePage({ params }) {
-  const { username } = await params; // ← await params (Next 15+)
+  const { username } = params;
   await connectDB();
 
-  // Case-insensitive lookup so /Judo2000 works too
-  const user = await User.findOne({
-    username: { $regex: `^${escapeRegex(username)}$`, $options: "i" },
-  }).lean();
+  const user = await User.findOne(
+    { username: { $regex: `^${escapeRegex(username)}$`, $options: "i" } },
+    { _id: 1, username: 1, firstName: 1, lastName: 1, allowPublic: 1 }
+  ).lean();
 
   if (!user) {
     notFound();
   }
 
-  // Determine if the viewer is the owner (cookies() is async now)
-  const cookieStore = await cookies(); // ← await cookies()
+  const cookieStore = await cookies();
   const token = cookieStore.get("token")?.value;
 
   let isMyProfile = false;
@@ -67,9 +88,7 @@ export default async function UserProfilePage({ params }) {
       if (payload?.userId === String(user._id)) {
         isMyProfile = true;
       }
-    } catch {
-      /* ignore bad/expired token */
-    }
+    } catch {}
   }
 
   const isPublic =
@@ -85,11 +104,30 @@ export default async function UserProfilePage({ params }) {
     );
   }
 
-  // Pass isMyProfile so the client can show the “Back to Settings” button
+  const stylesRaw = await UserStyle.find(
+    { userId: user._id, familyMemberId: null },
+    {
+      styleName: 1,
+      currentRank: 1,
+      promotions: 1,
+      startDate: 1,
+      grip: 1,
+      favoriteTechnique: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+  )
+    .sort({ createdAt: 1 })
+    .lean();
+
+  const styles = plainifyStyles(stylesRaw);
+
   return (
     <UserProfileClient
       username={user.username}
       isMyProfile={isMyProfile}
+      userId={String(user._id)}
+      initialStyles={styles}
     />
   );
 }
