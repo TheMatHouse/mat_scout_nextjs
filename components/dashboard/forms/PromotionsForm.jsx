@@ -96,12 +96,7 @@ function friendlyRankLabel(rank, styleKey) {
 }
 
 /* ---------------- child components ---------------- */
-const AddPromotionInline = ({
-  userStyleId,
-  onAdded,
-  onClose,
-  rankOptions, // [{ value: label, label }]
-}) => {
+const AddPromotionInline = ({ userStyleId, onAdded, onClose, rankOptions }) => {
   const [form, setForm] = useState({
     rank: "",
     promotedOn: "",
@@ -131,7 +126,7 @@ const AddPromotionInline = ({
       const res = await fetch(`/api/userStyles/${userStyleId}/promotions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form), // store human-readable label
+        body: JSON.stringify(form),
       });
       const json = await readJsonSafe(res);
       if (!res.ok || !json?.style) {
@@ -146,6 +141,7 @@ const AddPromotionInline = ({
         note: "",
         proofUrl: "",
       });
+      // keep modal open to allow multiple adds
     } catch (err) {
       toast.error(err.message || "Error adding promotion");
     } finally {
@@ -169,7 +165,7 @@ const AddPromotionInline = ({
               onChange={(e) =>
                 setForm((s) => ({
                   ...s,
-                  rank: e.target.value, // label == value
+                  rank: e.target.value,
                 }))
               }
               required
@@ -316,7 +312,6 @@ const PromotionsList = ({ userStyleId, promotions = [], onDeleted }) => {
     }
   };
 
-  // Sort oldest → newest
   const sortedPromotions = [...promotions].sort((a, b) => {
     const da = a.promotedOn ? new Date(a.promotedOn).getTime() : 0;
     const db = b.promotedOn ? new Date(b.promotedOn).getTime() : 0;
@@ -367,19 +362,11 @@ const PromotionsList = ({ userStyleId, promotions = [], onDeleted }) => {
   );
 };
 
-/**
- * PromotionsForm
- * Props:
- * - userStyleId: string (required)
- * - onUpdated: (updatedStyle) => void
- * - onClose: () => void
- */
 export default function PromotionsForm({ userStyleId, onUpdated, onClose }) {
   const [loading, setLoading] = useState(false);
   const [styleDoc, setStyleDoc] = useState(null);
-  const [allRanks, setAllRanks] = useState([]); // fetched from /api/ranks
+  const [allRanks, setAllRanks] = useState([]);
 
-  // Load the userStyle doc
   useEffect(() => {
     let alive = true;
     async function load() {
@@ -407,7 +394,6 @@ export default function PromotionsForm({ userStyleId, onUpdated, onClose }) {
     };
   }, [userStyleId]);
 
-  // Fetch standardized ranks once
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -424,14 +410,12 @@ export default function PromotionsForm({ userStyleId, onUpdated, onClose }) {
     };
   }, []);
 
-  // 🔒 Always call hooks before any conditional return
   const styleKey = styleKeyFromStyleName(styleDoc?.styleName);
   const rankOptions = useMemo(() => {
     if (!styleKey) return [];
     const filtered = (allRanks || []).filter(
       (r) => String(r.style || "").toLowerCase() === styleKey
     );
-    // Use label as both label+value so the select stays controlled by the same string we save
     return filtered
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       .map((r) => {
@@ -445,7 +429,6 @@ export default function PromotionsForm({ userStyleId, onUpdated, onClose }) {
     onUpdated?.(updated);
   };
 
-  // ✅ Now it’s safe to conditionally return (hook order already fixed)
   if (!userStyleId) {
     return (
       <div className="text-sm text-muted-foreground">

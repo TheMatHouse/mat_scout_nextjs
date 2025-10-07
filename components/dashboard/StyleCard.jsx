@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import moment from "moment";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";
@@ -224,6 +224,11 @@ const StyleCard = ({
   const [showHistory, setShowHistory] = useState(false);
   const { refreshUser } = useUser();
 
+  // 🔄 keep local state in sync if parent updates the style (e.g., after promotions change)
+  useEffect(() => {
+    setStyle(initialStyle);
+  }, [initialStyle]);
+
   const resolved = useMemo(
     () =>
       resolveTotals({
@@ -235,8 +240,7 @@ const StyleCard = ({
     [style, member, styleResultsMap, styleResults]
   );
 
-  const { wins, losses, draws, _debugKey, _matchedReports, _availableMapKeys } =
-    resolved;
+  const { wins, losses, draws, _debugKey } = resolved;
 
   // Promotions (derive current from most recent if not explicitly set)
   const noPromotions = isNoPromotionStyle(style?.styleName);
@@ -258,17 +262,6 @@ const StyleCard = ({
       : !noPromotions && mostRecent?.rank
       ? mostRecent.rank
       : currentRankExplicit || "—";
-
-  // Promotion date mirrors current derived rank when we derived it
-  const explicitPromoDate =
-    style?.lastPromotedOn ?? style?.promotionDate ?? null;
-  const latestPromotionISO =
-    !noPromotions && mostRecent?.promotedOn
-      ? mostRecent.promotedOn
-      : explicitPromoDate || null;
-  const latestPromotionText = latestPromotionISO
-    ? moment.utc(latestPromotionISO).format("MMMM D, YYYY")
-    : "—";
 
   // Sorted history (oldest → newest)
   const promotionsSorted = useMemo(
@@ -394,13 +387,6 @@ const StyleCard = ({
             <div>
               <span className="font-semibold text-slate-300">Rank:</span>{" "}
               {currentRank || "—"}
-            </div>
-
-            <div>
-              <span className="font-semibold text-slate-300">
-                Promotion Date:
-              </span>{" "}
-              {latestPromotionText}
             </div>
 
             {promotionsSorted.length > 0 && (

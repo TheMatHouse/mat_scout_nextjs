@@ -38,8 +38,6 @@ function SkeletonGrid({ count = 4 }) {
 }
 
 /* -------------- shape + ownership normalization -------------- */
-
-// Determine if an object looks like a style
 const looksLikeStyle = (x) =>
   x &&
   typeof x === "object" &&
@@ -47,7 +45,6 @@ const looksLikeStyle = (x) =>
     typeof x.name === "string" ||
     (x.style && typeof x.style.name === "string"));
 
-// Extract array of styles from common API shapes (but do NOT grab random arrays)
 function extractStylesShape(payload) {
   if (Array.isArray(payload) && payload.every(looksLikeStyle)) return payload;
   if (
@@ -81,7 +78,6 @@ function extractStylesShape(payload) {
   return [];
 }
 
-// Normalize a style's display name into style.styleName (non-destructive)
 function normalizeStyleName(style) {
   if (!style) return style;
   const name =
@@ -89,12 +85,9 @@ function normalizeStyleName(style) {
   return { ...style, styleName: name };
 }
 
-// Get the "owner" id from various shapes: userId | user | owner (id or populated)
 function getOwnerId(style) {
   const v = style?.userId ?? style?.user ?? style?.owner ?? null;
-
   if (!v) return "";
-
   if (typeof v === "string") return v;
   if (typeof v === "object") {
     if (typeof v._id === "string") return v._id;
@@ -107,20 +100,16 @@ function getOwnerId(style) {
   }
 }
 
-// Enforce that styles are owned by the primary user (exclude family proxy items)
 function onlyPrimaryUserStyles(arr, userId) {
   const uid = String(userId);
   return (Array.isArray(arr) ? arr : []).filter((s) => {
     const owner = getOwnerId(s);
     const isMine = owner && String(owner) === uid;
-
-    // Keep your original intent: allow no family member link or empty family id
     const fam = s?.familyMemberId;
     const noFamily =
       fam == null ||
       String(fam) === "" ||
       (typeof fam === "object" && !fam._id);
-
     return isMine && noFamily;
   });
 }
@@ -133,25 +122,22 @@ function DashboardStyles() {
   const [myStyles, setMyStyles] = useState([]);
   const [matchReports, setMatchReports] = useState([]);
 
-  // Add Style modal
   const [open, setOpen] = useState(false);
 
-  // Promotions modal + selection
   const [promoOpen, setPromoOpen] = useState(false);
   const [selectedStyleId, setSelectedStyleId] = useState("");
 
   const [loadingStyles, setLoadingStyles] = useState(true);
   const [loadingMatches, setLoadingMatches] = useState(true);
 
-  /* ---------------------- loaders ---------------------- */
+  // version flag to force card re-render after updates
+  const [stylesVersion, setStylesVersion] = useState(0);
 
-  // Canonical endpoint first; 2 strict fallbacks only if needed.
   const loadStyles = async (userId) => {
     setLoadingStyles(true);
     try {
-      // ordered candidates; all will be strictly normalized + filtered
       const candidates = [
-        `/api/dashboard/${userId}/userStyles`, // canonical
+        `/api/dashboard/${userId}/userStyles`,
         `/api/userStyles?userId=${encodeURIComponent(userId)}`,
         `/api/styles?userId=${encodeURIComponent(userId)}`,
       ];
@@ -161,7 +147,6 @@ function DashboardStyles() {
         try {
           const res = await fetch(url, { cache: "no-store" });
           if (!res.ok) {
-            // 404 or other: try next one
             const body = await res.text().catch(() => "");
             console.warn(`[styles] ${res.status} ${url}`, body);
             continue;
@@ -169,22 +154,17 @@ function DashboardStyles() {
           const payload = await res.json().catch(() => null);
           const extracted = extractStylesShape(payload).map(normalizeStyleName);
           const mine = onlyPrimaryUserStyles(extracted, userId);
-
-          // stop at first endpoint that returns *anything* owned by me
           if (mine.length > 0) {
             styles = mine;
             break;
           }
-          // if it returned an empty list, keep looking at the other endpoints
         } catch (e) {
           console.warn("[styles] network error:", e);
-          // try next
         }
       }
 
       setMyStyles(styles);
       if (styles.length === 0) {
-        // Soft info to help debug in console; no user-facing toast unless you want one
         console.info(
           "[styles] No owned styles found after normalization/filters."
         );
@@ -198,14 +178,12 @@ function DashboardStyles() {
     }
   };
 
-  // Match reports: use your dashboard route; never throw — log & fallback
   const loadMatches = async (userId) => {
     setLoadingMatches(true);
     try {
       const res = await fetch(`/api/dashboard/${userId}/matchReports`, {
         cache: "no-store",
       });
-
       if (res.status === 404) {
         console.warn(
           `[match-reports] 404 at /api/dashboard/${userId}/matchReports`
@@ -240,12 +218,14 @@ function DashboardStyles() {
   const handleStylesRefresh = async () => {
     if (!user?._id) return;
     await loadStyles(user._id);
+    setStylesVersion((v) => v + 1);
   };
 
   const handleDeleteStyle = (deletedStyleId) => {
     setMyStyles((prev) =>
       prev.filter((s) => String(s._id) !== String(deletedStyleId))
     );
+    setStylesVersion((v) => v + 1);
   };
 
   const styleSupportsPromotions = (s) => norm(s?.styleName) !== "wrestling";
@@ -263,7 +243,7 @@ function DashboardStyles() {
 
   const openPromotionModal = () => {
     setPromoOpen(true);
-    setSelectedStyleId(""); // force choose
+    setSelectedStyleId("");
   };
 
   const onPromotionUpdated = async (updatedStyle) => {
@@ -275,12 +255,13 @@ function DashboardStyles() {
             : s
         )
       );
-    } else {
-      await handleStylesRefresh();
     }
+    if (user?._id) {
+      await loadStyles(user._id); // authoritative refresh
+    }
+    setStylesVersion((v) => v + 1); // force card re-render
   };
 
-  // Build W/L map keyed by normalized styleName, and ensure every style has a bucket
   const styleResultsMap = useMemo(() => {
     const map = {};
     for (const r of matchReports) {
@@ -313,7 +294,6 @@ function DashboardStyles() {
 
   return (
     <div className="px-4 md:px-6 lg:px-8">
-      {/* Header */}
       <div className="flex flex-col items-start gap-3 mb-4">
         <h1 className="text-2xl font-bold">My Styles/Sports</h1>
         <div className="flex items-center gap-2">
@@ -334,7 +314,6 @@ function DashboardStyles() {
         </div>
       </div>
 
-      {/* Helper message */}
       <div className="mb-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white/5 dark:bg-black/20 p-4">
         <p className="text-sm">
           Use <span className="font-medium">Add Style</span> to create a
@@ -346,7 +325,6 @@ function DashboardStyles() {
         </p>
       </div>
 
-      {/* Add Style Modal */}
       <ModalLayout
         isOpen={open}
         onClose={() => setOpen(false)}
@@ -362,7 +340,6 @@ function DashboardStyles() {
         />
       </ModalLayout>
 
-      {/* Promotions Modal */}
       <ModalLayout
         isOpen={promoOpen}
         onClose={() => setPromoOpen(false)}
@@ -422,7 +399,6 @@ function DashboardStyles() {
 
       <hr className="border-gray-200 dark:border-gray-700 my-4" />
 
-      {/* Loading / Empty / Cards */}
       {isLoading ? (
         <SkeletonGrid />
       ) : myStyles.length === 0 ? (
@@ -435,17 +411,12 @@ function DashboardStyles() {
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-2">
           {myStyles.map((style) => (
             <StyleCard
-              key={style._id}
+              key={`${style._id}-${stylesVersion}`}
               style={style}
               user={user}
               userType="user"
               styleResultsMap={styleResultsMap}
-              onDelete={(deletedId) => {
-                // keep UI in sync on delete
-                setMyStyles((prev) =>
-                  prev.filter((s) => String(s._id) !== String(deletedId))
-                );
-              }}
+              onDelete={(deletedId) => handleDeleteStyle(deletedId)}
             />
           ))}
         </div>
