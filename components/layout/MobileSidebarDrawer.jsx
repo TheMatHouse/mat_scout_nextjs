@@ -97,6 +97,7 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
                   <div className="pl-4 mt-2 space-y-2 text-sm text-ms-blue-gray">
                     {[
                       { href: "/dashboard/settings", label: "Settings" },
+                      { href: "/dashboard/settings/bio", label: "Bio" },
                       { href: "/dashboard/styles", label: "Styles/Sports" },
                       { href: "/dashboard/matches", label: "Match Reports" },
                       {
