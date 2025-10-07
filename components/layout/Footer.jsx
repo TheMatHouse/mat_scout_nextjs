@@ -41,7 +41,7 @@ export default function Footer() {
 
         {/* Socials */}
         <div className="flex gap-4 text-lg">
-          <Link
+          {/* <Link
             href="#"
             className="hover:text-white opacity-80"
           >
@@ -58,7 +58,7 @@ export default function Footer() {
             className="hover:text-white opacity-80"
           >
             <FaInstagram />
-          </Link>
+          </Link> */}
         </div>
       </div>
     </footer>
