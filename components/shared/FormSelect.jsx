@@ -6,7 +6,7 @@ export default function FormSelect({
   name,
   value,
   onChange,
-  options = [], // [{ value, label }]
+  options = [], // [{ key?, value, label, disabled? }]
   placeholder = "Select…",
   disabled = false,
   required = false,
@@ -34,12 +34,15 @@ export default function FormSelect({
         required={required}
         className="w-full rounded-md border px-3 py-2 text-sm bg-[var(--color-card)] text-[var(--color-text)] shadow-sm transition focus:outline-none focus:ring-1 focus:border-[var(--color-border)] focus:ring-[var(--color-border)] disabled:opacity-60"
       >
+        {/* Placeholder */}
         <option value="">{placeholder}</option>
 
-        {options.map((opt) => (
+        {/* Options */}
+        {options.map((opt, i) => (
           <option
-            key={String(opt.value)}
+            key={String(opt.key ?? `${opt.value}-${i}`)} // 👈 unique React key
             value={opt.value}
+            disabled={!!opt.disabled}
           >
             {opt.label}
           </option>

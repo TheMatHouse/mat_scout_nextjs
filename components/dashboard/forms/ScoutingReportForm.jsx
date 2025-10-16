@@ -9,11 +9,12 @@ import { useUser } from "@/context/UserContext";
 import { scoutingReportCreated } from "@/lib/analytics/adminEvents";
 
 import { Button } from "@/components/ui/button";
-import Countries from "@/assets/countries.json";
 import Editor from "../../shared/Editor";
 import TechniqueTagInput from "../../shared/TechniqueTagInput";
 import FormField from "@/components/shared/FormField";
 import FormSelect from "@/components/shared/FormSelect";
+// ✅ Unified country picker (pinned + divider + theming)
+import CountrySelect from "@/components/shared/CountrySelect";
 
 /* ----------------- helpers ----------------- */
 function extractArray(payload) {
@@ -672,15 +673,11 @@ const ScoutingReportForm = ({
             onChange={(e) => setAthleteClub(e.target.value)}
           />
 
-          <FormSelect
+          {/* ✅ Unified country select */}
+          <CountrySelect
             label="Country"
             value={athleteCountry}
             onChange={setAthleteCountry}
-            placeholder="Select country..."
-            options={(Countries || []).map((c) => ({
-              value: c.code3 ?? c.cca3 ?? c.code ?? c.name,
-              label: c.name,
-            }))}
           />
 
           {/* Grip */}

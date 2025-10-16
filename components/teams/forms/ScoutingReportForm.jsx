@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 
 import { Button } from "@/components/ui/button";
-import CountriesRaw from "@/assets/countries.json";
 import Editor from "@/components/shared/Editor";
 import TechniqueTagInput from "@/components/shared/TechniqueTagInput";
 import Spinner from "@/components/shared/Spinner";
@@ -15,6 +14,9 @@ import Spinner from "@/components/shared/Spinner";
 import FormField from "@/components/shared/FormField";
 import FormSelect from "@/components/shared/FormSelect";
 import FormMultiSelect from "@/components/shared/FormMultiSelect";
+
+// ✅ Unified country picker (pinned + divider + theming)
+import CountrySelect from "@/components/shared/CountrySelect";
 
 const sortByLabel = (arr) =>
   [...arr].sort((a, b) =>
@@ -250,16 +252,6 @@ export default function TeamScoutingReportForm({
     [loadedTechniques]
   );
 
-  // Countries sorted
-  const countryOptions = useMemo(() => {
-    const options = CountriesRaw.map((c) => ({
-      value: c.code3,
-      label: c.name,
-      name: c.name,
-    }));
-    return sortByLabel(options);
-  }, []);
-
   const onAthleteAdd = useCallback(
     (tag) => setAthleteSelected((prev) => [...prev, tag]),
     []
@@ -472,12 +464,11 @@ export default function TeamScoutingReportForm({
         onChange={(e) => setAthleteClub(e.target.value)}
       />
 
-      <FormSelect
+      {/* ✅ Unified Country select (pinned + divider, themed correctly) */}
+      <CountrySelect
         label="Country"
         value={athleteCountry}
         onChange={setAthleteCountry}
-        placeholder="Select country..."
-        options={countryOptions}
       />
 
       {/* Grip */}
@@ -552,15 +543,16 @@ export default function TeamScoutingReportForm({
               value={vid.url}
               onChange={(e) => handleVideoChange(index, "url", e.target.value)}
             />
-            {extractYouTubeID(vid.url) && (
-              <iframe
-                className="mt-3 w-full h-52"
-                src={`https://www.youtube.com/embed/${extractYouTubeID(
-                  vid.url
-                )}`}
-                allowFullScreen
-              />
-            )}
+            {(() => {
+              const id = extractYouTubeID(vid.url);
+              return id ? (
+                <iframe
+                  className="mt-3 w-full h-52"
+                  src={`https://www.youtube.com/embed/${id}`}
+                  allowFullScreen
+                />
+              ) : null;
+            })()}
             <Button
               type="button"
               variant="destructive"
@@ -597,15 +589,16 @@ export default function TeamScoutingReportForm({
                 handleNewVideoChange(index, "url", e.target.value)
               }
             />
-            {extractYouTubeID(vid.url) && (
-              <iframe
-                className="mt-3 w-full h-52"
-                src={`https://www.youtube.com/embed/${extractYouTubeID(
-                  vid.url
-                )}`}
-                allowFullScreen
-              />
-            )}
+            {(() => {
+              const id = extractYouTubeID(vid.url);
+              return id ? (
+                <iframe
+                  className="mt-3 w-full h-52"
+                  src={`https://www.youtube.com/embed/${id}`}
+                  allowFullScreen
+                />
+              ) : null;
+            })()}
             <Button
               type="button"
               variant="destructive"

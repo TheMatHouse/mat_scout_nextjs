@@ -11,20 +11,15 @@ import "react-phone-number-input/style.css";
 import Editor from "@/components/shared/Editor"; // ✅ WYSIWYG back in
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
 import FormField from "@/components/shared/FormField";
-import Countries from "@/assets/countries.json";
 import PhoneInput from "react-phone-number-input";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { Settings } from "lucide-react";
 import DeleteTeamSection from "@/components/teams/DeleteTeamSection";
 import Spinner from "@/components/shared/Spinner";
+
+// ✅ New shared country select (native <select> + pinned countries)
+import CountrySelect from "@/components/shared/CountrySelect";
 
 const PhoneInputField = forwardRef((props, ref) => (
   <input
@@ -61,7 +56,7 @@ export default function TeamSettingsPage() {
       city: t.city || "",
       state: t.state || "",
       postalCode: t.postalCode || "",
-      country: t.country || "US",
+      country: t.country || "US", // we store ISO-3 codes in CountrySelect; default to US
     };
   };
 
@@ -340,31 +335,13 @@ export default function TeamSettingsPage() {
                 onChange={handleChange}
                 className="input"
               />
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Country
-                </label>
-                <Select
-                  value={form.country}
-                  onValueChange={(v) =>
-                    setForm((prev) => ({ ...prev, country: v }))
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select a country" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Countries.map((c) => (
-                      <SelectItem
-                        key={c.code3}
-                        value={c.code3}
-                      >
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+
+              {/* ✅ Unified Country select */}
+              <CountrySelect
+                label="Country"
+                value={form.country}
+                onChange={(v) => setForm((prev) => ({ ...prev, country: v }))}
+              />
             </div>
           </CardContent>
         </Card>

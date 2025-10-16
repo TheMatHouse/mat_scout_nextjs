@@ -10,11 +10,12 @@ import { matchReportCreated } from "@/lib/analytics/adminEvents";
 
 // UI bits used inside the form (rendered later)
 import { Button } from "@/components/ui/button";
-import Countries from "@/assets/countries.json";
 import Editor from "../../shared/Editor";
 import TechniqueTagInput from "../../shared/TechniqueTagInput";
 import FormField from "@/components/shared/FormField";
 import FormSelect from "@/components/shared/FormSelect";
+// import { buildCountryOptions } from "@/lib/buildCountryOptions";
+import CountrySelect from "@/components/shared/CountrySelect";
 
 /* ----------------- helpers ----------------- */
 const toIdString = (v) =>
@@ -204,6 +205,7 @@ const MatchReportForm = ({
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [styles, athlete, userType]);
 
   // prefer prop, else fetch
@@ -955,16 +957,10 @@ const MatchReportForm = ({
             </>
           )}
 
-          <FormSelect
+          <CountrySelect
             label="Opponent's Country"
-            placeholder="Select country..."
             value={opponentCountry}
             onChange={setOpponentCountry}
-            options={(Countries || []).map((country) => ({
-              value:
-                country.code3 ?? country.cca3 ?? country.code ?? country.name,
-              label: country.name,
-            }))}
           />
 
           <div>
