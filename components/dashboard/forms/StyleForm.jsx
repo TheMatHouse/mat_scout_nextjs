@@ -193,7 +193,7 @@ const StyleForm = ({
               Grip/Stance
             </label>
 
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div className="flex gap-4">
               <label className="flex items-center gap-2 whitespace-nowrap">
                 <input
                   type="radio"
@@ -201,7 +201,6 @@ const StyleForm = ({
                   value="righty"
                   checked={formData.grip === "righty"}
                   onChange={handleChange}
-                  className="shrink-0 accent-blue-600"
                 />
                 Righty
               </label>
@@ -213,7 +212,6 @@ const StyleForm = ({
                   value="lefty"
                   checked={formData.grip === "lefty"}
                   onChange={handleChange}
-                  className="shrink-0 accent-blue-600"
                 />
                 Lefty
               </label>
