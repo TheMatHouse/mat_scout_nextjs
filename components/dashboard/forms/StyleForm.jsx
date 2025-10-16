@@ -193,8 +193,9 @@ const StyleForm = ({
               Grip/Stance
             </label>
 
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 whitespace-nowrap">
+            {/* Mobile: vertical (flex-col).  >=sm: horizontal (flex-row) */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:gap-4">
+              <label className="flex items-center gap-2">
                 <input
                   type="radio"
                   name="grip"
@@ -205,7 +206,7 @@ const StyleForm = ({
                 Righty
               </label>
 
-              <label className="flex items-center gap-2 whitespace-nowrap">
+              <label className="flex items-center gap-2">
                 <input
                   type="radio"
                   name="grip"
