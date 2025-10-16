@@ -158,7 +158,7 @@ const StyleForm = ({
   const isEdit = Boolean(style?._id);
 
   return (
-    <div className="space-y-6">
+    <div className="ms-form space-y-6">
       {/* Base style form */}
       <div className="rounded-xl border border-border bg-card p-5 md:p-6 shadow-xl">
         <form
@@ -192,9 +192,7 @@ const StyleForm = ({
             <label className="block text-sm font-medium mb-2">
               Grip/Stance
             </label>
-
-            {/* Mobile: vertical (flex-col).  >=sm: horizontal (flex-row) */}
-            <div className="flex flex-col gap-2 sm:flex-row sm:gap-4">
+            <div className="flex gap-4">
               <label className="flex items-center gap-2">
                 <input
                   type="radio"
@@ -205,7 +203,6 @@ const StyleForm = ({
                 />
                 Righty
               </label>
-
               <label className="flex items-center gap-2">
                 <input
                   type="radio"
