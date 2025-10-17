@@ -2,12 +2,13 @@ import Link from "next/link";
 import {
   Users,
   Shield,
-  FileText, // ⬅️ used for the top-level Reports card
+  FileText,
   Settings,
   UserPlus,
   ClipboardList,
   Search,
-  BarChart3, // ⬅️ used for Analytics
+  BarChart3,
+  HelpCircle, // 🆕 add for FAQ card icon
 } from "lucide-react";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
@@ -65,14 +66,12 @@ export default async function AdminDashboardPage() {
       icon: <Search size={24} />,
       href: "/admin/reports/scouting",
     },
-    // ⬇️ Top-level Reports hub to match your sidebar
     {
       label: "Reports",
       value: "-",
       icon: <FileText size={24} />,
       href: "/admin/reports",
     },
-    // ⬇️ GA4 Analytics page
     {
       label: "Analytics",
       value: "-",
@@ -84,6 +83,13 @@ export default async function AdminDashboardPage() {
       value: "-",
       icon: <Settings size={24} />,
       href: "/admin/settings",
+    },
+    // 🆕 Add FAQ Manager card
+    {
+      label: "Manage FAQs",
+      value: "-",
+      icon: <HelpCircle size={24} />,
+      href: "/admin/faqs",
     },
   ];
 

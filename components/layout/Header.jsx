@@ -19,7 +19,7 @@ export default function Header() {
   }
 
   return (
-    <header className="w-full sticky top-0 z-50 bg-ms-blue text-ms-nav-text  dark:text-white shadow-sm">
+    <header className="w-full sticky top-0 z-50 bg-ms-blue text-ms-nav-text dark:text-white shadow-sm">
       <div className="flex items-center justify-between px-6 md:px-12 lg:px-20 py-4 w-full">
         {/* Mobile Logo */}
         <Link
@@ -50,16 +50,30 @@ export default function Header() {
         {/* Navigation + Bell */}
         <div className="flex items-center space-x-6">
           {/* Desktop Navbar */}
-          <div className="hidden md:block">
+          <div className="hidden md:flex items-center gap-4">
             <Navbar />
+            {/* FAQ link (desktop) */}
+            <Link
+              href="/faq"
+              className="rounded-md px-3 py-2 text-white hover:bg-white/10 border border-transparent hover:border-white/20 transition"
+            >
+              FAQ
+            </Link>
           </div>
 
           {/* Notification Bell */}
           {user && <NotificationBell />}
 
           {/* Mobile Navbar */}
-          <div className="block md:hidden">
+          <div className="flex md:hidden items-center gap-3">
             <Navbar />
+            {/* FAQ link (mobile) */}
+            <Link
+              href="/faq"
+              className="rounded-md px-3 py-2 text-white hover:bg-white/10 border border-transparent hover:border-white/20 transition"
+            >
+              FAQ
+            </Link>
           </div>
         </div>
       </div>

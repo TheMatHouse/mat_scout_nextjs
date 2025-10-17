@@ -14,6 +14,8 @@ const adminLinks = [
   { href: "/admin/analytics", label: "Analytics" },
   { href: "/admin/messages", label: "Messages" },
   { href: "/admin/techniques", label: "Techniques" },
+  // 👉 New: FAQs link (placed next to Techniques/content tools)
+  { href: "/admin/faqs", label: "FAQs" },
 ];
 
 export default async function AdminLayout({ children }) {

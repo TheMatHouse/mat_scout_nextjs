@@ -12,6 +12,7 @@ import {
   Users as UsersIcon,
   User as UserIcon,
   Shield,
+  HelpCircle, // <-- added
 } from "lucide-react";
 import Spinner from "@/components/shared/Spinner";
 
@@ -144,6 +145,21 @@ export default function AuthenticatedSidebar() {
           </Link>
         </div>
 
+        {/* FAQ — new main link */}
+        <div>
+          <Link
+            href="/faq"
+            className={cn(
+              "flex items-center gap-2 text-lg font-medium px-2 py-2 rounded-md transition hover:text-ms-light-red hover:bg-[hsl(222_47%_20%)]",
+              isMainActive("/faq") &&
+                "bg-[hsl(222_47%_25%)] text-ms-light-red font-semibold border-l-4 border-[var(--ms-light-red)]"
+            )}
+          >
+            <HelpCircle size={18} />
+            FAQ
+          </Link>
+        </div>
+
         {/* Profile */}
         <div>
           <Link
@@ -161,7 +177,7 @@ export default function AuthenticatedSidebar() {
 
         {/* Admin link for admins only */}
         {user?.isAdmin && (
-          <div className="mt-6">
+          <div className="mt-6 space-y-2">
             <Link
               href="/admin"
               className={cn(

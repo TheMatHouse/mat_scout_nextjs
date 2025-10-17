@@ -1,4 +1,3 @@
-// components/shared/PreviewReportModal.jsx
 "use client";
 
 import React, { useRef, useEffect, useMemo } from "react";
@@ -87,7 +86,6 @@ const toEmbedUrl = (rawUrl, startSeconds = 0) => {
 // Field pickers by reportType
 const getFields = (report, reportType) => {
   if (reportType === "match") {
-    // match report: show my athlete (me) and opponent sections (you can expand later)
     return {
       firstName: s(report?.athleteFirstName),
       lastName: s(report?.athleteLastName),
@@ -103,7 +101,7 @@ const getFields = (report, reportType) => {
     };
   }
 
-  // default: scouting report (the athlete we are scouting)
+  // default: scouting report
   return {
     firstName: s(report?.athleteFirstName),
     lastName: s(report?.athleteLastName),
@@ -124,7 +122,6 @@ const PreviewReportModal = ({
   report,
   reportType = "scouting",
 }) => {
-  console.log("REPORT ", report);
   const dialogContentRef = useRef(null);
 
   useEffect(() => {
@@ -270,8 +267,9 @@ const PreviewReportModal = ({
                 <h4 className="font-semibold text-gray-800 dark:text-gray-200">
                   Athlete Notes:
                 </h4>
+                {/* Render WYSIWYG HTML with list support */}
                 <div
-                  className="prose dark:prose-invert max-w-none text-sm"
+                  className="wysiwyg-content prose dark:prose-invert max-w-none text-sm"
                   dangerouslySetInnerHTML={{ __html: notesHtml }}
                 />
               </div>
@@ -309,7 +307,7 @@ const PreviewReportModal = ({
                       )}
                       {notes && (
                         <div
-                          className="prose dark:prose-invert text-sm"
+                          className="wysiwyg-content prose dark:prose-invert text-sm max-w-none"
                           dangerouslySetInnerHTML={{ __html: notes }}
                         />
                       )}
@@ -334,6 +332,33 @@ const PreviewReportModal = ({
             )}
           </div>
         </div>
+
+        {/* Global minimal styles to ensure bullets & spacing show even without Typography plugin */}
+        <style
+          jsx
+          global
+        >{`
+          .wysiwyg-content ul {
+            list-style: disc;
+            padding-left: 1.25rem;
+            margin: 0 0 12px;
+          }
+          .wysiwyg-content ul ul {
+            list-style: circle;
+            margin: 4px 0 8px;
+          }
+          .wysiwyg-content li {
+            margin: 4px 0;
+            line-height: 1.5;
+          }
+          .wysiwyg-content p {
+            margin: 0 0 12px;
+            line-height: 1.6;
+          }
+          .wysiwyg-content a {
+            text-decoration: underline;
+          }
+        `}</style>
       </DialogContent>
     </Dialog>
   );
