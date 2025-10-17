@@ -36,6 +36,12 @@ const Navbar = () => {
                 Users
               </Link>
               <Link
+                href="/faq"
+                className="hover:underline"
+              >
+                FAQ
+              </Link>
+              <Link
                 href="/contact"
                 className="hover:underline"
               >
@@ -68,6 +74,12 @@ const Navbar = () => {
                 className="hover:underline"
               >
                 Teams
+              </Link>
+              <Link
+                href="/faq"
+                className="hover:underline"
+              >
+                FAQ
               </Link>
               <Link
                 href="/contact"

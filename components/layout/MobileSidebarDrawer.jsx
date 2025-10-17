@@ -194,6 +194,26 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
                 Profile
               </Link>
 
+              <Link
+                href="/faq"
+                onClick={onClose}
+                className={cn(
+                  "block text-lg font-medium hover:text-ms-light-red transition",
+                  pathname === "/users" && "text-ms-light-red"
+                )}
+              >
+                faq
+              </Link>
+              <Link
+                href="/contact"
+                onClick={onClose}
+                className={cn(
+                  "block text-lg font-medium hover:text-ms-light-red transition",
+                  pathname === "/users" && "text-ms-light-red"
+                )}
+              >
+                Contact Us
+              </Link>
               {/* Admin (only for admins) */}
               {user?.isAdmin && (
                 <div>
@@ -258,13 +278,7 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
             >
               About
             </Link>
-            <Link
-              href="/users"
-              onClick={onClose}
-              className="block hover:text-white transition"
-            >
-              Users
-            </Link>
+
             <Link
               href="/users"
               onClick={onClose}
@@ -278,6 +292,13 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
               className="block hover:text-white transition"
             >
               Teams
+            </Link>
+            <Link
+              href="/faq"
+              onClick={onClose}
+              className="block hover:text-white transition"
+            >
+              FAQ
             </Link>
             <Link
               href="/contact"

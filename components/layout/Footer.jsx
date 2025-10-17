@@ -32,6 +32,12 @@ export default function Footer() {
             Data Deletion
           </Link>
           <Link
+            href="/faq"
+            className="hover:underline"
+          >
+            FAQ
+          </Link>
+          <Link
             href="/contact"
             className="hover:underline"
           >

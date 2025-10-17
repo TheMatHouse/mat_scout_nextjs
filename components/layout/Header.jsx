@@ -52,13 +52,6 @@ export default function Header() {
           {/* Desktop Navbar */}
           <div className="hidden md:flex items-center gap-4">
             <Navbar />
-            {/* FAQ link (desktop) */}
-            <Link
-              href="/faq"
-              className="rounded-md px-3 py-2 text-white hover:bg-white/10 border border-transparent hover:border-white/20 transition"
-            >
-              FAQ
-            </Link>
           </div>
 
           {/* Notification Bell */}
@@ -67,13 +60,6 @@ export default function Header() {
           {/* Mobile Navbar */}
           <div className="flex md:hidden items-center gap-3">
             <Navbar />
-            {/* FAQ link (mobile) */}
-            <Link
-              href="/faq"
-              className="rounded-md px-3 py-2 text-white hover:bg-white/10 border border-transparent hover:border-white/20 transition"
-            >
-              FAQ
-            </Link>
           </div>
         </div>
       </div>

@@ -145,21 +145,6 @@ export default function AuthenticatedSidebar() {
           </Link>
         </div>
 
-        {/* FAQ — new main link */}
-        <div>
-          <Link
-            href="/faq"
-            className={cn(
-              "flex items-center gap-2 text-lg font-medium px-2 py-2 rounded-md transition hover:text-ms-light-red hover:bg-[hsl(222_47%_20%)]",
-              isMainActive("/faq") &&
-                "bg-[hsl(222_47%_25%)] text-ms-light-red font-semibold border-l-4 border-[var(--ms-light-red)]"
-            )}
-          >
-            <HelpCircle size={18} />
-            FAQ
-          </Link>
-        </div>
-
         {/* Profile */}
         <div>
           <Link
