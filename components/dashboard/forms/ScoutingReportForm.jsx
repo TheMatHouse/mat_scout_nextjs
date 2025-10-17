@@ -25,6 +25,17 @@ function extractArray(payload) {
   if (payload && Array.isArray(payload.results)) return payload.results;
   return [];
 }
+
+// normalize division select value -> string id
+function toDivisionId(val) {
+  if (val == null) return "";
+  if (typeof val === "string") return val;
+  if (typeof val === "number") return String(val);
+  if (typeof val === "object")
+    return String(val.value ?? val._id ?? val.id ?? "");
+  return String(val ?? "");
+}
+
 function pickStyleName(s) {
   if (!s) return "";
   if (typeof s === "string") return s.trim();
@@ -80,7 +91,6 @@ function secondsToHMS(total = 0) {
   const s = t % 60;
   return { h, m, s };
 }
-// Parse ?t=1h2m3s or ?t=90s or ?start=90 from a YouTube URL (best-effort)
 function parseTimestampFromUrl(url = "") {
   try {
     const u = new URL(url);
@@ -231,12 +241,14 @@ const ScoutingReportForm = ({
 
   /* --------------------- DIVISIONS & WEIGHTS ---------------------- */
   const [divisions, setDivisions] = useState([]); // [{value,label,gender}]
-  const [divisionId, setDivisionId] = useState(report?.division || "");
+  const [divisionId, setDivisionId] = useState(() =>
+    toDivisionId(report?.division)
+  );
   const [divisionsLoading, setDivisionsLoading] = useState(false);
 
   const [weightOptions, setWeightOptions] = useState([]); // [{value,label}]
   const [weightCategoryId, setWeightCategoryId] = useState(
-    report?.weightCategory || ""
+    () => String(report?.weightCategory ?? report?.weightItemId ?? "") // support legacy
   );
   const [weightLabel, setWeightLabel] = useState(report?.weightLabel || "");
   const [weightUnit, setWeightUnit] = useState(report?.weightUnit || "");
@@ -265,9 +277,14 @@ const ScoutingReportForm = ({
   }, [normalizedStyles, matchType]);
 
   // Refs to apply saved division/weight exactly once on edit
-  const initialDivisionId = report?.division ? String(report.division) : "";
-  const initialWeightCategoryId = report?.weightCategory
-    ? String(report.weightCategory)
+  const initialDivisionId = report?.division
+    ? String(report.division?._id ?? report.division)
+    : "";
+  // accept either weightCategory or legacy weightItemId
+  const initialWeightCategoryCandidate =
+    report?.weightCategory ?? report?.weightItemId ?? "";
+  const initialWeightCategoryId = initialWeightCategoryCandidate
+    ? String(initialWeightCategoryCandidate)
     : "";
   const initialWeightLabelRef = useRef(report?.weightLabel || "");
   const initialWeightUnitRef = useRef(report?.weightUnit || "");
@@ -286,16 +303,20 @@ const ScoutingReportForm = ({
           report.matchType || report.style || report.styleName || ""
         ).toLowerCase();
 
-    // reset chain before fetch
-    setDivisions([]);
-    setDivisionId("");
-    setWeightOptions([]);
-    setWeightCategoryId("");
-    setWeightLabel("");
-    setWeightUnit("");
-    setWeightsError("");
-    appliedInitialDivisionRef.current = false;
-    appliedInitialWeightRef.current = false;
+    // Reset only if user actually changed style away from saved one
+    if (!isEditingSameStyle) {
+      setDivisions([]);
+      setDivisionId("");
+      setWeightOptions([]);
+      setWeightCategoryId("");
+      setWeightLabel("");
+      setWeightUnit("");
+      setWeightsError("");
+      appliedInitialDivisionRef.current = false;
+      appliedInitialWeightRef.current = false;
+    } else {
+      setWeightsError("");
+    }
 
     const name = (matchType || "").trim();
     if (!name) return;
@@ -315,19 +336,22 @@ const ScoutingReportForm = ({
         if (!alive) return;
 
         const opts = (data?.divisions || []).map((d) => ({
-          value: d._id,
+          value: String(d._id),
           label: divisionLabel(d),
           gender: d.gender || null,
         }));
         setDivisions(opts);
 
-        // ✅ Auto-apply saved division on edit
+        // Auto-apply saved division (only once)
         if (
           isEditingSameStyle &&
           initialDivisionId &&
           !appliedInitialDivisionRef.current
         ) {
-          setDivisionId(initialDivisionId);
+          const hasIt = opts.some(
+            (o) => String(o.value) === String(initialDivisionId)
+          );
+          if (hasIt) setDivisionId(String(initialDivisionId));
           appliedInitialDivisionRef.current = true;
         }
       } catch (err) {
@@ -350,22 +374,26 @@ const ScoutingReportForm = ({
     let alive = true;
     const controller = new AbortController();
 
-    // reset on division change
-    setWeightOptions([]);
-    setWeightCategoryId("");
-    setWeightLabel("");
-    setWeightUnit("");
-    setWeightsError("");
-    appliedInitialWeightRef.current = false;
+    // BEFORE
+    // const id = String(divisionId || "");
+    // if (!id) { ... return; }
 
-    const id = String(divisionId || "");
-    if (!id) return;
+    // AFTER: normalize and guard
+    const id = toDivisionId(divisionId);
+    if (!id || id === "[object Object]") {
+      setWeightOptions([]);
+      setWeightCategoryId("");
+      setWeightLabel("");
+      setWeightUnit("");
+      setWeightsError("");
+      appliedInitialWeightRef.current = false;
+      return;
+    }
 
     (async () => {
       try {
         setWeightsLoading(true);
-
-        const url = `/api/divisions/${id}/weights`;
+        const url = `/api/divisions/${encodeURIComponent(id)}/weights`;
         const res = await fetch(url, {
           cache: "no-store",
           credentials: "same-origin",
@@ -374,11 +402,8 @@ const ScoutingReportForm = ({
         });
 
         if (!res.ok) {
-          // Soft-fail: many divisions legitimately won’t have weights
           const text = await res.text().catch(() => "");
           if (!alive) return;
-
-          // Don’t spam errors; only warn for unexpected cases
           if (res.status !== 404) {
             console.warn("[ScoutingReportForm] weights fetch non-200", {
               url,
@@ -386,8 +411,6 @@ const ScoutingReportForm = ({
               text,
             });
           }
-
-          // No hard error in UI when 404 or similar; just show “No weight categories…”
           setWeightOptions([]);
           setWeightsError(
             res.status === 404
@@ -440,40 +463,47 @@ const ScoutingReportForm = ({
         setWeightOptions(opts);
         setWeightUnit(String(unit || ""));
 
-        // ✅ Auto-apply saved weight on edit
-        if (initialWeightCategoryId && !appliedInitialWeightRef.current) {
-          setWeightCategoryId(String(initialWeightCategoryId));
-
-          const snap = initialWeightLabelRef.current;
-          if (snap) {
-            setWeightLabel(snap);
-          } else {
-            const opt = opts.find(
+        // Auto-apply saved weight on edit (by id first, then by label)
+        if (!appliedInitialWeightRef.current) {
+          if (initialWeightCategoryId) {
+            const byId = opts.find(
               (o) => String(o.value) === String(initialWeightCategoryId)
             );
-            setWeightLabel(opt?.label ?? "");
+            if (byId) {
+              setWeightCategoryId(String(initialWeightCategoryId));
+              setWeightLabel(byId.label ?? "");
+              if (initialWeightUnitRef.current)
+                setWeightUnit(initialWeightUnitRef.current);
+              appliedInitialWeightRef.current = true;
+            }
           }
-
-          if (initialWeightUnitRef.current) {
-            setWeightUnit(initialWeightUnitRef.current);
+          if (!appliedInitialWeightRef.current) {
+            const savedLabel = (initialWeightLabelRef.current || "")
+              .trim()
+              .toLowerCase();
+            if (savedLabel) {
+              const byLabel = opts.find(
+                (o) => String(o.label).trim().toLowerCase() === savedLabel
+              );
+              if (byLabel) {
+                setWeightCategoryId(String(byLabel.value));
+                setWeightLabel(byLabel.label);
+                if (initialWeightUnitRef.current)
+                  setWeightUnit(initialWeightUnitRef.current);
+                appliedInitialWeightRef.current = true;
+              }
+            }
           }
-
-          appliedInitialWeightRef.current = true;
+          // If nothing matched, keep whatever label/unit we had; user can re-pick.
         }
 
-        if (!opts.length) {
-          // No weights for this division (valid state)
-          setWeightsError("");
-        }
+        if (!opts.length) setWeightsError("");
       } catch (err) {
         if (controller.signal.aborted) return;
         console.warn("[ScoutingReportForm] weights fetch error:", err);
         if (!alive) return;
-        setWeightsError(""); // silent UI; treat as "no weights"
+        setWeightsError("");
         setWeightOptions([]);
-        setWeightCategoryId("");
-        setWeightLabel("");
-        setWeightUnit("");
       } finally {
         setWeightsLoading(false);
       }
@@ -610,7 +640,7 @@ const ScoutingReportForm = ({
       matchType,
 
       division: divisionId || undefined,
-      weightCategory: weightCategoryId || undefined,
+      weightCategory: weightCategoryId || undefined, // <- always item id
       weightLabel: weightLabel || undefined,
       weightUnit: weightUnit || undefined,
 
@@ -775,7 +805,7 @@ const ScoutingReportForm = ({
                 divisions.length ? "Select division..." : "No divisions found"
               }
               value={divisionId}
-              onChange={(val) => setDivisionId(val)}
+              onChange={(val) => setDivisionId(toDivisionId(val))}
               options={divisions}
               disabled={!divisions.length}
             />
@@ -911,7 +941,6 @@ const ScoutingReportForm = ({
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-2">Videos</h3>
 
-            {/* Existing videos */}
             {(videos || []).map((vid, idx) => {
               const isIdOnly = typeof vid === "string";
               const title = isIdOnly ? "" : vid.title || vid.videoTitle || "";
@@ -1011,12 +1040,11 @@ const ScoutingReportForm = ({
                           type="button"
                           variant="outline"
                           onClick={() => {
-                            if (vid._id) {
+                            if (vid._id)
                               setDeletedVideos((prev) => [
                                 ...prev,
                                 String(vid._id),
                               ]);
-                            }
                             setVideos((prev) =>
                               prev.filter((_, i) => i !== idx)
                             );
@@ -1031,7 +1059,6 @@ const ScoutingReportForm = ({
               );
             })}
 
-            {/* New videos */}
             {newVideos.map((vid, idx) => {
               const url = vid.url || "";
               const idMatch = url.match(
@@ -1146,7 +1173,7 @@ const ScoutingReportForm = ({
             <Button
               type="submit"
               className="btn btn-primary"
-              disabled={!hasStyle}
+              disabled={!hasStyle || divisionsLoading || weightsLoading}
             >
               {report ? "Update" : "Submit"} Report
             </Button>
