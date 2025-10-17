@@ -1,4 +1,4 @@
-// components/dashboard/PreviewReportModal.jsx
+// components/shared/PreviewReportModal.jsx
 "use client";
 
 import {
@@ -12,95 +12,83 @@ import React, { useEffect, useMemo, useRef } from "react";
 import moment from "moment";
 
 /* ---------- tiny helpers ---------- */
-const safe = (v) => (v == null || v === "" ? "" : String(v));
+const safeStr = (v, fallback = "") => (v == null ? fallback : String(v).trim());
 
-const divName = (report) =>
-  (report?.division &&
-    typeof report.division === "object" &&
-    report.division.name) ||
-  (typeof report?.division === "string" ? report.division : "") ||
-  "";
-
-// Prefer the saved label (already includes unit). Fall back sensibly.
-const weightDisplay = (report) => {
-  const label = (report?.weightLabel ?? "").trim();
-  if (label) return label; // e.g., "73kg" or "73 kg"
-
-  // some reports may store a category label/name
-  const catLabel =
-    (report?.weightCategoryLabel ?? "").trim() ||
-    (report?.weightCategory &&
-      typeof report.weightCategory === "object" &&
-      (report.weightCategory.label || report.weightCategory.name || ""));
-
-  if (typeof catLabel === "string" && catLabel.trim()) return catLabel.trim();
-
-  // legacy plain string
-  if (
-    typeof report?.weightCategory === "string" &&
-    report.weightCategory.trim()
-  ) {
-    return report.weightCategory.trim();
-  }
-
-  // last resort: synthesize from numeric + unit
-  const val = String(report?.weight ?? "").trim();
-  const unit = String(report?.weightUnit ?? "").trim();
-  return val ? `${val}${unit ? ` ${unit}` : ""}` : "";
+const genderLabel = (g) => {
+  const s = safeStr(g).toLowerCase();
+  if (s === "male") return "Men";
+  if (s === "female") return "Women";
+  if (s === "coed" || s === "open") return "Coed";
+  return s || "";
 };
 
-// Legacy single-video accessors (match reports & older data)
-const legacyVideoUrl = (report) =>
-  report?.video?.videoURL || report?.videoURL || "";
-const legacyVideoTitle = (report) =>
-  report?.video?.videoTitle || report?.videoTitle || "";
-const legacyVideoNotes = (report) =>
-  report?.video?.videoNotes || report?.videoNotes || "";
+const computeDivisionDisplay = (division) => {
+  if (!division) return "—";
+  if (typeof division === "string") return division || "—";
+  if (typeof division === "object") {
+    const name = safeStr(division?.name);
+    const glab = genderLabel(division?.gender);
+    return name ? (glab ? `${name} — ${glab}` : name) : "—";
+  }
+  return "—";
+};
 
-/** Convert common YouTube URLs to embeddable URL; fall back to raw URL. */
-function toEmbedUrl(urlRaw) {
+/** Convert common YouTube/Vimeo sources to embeddable URL; fall back to raw URL. */
+function toEmbedUrl(urlRaw, startSeconds = 0) {
   if (!urlRaw) return "";
-  const url = String(urlRaw).trim();
+  let url = safeStr(urlRaw);
+
+  // If user pasted a full <iframe ... src="...">, extract the src URL
+  if (/<iframe[\s\S]*?>/i.test(url)) {
+    const srcMatch =
+      url.match(/src\s*=\s*"(.*?)"/i) || url.match(/src\s*=\s*'(.*?)'/i);
+    if (srcMatch && srcMatch[1]) {
+      url = srcMatch[1];
+    }
+  }
 
   // YouTube patterns
   const ytIdMatch =
-    url.match(/(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/) ||
-    url.match(/youtube\.com\/shorts\/([^?]+)/);
+    url.match(/(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/i) ||
+    url.match(/youtube\.com\/shorts\/([^?]+)/i);
   if (ytIdMatch && ytIdMatch[1]) {
-    return `https://www.youtube.com/embed/${ytIdMatch[1]}`;
+    const base = `https://www.youtube.com/embed/${ytIdMatch[1]}`;
+    const start = Math.max(0, parseInt(startSeconds || 0, 10)) || 0;
+    return start ? `${base}?start=${start}` : base;
   }
 
-  // Vimeo quick pass (if already embed, use as-is)
+  // Vimeo embed (already)
   if (/player\.vimeo\.com\/video\//i.test(url)) return url;
 
-  // Otherwise, try raw (works if it's already an embeddable URL)
+  // Otherwise, return as-is (best effort)
   return url;
 }
 
-/** Normalize any video shapes into a single array [{title, notes, url, embedUrl}] */
-function normalizeVideos(report, reportType) {
+/** Normalize any video shapes into [{title, notes, url, embedUrl}] */
+function normalizeVideos(report) {
   const out = [];
 
-  // 1) New scouting shape: array on report.videos
+  // Array on report.videos (new structure, expected after populate)
   if (Array.isArray(report?.videos)) {
     for (const v of report.videos) {
       if (!v) continue;
-      const title = safe(v.title ?? v.videoTitle);
-      const notes = safe(v.notes ?? v.videoNotes);
-      const url = safe(v.url ?? v.videoURL);
-      const embedUrl = toEmbedUrl(url);
+      const title = safeStr(v.title ?? v.videoTitle);
+      const notes = safeStr(v.notes ?? v.videoNotes);
+      const url = safeStr(v.url ?? v.urlCanonical ?? v.videoURL);
+      const startSeconds = Math.max(0, parseInt(v?.startSeconds || 0, 10));
+      const embedUrl = toEmbedUrl(url, startSeconds);
       if (embedUrl) out.push({ title, notes, url, embedUrl });
     }
   }
 
-  // 2) Legacy/Match single nested video
-  const singleUrl = legacyVideoUrl(report);
-  if (singleUrl) {
-    const embedUrl = toEmbedUrl(singleUrl);
+  // Legacy single nested video fields on the report (optional)
+  const legacyUrl = safeStr(report?.video?.videoURL ?? report?.videoURL);
+  if (legacyUrl) {
+    const embedUrl = toEmbedUrl(legacyUrl);
     out.push({
-      title: legacyVideoTitle(report),
-      notes: legacyVideoNotes(report),
-      url: singleUrl,
+      title: safeStr(report?.video?.videoTitle ?? report?.videoTitle),
+      notes: safeStr(report?.video?.videoNotes ?? report?.videoNotes),
+      url: legacyUrl,
       embedUrl,
     });
   }
@@ -117,14 +105,15 @@ function normalizeVideos(report, reportType) {
 }
 
 const Info = ({ label, value }) => {
-  if (value == null || value === "") return null;
+  const val = safeStr(value);
+  if (!val) return null;
   return (
     <div className="flex justify-between gap-4 text-sm py-1">
       <span className="text-gray-700 dark:text-gray-300 font-medium">
         {label}:
       </span>
       <span className="text-gray-900 dark:text-white font-semibold text-right">
-        {value}
+        {val}
       </span>
     </div>
   );
@@ -158,15 +147,36 @@ const PreviewReportModal = ({
   }, [previewOpen, setPreviewOpen]);
 
   const derived = useMemo(() => {
+    const divisionDisplay =
+      report.divisionDisplay || computeDivisionDisplay(report?.division);
+
+    // Prefer saved snapshot label for weight
+    const weightLabel = safeStr(report?.weightLabel);
+    const weightUnit = safeStr(report?.weightUnit);
+    const weightDisplayBase =
+      weightLabel ||
+      safeStr(
+        report?.weightCategoryLabel ||
+          report?.weightCategory?.label ||
+          report?.weightCategory?.name ||
+          report?.weightCategory
+      );
+    const weightDisplay =
+      weightDisplayBase &&
+      weightUnit &&
+      !/\b(kg|lb)s?\b/i.test(weightDisplayBase)
+        ? `${weightDisplayBase} ${weightUnit}`
+        : weightDisplayBase || "—";
+
     return {
-      divisionDisplay: divName(report) || "—",
-      weightDisplay: weightDisplay(report) || "—",
+      divisionDisplay,
+      weightDisplay,
       eventDateDisplay: report?.matchDate
         ? moment.utc(report.matchDate).format("MMMM D, YYYY")
         : "—",
-      resultDisplay: report?.result || "—",
-      scoreDisplay: report?.score || "—",
-      createdByDisplay: report?.createdByName || "—",
+      resultDisplay: safeStr(report?.result) || "—",
+      scoreDisplay: safeStr(report?.score) || "—",
+      createdByDisplay: safeStr(report?.createdByName) || "—",
       isPublicDisplay: report?.isPublic ? "Yes" : "No",
       opponentTechs: Array.isArray(report?.opponentAttacks)
         ? report.opponentAttacks
@@ -174,9 +184,9 @@ const PreviewReportModal = ({
       athleteTechs: Array.isArray(report?.athleteAttacks)
         ? report.athleteAttacks
         : [],
-      videos: normalizeVideos(report, reportType),
+      videos: normalizeVideos(report),
     };
-  }, [report, reportType]);
+  }, [report]);
 
   return (
     <Dialog
@@ -208,11 +218,11 @@ const PreviewReportModal = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Info
                 label="Match Type"
-                value={safe(report.matchType)}
+                value={safeStr(report?.matchType)}
               />
               <Info
                 label="Event"
-                value={safe(report.eventName)}
+                value={safeStr(report?.eventName)}
               />
               <Info
                 label="Date"
@@ -253,27 +263,27 @@ const PreviewReportModal = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Info
                 label="Opponent Name"
-                value={safe(report.opponentName)}
+                value={safeStr(report?.opponentName)}
               />
               <Info
                 label="Opponent Country"
-                value={safe(report.opponentCountry)}
+                value={safeStr(report?.opponentCountry)}
               />
               <Info
                 label="Opponent Club"
-                value={safe(report.opponentClub)}
+                value={safeStr(report?.opponentClub)}
               />
               <Info
                 label="Opponent Rank"
-                value={safe(report.opponentRank)}
+                value={safeStr(report?.opponentRank)}
               />
               <Info
                 label="Opponent Grip/Stance"
-                value={safe(report.opponentGrip)}
+                value={safeStr(report?.opponentGrip)}
               />
               <Info
                 label="My Rank (at match)"
-                value={safe(report.myRank)}
+                value={safeStr(report?.myRank)}
               />
             </div>
 
@@ -285,21 +295,20 @@ const PreviewReportModal = ({
                 </h4>
                 <ul className="list-disc list-inside ml-2 text-sm mt-1">
                   {derived.opponentTechs.map((a, i) => (
-                    <li key={`opp-${i}`}>{a}</li>
+                    <li key={`opp-${i}`}>{safeStr(a)}</li>
                   ))}
                 </ul>
               </div>
             )}
 
             {/* Opponent notes (HTML) */}
-            {report.opponentAttackNotes && (
+            {safeStr(report?.opponentAttackNotes) && (
               <div className="mt-3">
                 <h4 className="font-semibold text-gray-800 dark:text-gray-200">
                   Opponent Notes
                 </h4>
                 <div
                   className="prose dark:prose-invert max-w-none text-sm"
-                  // Ensure this HTML comes from your own Editor control (trusted source)
                   dangerouslySetInnerHTML={{
                     __html: report.opponentAttackNotes,
                   }}
@@ -315,14 +324,14 @@ const PreviewReportModal = ({
                 </h4>
                 <ul className="list-disc list-inside ml-2 text-sm mt-1">
                   {derived.athleteTechs.map((a, i) => (
-                    <li key={`me-${i}`}>{a}</li>
+                    <li key={`me-${i}`}>{safeStr(a)}</li>
                   ))}
                 </ul>
               </div>
             )}
 
             {/* Athlete notes (HTML) */}
-            {report.athleteAttackNotes && (
+            {safeStr(report?.athleteAttackNotes) && (
               <div className="mt-3">
                 <h4 className="font-semibold text-gray-800 dark:text-gray-200">
                   My Notes
@@ -350,12 +359,12 @@ const PreviewReportModal = ({
                     key={v.embedUrl + i}
                     className="space-y-3"
                   >
-                    {!!v.title && (
+                    {!!safeStr(v.title) && (
                       <h4 className="font-bold text-lg text-gray-900 dark:text-white">
-                        {v.title}
+                        {safeStr(v.title)}
                       </h4>
                     )}
-                    {!!v.notes && (
+                    {!!safeStr(v.notes) && (
                       <div
                         className="prose dark:prose-invert max-w-none text-sm"
                         dangerouslySetInnerHTML={{ __html: v.notes }}
@@ -365,7 +374,7 @@ const PreviewReportModal = ({
                       <iframe
                         className="w-full h-full"
                         src={v.embedUrl}
-                        title={v.title || `Video ${i + 1}`}
+                        title={safeStr(v.title) || `Video ${i + 1}`}
                         allowFullScreen
                       />
                     </div>

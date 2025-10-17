@@ -13,7 +13,6 @@ import Editor from "../../shared/Editor";
 import TechniqueTagInput from "../../shared/TechniqueTagInput";
 import FormField from "@/components/shared/FormField";
 import FormSelect from "@/components/shared/FormSelect";
-// ✅ Unified country picker (pinned + divider + theming)
 import CountrySelect from "@/components/shared/CountrySelect";
 
 /* ----------------- helpers ----------------- */
@@ -67,6 +66,48 @@ function divisionLabel(d) {
   return g ? `${d.name} - ${g}` : d.name;
 }
 
+/* -------- timestamp helpers -------- */
+function hmsToSeconds({ h = 0, m = 0, s = 0 }) {
+  const H = Math.max(0, parseInt(h || 0, 10));
+  const M = Math.max(0, parseInt(m || 0, 10));
+  const S = Math.max(0, parseInt(s || 0, 10));
+  return H * 3600 + M * 60 + S;
+}
+function secondsToHMS(total = 0) {
+  const t = Math.max(0, parseInt(total || 0, 10));
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const s = t % 60;
+  return { h, m, s };
+}
+// Parse ?t=1h2m3s or ?t=90s or ?start=90 from a YouTube URL (best-effort)
+function parseTimestampFromUrl(url = "") {
+  try {
+    const u = new URL(url);
+    const t = u.searchParams.get("t");
+    const start = u.searchParams.get("start");
+    let secs = 0;
+    if (t) {
+      if (/^\d+$/.test(t)) secs = parseInt(t, 10);
+      else if (/^\d+s$/.test(t)) secs = parseInt(t, 10);
+      else {
+        const h = /(\d+)h/.exec(t)?.[1];
+        const m = /(\d+)m/.exec(t)?.[1];
+        const s = /(\d+)s/.exec(t)?.[1];
+        secs =
+          (h ? parseInt(h, 10) * 3600 : 0) +
+          (m ? parseInt(m, 10) * 60 : 0) +
+          (s ? parseInt(s, 10) : 0);
+      }
+      return Math.max(0, secs || 0);
+    }
+    if (start && /^\d+$/.test(start)) {
+      return Math.max(0, parseInt(start, 10));
+    }
+  } catch {}
+  return 0;
+}
+
 /* ----------------- small UI helper ----------------- */
 const InfoBox = ({ children }) => (
   <div className="rounded-md border p-3 text-sm text-muted-foreground">
@@ -74,12 +115,103 @@ const InfoBox = ({ children }) => (
   </div>
 );
 
+/* ----------------- TimestampInputs ----------------- */
+function TimestampInputs({ valueSeconds = 0, onChange }) {
+  const [hh, setHh] = useState("");
+  const [mm, setMm] = useState("");
+  const [ss, setSs] = useState("");
+
+  useEffect(() => {
+    const { h, m, s } = secondsToHMS(valueSeconds || 0);
+    setHh(String(h));
+    setMm(String(m));
+    setSs(String(s));
+  }, [valueSeconds]);
+
+  const toInt = (str) => {
+    if (str === "" || str == null) return 0;
+    const n = parseInt(String(str).replace(/\D/g, ""), 10);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  };
+
+  const emit = (hStr, mStr, sStr) => {
+    const next = hmsToSeconds({
+      h: toInt(hStr),
+      m: toInt(mStr),
+      s: toInt(sStr),
+    });
+    onChange?.(next);
+  };
+
+  return (
+    <div className="mt-4">
+      <label className="block text-base font-semibold mb-2">Timestamp</label>
+      <p className="text-sm text-gray-900 dark:text-gray-100 mb-3">
+        If no timestamp is added, the video will start from the beginning.
+      </p>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div className="flex flex-col">
+          <label className="mb-1 text-sm font-medium">Hours</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="0"
+            autoComplete="off"
+            className="w-full rounded-md border px-3 py-2"
+            value={hh}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/\D/g, "");
+              setHh(raw);
+              emit(raw, mm, ss);
+            }}
+          />
+        </div>
+
+        <div className="flex flex-col">
+          <label className="mb-1 text-sm font-medium">Minutes</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="0"
+            autoComplete="off"
+            className="w-full rounded-md border px-3 py-2"
+            value={mm}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/\D/g, "");
+              setMm(raw);
+              emit(hh, raw, ss);
+            }}
+          />
+        </div>
+
+        <div className="flex flex-col">
+          <label className="mb-1 text-sm font-medium">Seconds</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="0"
+            autoComplete="off"
+            className="w-full rounded-md border px-3 py-2"
+            value={ss}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/\D/g, "");
+              setSs(raw);
+              emit(hh, mm, raw);
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const ScoutingReportForm = ({
   athlete,
   report,
-  styles, // provided by dashboard container
-  techniques, // optional
-  userType, // "user" | "family"
+  styles,
+  techniques,
+  userType,
   setOpen,
   onSuccess,
 }) => {
@@ -105,7 +237,7 @@ const ScoutingReportForm = ({
   const [weightOptions, setWeightOptions] = useState([]); // [{value,label}]
   const [weightCategoryId, setWeightCategoryId] = useState(
     report?.weightCategory || ""
-  ); // control by id
+  );
   const [weightLabel, setWeightLabel] = useState(report?.weightLabel || "");
   const [weightUnit, setWeightUnit] = useState(report?.weightUnit || "");
   const [weightsLoading, setWeightsLoading] = useState(false);
@@ -116,7 +248,6 @@ const ScoutingReportForm = ({
     report?.matchType || report?.style || report?.styleName || ""
   );
 
-  // --- include current report style in options if it isn't in the list ---
   const styleOptions = useMemo(() => {
     const base = (normalizedStyles || []).map((s) => ({
       value: s.styleName,
@@ -200,7 +331,7 @@ const ScoutingReportForm = ({
           appliedInitialDivisionRef.current = true;
         }
       } catch (err) {
-        console.error("[ScoutingReportForm] divisions fetch error:", err);
+        console.warn("[ScoutingReportForm] divisions fetch error:", err);
         if (!alive) return;
         setDivisions([]);
       } finally {
@@ -217,6 +348,7 @@ const ScoutingReportForm = ({
   // ------------- WEIGHTS after division -------------
   useEffect(() => {
     let alive = true;
+    const controller = new AbortController();
 
     // reset on division change
     setWeightOptions([]);
@@ -238,17 +370,30 @@ const ScoutingReportForm = ({
           cache: "no-store",
           credentials: "same-origin",
           headers: { accept: "application/json" },
+          signal: controller.signal,
         });
 
         if (!res.ok) {
+          // Soft-fail: many divisions legitimately won’t have weights
           const text = await res.text().catch(() => "");
           if (!alive) return;
-          console.error("[ScoutingReportForm] weights non-200", {
-            url,
-            status: res.status,
-            text,
-          });
-          setWeightsError(`Failed to load weights (HTTP ${res.status}).`);
+
+          // Don’t spam errors; only warn for unexpected cases
+          if (res.status !== 404) {
+            console.warn("[ScoutingReportForm] weights fetch non-200", {
+              url,
+              status: res.status,
+              text,
+            });
+          }
+
+          // No hard error in UI when 404 or similar; just show “No weight categories…”
+          setWeightOptions([]);
+          setWeightsError(
+            res.status === 404
+              ? ""
+              : `Failed to load weights (HTTP ${res.status}).`
+          );
           return;
         }
 
@@ -257,7 +402,7 @@ const ScoutingReportForm = ({
           data = await res.json();
         } catch (e) {
           if (!alive) return;
-          console.error("[ScoutingReportForm] weights JSON parse error:", e);
+          console.warn("[ScoutingReportForm] weights JSON parse error:", e);
           setWeightsError("Weights endpoint did not return JSON.");
           return;
         }
@@ -299,7 +444,6 @@ const ScoutingReportForm = ({
         if (initialWeightCategoryId && !appliedInitialWeightRef.current) {
           setWeightCategoryId(String(initialWeightCategoryId));
 
-          // Prefer snapshot label from saved report
           const snap = initialWeightLabelRef.current;
           if (snap) {
             setWeightLabel(snap);
@@ -318,12 +462,14 @@ const ScoutingReportForm = ({
         }
 
         if (!opts.length) {
-          setWeightsError("No weight categories found for this division.");
+          // No weights for this division (valid state)
+          setWeightsError("");
         }
       } catch (err) {
-        console.error("[ScoutingReportForm] weights fetch error:", err);
+        if (controller.signal.aborted) return;
+        console.warn("[ScoutingReportForm] weights fetch error:", err);
         if (!alive) return;
-        setWeightsError("Unexpected error loading weights.");
+        setWeightsError(""); // silent UI; treat as "no weights"
         setWeightOptions([]);
         setWeightCategoryId("");
         setWeightLabel("");
@@ -335,6 +481,7 @@ const ScoutingReportForm = ({
 
     return () => {
       alive = false;
+      controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [divisionId]);
@@ -371,9 +518,21 @@ const ScoutingReportForm = ({
   );
 
   // ----- videos -----
-  const [videos, setVideos] = useState(report?.videos || []); // existing (with _id)
-  const [newVideos, setNewVideos] = useState([]); // new entries from form
-  const [deletedVideos, setDeletedVideos] = useState([]); // _ids marked for deletion
+  const normalizedExistingVideos = useMemo(() => {
+    const src = Array.isArray(report?.videos) ? report.videos : [];
+    return src.map((v) =>
+      typeof v === "string"
+        ? v
+        : {
+            ...v,
+            startSeconds: Math.max(0, parseInt(v?.startSeconds ?? 0, 10)) || 0,
+          }
+    );
+  }, [report?.videos]);
+
+  const [videos, setVideos] = useState(normalizedExistingVideos);
+  const [newVideos, setNewVideos] = useState([]);
+  const [deletedVideos, setDeletedVideos] = useState([]);
 
   useEffect(() => {
     const fromProps = (() => {
@@ -451,8 +610,8 @@ const ScoutingReportForm = ({
       matchType,
 
       division: divisionId || undefined,
-      weightCategory: weightCategoryId || undefined, // id/value
-      weightLabel: weightLabel || undefined, // snapshot text
+      weightCategory: weightCategoryId || undefined,
+      weightLabel: weightLabel || undefined,
       weightUnit: weightUnit || undefined,
 
       athleteFirstName,
@@ -467,9 +626,32 @@ const ScoutingReportForm = ({
       athleteAttackNotes,
       accessList,
 
-      // videos
-      updatedVideos: (videos || []).filter((v) => v && v._id),
-      newVideos,
+      updatedVideos: (videos || [])
+        .filter((v) => v && v._id)
+        .map((v) => ({
+          ...v,
+          startSeconds: Math.max(
+            0,
+            parseInt(
+              typeof v.startSeconds === "number"
+                ? v.startSeconds
+                : v?.startSeconds || 0,
+              10
+            )
+          ),
+        })),
+      newVideos: (newVideos || []).map((v) => ({
+        ...v,
+        startSeconds: Math.max(
+          0,
+          parseInt(
+            typeof v.startSeconds === "number"
+              ? v.startSeconds
+              : v?.startSeconds || 0,
+            10
+          )
+        ),
+      })),
       deletedVideos,
     };
 
@@ -526,7 +708,6 @@ const ScoutingReportForm = ({
 
   const noStyles = (normalizedStyles || []).length === 0;
   if (noStyles) {
-    // Family members edit styles via an internal tab, so don't deep-link.
     if (userType === "family") {
       return (
         <div className="rounded-lg border p-4 bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
@@ -572,7 +753,7 @@ const ScoutingReportForm = ({
       onSubmit={handleSubmit}
       className="space-y-6"
     >
-      {/* Always visible: STYLE */}
+      {/* STYLE */}
       <FormSelect
         label="Match Type"
         placeholder="Select style/sport..."
@@ -581,7 +762,7 @@ const ScoutingReportForm = ({
         options={styleOptions}
       />
 
-      {/* Everything else appears ONLY after a style is selected */}
+      {/* Rest appears after style chosen */}
       {hasStyle && (
         <>
           {/* Division */}
@@ -620,13 +801,13 @@ const ScoutingReportForm = ({
                     ? "Select weight..."
                     : "No weight categories for this division"
                 }
-                value={weightCategoryId} // CONTROL BY ID
+                value={weightCategoryId}
                 onChange={(val) => {
                   const opt = (weightOptions || []).find(
                     (o) => String(o.value) === String(val)
                   );
-                  setWeightCategoryId(String(val)); // id/value
-                  setWeightLabel(opt?.label ?? ""); // snapshot label
+                  setWeightCategoryId(String(val));
+                  setWeightLabel(opt?.label ?? "");
                 }}
                 options={weightOptions}
                 disabled={!weightOptions.length}
@@ -673,7 +854,6 @@ const ScoutingReportForm = ({
             onChange={(e) => setAthleteClub(e.target.value)}
           />
 
-          {/* ✅ Unified country select */}
           <CountrySelect
             label="Country"
             value={athleteCountry}
@@ -731,17 +911,18 @@ const ScoutingReportForm = ({
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-2">Videos</h3>
 
-            {/* Existing videos (editable) */}
+            {/* Existing videos */}
             {(videos || []).map((vid, idx) => {
-              // Only render editable UI if we have an object (populated). If it's just an id string, show a placeholder.
               const isIdOnly = typeof vid === "string";
               const title = isIdOnly ? "" : vid.title || vid.videoTitle || "";
               const notes = isIdOnly ? "" : vid.notes || vid.videoNotes || "";
               const url = isIdOnly ? "" : vid.url || vid.videoURL || "";
+              const startSeconds = isIdOnly
+                ? 0
+                : Math.max(0, parseInt(vid?.startSeconds || 0, 10));
 
-              // derive YouTube embed
               const idMatch = (url || "").match(
-                /(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/
+                /(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/i
               );
               const embedId = idMatch ? idMatch[1] : null;
 
@@ -785,17 +966,42 @@ const ScoutingReportForm = ({
                         value={url}
                         onChange={(e) => {
                           const next = [...videos];
+                          const parsed = parseTimestampFromUrl(e.target.value);
+                          const prev = Math.max(
+                            0,
+                            parseInt(next[idx]?.startSeconds || 0, 10)
+                          );
                           next[idx] = {
                             ...(next[idx] || {}),
                             url: e.target.value,
+                            startSeconds: parsed ? parsed : prev,
                           };
                           setVideos(next);
                         }}
                       />
+
+                      <TimestampInputs
+                        valueSeconds={startSeconds}
+                        onChange={(nextSecs) => {
+                          const next = [...videos];
+                          next[idx] = {
+                            ...(next[idx] || {}),
+                            startSeconds: Math.max(
+                              0,
+                              parseInt(nextSecs || 0, 10)
+                            ),
+                          };
+                          setVideos(next);
+                        }}
+                      />
+
                       {embedId && (
                         <iframe
                           className="mt-3 w-full h-52"
-                          src={`https://www.youtube.com/embed/${embedId}`}
+                          src={`https://www.youtube.com/embed/${embedId}?start=${Math.max(
+                            0,
+                            parseInt(videos[idx]?.startSeconds || 0, 10)
+                          )}`}
                           allowFullScreen
                         />
                       )}
@@ -805,14 +1011,12 @@ const ScoutingReportForm = ({
                           type="button"
                           variant="outline"
                           onClick={() => {
-                            // mark for deletion if it has an _id
                             if (vid._id) {
                               setDeletedVideos((prev) => [
                                 ...prev,
                                 String(vid._id),
                               ]);
                             }
-                            // remove from the editable list
                             setVideos((prev) =>
                               prev.filter((_, i) => i !== idx)
                             );
@@ -829,10 +1033,15 @@ const ScoutingReportForm = ({
 
             {/* New videos */}
             {newVideos.map((vid, idx) => {
-              const idMatch = (vid.url || "").match(
-                /(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/
+              const url = vid.url || "";
+              const idMatch = url.match(
+                /(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/i
               );
               const embedId = idMatch ? idMatch[1] : null;
+              const startSeconds = Math.max(
+                0,
+                parseInt(vid?.startSeconds || 0, 10)
+              );
 
               return (
                 <div
@@ -863,17 +1072,43 @@ const ScoutingReportForm = ({
                   />
                   <FormField
                     label="YouTube URL"
-                    value={vid.url || ""}
+                    value={url}
                     onChange={(e) => {
                       const next = [...newVideos];
-                      next[idx] = { ...(next[idx] || {}), url: e.target.value };
+                      const parsed = parseTimestampFromUrl(e.target.value);
+                      next[idx] = {
+                        ...(next[idx] || {}),
+                        url: e.target.value,
+                        startSeconds: parsed
+                          ? parsed
+                          : Math.max(
+                              0,
+                              parseInt(next[idx]?.startSeconds || 0, 10)
+                            ),
+                      };
                       setNewVideos(next);
                     }}
                   />
+
+                  <TimestampInputs
+                    valueSeconds={startSeconds}
+                    onChange={(nextSecs) => {
+                      const next = [...newVideos];
+                      next[idx] = {
+                        ...(next[idx] || {}),
+                        startSeconds: Math.max(0, parseInt(nextSecs || 0, 10)),
+                      };
+                      setNewVideos(next);
+                    }}
+                  />
+
                   {embedId && (
                     <iframe
                       className="mt-3 w-full h-52"
-                      src={`https://www.youtube.com/embed/${embedId}`}
+                      src={`https://www.youtube.com/embed/${embedId}?start=${Math.max(
+                        0,
+                        parseInt(newVideos[idx]?.startSeconds || 0, 10)
+                      )}`}
                       allowFullScreen
                     />
                   )}
@@ -899,7 +1134,7 @@ const ScoutingReportForm = ({
               onClick={() =>
                 setNewVideos((prev) => [
                   ...prev,
-                  { title: "", notes: "", url: "" },
+                  { title: "", notes: "", url: "", startSeconds: 0 },
                 ])
               }
             >

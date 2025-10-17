@@ -1,16 +1,36 @@
-// app/api/dashboard/[userId]/scoutingReports/[reportId]/route.js
+// app/api/dashboard/[userId]/scoutingReports/[scoutingReportId]/route.js
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import { connectDB } from "@/lib/mongo";
 import ScoutingReport from "@/models/scoutingReportModel";
+import Video from "@/models/videoModel";
 
 export const dynamic = "force-dynamic";
 
 /* ---------------- helpers ---------------- */
+const safeStr = (v) => (v == null ? "" : String(v)).trim();
+
 const first24Hex = (v) =>
   typeof v === "string" ? (v.match(/[a-f0-9]{24}/i) || [])[0] : null;
 
-const safeStr = (v) => (v == null ? "" : String(v)).trim();
+// Build filters that match either ObjectId _or_ string _id (covers legacy docs)
+const buildIdCandidates = (rawId) => {
+  const candidates = [];
+  const idStr = safeStr(rawId);
+  if (!idStr) return candidates;
+
+  const hex = first24Hex(idStr);
+  if (hex) {
+    try {
+      candidates.push({ _id: new Types.ObjectId(hex) });
+    } catch {
+      /* ignore cast error; we'll still try string form */
+    }
+  }
+  // Always also try raw string form
+  candidates.push({ _id: idStr });
+  return candidates;
+};
 
 // pull a param value robustly from params OR from the URL path as a fallback
 const extractReportId = async (req, context) => {
@@ -35,23 +55,13 @@ const extractReportId = async (req, context) => {
   }
 };
 
-// Build filters that match either ObjectId _or_ string _id (covers legacy docs)
-const buildIdCandidates = (rawId) => {
-  const candidates = [];
-  const idStr = safeStr(rawId);
-  if (!idStr) return candidates;
-
-  const hex = first24Hex(idStr);
-  if (hex) {
-    try {
-      candidates.push({ _id: new Types.ObjectId(hex) });
-    } catch {
-      /* ignore cast error; we'll still try string form */
-    }
-  }
-  // Always also try raw string form
-  candidates.push({ _id: idStr });
-  return candidates;
+// best-effort normalize a division value (string id or {_id})
+const normalizeDivisionId = (val) => {
+  if (val == null || val === "") return "";
+  let id = val;
+  if (typeof id === "object") id = id._id || id.id || "";
+  id = safeStr(id);
+  return Types.ObjectId.isValid(id) ? id : "";
 };
 
 /* ---------------- PATCH ---------------- */
@@ -72,8 +82,8 @@ export async function PATCH(req, context) {
     const body = await req.json();
 
     // Find doc by either id representation
-    const doc = await ScoutingReport.findOne({ $or: candidates });
-    if (!doc) {
+    const report = await ScoutingReport.findOne({ $or: candidates });
+    if (!report) {
       return NextResponse.json(
         { message: "Report not found", debug: { rawReportId, candidates } },
         { status: 404 }
@@ -81,37 +91,43 @@ export async function PATCH(req, context) {
     }
 
     // Build update doc from allowed fields
-    const update = {
-      ...(body.matchType !== undefined && { matchType: body.matchType }),
+    const update = {};
 
-      ...(body.athleteFirstName !== undefined && {
-        athleteFirstName: body.athleteFirstName,
-      }),
-      ...(body.athleteLastName !== undefined && {
-        athleteLastName: body.athleteLastName,
-      }),
-      ...(body.athleteNationalRank !== undefined && {
-        athleteNationalRank: body.athleteNationalRank,
-      }),
-      ...(body.athleteWorldRank !== undefined && {
-        athleteWorldRank: body.athleteWorldRank,
-      }),
+    if (body.matchType !== undefined) update.matchType = body.matchType;
 
-      ...(body.division !== undefined && { division: body.division }),
-      ...(body.athleteClub !== undefined && { athleteClub: body.athleteClub }),
-      ...(body.athleteCountry !== undefined && {
-        athleteCountry: body.athleteCountry,
-      }),
-      ...(body.athleteRank !== undefined && { athleteRank: body.athleteRank }),
-      ...(body.athleteGrip !== undefined && { athleteGrip: body.athleteGrip }),
-      ...(body.athleteAttacks !== undefined && {
-        athleteAttacks: body.athleteAttacks,
-      }),
-      ...(body.athleteAttackNotes !== undefined && {
-        athleteAttackNotes: body.athleteAttackNotes,
-      }),
-      ...(body.accessList !== undefined && { accessList: body.accessList }),
-    };
+    if (body.athleteFirstName !== undefined)
+      update.athleteFirstName = body.athleteFirstName;
+    if (body.athleteLastName !== undefined)
+      update.athleteLastName = body.athleteLastName;
+    if (body.athleteNationalRank !== undefined)
+      update.athleteNationalRank = body.athleteNationalRank;
+    if (body.athleteWorldRank !== undefined)
+      update.athleteWorldRank = body.athleteWorldRank;
+
+    // ✅ Division: accept string id or {_id}, safely cast to ObjectId
+    if (body.division !== undefined) {
+      const divId = normalizeDivisionId(body.division);
+      if (divId) {
+        update.division = new Types.ObjectId(divId);
+      } else if (body.division === "" || body.division === null) {
+        update.division = undefined; // allow clearing
+      }
+      // if invalid provided, silently ignore; or you could 400
+    }
+
+    if (body.athleteClub !== undefined) update.athleteClub = body.athleteClub;
+    if (body.athleteCountry !== undefined)
+      update.athleteCountry = body.athleteCountry;
+    if (body.athleteRank !== undefined) update.athleteRank = body.athleteRank;
+    if (body.athleteGrip !== undefined) update.athleteGrip = body.athleteGrip;
+    if (body.athleteAttacks !== undefined)
+      update.athleteAttacks = Array.isArray(body.athleteAttacks)
+        ? body.athleteAttacks
+        : [];
+    if (body.athleteAttackNotes !== undefined)
+      update.athleteAttackNotes = body.athleteAttackNotes;
+    if (body.accessList !== undefined)
+      update.accessList = Array.isArray(body.accessList) ? body.accessList : [];
 
     // weight fields (keep alias in sync)
     if (body.weightCategory !== undefined) {
@@ -121,7 +137,109 @@ export async function PATCH(req, context) {
     if (body.weightLabel !== undefined) update.weightLabel = body.weightLabel;
     if (body.weightUnit !== undefined) update.weightUnit = body.weightUnit;
 
-    await ScoutingReport.updateOne({ _id: doc._id }, { $set: update });
+    await ScoutingReport.updateOne({ _id: report._id }, { $set: update });
+
+    /* ------------ videos: create/update/delete ------------ */
+    const updatedVideos = Array.isArray(body.updatedVideos)
+      ? body.updatedVideos
+      : [];
+    const newVideos = Array.isArray(body.newVideos) ? body.newVideos : [];
+    const deletedVideos = Array.isArray(body.deletedVideos)
+      ? body.deletedVideos
+      : [];
+
+    // DELETE first
+    if (deletedVideos.length) {
+      const ids = deletedVideos
+        .map((v) => safeStr(v))
+        .filter((id) => Types.ObjectId.isValid(id))
+        .map((id) => new Types.ObjectId(id));
+      if (ids.length) {
+        await Video.deleteMany({ _id: { $in: ids }, report: report._id });
+      }
+    }
+
+    // UPDATE existing (by _id)
+    for (const v of updatedVideos) {
+      if (!v || !v._id) continue;
+      const idStr = safeStr(v._id);
+      if (!Types.ObjectId.isValid(idStr)) continue;
+
+      const urlRaw = safeStr(v.url || v.videoURL);
+      const startSeconds = Math.max(
+        0,
+        parseInt(
+          typeof v.startSeconds === "number"
+            ? v.startSeconds
+            : v?.startSeconds || 0,
+          10
+        )
+      );
+
+      // compute urlCanonical & videoId
+      let urlCanonical = urlRaw;
+      let videoId = "";
+      // YouTube id
+      const m =
+        urlRaw.match(/(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/i) ||
+        urlRaw.match(/youtube\.com\/shorts\/([^?]+)/i);
+      if (m && m[1]) {
+        videoId = m[1];
+        urlCanonical = `https://www.youtube.com/embed/${videoId}`;
+      }
+
+      await Video.updateOne(
+        { _id: idStr, report: report._id },
+        {
+          $set: {
+            title: safeStr(v.title || v.videoTitle),
+            notes: safeStr(v.notes || v.videoNotes),
+            url: urlRaw,
+            urlCanonical,
+            videoId,
+            startSeconds,
+          },
+        }
+      );
+    }
+
+    // CREATE new
+    for (const v of newVideos) {
+      const urlRaw = safeStr(v.url || v.videoURL);
+      if (!urlRaw) continue;
+
+      const startSeconds = Math.max(
+        0,
+        parseInt(
+          typeof v.startSeconds === "number"
+            ? v.startSeconds
+            : v?.startSeconds || 0,
+          10
+        )
+      );
+
+      // compute urlCanonical & videoId
+      let urlCanonical = urlRaw;
+      let videoId = "";
+      const m =
+        urlRaw.match(/(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/i) ||
+        urlRaw.match(/youtube\.com\/shorts\/([^?]+)/i);
+      if (m && m[1]) {
+        videoId = m[1];
+        urlCanonical = `https://www.youtube.com/embed/${videoId}`;
+      }
+
+      await Video.create({
+        title: safeStr(v.title || v.videoTitle),
+        notes: safeStr(v.notes || v.videoNotes),
+        url: urlRaw,
+        urlCanonical,
+        videoId,
+        startSeconds,
+        report: report._id,
+        createdBy: report.createdById || undefined,
+      });
+    }
 
     return NextResponse.json(
       { message: "Scouting report updated." },
@@ -155,20 +273,16 @@ export async function DELETE(req, context) {
     const doc = await ScoutingReport.findOne({ $or: candidates }).lean();
     if (!doc) {
       return NextResponse.json(
-        {
-          message: "Report not found",
-          debug: {
-            rawReportId,
-            candidates,
-            // NOTE: keep this debug while fixing; remove later
-          },
-        },
+        { message: "Report not found", debug: { rawReportId, candidates } },
         { status: 404 }
       );
     }
 
-    // 2) Delete by the same $or candidates
-    const res = await ScoutingReport.deleteOne({ $or: candidates });
+    // 2) Delete linked videos
+    await Video.deleteMany({ report: doc._id });
+
+    // 3) Delete the report
+    const res = await ScoutingReport.deleteOne({ _id: doc._id });
 
     if (res.deletedCount !== 1) {
       return NextResponse.json(

@@ -13,6 +13,26 @@ import ScoutingReportForm from "./forms/ScoutingReportForm";
 import ModalLayout from "@/components/shared/ModalLayout";
 import Spinner from "@/components/shared/Spinner";
 
+/* ---------------- safe display helpers --------------- */
+const genderLabel = (g) => {
+  const s = String(g ?? "").toLowerCase();
+  if (s === "male") return "Men";
+  if (s === "female") return "Women";
+  if (s === "coed" || s === "open") return "Coed";
+  return s || "";
+};
+
+const computeDivisionDisplay = (division) => {
+  if (!division) return "—";
+  if (typeof division === "string") return division; // legacy id/label
+  if (typeof division === "object") {
+    const name = division?.name || "";
+    const glab = genderLabel(division?.gender);
+    return name ? (glab ? `${name} — ${glab}` : name) : "—";
+  }
+  return "—";
+};
+
 /* ---------- helpers ---------- */
 function extractArray(payload) {
   if (Array.isArray(payload)) return payload;
@@ -22,21 +42,6 @@ function extractArray(payload) {
   if (payload && Array.isArray(payload.data)) return payload.data;
   if (payload && Array.isArray(payload.results)) return payload.results;
   return [];
-}
-
-function genderLabel(g) {
-  if (!g) return "";
-  const s = String(g).toLowerCase();
-  if (s === "male") return "Men";
-  if (s === "female") return "Women";
-  if (s === "coed" || s === "open") return "Coed";
-  return s;
-}
-
-function divisionPrettyFromObj(d) {
-  if (!d) return "";
-  const g = genderLabel(d.gender);
-  return g ? `${d.name} — ${g}` : d.name || "";
 }
 
 function ensureWeightDisplay(label, unit) {
@@ -92,12 +97,115 @@ async function fetchDivisionWeights(divisionId) {
   }
 }
 
+/* ---------- NEW: Build a primitive-only payload for the preview modal ---------- */
+const toSafeStr = (v) => (v == null ? "" : String(v));
+const toNonNegInt = (v) => {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+
+// const toSafeStr = (v) => (v == null ? "" : String(v));
+// const toNonNegInt = (v) => {
+//   const n = parseInt(v, 10);
+//   return Number.isFinite(n) && n > 0 ? n : 0;
+// };
+
+const buildPreviewPayload = (r) => {
+  // division is always turned into a STRING for preview
+  const divisionDisplay = computeDivisionDisplay(r?.division);
+
+  // weight snapshot first, with unit if not already in label
+  const weightLabel = toSafeStr(r?.weightLabel).trim();
+  const weightUnit = toSafeStr(r?.weightUnit).trim();
+  const rawCategoryLabel =
+    (typeof r?.weightCategory === "object"
+      ? toSafeStr(r?.weightCategory?.label || r?.weightCategory?.name)
+      : toSafeStr(r?.weightCategory)) || "";
+
+  let weightDisplay = weightLabel || rawCategoryLabel || "";
+  if (weightDisplay && weightUnit && !/\b(kg|lb)s?\b/i.test(weightDisplay)) {
+    weightDisplay = `${weightDisplay} ${weightUnit}`;
+  }
+
+  // normalize videos with only primitives
+  const videos = Array.isArray(r?.videos)
+    ? r.videos
+        .map((v) =>
+          v && typeof v === "object"
+            ? {
+                title: toSafeStr(v.title || v.videoTitle),
+                notes: toSafeStr(v.notes || v.videoNotes),
+                url: toSafeStr(v.url || v.videoURL),
+                startSeconds: toNonNegInt(v.startSeconds),
+              }
+            : null
+        )
+        .filter(Boolean)
+    : [];
+
+  // include legacy single-video fields (optional)
+  const legacyVideoURL = toSafeStr(r?.video?.videoURL || r?.videoURL);
+  const legacyVideoTitle = toSafeStr(r?.video?.videoTitle || r?.videoTitle);
+  const legacyVideoNotes = toSafeStr(r?.video?.videoNotes || r?.videoNotes);
+
+  return {
+    _id: toSafeStr(r?._id),
+    matchType: toSafeStr(r?.matchType),
+    eventName: toSafeStr(r?.eventName),
+    matchDate: r?.matchDate || null,
+    createdByName: toSafeStr(r?.createdByName),
+    result: toSafeStr(r?.result),
+    score: toSafeStr(r?.score),
+    isPublic: !!r?.isPublic,
+
+    // ---- Athlete fields (the ones the modal expects) ----
+    athleteFirstName: toSafeStr(r?.athleteFirstName),
+    athleteLastName: toSafeStr(r?.athleteLastName),
+    athleteCountry: toSafeStr(r?.athleteCountry),
+    athleteNationalRank: toSafeStr(r?.athleteNationalRank),
+    athleteWorldRank: toSafeStr(r?.athleteWorldRank),
+    athleteClub: toSafeStr(r?.athleteClub),
+    athleteGrip: toSafeStr(r?.athleteGrip),
+
+    // Keep both of these as strings for display
+    divisionDisplay,
+    division: divisionDisplay,
+
+    weightDisplay: weightDisplay || "—",
+    weightLabel,
+    weightUnit,
+
+    // Techniques + notes
+    opponentAttacks: Array.isArray(r?.opponentAttacks)
+      ? r.opponentAttacks.map(toSafeStr)
+      : [],
+    athleteAttacks: Array.isArray(r?.athleteAttacks)
+      ? r.athleteAttacks.map(toSafeStr)
+      : [],
+    opponentAttackNotes: toSafeStr(r?.opponentAttackNotes),
+    athleteAttackNotes: toSafeStr(r?.athleteAttackNotes),
+
+    // Opponent fields (mostly used by match reports—harmless to include)
+    opponentName: toSafeStr(r?.opponentName),
+    opponentCountry: toSafeStr(r?.opponentCountry),
+    opponentClub: toSafeStr(r?.opponentClub),
+    opponentRank: toSafeStr(r?.opponentRank),
+    opponentGrip: toSafeStr(r?.opponentGrip),
+    myRank: toSafeStr(r?.myRank),
+
+    videos,
+    // legacy single-video (modal tolerates absence)
+    videoURL: legacyVideoURL,
+    videoTitle: legacyVideoTitle,
+    videoNotes: legacyVideoNotes,
+  };
+};
+
 const DashboardScouting = ({ user }) => {
   const router = useRouter();
 
-  // raw reports
+  // raw reports (normalized)
   const [scoutingReports, setScoutingReports] = useState([]);
-
   // pretty division map: { divisionId: "IJF Junior (U21) — Women" }
   const [divisionMap, setDivisionMap] = useState({});
 
@@ -110,7 +218,8 @@ const DashboardScouting = ({ user }) => {
   // modal state
   const [open, setOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [selectedReport, setSelectedReport] = useState(null);
+  const [selectedReport, setSelectedReport] = useState(null); // raw for edit
+  const [previewPayload, setPreviewPayload] = useState(null); // sanitized for preview
 
   // styles for the form
   const [stylesLoading, setStylesLoading] = useState(false);
@@ -170,18 +279,27 @@ const DashboardScouting = ({ user }) => {
         return tb - ta;
       });
 
-      // Normalize for the table
-      const normalized = cleaned.map((r) => ({
-        ...r,
-        divisionId: r?.division?._id || r?.division || null,
-        divisionName: r?.division?.name || r?.divisionName || "",
-        weightText: r?.weightLabel
+      // Normalize for UI (precompute divisionDisplay as a string)
+      const normalized = cleaned.map((r) => {
+        const divisionId = r?.division?._id || r?.division || null;
+        const divisionName = r?.division?.name || r?.divisionName || "";
+        const divisionDisplay = computeDivisionDisplay(r?.division);
+        const weightText = r?.weightLabel
           ? `${r.weightLabel}${r?.weightUnit ? ` ${r.weightUnit}` : ""}`
-          : "",
-        athleteFullName: [r?.athleteFirstName, r?.athleteLastName]
+          : "";
+        const athleteFullName = [r?.athleteFirstName, r?.athleteLastName]
           .filter(Boolean)
-          .join(" "),
-      }));
+          .join(" ");
+
+        return {
+          ...r,
+          divisionId,
+          divisionName,
+          divisionDisplay, // <-- guaranteed string
+          weightText,
+          athleteFullName,
+        };
+      });
 
       setScoutingReports(normalized);
 
@@ -204,7 +322,7 @@ const DashboardScouting = ({ user }) => {
       const divObj =
         r?.division && typeof r.division === "object" ? r.division : null;
       if (divId && divObj && !entries[divId]) {
-        entries[divId] = divisionPrettyFromObj(divObj);
+        entries[divId] = computeDivisionDisplay(divObj);
       }
     });
 
@@ -232,7 +350,7 @@ const DashboardScouting = ({ user }) => {
           const data = await res.json().catch(() => ({}));
           const divs = Array.isArray(data?.divisions) ? data.divisions : [];
           divs.forEach((d) => {
-            if (d?._id) fetched[d._id] = divisionPrettyFromObj(d);
+            if (d?._id) fetched[d._id] = computeDivisionDisplay(d);
           });
         } catch {
           /* non-fatal */
@@ -367,6 +485,7 @@ const DashboardScouting = ({ user }) => {
         setScoutingReports((prev) =>
           prev.filter((r) => String(r._id) !== String(report._id))
         );
+        setPreviewPayload(null);
         setSelectedReport(null);
         await fetchReports({ showSpinner: false });
         return;
@@ -394,12 +513,11 @@ const DashboardScouting = ({ user }) => {
   // ----- Derive table rows -----
   const tableData = useMemo(() => {
     return (scoutingReports || []).map((r) => {
+      // We already computed r.divisionDisplay above, but keep a defensive fallback:
       const divDisplay =
-        (r?.division && typeof r.division === "object"
-          ? divisionPrettyFromObj(r.division)
-          : r?.division && typeof r.division === "string"
-          ? divisionMap[r.division] || "—"
-          : "—") || "—";
+        typeof r.divisionDisplay === "string"
+          ? r.divisionDisplay
+          : computeDivisionDisplay(r.division);
 
       let weightDisplay = "—";
       if (r?.weightLabel && String(r.weightLabel).trim()) {
@@ -426,10 +544,9 @@ const DashboardScouting = ({ user }) => {
 
       return { ...r, divisionDisplay: divDisplay, weightDisplay };
     });
-  }, [scoutingReports, divisionMap, weightsMap]);
+  }, [scoutingReports, weightsMap]);
 
   // ===== Columns =====
-  // Order: Style → First Name → Last Name → (rest unchanged)
   const columns = useMemo(
     () => [
       {
@@ -531,7 +648,7 @@ const DashboardScouting = ({ user }) => {
             <div className="flex justify-center gap-3">
               <button
                 onClick={() => {
-                  setSelectedReport(report);
+                  setPreviewPayload(buildPreviewPayload(report)); // << sanitized
                   setPreviewOpen(true);
                 }}
                 title="View Details"
@@ -541,7 +658,7 @@ const DashboardScouting = ({ user }) => {
               </button>
               <button
                 onClick={async () => {
-                  setSelectedReport(report);
+                  setSelectedReport(report); // raw for edit
                   setOpen(true);
                   await Promise.all([
                     loadStylesForModal(),
@@ -678,7 +795,10 @@ const DashboardScouting = ({ user }) => {
                     <strong>Country:</strong> {report.athleteCountry}
                   </p>
                   <p>
-                    <strong>Division:</strong> {report.divisionDisplay}
+                    <strong>Division:</strong>{" "}
+                    {typeof report.divisionDisplay === "string"
+                      ? report.divisionDisplay
+                      : computeDivisionDisplay(report.division)}
                   </p>
                   <p>
                     <strong>Weight Class:</strong> {report.weightDisplay}
@@ -690,7 +810,7 @@ const DashboardScouting = ({ user }) => {
                   <div className="flex justify-end gap-4 mt-4">
                     <button
                       onClick={() => {
-                        setSelectedReport(report);
+                        setPreviewPayload(buildPreviewPayload(report)); // << sanitized
                         setPreviewOpen(true);
                       }}
                       title="View Details"
@@ -700,7 +820,7 @@ const DashboardScouting = ({ user }) => {
                     </button>
                     <button
                       onClick={async () => {
-                        setSelectedReport(report);
+                        setSelectedReport(report); // raw for edit
                         setOpen(true);
                         await Promise.all([
                           loadStylesForModal(),
@@ -740,11 +860,11 @@ const DashboardScouting = ({ user }) => {
       )}
 
       {/* Preview modal */}
-      {previewOpen && selectedReport && (
+      {previewOpen && previewPayload && (
         <PreviewReportModal
           previewOpen={previewOpen}
           setPreviewOpen={setPreviewOpen}
-          report={selectedReport}
+          report={previewPayload} // << primitive-only payload
           reportType="scouting"
         />
       )}
