@@ -6,7 +6,7 @@ import { getCurrentUser } from "@/lib/auth-server";
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
 import TeamInvitation from "@/models/teamInvitationModel";
-import User from "@/models/userModel"; // <-- add this to resolve inviter's name
+import User from "@/models/userModel";
 import { Mail } from "@/lib/email/mailer";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 import sanitizeHtml from "sanitize-html";
@@ -77,20 +77,29 @@ export async function POST(_req, { params }) {
     }
 
     const me = await getCurrentUser();
-    if (!me)
+    if (!me) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
 
+    // Include team.user so we can recognize the owner
     const team = await Team.findOne({ teamSlug: slug }).select(
-      "_id teamName teamSlug"
+      "_id teamName teamSlug user"
     );
-    if (!team)
+    if (!team) {
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
+    }
 
     const myMembership = await TeamMember.findOne({
       teamId: team._id,
       userId: me._id,
     }).select("role");
-    if (!myMembership || myMembership.role !== "manager") {
+
+    // ✅ Permission: owner OR manager OR coach
+    const isOwner = String(team.user) === String(me._id);
+    const canManage =
+      isOwner || ["manager", "coach"].includes(myMembership?.role);
+
+    if (!canManage) {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
@@ -133,8 +142,12 @@ export async function POST(_req, { params }) {
 
     // HTML-safe pieces
     const teamName = escapeHtml(team.teamName);
-    const inviteeFirst = escapeHtml(invite.inviteeFirstName || "");
-    const inviteeLast = escapeHtml(invite.inviteeLastName || "");
+    const inviteeFirst = escapeHtml(
+      invite.inviteeFirstName || invite.firstName || ""
+    );
+    const inviteeLast = escapeHtml(
+      invite.inviteeLastName || invite.lastName || ""
+    );
     const parentSafe = escapeHtml(invite.parentName || "");
     const targetEmail =
       (invite.isMinor ? invite.parentEmail : invite.email) || "";
@@ -160,7 +173,7 @@ export async function POST(_req, { params }) {
         <span style="word-break:break-all">${acceptUrl}</span>
       </p>`;
 
-    // Body (adult vs parent/guardian) — matches the new template
+    // Body (adult vs parent/guardian)
     const body = invite.isMinor
       ? `
         <p>Hi ${parentSafe || "there"},</p>
@@ -173,7 +186,7 @@ export async function POST(_req, { params }) {
         <ul>
           <li>View and contribute to scouting reports</li>
           <li>Receive team updates and messages</li>
-          <li>Track progress and match insights</li>
+          <li>Track performance and match insights</li>
           <li>Stay in sync with their coach and teammates</li>
         </ul>
 
@@ -185,9 +198,6 @@ export async function POST(_req, { params }) {
         <p style="margin-top:14px;font-size:12px;color:#6b7280">
           This invitation link expires on <strong>${expiresOn}</strong>.
         </p>
-
-        <p>Whether you’re a student, coach, parent, or fan—there’s a place for you here.<br/>
-        See you on the mat!</p>
       `
       : `
         <p>Hi ${inviteeFirst || "there"},</p>
@@ -211,9 +221,6 @@ export async function POST(_req, { params }) {
         <p style="margin-top:14px;font-size:12px;color:#6b7280">
           This invitation link expires on <strong>${expiresOn}</strong>.
         </p>
-
-        <p>Whether you're a student, coach, parent, or fan—there’s a place for you here.<br/>
-        See you on the mat!</p>
       `;
 
     const html = baseEmailTemplate({
@@ -222,7 +229,7 @@ export async function POST(_req, { params }) {
     });
 
     await Mail.sendEmail({
-      type: Mail.kinds.TEAM_INVITE, // respects prefs + 24h dedupe
+      type: Mail.kinds.TEAM_INVITE,
       toEmail: targetEmail,
       subject: `You're invited to join ${teamName} on MatScout`,
       html,

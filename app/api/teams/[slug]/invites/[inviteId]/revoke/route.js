@@ -13,7 +13,7 @@ export async function POST(_req, { params }) {
   try {
     await connectDB();
 
-    const { slug, inviteId } = params; // <-- matches folder name
+    const { slug, inviteId } = params;
     if (!inviteId || !isValidObjectId(inviteId)) {
       return NextResponse.json(
         { message: "Invalid invite id" },
@@ -25,7 +25,10 @@ export async function POST(_req, { params }) {
     if (!me)
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const team = await Team.findOne({ teamSlug: slug }).select("_id teamName");
+    // Need owner to allow, or staff
+    const team = await Team.findOne({ teamSlug: slug }).select(
+      "_id teamName user"
+    );
     if (!team)
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
 
@@ -34,14 +37,17 @@ export async function POST(_req, { params }) {
       userId: me._id,
     }).select("role");
 
-    if (!membership || membership.role !== "manager") {
+    const isOwner = String(team.user) === String(me._id);
+    const canManage =
+      isOwner || ["manager", "coach"].includes(membership?.role);
+    if (!canManage)
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-    }
 
+    // Only delete if it's still pending (not accepted)
     const invite = await TeamInvitation.findOne({
       _id: inviteId,
       teamId: team._id,
-    });
+    }).select("_id acceptedAt status");
 
     if (!invite) {
       return NextResponse.json(
@@ -49,25 +55,20 @@ export async function POST(_req, { params }) {
         { status: 404 }
       );
     }
-    if (invite.acceptedAt) {
+    if (invite.acceptedAt || invite.status === "accepted") {
       return NextResponse.json(
         { message: "Invite already accepted" },
         { status: 409 }
       );
     }
-    if (invite.revokedAt) {
-      return NextResponse.json(
-        { message: "Invite already revoked" },
-        { status: 409 }
-      );
-    }
 
-    invite.revokedAt = new Date();
-    invite.revokedBy = me._id;
-    await invite.save();
+    await TeamInvitation.deleteOne({ _id: inviteId, teamId: team._id });
 
     return NextResponse.json(
-      { message: "Invitation revoked" },
+      {
+        message: "Invitation revoked (deleted)",
+        inviteId: inviteId.toString(),
+      },
       { status: 200 }
     );
   } catch (err) {

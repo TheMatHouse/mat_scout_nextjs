@@ -35,10 +35,23 @@ function sanitizeNoteHtml(input = "") {
   return escapeHtml(input).replace(/\r?\n/g, "<br/>");
 }
 
-const canManage = (team, membership, meId) =>
-  String(team.user) === String(meId) ||
-  membership?.role === "manager" ||
-  membership?.role === "coach";
+function canManage(team, membership, meId) {
+  return (
+    String(team.user) === String(meId) ||
+    membership?.role === "manager" ||
+    membership?.role === "coach"
+  );
+}
+
+function activeFilter(teamId) {
+  const now = new Date();
+  return {
+    teamId,
+    acceptedAt: { $exists: false },
+    revokedAt: { $exists: false },
+    $or: [{ expiresAt: { $gt: now } }, { expiresAt: { $exists: false } }],
+  };
+}
 
 /* ------------------ POST ------------------ */
 export async function POST(req, { params }) {
@@ -49,7 +62,7 @@ export async function POST(req, { params }) {
   if (!me) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const team = await Team.findOne({ teamSlug: slug }).select(
-    "_id teamName user"
+    "_id teamName teamSlug user"
   );
   if (!team)
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
@@ -57,21 +70,28 @@ export async function POST(req, { params }) {
   const membership = await TeamMember.findOne({
     teamId: team._id,
     userId: me._id,
-  }).select("role");
-  if (!canManage(team, membership, me._id)) {
+  })
+    .select("role")
+    .lean();
+
+  if (!canManage(team, membership, me._id))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
 
   const body = await req.json();
   const role = body.role;
   const isMinor = !!body.isMinor;
 
-  // invitee names (child names if minor, optional for adults)
-  const firstName = norm(body.firstName ?? body.inviteeFirstName ?? "");
-  const lastName = norm(body.lastName ?? body.inviteeLastName ?? "");
+  // invitee names
+  const inviteeFirstName = norm(body.inviteeFirstName ?? body.firstName ?? "");
+  const inviteeLastName = norm(body.inviteeLastName ?? body.lastName ?? "");
 
-  // email (for minors this is the parent/guardian email)
-  const email = lower(body.email ?? body.parentEmail ?? "");
+  // emails
+  const email = lower(body.email ?? "");
+  const parentEmail = lower(body.parentEmail ?? "");
+
+  // only defined if minor
+  const parentFirstName = isMinor ? norm(body.parentFirstName ?? "") : "";
+  const parentLastName = isMinor ? norm(body.parentLastName ?? "") : "";
 
   const message = body.message?.slice(0, 1000) || "";
 
@@ -79,26 +99,65 @@ export async function POST(req, { params }) {
   if (!["member", "coach", "manager"].includes(role)) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
   }
-  if (!email) {
-    return NextResponse.json({ error: "Email required" }, { status: 400 });
-  }
-  if (isMinor && (!firstName || !lastName)) {
+
+  if (!inviteeFirstName || !inviteeLastName) {
     return NextResponse.json(
-      { error: "Minor invites require first and last name" },
+      { error: "Invitee name required" },
       { status: 400 }
     );
   }
 
-  /* ---------- duplicate checks (aligned to your schema indexes) ---------- */
-  // Adults: unique (teamId, email) where isMinor:false
-  // Minors: unique (teamId, email, firstNameLower, lastNameLower) where isMinor:true
-  const q = { teamId: team._id, email, isMinor };
-  if (isMinor) {
-    q.firstNameLower = lower(firstName);
-    q.lastNameLower = lower(lastName);
+  if (!isMinor && !email) {
+    return NextResponse.json({ error: "Email required" }, { status: 400 });
   }
-  const exists = await TeamInvitation.findOne(q).lean();
-  if (exists) {
+
+  if (isMinor) {
+    if (!parentFirstName || !parentLastName) {
+      return NextResponse.json(
+        { error: "Parent first and last name required" },
+        { status: 400 }
+      );
+    }
+    if (!parentEmail) {
+      return NextResponse.json(
+        { error: "Parent email required" },
+        { status: 400 }
+      );
+    }
+  }
+
+  /* ---------- duplicate checks ---------- */
+  const existing = await TeamInvitation.find(activeFilter(team._id))
+    .select(
+      "isMinor email parentEmail inviteeFirstName inviteeLastName role teamId"
+    )
+    .lean();
+
+  const firstLower = lower(inviteeFirstName);
+  const lastLower = lower(inviteeLastName);
+  let duplicate = false;
+
+  if (!isMinor) {
+    duplicate = existing.some(
+      (i) =>
+        !i.isMinor &&
+        i.teamId.toString() === team._id.toString() &&
+        lower(i.email || "") === email &&
+        i.role === role
+    );
+  } else {
+    duplicate = existing.some(
+      (i) =>
+        i.isMinor &&
+        i.teamId.toString() === team._id.toString() &&
+        lower(i.parentEmail || "") === parentEmail &&
+        lower(i.inviteeFirstName || "") === firstLower &&
+        lower(i.inviteeLastName || "") === lastLower &&
+        i.role === role
+    );
+  }
+
+  if (duplicate) {
     return NextResponse.json(
       { error: "Duplicate invite already exists for this recipient." },
       { status: 409 }
@@ -107,18 +166,35 @@ export async function POST(req, { params }) {
 
   /* ---------- create ---------- */
   const token = crypto.randomBytes(32).toString("hex");
-  const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days
+  const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
 
   const invite = await TeamInvitation.create({
     teamId: team._id,
-    email,
+    role,
     isMinor,
-    firstName: isMinor ? firstName : undefined,
-    lastName: isMinor ? lastName : undefined,
-    invitedByUserId: me._id,
+    email: isMinor ? undefined : email,
+    parentEmail: isMinor ? parentEmail : undefined,
+    parentFirstName: isMinor ? parentFirstName : undefined,
+    parentLastName: isMinor ? parentLastName : undefined,
+    inviteeFirstName,
+    inviteeLastName,
+    message,
 
-    // keep everything in payload so the model does not need to change
-    payload: { token, message, role, expiresAt },
+    // Store top-level for convenience (if your schema allows it)...
+    token,
+    expiresAt,
+
+    invitedBy: me._id,
+
+    // ...and ALWAYS store in payload so lookup/accept can read them reliably.
+    payload: {
+      ...(body.payload || {}),
+      token,
+      expiresAt,
+      role,
+      firstName: isMinor ? inviteeFirstName : undefined,
+      lastName: isMinor ? inviteeLastName : undefined,
+    },
   });
 
   /* ---------- email ---------- */
@@ -132,10 +208,8 @@ export async function POST(req, { params }) {
     escapeHtml(me?.email);
 
   const teamName = escapeHtml(team.teamName);
-  const childName =
-    isMinor && (firstName || lastName)
-      ? `${escapeHtml(firstName)} ${escapeHtml(lastName)}`.trim()
-      : "";
+  const inviteeFirst = escapeHtml(inviteeFirstName);
+  const inviteeLast = escapeHtml(inviteeLastName);
 
   const noteHtml = sanitizeNoteHtml(message);
   const coachNote = noteHtml
@@ -151,29 +225,49 @@ export async function POST(req, { params }) {
       Join Team
     </a>`;
 
+  const parentFullName = isMinor
+    ? escapeHtml(
+        [parentFirstName, parentLastName].filter(Boolean).join(" ") || "there"
+      )
+    : "";
+
+  const bodyHtml = isMinor
+    ? `
+      <p>Hi ${parentFullName},</p>
+      <p><strong>${inviterName}</strong> invited your athlete
+         <strong>${inviteeFirst} ${inviteeLast}</strong> to join <strong>${teamName}</strong> on MatScout.</p>
+      <ul>
+        <li>View and contribute to scouting reports</li>
+        <li>Receive team updates and messages</li>
+        <li>Track progress and match insights</li>
+        <li>Stay in sync with their coach and teammates</li>
+      </ul>
+      <p>${ctaBtn}</p>
+      ${coachNote}
+      <p style="font-size:12px;color:#666;margin-top:10px">This link expires in 14 days.</p>
+    `
+    : `
+      <p>Hi ${inviteeFirst || "there"},</p>
+      <p><strong>${inviterName}</strong> invited you to join <strong>${teamName}</strong> on MatScout.</p>
+      <ul>
+        <li>View and contribute to scouting reports</li>
+        <li>Receive team updates and messages</li>
+        <li>Track your progress and match insights</li>
+        <li>Stay in sync with your coach and teammates</li>
+      </ul>
+      <p>${ctaBtn}</p>
+      ${coachNote}
+      <p style="font-size:12px;color:#666;margin-top:10px">This link expires in 14 days.</p>
+    `;
+
   const html = baseEmailTemplate({
     title: `Invitation to join ${teamName}`,
-    message: isMinor
-      ? `
-        <p>Hi Parent/Guardian,</p>
-        <p><strong>${inviterName}</strong> invited your athlete
-           <strong>${childName}</strong> to join <strong>${teamName}</strong> on MatScout.</p>
-        ${ctaBtn}
-        ${coachNote}
-        <p style="font-size:12px;color:#666;margin-top:10px">This link expires in 14 days.</p>
-      `
-      : `
-        <p>Hi there,</p>
-        <p><strong>${inviterName}</strong> invited you to join <strong>${teamName}</strong> on MatScout.</p>
-        ${ctaBtn}
-        ${coachNote}
-        <p style="font-size:12px;color:#666;margin-top:10px">This link expires in 14 days.</p>
-      `,
+    message: bodyHtml,
   });
 
   await Mail.sendEmail({
     type: Mail.kinds.TEAM_INVITE,
-    toEmail: email,
+    toEmail: isMinor ? parentEmail : email,
     subject: `You're invited to join ${teamName} on MatScout`,
     html,
     teamId: team._id.toString(),
@@ -199,14 +293,14 @@ export async function GET(_req, { params }) {
   const membership = await TeamMember.findOne({
     teamId: team._id,
     userId: me._id,
-  }).select("role");
+  })
+    .select("role")
+    .lean();
 
-  if (!canManage(team, membership, me._id)) {
+  if (!canManage(team, membership, me._id))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
 
-  // Return all active invites (you can filter more if needed)
-  const invites = await TeamInvitation.find({ teamId: team._id })
+  const invites = await TeamInvitation.find(activeFilter(team._id))
     .sort({ createdAt: -1 })
     .lean();
 
