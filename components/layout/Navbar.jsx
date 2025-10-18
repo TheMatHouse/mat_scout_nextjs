@@ -35,12 +35,14 @@ const Navbar = () => {
               >
                 Users
               </Link>
-              <Link
-                href="/faq"
-                className="hover:underline"
-              >
-                FAQ
-              </Link>
+              {process.env.NODE_ENV !== "production" && (
+                <Link
+                  href="/faq"
+                  className="hover:underline"
+                >
+                  FAQ
+                </Link>
+              )}
               <Link
                 href="/contact"
                 className="hover:underline"

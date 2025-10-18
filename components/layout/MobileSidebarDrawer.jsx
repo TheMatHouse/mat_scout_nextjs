@@ -293,13 +293,15 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
             >
               Teams
             </Link>
-            <Link
-              href="/faq"
-              onClick={onClose}
-              className="block hover:text-white transition"
-            >
-              FAQ
-            </Link>
+            {process.env.NODE_ENV !== "production" && (
+              <Link
+                href="/faq"
+                onClick={onClose}
+                className="block hover:text-white transition"
+              >
+                FAQ
+              </Link>
+            )}
             <Link
               href="/contact"
               onClick={onClose}
