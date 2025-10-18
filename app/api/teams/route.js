@@ -64,17 +64,32 @@ function buildFilter({ name, city, state, country }) {
   return and.length ? { $and: and } : {};
 }
 
-// simple, dependency-free slugify
-function toSlug(str = "") {
+// Slug rules to match your UI (underscores supported)
+const SLUG_RX = /^[a-z0-9_ -]+$/i;
+function toUiSlug(str = "") {
   return String(str)
     .trim()
     .toLowerCase()
     .replace(/['"]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "");
+    .replace(/[^a-z0-9_]+/g, "_") // keep underscores; collapse others to "_"
+    .replace(/^_+|_+$/g, "")
+    .replace(/__+/g, "_");
 }
 
-/* ------------------------- GET: list/search ------------------------- */
+async function ensureUniqueSlug(baseSlug) {
+  const base = toUiSlug(baseSlug) || "team";
+  // case-insensitive existence check
+  const exists = async (s) =>
+    !!(await Team.exists({ teamSlug: rxEqualsCaseI(s) }));
+  if (!(await exists(base))) return base;
+
+  // add _2, _3, ...
+  let n = 2;
+  while (await exists(`${base}_${n}`)) n++;
+  return `${base}_${n}`;
+}
+
+/* ------------------------- GET: list/search (unchanged) ------------------------- */
 export async function GET(req) {
   await connectDB();
 
@@ -124,7 +139,7 @@ export async function GET(req) {
   );
 }
 
-/* ------------------------- POST: create team ------------------------- */
+/* ------------------------- POST: create team (updated) ------------------------- */
 export async function POST(req) {
   try {
     await connectDB();
@@ -143,6 +158,7 @@ export async function POST(req) {
 
     const {
       teamName,
+      teamSlug: clientSlug,
       logoURL = null,
       email = "",
       phone = "",
@@ -159,6 +175,7 @@ export async function POST(req) {
       info = "",
     } = body || {};
 
+    // Validate name
     if (!teamName || !String(teamName).trim()) {
       return NextResponse.json(
         { message: "Team name is required." },
@@ -166,19 +183,28 @@ export async function POST(req) {
       );
     }
 
-    // generate a unique slug
-    const base = toSlug(teamName);
-    let slug = base || `team-${Date.now()}`;
-    let n = 1;
-    // ensure uniqueness (case-sensitive unique in DB)
-    // if you want case-insensitive, adjust to use a regex check
-    while (await Team.exists({ teamSlug: slug })) {
-      slug = `${base}-${++n}`;
+    // Decide slug (prefer the client-provided slug; fall back to name)
+    let desired = clientSlug ? String(clientSlug) : String(teamName);
+    desired = toUiSlug(desired);
+
+    // Basic format check so users get instant feedback
+    if (!desired || desired.length < 3 || !SLUG_RX.test(desired)) {
+      return NextResponse.json(
+        {
+          message:
+            "Please provide a URL slug of at least 3 characters using only letters, numbers, or underscores.",
+        },
+        { status: 400 }
+      );
     }
 
+    // Enforce uniqueness case-insensitively and suffix if needed
+    const finalSlug = await ensureUniqueSlug(desired);
+
+    // Create document
     const created = await Team.create({
       teamName: String(teamName).trim(),
-      teamSlug: slug,
+      teamSlug: finalSlug,
       user: user._id, // owner
       logoURL,
       email,
@@ -200,9 +226,33 @@ export async function POST(req) {
 
     return NextResponse.json({ team }, { status: 201 });
   } catch (err) {
+    // Duplicate key (unique index on teamSlug, etc.)
+    if (err?.code === 11000) {
+      const fields = Object.keys(err?.keyPattern || {});
+      const field = fields[0] || "field";
+      return NextResponse.json(
+        { message: `A team with that ${field} already exists.` },
+        { status: 409 }
+      );
+    }
+
+    // Mongoose validation error (surface first path’s message)
+    if (err?.name === "ValidationError") {
+      const first = Object.values(err.errors || {})[0];
+      return NextResponse.json(
+        { message: first?.message || "Validation error." },
+        { status: 400 }
+      );
+    }
+
     console.error("POST /api/teams error:", err);
     return NextResponse.json(
-      { message: "Server error creating team" },
+      {
+        message:
+          typeof err?.message === "string"
+            ? err.message
+            : "Server error creating team",
+      },
       { status: 500 }
     );
   }

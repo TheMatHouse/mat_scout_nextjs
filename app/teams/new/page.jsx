@@ -70,9 +70,8 @@ export default function CreateTeamPage() {
       adminTeamCreated({ method: "manual" });
       router.push(`/teams/${team.teamSlug}`);
     } else {
-      toast.error(
-        "Failed to create team. Please check the form and try again."
-      );
+      const err = await res.json().catch(() => ({}));
+      toast.error(err?.message || "Failed to create team.");
     }
   };
 
