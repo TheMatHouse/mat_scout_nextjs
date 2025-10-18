@@ -5,7 +5,6 @@ import { RefreshCw, XCircle, Shield } from "lucide-react";
 /** Convert any HTML to plain text (decodes entities, removes tags). */
 function htmlToText(html = "") {
   if (!html) return "";
-  // Client component → we can use DOMParser or a throwaway div
   const div = document.createElement("div");
   div.innerHTML = html;
   return (div.textContent || div.innerText || "").trim();
@@ -35,11 +34,31 @@ export default function InvitesTable({
       ) : invites.length ? (
         <div className="divide-y divide-gray-200 dark:divide-gray-700">
           {invites.map((inv) => {
-            const targetEmail =
-              (inv.isMinor ? inv.parentEmail : inv.email) || "";
-            const preview = inv.message
-              ? htmlToText(inv.message).replace(/\s+/g, " ")
+            // email is always stored in `email` for both adults and minors in your current model
+            const targetEmail = inv.email || "";
+
+            // name/label: minors have first/last; adults may not
+            const nameFromFields = [inv.firstName, inv.lastName]
+              .filter(Boolean)
+              .join(" ");
+            const labelName = inv.isMinor
+              ? nameFromFields || "(minor)"
+              : nameFromFields || targetEmail;
+
+            // role may be stored on payload or top-level depending on version
+            const role = inv?.payload?.role || inv?.role || "member";
+
+            // message may be on payload or top-level depending on version
+            const rawMessage = inv?.message ?? inv?.payload?.message ?? "";
+            const preview = rawMessage
+              ? htmlToText(rawMessage).replace(/\s+/g, " ")
               : "";
+
+            // guard expiresAt to avoid "Invalid Date"
+            const expiresAt = inv?.expiresAt ? new Date(inv.expiresAt) : null;
+            const expiresText = expiresAt
+              ? `Expires ${expiresAt.toLocaleDateString()}`
+              : "—";
 
             return (
               <div
@@ -48,9 +67,9 @@ export default function InvitesTable({
               >
                 <div className="text-sm">
                   <div className="font-medium text-gray-900 dark:text-gray-100">
-                    {inv.inviteeFirstName} {inv.inviteeLastName}
+                    {labelName}
                     <span className="ml-2 inline-block text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200">
-                      {inv.role}
+                      {role}
                     </span>
                     {inv.isMinor && (
                       <span className="ml-2 text-xs text-gray-500">
@@ -58,12 +77,16 @@ export default function InvitesTable({
                       </span>
                     )}
                   </div>
+
                   <div className="text-gray-600 dark:text-gray-300">
                     {targetEmail}
                   </div>
-                  <div className="text-xs text-gray-500">
-                    Expires {new Date(inv.expiresAt).toLocaleDateString()}
-                  </div>
+
+                  {expiresAt && (
+                    <div className="text-xs text-gray-500">
+                      Expires {expiresAt.toLocaleDateString()}
+                    </div>
+                  )}
 
                   {preview && (
                     <div className="text-xs text-gray-500 mt-1 italic line-clamp-2">

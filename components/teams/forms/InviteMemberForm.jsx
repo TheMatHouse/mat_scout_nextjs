@@ -1,3 +1,4 @@
+// components/teams/forms/InviteMemberForm.jsx
 "use client";
 
 import { useState, useMemo } from "react";
@@ -49,59 +50,59 @@ export default function InviteMemberForm({
 
   async function onSubmit(e) {
     e.preventDefault();
-
-    if (!firstName.trim() || !lastName.trim()) {
-      toast.error("Please provide the invitee’s first and last name.");
-      return;
-    }
-    if (!isMinor && !email.trim()) {
-      toast.error("Please provide the invitee’s email.");
-      return;
-    }
-    if (isMinor && !pEmail.trim()) {
-      toast.error("Please provide the parent’s email.");
-      return;
-    }
-
-    const payload = isMinor
-      ? {
-          isMinor: true,
-          role,
-          inviteeFirstName: firstName.trim(),
-          inviteeLastName: lastName.trim(),
-          parentFirstName: pFirst.trim(),
-          parentLastName: pLast.trim(),
-          parentEmail: pEmail.trim(),
-          message: message || defaultMessage,
-        }
-      : {
-          isMinor: false,
-          role,
-          inviteeFirstName: firstName.trim(),
-          inviteeLastName: lastName.trim(),
-          email: email.trim(),
-          message: message || defaultMessage,
-        };
-
     setSubmitting(true);
-    try {
-      const res = await fetch(
-        `/api/teams/${encodeURIComponent(slug)}/invites`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Failed to send invite.");
 
-      toast.success("Invite sent!");
-      adminInviteSent({ role: newRole });
+    try {
+      // build parent fields ONLY when minor
+      const parentName = isMinor ? `${pFirst} ${pLast}`.trim() : undefined;
+      const parentEmail = isMinor ? pEmail : undefined;
+
+      const payload = {
+        firstName,
+        lastName,
+        role, // send 'role'
+        email, // adult email; ignored by server if isMinor === true
+        isMinor,
+        parentName, // only present when minor
+        parentEmail, // only present when minor
+        message,
+      };
+
+      const res = await fetch(`/api/teams/${slug}/invites`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to send invite");
+      }
+
+      const displayName = `${firstName} ${lastName}`.trim();
+      toast.success(`Invitation sent to ${displayName} as ${role}`);
+
+      // optional analytics (unchanged)
+      try {
+        adminInviteSent?.({ slug, role, isMinor });
+      } catch {}
+
+      // ✅ refresh lists and close modal
+      await onSuccess?.();
       setOpen(false);
-      onSuccess?.();
+
+      // optional: reset fields for next time the modal opens
+      setIsMinor(false);
+      setFirstName("");
+      setLastName("");
+      setEmail("");
+      setPFirst("");
+      setPLast("");
+      setPEmail("");
+      setMessage("");
     } catch (err) {
-      toast.error(err.message || "Failed to send invite.");
+      toast.error(err.message || "Failed to send invite");
     } finally {
       setSubmitting(false);
     }
