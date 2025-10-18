@@ -35,7 +35,7 @@ const Navbar = () => {
               >
                 Users
               </Link>
-              {process.env.NODE_ENV !== "production" && (
+              {process.env.NEXT_PUBLIC_APP_ENV !== "production" && (
                 <Link
                   href="/faq"
                   className="hover:underline"

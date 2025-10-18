@@ -294,7 +294,7 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
               Teams
             </Link>
             {/* FAQ — hidden in production only */}
-            {process.env.NODE_ENV !== "production" && (
+            {process.env.NEXT_PUBLIC_APP_ENV !== "production" && (
               <Link
                 href="/faq"
                 onClick={onClose}
