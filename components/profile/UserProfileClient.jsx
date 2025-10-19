@@ -567,8 +567,9 @@ export default function UserProfileClient({ username, userId }) {
                   Bio
                 </h2>
               </div>
+              {/* Render bio HTML inside a scoped wrapper so bullets always show */}
               <div
-                className="prose dark:prose-invert max-w-none text-[15px] leading-7 text-gray-800 dark:text-gray-200"
+                className="bio-content prose dark:prose-invert max-w-none text-[15px] leading-7 text-gray-800 dark:text-gray-200"
                 dangerouslySetInnerHTML={{ __html: sanitize(bioHtml) }}
               />
             </div>
@@ -591,6 +592,34 @@ export default function UserProfileClient({ username, userId }) {
         targetType="user"
         list="following"
       />
+
+      {/* ✅ Scoped styles so <ul>/<ol>/<li> render bullets in the Bio only */}
+      <style
+        jsx
+        global
+      >{`
+        .bio-content ul {
+          list-style: disc !important;
+          list-style-position: outside !important;
+          padding-left: 1.25rem !important;
+          margin: 0 0 12px !important;
+        }
+        .bio-content ol {
+          list-style: decimal !important;
+          list-style-position: outside !important;
+          padding-left: 1.25rem !important;
+          margin: 0 0 12px !important;
+        }
+        .bio-content ul ul {
+          list-style: circle !important;
+          margin: 4px 0 8px !important;
+        }
+        .bio-content li {
+          display: list-item !important;
+          margin: 4px 0 !important;
+          line-height: 1.5 !important;
+        }
+      `}</style>
     </>
   );
 }

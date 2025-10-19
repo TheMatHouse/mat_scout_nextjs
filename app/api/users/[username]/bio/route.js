@@ -15,6 +15,14 @@ const json = (data, status = 200) =>
     },
   });
 
+// case-insensitive username match (same pattern you use elsewhere)
+function escapeRegex(s = "") {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+const byUsername = (username) => ({
+  username: { $regex: `^${escapeRegex(String(username))}$`, $options: "i" },
+});
+
 // Keep formatting; remove scripts/styles/inline handlers
 function sanitizeKeepFormatting(html = "") {
   return String(html)
@@ -39,10 +47,11 @@ export async function GET(_req, { params }) {
   await connectDB();
   const { username } = await params;
 
-  const doc = await User.findOne(
-    { username },
-    { _id: 1, bio: 1, bioText: 1 }
-  ).lean();
+  const doc = await User.findOne(byUsername(username), {
+    _id: 1,
+    bio: 1,
+    bioText: 1,
+  }).lean();
 
   if (!doc) return json({ error: "User not found" }, 404);
 
@@ -67,13 +76,16 @@ async function saveBio(req, { params }) {
   const viewer = await getCurrentUser().catch(() => null);
   if (!viewer) return json({ error: "Unauthorized" }, 401);
 
-  const target = await User.findOne(
-    { username },
-    { _id: 1, username: 1, firstName: 1, lastName: 1 }
-  ).lean();
+  const target = await User.findOne(byUsername(username), {
+    _id: 1,
+    username: 1,
+    firstName: 1,
+    lastName: 1,
+  }).lean();
   if (!target) return json({ error: "User not found" }, 404);
 
-  const isOwner = String(viewer.username) === String(username);
+  const isOwner =
+    String(viewer.username).toLowerCase() === String(username).toLowerCase();
   const isAdmin = !!viewer.isAdmin;
   if (!(isOwner || isAdmin)) return json({ error: "Forbidden" }, 403);
 
@@ -85,7 +97,11 @@ async function saveBio(req, { params }) {
   }
 
   const incomingHtml = typeof body?.bioHtml === "string" ? body.bioHtml : "";
-  const cleanHtml = sanitizeKeepFormatting(incomingHtml);
+  // Normalize NBSPs (optional) then keep formatting while stripping scripts/styles/handlers
+  const normalized = incomingHtml
+    .replaceAll("&nbsp;", " ")
+    .replace(/\u00a0/g, " ");
+  const cleanHtml = sanitizeKeepFormatting(normalized);
   const bioText = htmlToText(cleanHtml);
 
   if (bioText.length > 1000) {
@@ -97,7 +113,7 @@ async function saveBio(req, { params }) {
     { $set: { bio: cleanHtml, bioText } }
   );
 
-  // 🔔 notify user followers using your existing helper & event
+  // 🔔 notify followers (best-effort)
   try {
     await notifyFollowers(target._id, "followed.profile.updated", {
       changedFields: [{ key: "bio", oldValue: undefined, newValue: "updated" }],
