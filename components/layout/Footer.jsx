@@ -31,12 +31,14 @@ export default function Footer() {
           >
             Data Deletion
           </Link>
-          <Link
-            href="/faq"
-            className="hover:underline"
-          >
-            FAQ
-          </Link>
+          {process.env.NEXT_PUBLIC_APP_ENV !== "production" && (
+            <Link
+              href="/faq"
+              className="hover:underline"
+            >
+              FAQ
+            </Link>
+          )}
           <Link
             href="/contact"
             className="hover:underline"
