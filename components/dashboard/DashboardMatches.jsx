@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowUpDown, Eye, Edit, Trash, Printer } from "lucide-react";
 import ModalLayout from "@/components/shared/ModalLayout";
 import Spinner from "@/components/shared/Spinner";
+import MatchReportCard from "@/components/shared/MatchReportCard";
 
 /* ---------------- helpers to normalize styles shapes ---------------- */
 const toIdString = (v) =>
@@ -499,91 +500,28 @@ const DashboardMatches = ({ user }) => {
         </div>
       ) : (
         <>
-          {/* Cards for Mobile */}
+          {/* Cards for Mobile — now using shared MatchReportCard */}
           <div className="block md:hidden space-y-4">
             {tableData.length > 0 ? (
               tableData.map((match) => (
-                <div
+                <MatchReportCard
                   key={match._id}
-                  className="relative card p-4 rounded-lg shadow-md"
-                >
-                  {/* Floating action rail (top-right) */}
-                  <div className="absolute top-3 right-3 z-10 flex flex-col gap-2">
-                    <button
-                      onClick={async () => {
-                        const full =
-                          (await fetchFullReportById(match?._id)) || match;
-                        setSelectedMatch(full);
-                        setPreviewOpen(true);
-                      }}
-                      title="View Details"
-                      className="h-9 w-9 grid place-items-center rounded-lg border border-slate-600 bg-slate-800/70 text-blue-400 hover:bg-slate-700"
-                    >
-                      <Eye size={18} />
-                    </button>
-                    <button
-                      onClick={async () => {
-                        const [full] = await Promise.all([
-                          fetchFullReportById(match?._id),
-                          loadStylesForModal(),
-                        ]);
-                        setSelectedMatch(full || match);
-                        setOpen(true);
-                      }}
-                      title="Edit"
-                      className="h-9 w-9 grid place-items-center rounded-lg border border-slate-600 bg-slate-800/70 text-green-400 hover:bg-slate-700"
-                    >
-                      <Edit size={18} />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteMatch(match)}
-                      title="Delete"
-                      className="h-9 w-9 grid place-items-center rounded-lg border border-slate-600 bg-slate-800/70 text-red-400 hover:bg-slate-700"
-                    >
-                      <Trash size={18} />
-                    </button>
-                  </div>
-
-                  {/* Card content */}
-                  <p>
-                    <strong>Type:</strong> {match.matchType}
-                  </p>
-                  <p>
-                    <strong>Event:</strong> {match.eventName}
-                  </p>
-                  <p>
-                    <strong>Date:</strong>{" "}
-                    {moment(match.matchDate).format("MMM D, YYYY")}
-                  </p>
-                  <p>
-                    <strong>Division:</strong> {match.divisionDisplay}
-                  </p>
-                  <p>
-                    <strong>Weight:</strong> {match.weightDisplay}
-                  </p>
-                  <p>
-                    <strong>Opponent:</strong> {match.opponentName}
-                  </p>
-                  <p>
-                    <strong>My Rank:</strong> {match.myRank || "—"}
-                  </p>
-                  <p>
-                    <strong>Opponent Rank:</strong> {match.opponentRank || "—"}
-                  </p>
-                  <p>
-                    <strong>Result:</strong>{" "}
-                    {match.result === "Won" ? (
-                      <span className="text-[var(--color-success)]">Win</span>
-                    ) : (
-                      <span className="text-[var(--color-danger)]">Loss</span>
-                    )}
-                  </p>
-
-                  {/* Optional bottom action row (keep if you want larger targets) */}
-                  {/* <div className="flex justify-end gap-3 mt-3">
-          ...
-        </div> */}
-                </div>
+                  match={match}
+                  onView={async (m) => {
+                    const full = (await fetchFullReportById(m?._id)) || m;
+                    setSelectedMatch(full);
+                    setPreviewOpen(true);
+                  }}
+                  onEdit={async (m) => {
+                    const [full] = await Promise.all([
+                      fetchFullReportById(m?._id),
+                      loadStylesForModal(),
+                    ]);
+                    setSelectedMatch(full || m);
+                    setOpen(true);
+                  }}
+                  onDelete={(m) => handleDeleteMatch(m)}
+                />
               ))
             ) : (
               <p className="text-gray-400">No match reports found.</p>

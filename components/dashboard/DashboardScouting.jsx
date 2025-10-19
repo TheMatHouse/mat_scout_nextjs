@@ -12,6 +12,7 @@ import PreviewReportModal from "../shared/PreviewReportModal";
 import ScoutingReportForm from "./forms/ScoutingReportForm";
 import ModalLayout from "@/components/shared/ModalLayout";
 import Spinner from "@/components/shared/Spinner";
+import MatchReportCard from "@/components/shared/MatchReportCard";
 
 /* ---------------- safe display helpers --------------- */
 const genderLabel = (g) => {
@@ -776,72 +777,59 @@ const DashboardScouting = ({ user }) => {
         </div>
       ) : (
         <>
-          {/* Mobile cards */}
+          {/* Mobile cards — shared MatchReportCard with scouting field mapping */}
           <div className="grid grid-cols-1 sm:hidden gap-4 mb-6">
             {tableData.length > 0 ? (
-              tableData.map((report) => (
-                <div
-                  key={report._id}
-                  className="bg-gray-900 text-white p-4 rounded-xl shadow-md border border-gray-700"
-                >
-                  <p>
-                    <strong>Type:</strong> {report.matchType}
-                  </p>
-                  <p>
-                    <strong>Athlete:</strong> {report.athleteFirstName}{" "}
-                    {report.athleteLastName}
-                  </p>
-                  <p>
-                    <strong>Country:</strong> {report.athleteCountry}
-                  </p>
-                  <p>
-                    <strong>Division:</strong>{" "}
-                    {typeof report.divisionDisplay === "string"
-                      ? report.divisionDisplay
-                      : computeDivisionDisplay(report.division)}
-                  </p>
-                  <p>
-                    <strong>Weight Class:</strong> {report.weightDisplay}
-                  </p>
-                  <p>
-                    <strong>Created By:</strong> {report.createdByName || "—"}
-                  </p>
+              tableData.map((report) => {
+                const athleteName = [
+                  report.athleteFirstName,
+                  report.athleteLastName,
+                ]
+                  .filter(Boolean)
+                  .join(" ");
 
-                  <div className="flex justify-end gap-4 mt-4">
-                    <button
-                      onClick={() => {
-                        setPreviewPayload(buildPreviewPayload(report)); // << sanitized
-                        setPreviewOpen(true);
-                      }}
-                      title="View Details"
-                      className="text-blue-400 hover:text-blue-300"
-                    >
-                      <Eye size={18} />
-                    </button>
-                    <button
-                      onClick={async () => {
-                        setSelectedReport(report); // raw for edit
-                        setOpen(true);
-                        await Promise.all([
-                          loadStylesForModal(),
-                          loadTechniquesForModal(),
-                        ]);
-                      }}
-                      title="Edit"
-                      className="text-green-400 hover:text-green-300"
-                    >
-                      <Edit size={18} />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteReport(report)}
-                      title="Delete"
-                      className="text-red-500 hover:text-red-400"
-                    >
-                      <Trash size={18} />
-                    </button>
-                  </div>
-                </div>
-              ))
+                return (
+                  <MatchReportCard
+                    key={
+                      report._id || `${athleteName}-${report.matchDate || ""}`
+                    }
+                    personLabel="Athlete"
+                    match={{
+                      _id: report._id,
+                      matchType: report.matchType || "",
+                      matchDate: report.matchDate || null,
+                      opponentName: athleteName || "—",
+                      eventName: report.eventName || "",
+                      divisionDisplay:
+                        typeof report.divisionDisplay === "string"
+                          ? report.divisionDisplay
+                          : "",
+                      weightDisplay: report.weightDisplay || "",
+                      method: report.athleteGrip || "",
+                      myRank:
+                        report.athleteNationalRank ||
+                        report.athleteWorldRank ||
+                        "",
+                      opponentRank: "",
+                      result: "",
+                      score: "",
+                    }}
+                    onView={() => {
+                      setPreviewPayload(buildPreviewPayload(report));
+                      setPreviewOpen(true);
+                    }}
+                    onEdit={async () => {
+                      setSelectedReport(report);
+                      setOpen(true);
+                      await Promise.all([
+                        loadStylesForModal(),
+                        loadTechniquesForModal(),
+                      ]);
+                    }}
+                    onDelete={() => handleDeleteReport(report)}
+                  />
+                );
+              })
             ) : (
               <p className="text-gray-400">No scouting reports found.</p>
             )}
