@@ -7,6 +7,7 @@ import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
+import matchReport from "@/models/matchReportModel"; // <-- add this import
 import { notifyFollowers } from "@/lib/notify-followers";
 import { getCurrentUser } from "@/lib/auth-server";
 
@@ -61,9 +62,6 @@ export async function GET(req, { params }) {
     const { username } = await params; // Next 15: await params
     if (!username) return json({ error: "Missing username" }, 400);
 
-    // 💡 Log incoming username so you can see it in server console
-    console.log("[users/:username] GET username =", username);
-
     // Case-insensitive lookup to avoid 404s due to casing
     const userDoc = await User.findOne(
       { username: new RegExp(`^${esc(username)}$`, "i") },
@@ -85,7 +83,6 @@ export async function GET(req, { params }) {
     ).lean();
 
     if (!userDoc) {
-      console.warn("[users/:username] no user found for", username);
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
@@ -93,11 +90,20 @@ export async function GET(req, { params }) {
     const uid = userDoc._id;
     const origin = new URL(req.url).origin;
 
-    // forward cookies to child routes
+    // who is viewing?
+    let viewer = null;
+    try {
+      viewer = await getCurrentUser();
+    } catch {
+      viewer = null;
+    }
+    const isOwner = viewer && String(viewer._id) === String(uid);
+
+    // forward cookies to child routes (for styles fetch only)
     const cookie = req.headers.get("cookie") ?? "";
     const commonInit = { cache: "no-store", headers: { cookie } };
 
-    // 2) Styles
+    // 2) Styles (kept via HTTP since we don't have your style model handy)
     let userStyles = [];
     try {
       const sRes = await fetch(
@@ -114,30 +120,56 @@ export async function GET(req, { params }) {
       console.warn("[users/:username] styles fetch failed:", e);
     }
 
-    // 3) Match reports (accept common shapes incl. {reports:[...]})
+    // 3) Match reports — query DB directly (no HTTP fetch)
     let matchReports = [];
     try {
-      const mRes = await fetch(
-        `${origin}/api/users/${encodeURIComponent(uname)}/match-reports`,
-        commonInit
-      );
-      if (mRes.ok) {
-        const mJson = await mRes.json().catch(() => ({}));
-
-        const rows =
-          (Array.isArray(mJson) && mJson) ||
-          (Array.isArray(mJson?.reports) && mJson.reports) ||
-          (Array.isArray(mJson?.results) && mJson.results) ||
-          (Array.isArray(mJson?.data) && mJson.data) ||
-          (Array.isArray(mJson?.matchReports) && mJson.matchReports) ||
-          [];
-
-        matchReports = rows;
-      } else if (mRes.status !== 404) {
-        await mRes.text().catch(() => "");
+      const q = {
+        athleteId: uid,
+        athleteType: "user",
+      };
+      if (!isOwner) {
+        q.isPublic = true;
       }
+
+      matchReports = await matchReport
+        .find(q, {
+          // select only fields the client needs
+          _id: 1,
+          athleteId: 1,
+          athleteType: 1,
+          createdByName: 1,
+          createdById: 1,
+          matchType: 1,
+          eventName: 1,
+          matchDate: 1,
+          myRank: 1,
+          opponentRank: 1,
+          opponentName: 1,
+          division: 1,
+          weightCategory: 1,
+          weightItemId: 1,
+          weightLabel: 1,
+          weightUnit: 1,
+          opponentClub: 1,
+          opponentCountry: 1,
+          opponentGrip: 1,
+          opponentAttacks: 1,
+          opponentAttackNotes: 1,
+          athleteAttacks: 1,
+          athleteAttackNotes: 1,
+          result: 1,
+          score: 1,
+          video: 1,
+          isPublic: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          style: 1, // keep style id if present
+        })
+        .sort({ matchDate: -1 })
+        .lean();
     } catch (e) {
-      console.warn("[users/:username] match reports fetch failed:", e);
+      console.warn("[users/:username] match reports DB query failed:", e);
+      matchReports = [];
     }
 
     // 4) Teams — filter out family-linked memberships
@@ -207,7 +239,7 @@ export async function GET(req, { params }) {
   }
 }
 
-/* ---------------- PATCH (unchanged) ---------------- */
+/* ---------------- PATCH (unchanged from your version) ---------------- */
 export async function PATCH(req, { params }) {
   try {
     await connectDB();
