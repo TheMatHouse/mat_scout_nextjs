@@ -122,8 +122,18 @@ export async function GET(req, { params }) {
         commonInit
       );
       if (mRes.ok) {
-        const mJson = await mRes.json().catch(() => []);
-        matchReports = Array.isArray(mJson) ? mJson : [];
+        const mJson = await mRes.json().catch(() => ({}));
+
+        // Accept: array | {reports} | {results} | {data} | {matchReports}
+        const rows =
+          (Array.isArray(mJson) && mJson) ||
+          (Array.isArray(mJson?.reports) && mJson.reports) ||
+          (Array.isArray(mJson?.results) && mJson.results) ||
+          (Array.isArray(mJson?.data) && mJson.data) ||
+          (Array.isArray(mJson?.matchReports) && mJson.matchReports) ||
+          [];
+
+        matchReports = rows;
       } else if (mRes.status !== 404) {
         await mRes.text().catch(() => "");
       }

@@ -1,7 +1,7 @@
 // components/profile/UserProfileClient.jsx
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import StyleCard from "@/components/profile/StyleCard";
@@ -10,7 +10,8 @@ import Spinner from "../shared/Spinner";
 import FollowButton from "@/components/shared/FollowButton";
 import FollowListModal from "@/components/profile/FollowListModal";
 
-// Cloudinary helper
+/* ---------------- helpers ---------------- */
+
 function cld(url, extra = "") {
   if (!url || typeof url !== "string") return url;
   if (!url.includes("/upload/")) return url;
@@ -19,7 +20,6 @@ function cld(url, extra = "") {
   return url.replace("/upload/", `/upload/${parts.join(",")}/`);
 }
 
-// Minimal sanitizer for display HTML (strip scripts & inline handlers)
 function sanitize(html = "") {
   return String(html)
     .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -28,7 +28,7 @@ function sanitize(html = "") {
     .replace(/\son\w+='[^']*'/gi, "");
 }
 
-// ---- styles payload normalizers ----
+// styles extraction
 const looksLikeStyle = (x) =>
   x &&
   typeof x === "object" &&
@@ -65,39 +65,58 @@ const normalizeStyleName = (s) => {
   return { ...s, styleName };
 };
 
-export default function UserProfileClient({ username, userId }) {
+// normalize a human label to a key, e.g. "Brazilian Jiu Jitsu" -> "brazilian-jiu-jitsu"
+const keyOf = (v) =>
+  String(v ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+// normalize ObjectId-ish values (string, ObjectId, populated object) to a string key
+const idKeyOf = (v) => {
+  if (!v) return "";
+  // populated object support: v = { _id: "..." } or actual ObjectId
+  const maybe =
+    typeof v === "object"
+      ? v._id?.toString?.() ?? v._id ?? v.toString?.() ?? ""
+      : v;
+  return String(maybe ?? "").trim();
+};
+
+/* ---------------- component ---------------- */
+
+const UserProfileClient = ({ username, userId }) => {
+  // state hooks
   const [profileUser, setProfileUser] = useState();
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState("");
 
-  // follow counts + status + modal visibility
   const [followCounts, setFollowCounts] = useState({
     followers: 0,
     following: 0,
   });
   const [isFollowing, setIsFollowing] = useState(false);
-  const [openList, setOpenList] = useState(null); // 'followers' | 'following' | null
+  const [openList, setOpenList] = useState(null);
 
-  // Bio (display-only)
   const [bioHtml, setBioHtml] = useState("");
-
-  // Family (display-only)
   const [familyList, setFamilyList] = useState([]);
 
+  // callbacks
   const refreshCounts = useCallback(async () => {
     try {
       const res = await fetch(
         `/api/users/${encodeURIComponent(username)}/follow`,
-        { cache: "no-store" }
+        {
+          cache: "no-store",
+        }
       );
       if (!res.ok) return;
       const json = await res.json();
       setFollowCounts(json?.counts || { followers: 0, following: 0 });
       setIsFollowing(!!json?.isFollowing);
-    } catch {
-      /* ignore */
-    }
+    } catch {}
   }, [username]);
 
   const handleFollowChange = useCallback(
@@ -112,7 +131,7 @@ export default function UserProfileClient({ username, userId }) {
     [refreshCounts]
   );
 
-  // 1) Load base profile (may or may not include userStyles)
+  // effects
   useEffect(() => {
     let cancelled = false;
 
@@ -177,7 +196,9 @@ export default function UserProfileClient({ username, userId }) {
         try {
           const res = await fetch(
             `/api/users/${encodeURIComponent(username)}/bio`,
-            { cache: "no-store" }
+            {
+              cache: "no-store",
+            }
           );
           if (!res.ok) {
             if (!cancelled) setBioHtml("");
@@ -190,9 +211,7 @@ export default function UserProfileClient({ username, userId }) {
         }
       })();
     })()
-      .catch(() => {
-        // handled above
-      })
+      .catch(() => {})
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
@@ -202,7 +221,6 @@ export default function UserProfileClient({ username, userId }) {
     };
   }, [username, refreshCounts]);
 
-  // 2) Ensure styles are loaded even if the profile payload didn't include them
   useEffect(() => {
     let cancelled = false;
 
@@ -214,11 +232,12 @@ export default function UserProfileClient({ username, userId }) {
         return;
       }
 
-      // First try a public styles endpoint (if you have it)
       try {
         const r = await fetch(
           `/api/users/${encodeURIComponent(username)}/styles`,
-          { cache: "no-store" }
+          {
+            cache: "no-store",
+          }
         );
         if (r.ok) {
           const data = await r.json().catch(() => ({}));
@@ -232,12 +251,14 @@ export default function UserProfileClient({ username, userId }) {
         }
       } catch {}
 
-      // Fallback: owner’s dashboard endpoint (works when viewing your own profile)
       if (!userId) return;
       try {
         const r2 = await fetch(
           `/api/dashboard/${encodeURIComponent(userId)}/userStyles`,
-          { cache: "no-store", credentials: "same-origin" }
+          {
+            cache: "no-store",
+            credentials: "same-origin",
+          }
         );
         if (r2.ok) {
           const data2 = await r2.json().catch(() => ({}));
@@ -258,14 +279,15 @@ export default function UserProfileClient({ username, userId }) {
     };
   }, [profileUser, username, userId]);
 
-  // 3) Load family list (separate; not blocking)
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const res = await fetch(
           `/api/users/${encodeURIComponent(username)}/family`,
-          { cache: "no-store" }
+          {
+            cache: "no-store",
+          }
         );
         if (!res.ok) {
           if (!cancelled) setFamilyList([]);
@@ -296,7 +318,8 @@ export default function UserProfileClient({ username, userId }) {
     };
   }, [username]);
 
-  // Spinner: only check loading now
+  /* ---------- render states ---------- */
+  console.log("USER ", profileUser);
   if (loading) {
     return (
       <div className="relative flex flex-col justify-center items-center h-[70vh] bg-background">
@@ -309,10 +332,8 @@ export default function UserProfileClient({ username, userId }) {
     );
   }
 
-  // 404 page
   if (profileUser === null) return notFound();
 
-  // Soft error (500, etc.)
   if (!profileUser) {
     return (
       <div className="max-w-2xl mx-auto text-center mt-20">
@@ -337,25 +358,7 @@ export default function UserProfileClient({ username, userId }) {
     );
   }
 
-  // Build W/L per style from matchReports
-  const styleResults = {};
-  if (Array.isArray(profileUser.userStyles)) {
-    profileUser.userStyles.forEach((style) => {
-      const key = (style.styleName || "").trim().toLowerCase();
-      if (!key) return;
-      const reports =
-        profileUser.matchReports?.filter(
-          (r) => (r.matchType || "").trim().toLowerCase() === key
-        ) || [];
-
-      const wins = reports.filter((r) => r.result === "Won").length || 0;
-      const losses = reports.filter((r) => r.result === "Lost").length || 0;
-
-      styleResults[key] = { Wins: wins, Losses: losses };
-    });
-  }
-
-  // Avatar (guaranteed non-empty)
+  // avatar
   const EMERGENCY_DEFAULT =
     "https://res.cloudinary.com/matscout/image/upload/v1747956346/default_user_rval6s.jpg";
 
@@ -373,16 +376,35 @@ export default function UserProfileClient({ username, userId }) {
   const avatarUrl =
     cld(selectedUrl, "w_200,h_200,c_fill,g_auto,dpr_auto") || selectedUrl;
 
+  /* ---------- build matches maps: by style _id and by matchType ---------- */
+  const matchesById = Object.create(null);
+  const matchesByType = Object.create(null);
+
+  const all = Array.isArray(profileUser?.matchReports)
+    ? profileUser.matchReports
+    : [];
+  for (const r of all) {
+    // by ObjectId (preferred if present / populated)
+    const styleIdKey = idKeyOf(r?.style);
+    if (styleIdKey) {
+      (matchesById[styleIdKey] ||= []).push(r);
+    }
+
+    // by matchType (fallback)
+    const typeKey = keyOf(r?.matchType);
+    if (typeKey) {
+      (matchesByType[typeKey] ||= []).push(r);
+    }
+  }
+
   return (
     <>
       {/* Top grid: avatar + styles */}
       <section className="relative max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-4 gap-6">
-        {/* subtle page glow */}
         <div className="pointer-events-none absolute -z-10 inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(74,84,109,0.12)_0%,_transparent_65%)]" />
 
         {/* Left Profile Card */}
         <div className="relative rounded-2xl border border-border bg-white dark:bg-gray-900 shadow-md overflow-hidden text-center self-start transition-transform duration-200 hover:shadow-lg hover:-translate-y-[1px]">
-          {/* Gradient top border – match StyleCard */}
           <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
 
           <div className="p-6 space-y-4">
@@ -400,7 +422,6 @@ export default function UserProfileClient({ username, userId }) {
             </h1>
             <p className="text-sm text-gray-400">@{profileUser.username}</p>
 
-            {/* Follow/Unfollow for other users */}
             {currentUser && currentUser.username !== profileUser.username && (
               <div className="mt-2">
                 <FollowButton
@@ -411,7 +432,6 @@ export default function UserProfileClient({ username, userId }) {
               </div>
             )}
 
-            {/* Stat pills */}
             <div className="mt-2 flex items-center justify-center gap-3">
               <button
                 type="button"
@@ -506,7 +526,6 @@ export default function UserProfileClient({ username, userId }) {
               </div>
             )}
 
-            {/* Settings link for own profile */}
             {currentUser?.username === profileUser.username && (
               <div className="mt-6 pt-4 border-t border-border">
                 <Link
@@ -523,17 +542,31 @@ export default function UserProfileClient({ username, userId }) {
         {/* Right Content: styles */}
         <div className="md:col-span-3 grid gap-6 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
           {profileUser.userStyles?.length > 0 ? (
-            profileUser.userStyles.map((style) => (
-              <StyleCard
-                key={style._id || style.styleName || "style"}
-                style={style}
-                styleResults={
-                  styleResults[(style.styleName || "").trim().toLowerCase()] ||
-                  {}
-                }
-                username={profileUser.username}
-              />
-            ))
+            profileUser.userStyles.map((style) => {
+              const idKey = idKeyOf(style?._id);
+              const typeKey = keyOf(style?.styleName);
+              const matchesForStyle =
+                (idKey && matchesById[idKey]) ||
+                (typeKey && matchesByType[typeKey]) ||
+                [];
+              // TEMP: visibility while debugging (remove once verified)
+              console.debug("StyleCard feed:", {
+                styleName: style?.styleName,
+                idKey,
+                typeKey,
+                fromId: (matchesById[idKey] || []).length,
+                fromType: (matchesByType[typeKey] || []).length,
+                chosen: matchesForStyle.length,
+              });
+              return (
+                <StyleCard
+                  key={style._id || style.styleName || "style"}
+                  style={style}
+                  username={profileUser.username}
+                  matches={matchesForStyle}
+                />
+              );
+            })
           ) : (
             <p className="text-sm text-muted-foreground col-span-full">
               No styles added yet.
@@ -542,9 +575,9 @@ export default function UserProfileClient({ username, userId }) {
         </div>
       </section>
 
-      {/* Bio section (full width, only if there is content) */}
+      {/* Bio section */}
       {bioHtml && (
-        <section className="max-w-7xl mx-auto px_4 pb-10">
+        <section className="max-w-7xl mx-auto px-4 pb-10">
           <div className="rounded-2xl border border-border bg-white dark:bg-gray-900 shadow-md overflow-hidden transition-transform duration-200 hover:shadow-lg hover:-translate-y-[1px]">
             <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
             <div className="p-6">
@@ -567,7 +600,6 @@ export default function UserProfileClient({ username, userId }) {
                   Bio
                 </h2>
               </div>
-              {/* Render bio HTML inside a scoped wrapper so bullets always show */}
               <div
                 className="bio-content prose dark:prose-invert max-w-none text-[15px] leading-7 text-gray-800 dark:text-gray-200"
                 dangerouslySetInnerHTML={{ __html: sanitize(bioHtml) }}
@@ -593,7 +625,7 @@ export default function UserProfileClient({ username, userId }) {
         list="following"
       />
 
-      {/* ✅ Scoped styles so <ul>/<ol>/<li> render bullets in the Bio only */}
+      {/* Scoped styles for Bio bullets */}
       <style
         jsx
         global
@@ -622,4 +654,6 @@ export default function UserProfileClient({ username, userId }) {
       `}</style>
     </>
   );
-}
+};
+
+export default UserProfileClient;
