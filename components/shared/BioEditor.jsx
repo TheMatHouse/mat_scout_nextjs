@@ -1,13 +1,12 @@
-// components/shared/BioEditor.jsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Editor from "@/components/shared/Editor";
 import { Button } from "@/components/ui/button";
 
 /* ---------------- helpers ---------------- */
 
-// Convert any HTML to plain text for UI character counting
+// Convert HTML to plain text for character counting
 function htmlToText(html = "") {
   return String(html)
     .replace(/<style[\s\S]*?<\/style>/gi, "")
@@ -19,26 +18,23 @@ function htmlToText(html = "") {
     .trim();
 }
 
-// Strip dangerous/annoying inline junk and allow only a tiny tag set.
-// Allowed tags: p, br, b, strong, i, em, ul, ol, li, a[href]
-// Removes all inline styles/classes/ids and Word "mso-" cruft.
-// IMPORTANT: This preserves bullet lists and basic formatting.
+// Safe sanitizer for saved bios — strips junk but preserves valid formatting
 function sanitizeForBio(dirtyHtml = "") {
   if (!dirtyHtml) return "";
 
-  // Quick kill: remove comments & Word conditionals/mso tags
   let html = dirtyHtml
     .replace(/<!--\[if[\s\S]*?<!\[endif\]-->/gi, "")
     .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/<\/?o:p[^>]*>/gi, "");
+    .replace(/<\/?o:p[^>]*>/gi, "")
+    .replace(/<\/?(meta|link|title|xml|head|body|html)[^>]*>/gi, "");
 
-  // Also remove meta/office tags if pasted
-  html = html.replace(/<\/?(meta|link|title|xml|head|body|html)[^>]*>/gi, "");
+  if (typeof DOMParser === "undefined") return html;
 
-  // Parse and walk DOM safely
   const parser = new DOMParser();
   const doc = parser.parseFromString(`<div>${html}</div>`, "text/html");
-  const root = doc.body.firstElementChild;
+  const root =
+    doc.body && doc.body.firstElementChild ? doc.body.firstElementChild : null;
+  if (!root) return html;
 
   const ALLOWED = new Set([
     "P",
@@ -47,6 +43,7 @@ function sanitizeForBio(dirtyHtml = "") {
     "STRONG",
     "I",
     "EM",
+    "U",
     "UL",
     "OL",
     "LI",
@@ -64,7 +61,6 @@ function sanitizeForBio(dirtyHtml = "") {
     const el = node;
     const tag = el.tagName;
 
-    // If tag not allowed, unwrap it (keep children text/inline)
     if (tag && !ALLOWED.has(tag)) {
       const parent = el.parentNode;
       while (el.firstChild) parent.insertBefore(el.firstChild, el);
@@ -72,7 +68,6 @@ function sanitizeForBio(dirtyHtml = "") {
       return;
     }
 
-    // Drop all attributes except href on <a> (and sanitize href)
     const toRemove = [];
     for (const attr of el.attributes || []) {
       const name = attr.name.toLowerCase();
@@ -81,7 +76,6 @@ function sanitizeForBio(dirtyHtml = "") {
         if (/^javascript:/i.test(val)) {
           toRemove.push(name);
         } else {
-          // safety: add rel/target if not present
           el.setAttribute("rel", "nofollow noopener");
           if (!el.getAttribute("target")) el.setAttribute("target", "_blank");
         }
@@ -91,20 +85,20 @@ function sanitizeForBio(dirtyHtml = "") {
     }
     toRemove.forEach((n) => el.removeAttribute(n));
 
-    // Recurse
     const children = Array.from(el.childNodes);
     children.forEach((c) => cleanNode(c));
   }
 
   Array.from(root.childNodes).forEach((n) => cleanNode(n));
 
-  // Serialize back to string and nuke any lingering style snippets
-  return root.innerHTML
+  const cleaned = root.innerHTML
     .replace(/style="[^"]*"/gi, "")
     .replace(/color\s*:\s*[^;"]+;?/gi, "")
     .replace(/caret-color\s*:\s*[^;"]+;?/gi, "")
     .replace(/border-color\s*:\s*[^;"]+;?/gi, "")
     .trim();
+
+  return cleaned || html;
 }
 
 /* -------------- component -------------- */
@@ -113,7 +107,7 @@ const MAX = 2000;
 
 export default function BioEditor({
   initialHtml = "",
-  onSave, // async (html, plainText) => void — parent shows toasts
+  onSave,
   saving = false,
   className = "",
   label = null,
@@ -122,28 +116,11 @@ export default function BioEditor({
   const [html, setHtml] = useState(initialHtml || "");
   const [isSaving, setIsSaving] = useState(false);
   const [localError, setLocalError] = useState("");
-  const normalizingRef = useRef(false);
 
-  // keep editor in sync when parent updates initialHtml
+  // Keep editor in sync when parent updates initialHtml
   useEffect(() => {
     setHtml(initialHtml || "");
   }, [initialHtml]);
-
-  // Auto-sanitize on every change (including paste) without destroying lists/bold/etc.
-  // We guard against loops by short-circuiting when sanitized === current.
-  useEffect(() => {
-    if (normalizingRef.current) return;
-    const cleaned = sanitizeForBio(html);
-    if (cleaned !== html) {
-      normalizingRef.current = true;
-      setHtml(cleaned);
-      // allow React state flush before re-enabling
-      const t = setTimeout(() => {
-        normalizingRef.current = false;
-      }, 0);
-      return () => clearTimeout(t);
-    }
-  }, [html]);
 
   const plain = useMemo(() => htmlToText(html), [html]);
   const overLimit = plain.length > MAX;
@@ -158,7 +135,7 @@ export default function BioEditor({
 
     setIsSaving(true);
     try {
-      // Final safety gate: sanitize again before persisting
+      // Final cleanup pass on save
       const cleaned = sanitizeForBio(html);
       const cleanedPlain = htmlToText(cleaned);
       await onSave(cleaned, cleanedPlain);
@@ -181,6 +158,7 @@ export default function BioEditor({
         <p className="text-sm text-muted-foreground mb-4">{helperText}</p>
       )}
 
+      {/* Shared Editor (now without indent/outdent) */}
       <Editor
         name="bio"
         text={html}

@@ -1,4 +1,3 @@
-// components/shared/Editor.jsx
 "use client";
 
 import { useEffect, useRef } from "react";
@@ -9,7 +8,6 @@ export default function Editor({ name, onChange, text, label }) {
 
   /* ---------------- helpers ---------------- */
 
-  // Allowed tags & minimal attributes
   const ALLOWED = new Set([
     "P",
     "BR",
@@ -25,11 +23,9 @@ export default function Editor({ name, onChange, text, label }) {
   ]);
   const URL_ATTR = new Set(["href"]);
 
-  // Sanitize HTML: remove Word/Docs junk, inline styles, unknown tags; keep lists/bold/etc.
   function sanitizeHtml(dirty = "") {
     if (!dirty) return "";
 
-    // Quick kill: comments, conditional MSO, office namespace, head/meta/link
     let html = dirty
       .replace(/<!--\[if[\s\S]*?<!\[endif\]-->/gi, "")
       .replace(/<!--[\s\S]*?-->/g, "")
@@ -52,14 +48,12 @@ export default function Editor({ name, onChange, text, label }) {
       const tag = el.tagName;
 
       if (tag && !ALLOWED.has(tag)) {
-        // unwrap unknown tag but keep its children
         const parent = el.parentNode;
         while (el.firstChild) parent.insertBefore(el.firstChild, el);
         parent.removeChild(el);
         return;
       }
 
-      // strip all attrs except safe href on <a>
       const toRemove = [];
       for (const attr of el.attributes || []) {
         const name = attr.name.toLowerCase();
@@ -76,14 +70,11 @@ export default function Editor({ name, onChange, text, label }) {
         }
       }
       toRemove.forEach((n) => el.removeAttribute(n));
-
-      // Recurse
       Array.from(el.childNodes).forEach(clean);
     }
 
-    Array.from(root.childNodes).forEach(clean);
+    Array.from(root.childNodes).forEach((n) => clean(n));
 
-    // Final sweep: nuke any leftover style snippets
     return root.innerHTML
       .replace(/style="[^"]*"/gi, "")
       .replace(/color\s*:\s*[^;"]+;?/gi, "")
@@ -100,7 +91,6 @@ export default function Editor({ name, onChange, text, label }) {
 
   /* ---------------- lifecycle ---------------- */
 
-  // Keep innerHTML in sync with `text` prop without blowing selection
   useEffect(() => {
     if (!editorRef.current || text === undefined) return;
     if (editorRef.current.innerHTML === text) return;
@@ -118,14 +108,13 @@ export default function Editor({ name, onChange, text, label }) {
     }
   }, [text]);
 
-  // Normalize on every input change to keep the DOM clean
+  // Normalize content after every input/paste
   const normalizeNow = () => {
     if (!editorRef.current || normalizingRef.current) return;
     const cleaned = sanitizeHtml(editorRef.current.innerHTML);
     if (cleaned !== editorRef.current.innerHTML) {
       normalizingRef.current = true;
       editorRef.current.innerHTML = cleaned;
-      // re-enable after microtask so caret doesn't jump
       setTimeout(() => {
         normalizingRef.current = false;
         emitChange();
@@ -135,27 +124,29 @@ export default function Editor({ name, onChange, text, label }) {
     }
   };
 
+  useEffect(() => {
+    // Ensure paragraphs instead of divs, and prevent inline style formatting
+    document.execCommand("defaultParagraphSeparator", false, "p");
+    document.execCommand("styleWithCSS", false, false);
+  }, []);
+
   /* ---------------- handlers ---------------- */
 
   const handleInput = () => normalizeNow();
 
   const handleKeyDown = (e) => {
-    // Shift+Enter => soft line break
     if (e.key === "Enter" && e.shiftKey) {
       e.preventDefault();
       document.execCommand("insertLineBreak");
       normalizeNow();
       return;
     }
-    // default: Enter creates paragraphs/list items
   };
 
-  // Clean paste: prefer HTML, sanitize, insert; fallback to plain text
   const handlePaste = (e) => {
     if (!editorRef.current) return;
     const cd = e.clipboardData;
     if (!cd) return;
-
     const html = cd.getData("text/html");
     const textPlain = cd.getData("text/plain");
 
@@ -164,7 +155,6 @@ export default function Editor({ name, onChange, text, label }) {
       const toInsert = html
         ? sanitizeHtml(html)
         : escapeHtml(textPlain).replace(/\n/g, "<br>");
-      // Insert at caret
       document.execCommand("insertHTML", false, toInsert);
       normalizeNow();
     }
@@ -204,7 +194,6 @@ export default function Editor({ name, onChange, text, label }) {
             {style}
           </button>
         ))}
-
         <button
           type="button"
           onClick={() => applyCommand("insertUnorderedList")}
@@ -212,22 +201,6 @@ export default function Editor({ name, onChange, text, label }) {
           title="Bulleted list"
         >
           • List
-        </button>
-        <button
-          type="button"
-          onClick={() => applyCommand("indent")}
-          className={toolbarBtn}
-          title="Indent"
-        >
-          Indent
-        </button>
-        <button
-          type="button"
-          onClick={() => applyCommand("outdent")}
-          className={toolbarBtn}
-          title="Outdent"
-        >
-          Outdent
         </button>
       </div>
 
@@ -249,22 +222,26 @@ export default function Editor({ name, onChange, text, label }) {
           sm:text-sm p-3 min-h-[150px]`}
       />
 
-      {/* Minimal content styling & safety overrides */}
+      {/* Content styling & underline fix */}
       <style
         jsx
         global
       >{`
-        /* Ensure children inherit theme colors (beats inline styles removed anyway) */
         .editor-content,
         .editor-content * {
           color: inherit !important;
+        }
+        /* Ensure underlines always visible */
+        .editor-content u,
+        .editor-content span[style*="underline"],
+        .editor-content [style*="text-decoration: underline"] {
+          text-decoration: underline !important;
         }
         /* Paragraph spacing */
         .editor-content p {
           margin: 0 0 12px;
           line-height: 1.5;
         }
-        /* Handle browser-inserted divs */
         .editor-content div {
           margin: 0;
           line-height: 1.5;
@@ -283,7 +260,7 @@ export default function Editor({ name, onChange, text, label }) {
           margin: 4px 0;
           line-height: 1.5;
         }
-        /* Show empty lines nicely */
+        /* Empty line display */
         .editor-content p:empty::before,
         .editor-content div:empty::before {
           content: "\\00a0";
@@ -294,7 +271,7 @@ export default function Editor({ name, onChange, text, label }) {
   );
 }
 
-/* Utility: escape plain text for safe HTML insertion */
+/* Escape text when pasting plain content */
 function escapeHtml(s = "") {
   return String(s)
     .replace(/&/g, "&amp;")
