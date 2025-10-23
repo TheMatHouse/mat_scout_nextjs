@@ -78,7 +78,7 @@ export async function GET(req, { params }) {
         googleAvatar: 1,
         facebookAvatar: 1,
         gender: 1,
-        bio: 1, // keep bio (blocks JSON) if you store it here
+        bio: 1,
         city: 1,
         state: 1,
       }
@@ -114,7 +114,7 @@ export async function GET(req, { params }) {
       console.warn("[users/:username] styles fetch failed:", e);
     }
 
-    // 3) Match reports (light)
+    // 3) Match reports (accept common shapes incl. {reports:[...]})
     let matchReports = [];
     try {
       const mRes = await fetch(
@@ -124,7 +124,6 @@ export async function GET(req, { params }) {
       if (mRes.ok) {
         const mJson = await mRes.json().catch(() => ({}));
 
-        // Accept: array | {reports} | {results} | {data} | {matchReports}
         const rows =
           (Array.isArray(mJson) && mJson) ||
           (Array.isArray(mJson?.reports) && mJson.reports) ||
@@ -208,7 +207,7 @@ export async function GET(req, { params }) {
   }
 }
 
-/* ---------------- PATCH (unchanged from your version) ---------------- */
+/* ---------------- PATCH (unchanged) ---------------- */
 export async function PATCH(req, { params }) {
   try {
     await connectDB();
