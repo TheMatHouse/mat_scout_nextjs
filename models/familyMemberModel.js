@@ -26,7 +26,7 @@ const familyMemberSchema = new mongoose.Schema(
       type: String,
     },
     bio: { type: Object, default: null }, // Editor.js blocks JSON
-    bioText: { type: String, trim: true, maxlength: 1000 }, // plain text for search & limit
+    bioText: { type: String, trim: true, maxlength: 2000 }, // plain text for search & limit
     avatar: {
       type: String,
       default:

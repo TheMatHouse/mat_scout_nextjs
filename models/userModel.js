@@ -61,7 +61,7 @@ const userSchema = new mongoose.Schema(
       default: "not specified",
     },
     bio: { type: Object, default: null },
-    bioText: { type: String, trim: true, maxlength: 1000 },
+    bioText: { type: String, trim: true, maxlength: 2000 },
     avatar: {
       type: String,
       default:

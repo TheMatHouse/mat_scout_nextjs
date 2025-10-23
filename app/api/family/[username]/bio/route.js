@@ -85,8 +85,8 @@ async function putOrPost(req, { params }) {
     bioHtml = "";
   }
 
-  if (bioText.length > 1000)
-    return json({ error: "Bio exceeds 1000 characters" }, 400);
+  if (bioText.length > 2000)
+    return json({ error: "Bio exceeds 2000 characters" }, 400);
 
   await FamilyMember.updateOne(
     { _id: fam._id },

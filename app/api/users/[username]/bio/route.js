@@ -104,8 +104,8 @@ async function saveBio(req, { params }) {
   const cleanHtml = sanitizeKeepFormatting(normalized);
   const bioText = htmlToText(cleanHtml);
 
-  if (bioText.length > 1000) {
-    return json({ error: "Bio exceeds 1000 characters" }, 400);
+  if (bioText.length > 2000) {
+    return json({ error: "Bio exceeds 2000 characters" }, 400);
   }
 
   await User.updateOne(

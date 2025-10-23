@@ -192,7 +192,7 @@ export default function UserBioSection({ user }) {
         onSave={handleSave}
         saving={saving}
         label="Bio"
-        helperText="Add a short bio (up to 1000 characters). It will appear on your public profile."
+        helperText="Add a short bio (up to 2000 characters). It will appear on your public profile."
       />
 
       {/* Render saved HTML exactly like the other pages */}
