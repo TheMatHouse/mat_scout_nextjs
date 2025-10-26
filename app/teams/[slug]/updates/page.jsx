@@ -10,6 +10,12 @@ import ModalLayout from "@/components/shared/ModalLayout";
 import TeamUpdateForm from "@/components/teams/forms/TeamUpdateForm";
 import { Edit, Trash } from "lucide-react";
 
+/* ---------- helpers ---------- */
+function idsEqual(a, b) {
+  if (!a || !b) return false;
+  return String(a) === String(b);
+}
+
 export default function TeamUpdatesPage() {
   const { slug } = useParams();
   const { user } = useUser();
@@ -22,13 +28,16 @@ export default function TeamUpdatesPage() {
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
 
-  // Role check so managers/coaches can edit/delete anything
+  // Role/ownership
   const [myRole, setMyRole] = useState(null);
+  const [isOwner, setIsOwner] = useState(false);
 
   const loadUpdates = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/teams/${slug}/updates?ts=${Date.now()}`);
+      const res = await fetch(
+        `/api/teams/${encodeURIComponent(slug)}/updates?ts=${Date.now()}`
+      );
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to load updates");
       setUpdates(Array.isArray(data.updates) ? data.updates : []);
@@ -40,27 +49,51 @@ export default function TeamUpdatesPage() {
     }
   }, [slug]);
 
-  const loadMyRole = useCallback(async () => {
+  const loadRoleAndOwnership = useCallback(async () => {
+    // We’ll try members first for role, then fetch the team doc to confirm ownership.
     try {
-      const res = await fetch(`/api/teams/${slug}/members?ts=${Date.now()}`);
-      const data = await res.json();
-      if (!res.ok) return;
-      const mine = (data.members || []).find((m) => m.userId === user?._id);
-      setMyRole(mine?.role || null);
+      // 1) What does the members endpoint think my role is?
+      const res = await fetch(
+        `/api/teams/${encodeURIComponent(slug)}/members?ts=${Date.now()}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const mine = (data.members || []).find((m) => m.userId === user?._id);
+        setMyRole(mine?.role || null);
+      } else {
+        setMyRole(null);
+      }
     } catch {
-      // ignore
+      setMyRole(null);
+    }
+
+    try {
+      // 2) Confirm ownership from the team doc directly (handles missing TeamMember rows)
+      const resTeam = await fetch(
+        `/api/teams/${encodeURIComponent(slug)}?select=owner&ts=${Date.now()}`
+      );
+      if (resTeam.ok) {
+        const team = await resTeam.json();
+        // Support both shapes: {owner: "..."} or {team: {owner: "..."}} if your API wraps it
+        const ownerId = team?.owner || team?.team?.owner;
+        setIsOwner(idsEqual(ownerId, user?._id));
+      } else {
+        setIsOwner(false);
+      }
+    } catch {
+      setIsOwner(false);
     }
   }, [slug, user?._id]);
 
   useEffect(() => {
     loadUpdates();
-    loadMyRole();
-  }, [loadUpdates, loadMyRole]);
+    loadRoleAndOwnership();
+  }, [loadUpdates, loadRoleAndOwnership]);
 
-  const isManagerOrCoach = useMemo(
-    () => myRole === "manager" || myRole === "coach",
-    [myRole]
-  );
+  const canPost = useMemo(() => {
+    // Owners, managers, and coaches can post.
+    return isOwner || myRole === "manager" || myRole === "coach";
+  }, [isOwner, myRole]);
 
   const handleCreateOrEditSuccess = (newOrEdited) => {
     if (newOrEdited?._id) {
@@ -106,8 +139,14 @@ export default function TeamUpdatesPage() {
   };
 
   const canEdit = (u) =>
-    isManagerOrCoach ||
-    (u?.author?._id && u.author._id === user?._id) ||
+    // Owners can edit anything
+    isOwner ||
+    // Managers/coaches can edit anything
+    myRole === "manager" ||
+    myRole === "coach" ||
+    // Authors can edit their own
+    (u?.author?._id && idsEqual(u.author._id, user?._id)) ||
+    // Site admins override
     user?.isAdmin;
 
   const stripHtml = (html) => (html || "").replace(/<[^>]+>/g, "");
@@ -124,7 +163,8 @@ export default function TeamUpdatesPage() {
             Announcements and important info from your coaches.
           </p>
         </div>
-        {isManagerOrCoach && (
+
+        {canPost && (
           <button
             className="btn btn-primary"
             onClick={() => {
