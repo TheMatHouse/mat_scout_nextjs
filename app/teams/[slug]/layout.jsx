@@ -182,10 +182,11 @@ export default async function TeamLayout({ children, params }) {
     .join(" • ");
 
   return (
-    <main className="w-full min-w-0 overflow-x-hidden relative bg-[var(--color-bg)]">
-      <TeamProviderClient team={safeTeam}>
+    <TeamProviderClient team={safeTeam}>
+      {/* Clamp width + prevent horizontal scroll blowouts */}
+      <div className="relative w-full overflow-x-hidden">
         {/* Banner / Header with Logo */}
-        <div className="bg-gray-100 dark:bg-gray-900 py-8 shadow-sm w-full overflow-hidden">
+        <div className="bg-gray-100 dark:bg-gray-900 py-8 shadow-sm">
           <div className="mx-auto w-full max-w-[1600px] px-4 md:px-6 lg:px-8 flex flex-col items-center text-center">
             <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white shadow-md mb-4">
               {safeTeam.logoURL ? (
@@ -205,12 +206,13 @@ export default async function TeamLayout({ children, params }) {
                 </div>
               )}
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
               {safeTeam.teamName}
             </h1>
 
             {(safeTeam.city || safeTeam.country) && (
-              <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
+              <p className="text-gray-600 dark:text-gray-300 mt-1 text-sm">
                 {[safeTeam.city, safeTeam.state, safeTeam.country]
                   .filter(Boolean)
                   .join(", ")}
@@ -218,7 +220,7 @@ export default async function TeamLayout({ children, params }) {
             )}
 
             {managerRows.length > 0 && (
-              <p className="text-gray-600 dark:text-gray-300 mt-1 text-sm">
+              <p className="text-gray-700 dark:text-gray-200 mt-1 text-sm">
                 <span className="font-medium">
                   Manager{managerRows.length > 1 ? "s" : ""}:
                 </span>{" "}
@@ -242,20 +244,19 @@ export default async function TeamLayout({ children, params }) {
           </div>
         </div>
 
-        {/* Tabs + Share */}
-        <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 w-full overflow-hidden">
-          <div className="mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8">
-            {/* On small screens: stack (tabs first, share below right) */}
-            {/* On md+ screens: single row with Share to the right */}
+        {/* Tabs + Share (responsive, no overflow) */}
+        <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 w-full">
+          <div className="mx-auto w-full max-w-[1600px] px-4 md:px-6 lg:px-8">
+            {/* On small screens: stack (tabs first, share below). On md+: one row. */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-3 min-w-0">
-              {/* Tabs: scroll if needed; never widen the viewport */}
-              <div className="min-w-0 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+              {/* Tabs: horizontal scroll allowed without widening page */}
+              <div className="min-w-0 overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
                 <div className="inline-flex min-w-max">
                   <TeamTabs tabs={tabs} />
                 </div>
               </div>
 
-              {/* Share: below on small screens, right-aligned; right on md+ */}
+              {/* Share: below on small screens; right side on md+ */}
               <div className="shrink-0 self-end md:self-auto">
                 <ShareMenu
                   url={shareUrl}
@@ -268,10 +269,10 @@ export default async function TeamLayout({ children, params }) {
         </div>
 
         {/* Main content */}
-        <section className="mx-auto w-full max-w-[1600px] px-4 md:px-6 lg:px-8 py-8">
-          {children}
-        </section>
-      </TeamProviderClient>
-    </main>
+        <main className="mx-auto w-full max-w-[1600px] px-4 md:px-6 lg:px-8 py-8">
+          <div className="min-w-0">{children}</div>
+        </main>
+      </div>
+    </TeamProviderClient>
   );
 }
