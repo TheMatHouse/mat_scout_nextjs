@@ -18,7 +18,7 @@ export default function InvitesTable({
   onRevoke,
 }) {
   return (
-    <section className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-5">
+    <section className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-5 overflow-x-hidden">
       <div className="flex items-center gap-2 mb-4">
         <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400" />
         <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
@@ -56,62 +56,70 @@ export default function InvitesTable({
 
             // guard expiresAt to avoid "Invalid Date"
             const expiresAt = inv?.expiresAt ? new Date(inv.expiresAt) : null;
-            const expiresText = expiresAt
-              ? `Expires ${expiresAt.toLocaleDateString()}`
-              : "—";
 
             return (
               <div
                 key={inv._id}
-                className="py-3 flex items-center justify-between"
+                className="py-3"
               >
-                <div className="text-sm">
-                  <div className="font-medium text-gray-900 dark:text-gray-100">
-                    {labelName}
-                    <span className="ml-2 inline-block text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200">
-                      {role}
-                    </span>
-                    {inv.isMinor && (
-                      <span className="ml-2 text-xs text-gray-500">
-                        (minor)
-                      </span>
-                    )}
+                {/* Responsive row: info left (7 cols), actions right (5 cols) */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start sm:items-center">
+                  {/* LEFT: invite info */}
+                  <div className="sm:col-span-7 min-w-0">
+                    <div className="text-sm min-w-0">
+                      <div className="font-medium text-gray-900 dark:text-gray-100">
+                        {labelName}
+                        <span className="ml-2 inline-block text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200">
+                          {role}
+                        </span>
+                        {inv.isMinor && (
+                          <span className="ml-2 text-xs text-gray-500">
+                            (minor)
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-gray-600 dark:text-gray-300 truncate">
+                        {targetEmail}
+                      </div>
+
+                      {expiresAt && (
+                        <div className="text-xs text-gray-500">
+                          Expires {expiresAt.toLocaleDateString()}
+                        </div>
+                      )}
+
+                      {preview && (
+                        <div className="text-xs text-gray-500 mt-1 italic line-clamp-2">
+                          “{preview}”
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="text-gray-600 dark:text-gray-300">
-                    {targetEmail}
+                  {/* RIGHT: actions (same styles; never force row width) */}
+                  <div className="sm:col-span-5 min-w-0">
+                    <div className="flex gap-2 sm:justify-end flex-nowrap">
+                      <button
+                        onClick={() => onResend(inv._id)}
+                        className="inline-flex items-center gap-1 rounded-md border px-3 py-1 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap shrink-0"
+                        title="Resend invite"
+                        type="button"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        Resend
+                      </button>
+                      <button
+                        onClick={() => onRevoke(inv._id)}
+                        className="inline-flex items-center gap-1 rounded-md border px-3 py-1 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-red-600 border-red-200 dark:border-red-800 whitespace-nowrap shrink-0"
+                        title="Revoke invite"
+                        type="button"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        Revoke
+                      </button>
+                    </div>
                   </div>
-
-                  {expiresAt && (
-                    <div className="text-xs text-gray-500">
-                      Expires {expiresAt.toLocaleDateString()}
-                    </div>
-                  )}
-
-                  {preview && (
-                    <div className="text-xs text-gray-500 mt-1 italic line-clamp-2">
-                      “{preview}”
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => onResend(inv._id)}
-                    className="inline-flex items-center gap-1 rounded-md border px-3 py-1 text-sm hover:bg-gray-50 dark:hover:bg-gray-700"
-                    title="Resend invite"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    Resend
-                  </button>
-                  <button
-                    onClick={() => onRevoke(inv._id)}
-                    className="inline-flex items-center gap-1 rounded-md border px-3 py-1 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-red-600 border-red-200 dark:border-red-800"
-                    title="Revoke invite"
-                  >
-                    <XCircle className="w-4 h-4" />
-                    Revoke
-                  </button>
                 </div>
               </div>
             );
