@@ -15,6 +15,10 @@
 ========================================= */
 html {
   scroll-behavior: smooth;
+  /* clamp horizontal overflow at the root */
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 html,
@@ -27,14 +31,49 @@ body {
   font-family: "Roboto", Arial, Helvetica, sans-serif;
   margin: 0;
   padding: 0;
-  display: flex; /* ✅ Keep flex for footer positioning */
+  display: flex; /* keep flex for footer positioning */
   flex-direction: column;
   min-height: 100vh;
-  background-color: var(--color-bg); /* ✅ Theme-aware background */
-  color: var(--color-text); /* ✅ Theme-aware text */
+  background-color: var(--color-bg); /* theme-aware background */
+  color: var(--color-text); /* theme-aware text */
+  /* clamp any stray wide child */
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
+
+/* Tailwind border color baseline */
 * {
   @apply border-border;
+}
+
+/* Media that often causes horizontal overflow on mobile */
+img,
+svg,
+video,
+canvas,
+iframe {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Tables shouldn’t blow out the viewport */
+table {
+  width: 100%;
+  table-layout: auto;
+}
+
+/* Utility: make an element truly full-bleed (great for headers/stripes) */
+.full-bleed {
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+}
+
+/* Utility: force-disable horizontal scroll on a container if needed */
+.no-x-overflow {
+  overflow-x: hidden !important;
 }
 
 /* =========================================

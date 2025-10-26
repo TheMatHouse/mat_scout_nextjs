@@ -77,10 +77,14 @@ export default async function UserProfilePage({ params }) {
   }
 
   return (
-    <UserProfileClient
-      username={user.username}
-      isMyProfile={isMyProfile}
-      userId={String(user._id)}
-    />
+    <main className="relative w-full no-x-overflow">
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <UserProfileClient
+          username={user.username}
+          isMyProfile={isMyProfile}
+          userId={String(user._id)}
+        />
+      </section>
+    </main>
   );
 }

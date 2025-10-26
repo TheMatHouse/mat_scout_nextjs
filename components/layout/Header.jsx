@@ -1,3 +1,4 @@
+// components/layout/Header.jsx
 "use client";
 import Link from "next/link";
 import Image from "next/image";
@@ -8,58 +9,60 @@ import NotificationBell from "@/components/notifications/NotificationBell";
 import { useUser } from "@/context/UserContext";
 
 export default function Header() {
-  const { user } = useUser();
-  const { loading } = useUser();
+  const { user, loading } = useUser();
 
-  // ✅ If user state is loading, render a placeholder (same height as header)
+  // Keep the header height stable while auth state loads
   if (loading) {
     return (
-      <header className="w-full sticky top-0 z-50 bg-ms-blue shadow-sm h-20"></header>
+      <header className="sticky top-0 inset-x-0 z-50 bg-ms-blue shadow-sm h-16 md:h-20" />
     );
   }
 
   return (
-    <header className="w-full sticky top-0 z-50 bg-ms-blue text-ms-nav-text dark:text-white shadow-sm">
-      <div className="flex items-center justify-between px-6 md:px-12 lg:px-20 py-4 w-full">
-        {/* Mobile Logo */}
-        <Link
-          href="/"
-          className="block md:hidden"
-        >
-          <Image
-            src={logoMobile}
-            alt="MatScout Logo"
-            className="h-28 w-auto block md:hidden"
-            priority
-          />
-        </Link>
+    <header className="sticky top-0 inset-x-0 z-50 bg-ms-blue text-ms-nav-text dark:text-white shadow-sm">
+      {/* Constrained inner content; outer header provides the full-bleed background */}
+      <div className="mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16 md:h-20">
+          {/* Mobile Logo */}
+          <Link
+            href="/"
+            className="block md:hidden h-10"
+          >
+            <Image
+              src={logoMobile}
+              alt="MatScout Logo"
+              priority
+              className="h-10 w-auto"
+            />
+          </Link>
 
-        {/* Desktop Logo */}
-        <Link
-          href="/"
-          className="hidden md:block"
-        >
-          <Image
-            src={logoDesktop}
-            alt="MatScout Logo"
-            className="h-28 w-auto"
-            priority
-          />
-        </Link>
+          {/* Desktop Logo */}
+          <Link
+            href="/"
+            className="hidden md:block h-12 md:h-16"
+          >
+            <Image
+              src={logoDesktop}
+              alt="MatScout Logo"
+              priority
+              className="h-full w-auto"
+            />
+          </Link>
 
-        {/* Navigation + Bell */}
-        <div className="flex items-center space-x-6">
-          {/* Desktop Navbar */}
-          <div className="hidden md:flex items-center gap-4">
-            <Navbar />
-          </div>
+          {/* Navigation + Notifications */}
+          <div className="flex items-center gap-4">
+            {/* Desktop nav */}
+            <div className="hidden md:flex items-center gap-4">
+              <Navbar />
+            </div>
 
-          {/* Notification Bell */}
-          {user && <NotificationBell />}
+            {/* Notification bell (only when logged in) */}
+            {user && <NotificationBell />}
 
-          {/* Mobile Navbar */}
-          <div className="flex md:hidden items-center gap-3">
-            <Navbar />
+            {/* Mobile nav */}
+            <div className="flex md:hidden items-center gap-3">
+              <Navbar />
+            </div>
           </div>
         </div>
       </div>

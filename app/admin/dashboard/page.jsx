@@ -94,42 +94,46 @@ export default async function AdminDashboardPage() {
   ];
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold mb-6 text-gray-900 dark:text-gray-100">
-        Admin Dashboard
-      </h1>
-      <p className="mb-8 text-gray-700 dark:text-gray-300">
-        Welcome to the Admin Panel. Use the cards below to manage users, family
-        members, teams, and reports.
-      </p>
+    <main className="relative w-full no-x-overflow">
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div>
+          <h1 className="text-3xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+            Admin Dashboard
+          </h1>
+          <p className="mb-8 text-gray-700 dark:text-gray-300">
+            Welcome to the Admin Panel. Use the cards below to manage users,
+            family members, teams, and reports.
+          </p>
 
-      {/* Responsive grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {cards.map((card) => (
-          <Link
-            key={card.label}
-            href={card.href}
-            className="bg-white dark:bg-gray-900 shadow hover:shadow-lg dark:hover:border dark:border-gray-700 rounded-lg p-6 flex flex-col justify-between transition h-full"
-          >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="p-3 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-                {card.icon}
-              </div>
-              <div>
-                <p className="text-sm text-gray-700 dark:text-gray-300">
-                  {card.label}
-                </p>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {card.value}
-                </h2>
-              </div>
-            </div>
-            <span className="text-ms-light-red font-medium hover:underline">
-              Manage
-            </span>
-          </Link>
-        ))}
-      </div>
-    </div>
+          {/* Responsive grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {cards.map((card) => (
+              <Link
+                key={card.label}
+                href={card.href}
+                className="bg-white dark:bg-gray-900 shadow hover:shadow-lg dark:hover:border dark:border-gray-700 rounded-lg p-6 flex flex-col justify-between transition h-full"
+              >
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="p-3 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                    {card.icon}
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-700 dark:text-gray-300">
+                      {card.label}
+                    </p>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                      {card.value}
+                    </h2>
+                  </div>
+                </div>
+                <span className="text-ms-light-red font-medium hover:underline">
+                  Manage
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }
