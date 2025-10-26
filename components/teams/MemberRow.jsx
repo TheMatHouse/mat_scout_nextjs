@@ -1,7 +1,7 @@
 // components/teams/MemberRow.jsx
 "use client";
 
-import Link from "next/link"; // ⬅️ added
+import Link from "next/link";
 import { useState, useMemo } from "react";
 import { toast } from "react-toastify";
 
@@ -75,21 +75,26 @@ export default function MemberRow({
     : null;
 
   return (
-    <div className="flex items-center justify-between">
-      {/* Left: identity */}
-      <div className="flex items-center gap-3">
+    // Mobile-first stack; desktop becomes two columns with controls on the right
+    <div className="grid grid-cols-1 sm:grid-cols-12 items-start sm:items-center gap-3">
+      {/* Left: identity (avatar, name, meta) */}
+      <div className="sm:col-span-7 min-w-0 flex items-center gap-3">
         <img
           src={member.avatarUrl || "/default-avatar.png"}
           alt={member.name || "Member"}
-          className="h-8 w-8 rounded-full border"
+          className="h-8 w-8 rounded-full border shrink-0"
         />
-        <div className="flex flex-col">
-          <span className="text-sm font-medium">
+        <div className="min-w-0">
+          <span className="block text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
             {profileHref ? (
               <Link
                 href={profileHref}
-                className="text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/50 rounded"
-                title={`View ${member.username}'s profile`}
+                className="hover:underline focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/50 rounded"
+                title={
+                  member.username
+                    ? `View ${member.username}'s profile`
+                    : "View profile"
+                }
               >
                 {member.name || member.username || "—"}
               </Link>
@@ -98,30 +103,43 @@ export default function MemberRow({
             )}
           </span>
 
-          {member.username && (
-            <span className="text-xs text-muted-foreground">
-              @{member.username}
-            </span>
-          )}
-
-          {member.isOwner && (
-            <span className="text-xs text-amber-600">Team Owner</span>
-          )}
+          {/* secondary line(s) */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            {member.username && (
+              <span className="text-xs text-muted-foreground truncate">
+                @{member.username}
+              </span>
+            )}
+            {member.isOwner && (
+              <span className="text-xs text-amber-600">Team Owner</span>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Right: role control or label */}
-      <div className="min-w-[200px]">
+      {/* Right: controls (drop below on mobile, align right on desktop) */}
+      <div className="sm:col-span-5 min-w-0 flex flex-col sm:flex-row sm:justify-end gap-2">
         {isManager && !member.isOwner ? (
           <Select
             value={role}
             onValueChange={handleChange}
             disabled={saving}
           >
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger
+              // compact, consistent width; won't force the row to be wide
+              className="w-44 sm:w-56 truncate shrink-0"
+              aria-label="Change member role"
+            >
               <SelectValue placeholder="Select a role" />
             </SelectTrigger>
-            <SelectContent>
+
+            {/* Match the dropdown to the trigger width and keep it inside viewport */}
+            <SelectContent
+              position="popper"
+              sideOffset={4}
+              align="start"
+              className="w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-2rem)]"
+            >
               <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="member">Member</SelectItem>
               <SelectItem value="coach">Coach</SelectItem>
@@ -130,10 +148,11 @@ export default function MemberRow({
             </SelectContent>
           </Select>
         ) : (
-          <span className="inline-flex items-center px-2 py-1 rounded bg-muted text-sm">
+          <span className="inline-flex items-center px-2 py-1 rounded bg-muted text-sm text-gray-900 dark:text-gray-100">
             {roleLabel(role || (member.isOwner ? "manager" : "member"))}
           </span>
         )}
+        {/* If you ever add action buttons (Revoke/Approve), they’ll wrap nicely here */}
       </div>
     </div>
   );
