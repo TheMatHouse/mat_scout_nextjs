@@ -116,6 +116,11 @@ export default async function TeamLayout({ children, params }) {
       label: "Scouting Reports",
       href: `/teams/${slug}/scouting-reports`,
     });
+    // NEW: Coach's Notes tab for managers/coaches
+    tabs.push({
+      label: "Coach's Notes",
+      href: `/teams/${slug}/coach-notes`,
+    });
   }
 
   if (isManager) {
