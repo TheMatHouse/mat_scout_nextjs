@@ -79,7 +79,7 @@ export default function RootLayout({ children }) {
           />
         ) : null}
       </head>
-      <body className="font-sans flex flex-col min-h-screen bg-[var(--color-bg)] text-[var(--color-text)]">
+      <body className="font-sans flex flex-col min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] w-full overflow-x-hidden">
         <AnalyticsBeacon />
         <ThemeProvider
           attribute="class"

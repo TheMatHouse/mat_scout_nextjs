@@ -1,34 +1,43 @@
+// components/layout/LayoutClient.jsx
 "use client";
 
-import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
-import { toast } from "react-toastify";
-import AuthenticatedSidebar from "@/components/layout/AuthenticatedSidebar";
+import { usePathname } from "next/navigation";
+import { useMemo } from "react";
 
+/**
+ * LayoutClient
+ * - Scopes left padding for fixed sidebars to dashboard-like routes only.
+ * - Prevents global left shift on public pages (e.g., /teams/[slug]).
+ */
 export default function LayoutClient({ children }) {
-  const pathname = usePathname();
-  const params = useSearchParams();
+  const pathname = usePathname() || "/";
 
-  const showSidebar =
-    pathname.startsWith("/dashboard") ||
-    pathname.startsWith("/teams") ||
-    /^\/[^/]+$/.test(pathname) ||
-    pathname.startsWith("/family/");
+  // Adjust these prefixes to match routes that actually have a fixed sidebar.
+  const needsSidebar = useMemo(() => {
+    return (
+      pathname.startsWith("/dashboard") || pathname.startsWith("/admin")
+      // add more prefixes if you truly have a sidebar there
+    );
+  }, [pathname]);
 
-  useEffect(() => {
-    if (params.get("error") === "forbidden") {
-      toast.error("You are not authorized to access that page.");
-    }
-  }, [params]);
+  // Width of your fixed sidebar on large screens (if any)
+  const SIDEBAR_WIDTH = 280; // px
 
   return (
-    <div className="flex flex-1">
-      {showSidebar && (
-        <aside className="hidden md:flex w-64 bg-sidebar-background text-sidebar-foreground">
-          <AuthenticatedSidebar />
-        </aside>
-      )}
-      <main className="flex-1">{children}</main>
+    <div
+      className={[
+        // base
+        "flex-1 w-full min-w-0",
+        // prevent accidental horizontal scroll
+        "overflow-x-clip",
+        // only reserve space for sidebar on large screens AND only on sidebar routes
+        needsSidebar ? `lg:pl-[${SIDEBAR_WIDTH}px]` : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      {/* Keep a neutral inner wrapper so pages can manage their own containers */}
+      <div className="w-full min-w-0">{children}</div>
     </div>
   );
 }

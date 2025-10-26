@@ -1,3 +1,4 @@
+// components/teams/TeamPageClient.jsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -25,7 +26,7 @@ function isOwner(team, userId) {
   const uid = String(userId);
   const ownerCandidates = [
     team.user, // ✅ your Team owner field
-    team.userId, // optional safety (if you ever expose this)
+    team.userId,
     team.ownerId,
     team.owner,
     team.ownerID,
@@ -239,228 +240,239 @@ export default function TeamPageClient({ slug, initialData }) {
   const roleLabel = (r) => (r ? r.charAt(0).toUpperCase() + r.slice(1) : "—");
   const role = (userMembership?.role || "").toLowerCase();
   const status = (userMembership?.status || "active").toLowerCase();
-  const isPending = status === "pending" || role === "pending"; // support both styles
+  const isPending = status === "pending" || role === "pending";
   const cannotLeave = role === "manager" || role === "owner";
   const hasRow = !!userMembership?._id; // synthetic membership has no _id
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-      {/* CONTENT GRID */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* LEFT – About + Contact */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* About */}
-          <div className="rounded-xl border border-border bg-card shadow">
-            <div className="p-5 md:p-6">
-              <h2 className="text-xl font-semibold mb-3">
-                About {team.teamName}
-              </h2>
-              <div
-                className="prose dark:prose-invert max-w-none text-sm md:text-base"
-                dangerouslySetInnerHTML={{
-                  __html: team.info?.trim()
-                    ? team.info
-                    : "<p>This team hasn’t added info yet.</p>",
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Contact & Location */}
-          <div className="rounded-xl border border-border bg-card shadow">
-            <div className="p-5 md:p-6 space-y-4">
-              <h2 className="text-xl font-semibold">Contact &amp; Location</h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <InfoItem
-                  icon={<Mail className="w-4 h-4" />}
-                  label="Email"
-                  value={team.email || "—"}
-                />
-                <InfoItem
-                  icon={<Phone className="w-4 h-4" />}
-                  label="Phone"
-                  value={team.phone || "—"}
-                />
-                <InfoItem
-                  icon={<MapPin className="w-4 h-4" />}
-                  label="Address"
-                  value={fullAddress}
-                  className="md:col-span-2"
-                />
-                <InfoItem
-                  icon={<CalendarDays className="w-4 h-4" />}
-                  label="Created"
-                  value={createdOn}
+    // ⛑️ Clamp width at the top so nothing inside can widen the viewport
+    <div className="w-full min-w-0 overflow-x-hidden">
+      <div className="max-w-7xl mx-auto px-4 py-8 space-y-8 min-w-0">
+        {/* CONTENT GRID */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-w-0">
+          {/* LEFT – About + Contact */}
+          <div className="lg:col-span-2 space-y-6 min-w-0">
+            {/* About */}
+            <div className="rounded-xl border border-border bg-card shadow min-w-0">
+              <div className="p-5 md:p-6">
+                <h2 className="text-xl font-semibold mb-3">
+                  About {team.teamName}
+                </h2>
+                <div
+                  className="prose dark:prose-invert max-w-none text-sm md:text-base break-words"
+                  dangerouslySetInnerHTML={{
+                    __html: team.info?.trim()
+                      ? team.info
+                      : "<p>This team hasn’t added info yet.</p>",
+                  }}
                 />
               </div>
             </div>
+
+            {/* Contact & Location */}
+            <div className="rounded-xl border border-border bg-card shadow min-w-0">
+              <div className="p-5 md:p-6 space-y-4">
+                <h2 className="text-xl font-semibold">
+                  Contact &amp; Location
+                </h2>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
+                  <InfoItem
+                    icon={<Mail className="w-4 h-4" />}
+                    label="Email"
+                    value={team.email || "—"}
+                  />
+                  <InfoItem
+                    icon={<Phone className="w-4 h-4" />}
+                    label="Phone"
+                    value={team.phone || "—"}
+                  />
+                  <InfoItem
+                    icon={<MapPin className="w-4 h-4" />}
+                    label="Address"
+                    value={fullAddress}
+                    className="md:col-span-2"
+                  />
+                  <InfoItem
+                    icon={<CalendarDays className="w-4 h-4" />}
+                    label="Created"
+                    value={createdOn}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
 
-        {/* RIGHT – Membership & Family */}
-        <div className="space-y-6">
-          {/* Your Membership */}
-          <div className="rounded-xl border border-border bg-card shadow">
-            <div className="p-5 md:p-6 space-y-3">
-              <h2 className="text-xl font-semibold">Your Membership</h2>
+          {/* RIGHT – Membership & Family */}
+          <div className="space-y-6 min-w-0">
+            {/* Your Membership */}
+            <div className="rounded-xl border border-border bg-card shadow min-w-0">
+              <div className="p-5 md:p-6 space-y-3">
+                <h2 className="text-xl font-semibold">Your Membership</h2>
 
-              {user ? (
-                userMembership ? (
-                  isPending ? (
-                    <>
-                      <p className="text-sm text-muted-foreground">
-                        Your join request is <strong>Pending</strong>.
-                      </p>
-                      <button
-                        onClick={() =>
-                          hasRow &&
-                          handleLeave({ membershipId: userMembership._id })
-                        }
-                        disabled={buttonLoading || !hasRow}
-                        className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-yellow-600 px-4 py-2 text-sm font-semibold text-white hover:bg-yellow-700 disabled:opacity-60"
-                        title={
-                          !hasRow
-                            ? "No pending row to withdraw"
-                            : "Withdraw your request"
-                        }
-                      >
-                        <LogOut className="w-4 h-4" />
-                        Withdraw Request
-                      </button>
-                    </>
+                {user ? (
+                  userMembership ? (
+                    isPending ? (
+                      <>
+                        <p className="text-sm text-muted-foreground">
+                          Your join request is <strong>Pending</strong>.
+                        </p>
+                        <button
+                          onClick={() =>
+                            hasRow &&
+                            handleLeave({ membershipId: userMembership._id })
+                          }
+                          disabled={buttonLoading || !hasRow}
+                          className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-yellow-600 px-4 py-2 text-sm font-semibold text-white hover:bg-yellow-700 disabled:opacity-60"
+                          title={
+                            !hasRow
+                              ? "No pending row to withdraw"
+                              : "Withdraw your request"
+                          }
+                        >
+                          <LogOut className="w-4 h-4" />
+                          Withdraw Request
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm">
+                          Role:{" "}
+                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-muted text-muted-foreground">
+                            {roleLabel(userMembership.role)}
+                          </span>
+                        </p>
+                        <button
+                          onClick={() =>
+                            hasRow &&
+                            handleLeave({ membershipId: userMembership._id })
+                          }
+                          disabled={buttonLoading || cannotLeave || !hasRow}
+                          className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                          title={
+                            cannotLeave
+                              ? "Managers/Owners cannot leave from here"
+                              : !hasRow
+                              ? "No membership row to leave"
+                              : "Leave team"
+                          }
+                        >
+                          <LogOut className="w-4 h-4" />
+                          Leave Team
+                        </button>
+                      </>
+                    )
                   ) : (
                     <>
-                      <p className="text-sm">
-                        Role:{" "}
-                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-muted text-muted-foreground">
-                          {roleLabel(userMembership.role)}
-                        </span>
+                      <p className="text-sm text-muted-foreground">
+                        You’re not a member yet.
                       </p>
                       <button
-                        onClick={() =>
-                          hasRow &&
-                          handleLeave({ membershipId: userMembership._id })
-                        }
-                        disabled={buttonLoading || cannotLeave || !hasRow}
-                        className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
-                        title={
-                          cannotLeave
-                            ? "Managers/Owners cannot leave from here"
-                            : !hasRow
-                            ? "No membership row to leave"
-                            : "Leave team"
-                        }
+                        onClick={() => handleJoin()}
+                        disabled={buttonLoading}
+                        className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-[var(--ms-blue)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--ms-blue-gray)] disabled:opacity-60"
                       >
-                        <LogOut className="w-4 h-4" />
-                        Leave Team
+                        <UserPlus className="w-4 h-4" />
+                        {buttonLoading ? "Joining..." : "Join Team"}
                       </button>
                     </>
                   )
                 ) : (
-                  <>
-                    <p className="text-sm text-muted-foreground">
-                      You’re not a member yet.
-                    </p>
-                    <button
-                      onClick={() => handleJoin()}
-                      disabled={buttonLoading}
-                      className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-[var(--ms-blue)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--ms-blue-gray)] disabled:opacity-60"
-                    >
-                      <UserPlus className="w-4 h-4" />
-                      {buttonLoading ? "Joining..." : "Join Team"}
-                    </button>
-                  </>
-                )
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Log in to join this team.
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Family Members */}
-          {user && family.length > 0 && (
-            <div className="rounded-xl border border-border bg-card shadow">
-              <div className="p-5 md:p-6 space-y-4">
-                <h2 className="text-xl font-semibold">Family Members</h2>
-
-                <div className="space-y-3">
-                  {family.map((fm) => {
-                    const m = memberships.find(
-                      (m) => String(m.familyMemberId) === String(fm._id)
-                    );
-                    const mRole = (m?.role || "").toLowerCase();
-                    const mStatus = (m?.status || "active").toLowerCase();
-                    const mPending =
-                      mStatus === "pending" || mRole === "pending";
-
-                    let statusLabel = m
-                      ? mPending
-                        ? "Pending"
-                        : roleLabel(mRole)
-                      : "Not a member";
-                    let button = (
-                      <button
-                        onClick={() => handleJoin(fm._id)}
-                        disabled={buttonLoading}
-                        className="inline-flex items-center gap-2 rounded-md bg-[var(--ms-blue)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--ms-blue-gray)] disabled:opacity-60"
-                      >
-                        <UserPlus className="w-4 h-4" />
-                        {buttonLoading ? "Adding..." : "Add to Team"}
-                      </button>
-                    );
-
-                    if (m) {
-                      if (mPending) {
-                        button = (
-                          <button
-                            onClick={() => handleLeave({ membershipId: m._id })}
-                            disabled={buttonLoading}
-                            className="inline-flex items-center gap-2 rounded-md bg-yellow-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-yellow-700 disabled:opacity-60"
-                          >
-                            Withdraw
-                          </button>
-                        );
-                      } else if (
-                        ["member", "manager", "owner", "coach"].includes(mRole)
-                      ) {
-                        button = (
-                          <button
-                            onClick={() => handleLeave({ membershipId: m._id })}
-                            disabled={buttonLoading}
-                            className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
-                          >
-                            Leave Team
-                          </button>
-                        );
-                      }
-                    }
-
-                    return (
-                      <div
-                        key={fm._id}
-                        className="flex items-center justify-between rounded-lg border border-border bg-background/60 px-3 py-2"
-                      >
-                        <div>
-                          <p className="text-sm font-medium">
-                            {fm.firstName} {fm.lastName}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Status: {statusLabel}
-                          </p>
-                        </div>
-                        {button}
-                      </div>
-                    );
-                  })}
-                </div>
+                  <p className="text-sm text-muted-foreground">
+                    Log in to join this team.
+                  </p>
+                )}
               </div>
             </div>
-          )}
-        </div>
-      </section>
+
+            {/* Family Members */}
+            {user && family.length > 0 && (
+              <div className="rounded-xl border border-border bg-card shadow min-w-0">
+                <div className="p-5 md:p-6 space-y-4">
+                  <h2 className="text-xl font-semibold">Family Members</h2>
+
+                  <div className="space-y-3 min-w-0">
+                    {family.map((fm) => {
+                      const m = memberships.find(
+                        (m) => String(m.familyMemberId) === String(fm._id)
+                      );
+                      const mRole = (m?.role || "").toLowerCase();
+                      const mStatus = (m?.status || "active").toLowerCase();
+                      const mPending =
+                        mStatus === "pending" || mRole === "pending";
+
+                      let statusLabel = m
+                        ? mPending
+                          ? "Pending"
+                          : roleLabel(mRole)
+                        : "Not a member";
+                      let button = (
+                        <button
+                          onClick={() => handleJoin(fm._id)}
+                          disabled={buttonLoading}
+                          className="inline-flex items-center gap-2 rounded-md bg-[var(--ms-blue)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--ms-blue-gray)] disabled:opacity-60"
+                        >
+                          <UserPlus className="w-4 h-4" />
+                          {buttonLoading ? "Adding..." : "Add to Team"}
+                        </button>
+                      );
+
+                      if (m) {
+                        if (mPending) {
+                          button = (
+                            <button
+                              onClick={() =>
+                                handleLeave({ membershipId: m._id })
+                              }
+                              disabled={buttonLoading}
+                              className="inline-flex items-center gap-2 rounded-md bg-yellow-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-yellow-700 disabled:opacity-60"
+                            >
+                              Withdraw
+                            </button>
+                          );
+                        } else if (
+                          ["member", "manager", "owner", "coach"].includes(
+                            mRole
+                          )
+                        ) {
+                          button = (
+                            <button
+                              onClick={() =>
+                                handleLeave({ membershipId: m._id })
+                              }
+                              disabled={buttonLoading}
+                              className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                            >
+                              Leave Team
+                            </button>
+                          );
+                        }
+                      }
+
+                      return (
+                        <div
+                          key={fm._id}
+                          className="flex items-center justify-between rounded-lg border border-border bg-background/60 px-3 py-2 min-w-0"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {fm.firstName} {fm.lastName}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Status: {statusLabel}
+                            </p>
+                          </div>
+                          {button}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
@@ -469,7 +481,7 @@ export default function TeamPageClient({ slug, initialData }) {
 function InfoItem({ icon, label, value, className = "" }) {
   return (
     <div
-      className={`rounded-lg border border-border bg-background/60 p-4 ${className}`}
+      className={`rounded-lg border border-border bg-background/60 p-4 min-w-0 ${className}`}
     >
       <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted-foreground">
         <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-muted">
@@ -477,7 +489,7 @@ function InfoItem({ icon, label, value, className = "" }) {
         </span>
         {label.toUpperCase()}
       </div>
-      <div className="text-sm">{value || "—"}</div>
+      <div className="text-sm break-words">{value || "—"}</div>
     </div>
   );
 }
