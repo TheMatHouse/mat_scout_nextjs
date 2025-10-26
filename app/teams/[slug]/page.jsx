@@ -91,13 +91,9 @@ export default async function TeamPage({ params }) {
   const team = await Team.findOne({ teamSlug: slug });
 
   return (
-    <main className="relative w-full no-x-overflow">
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <TeamPageClient
-          slug={slug}
-          initialData={team ? JSON.parse(JSON.stringify(team)) : null}
-        />
-      </section>
-    </main>
+    <TeamPageClient
+      slug={slug}
+      initialData={team ? JSON.parse(JSON.stringify(team)) : null}
+    />
   );
 }
