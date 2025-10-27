@@ -232,7 +232,7 @@ export default async function TeamLayout({ children, params }) {
                     <span key={m.id}>
                       {m.username ? (
                         <Link
-                          href={`/family/${encodeURIComponent(m.username)}`}
+                          href={`/${encodeURIComponent(m.username)}`}
                           className="hover:underline"
                         >
                           {m.name}
