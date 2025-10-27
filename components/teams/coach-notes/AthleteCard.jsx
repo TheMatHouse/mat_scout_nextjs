@@ -48,10 +48,7 @@ const AthleteCard = ({ slug, entry, showDelete = true }) => {
         </div>
 
         <div className="flex gap-2">
-          <AddCoachMatchModalButton
-            slug={slug}
-            entryId={entry._id}
-          />
+          AddCoachMatchModalButton
           <button
             onClick={() => setOpenView(true)}
             className="px-3 py-1 rounded bg-gray-200 dark:bg-zinc-800"

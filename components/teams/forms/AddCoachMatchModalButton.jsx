@@ -1,44 +1,227 @@
 // components/teams/forms/AddCoachMatchModalButton.jsx
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
-import { toast } from "react-toastify";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "react-toastify";
 import ModalLayout from "@/components/shared/ModalLayout";
-import Editor from "@/components/shared/Editor";
 import CountrySelect from "@/components/shared/CountrySelect";
+import Editor from "@/components/shared/Editor";
 import TechniqueTagInput from "@/components/shared/TechniqueTagInput";
 
+/* ---------------- small inputs ---------------- */
+const TextInput = ({ label, value, onChange, placeholder }) => (
+  <label className="grid gap-1">
+    {label && <span className="text-sm">{label}</span>}
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="px-3 py-2 rounded border bg-transparent"
+    />
+  </label>
+);
+
+const Select = ({ label, value, onChange, children }) => (
+  <label className="grid gap-1">
+    {label && <span className="text-sm">{label}</span>}
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="px-3 py-2 rounded border bg-transparent"
+    >
+      {children}
+    </select>
+  </label>
+);
+
+/* ---------------- note block ---------------- */
 const emptyNote = () => ({
   opponentName: "",
   opponentRank: "",
   opponentClub: "",
   opponentCountry: "",
-  wentWell: "",
+  whatWentWell: "",
   reinforce: "",
   needsFix: "",
-  techOursTags: [], // [{label, value}]
-  techTheirsTags: [], // [{label, value}]
+  techOurs: [],
+  techTheirs: [],
   result: "",
   score: "",
   notes: "",
 });
 
-const AddCoachMatchModalButton = ({ slug, entryId }) => {
+const NoteBlock = ({
+  idx,
+  value,
+  onChange,
+  suggestions,
+  onRemove,
+  canRemove,
+}) => {
+  // helpers to update subfields
+  const set = (key) => (v) => onChange({ ...value, [key]: v });
+
+  // technique dedup helpers
+  const addUnique = (listKey) => (tag) => {
+    const list = value[listKey] || [];
+    if (list.some((p) => p.label.toLowerCase() === tag.label.toLowerCase()))
+      return;
+    onChange({ ...value, [listKey]: [...list, tag] });
+  };
+  const delAt = (listKey) => (i) => {
+    const list = value[listKey] || [];
+    onChange({ ...value, [listKey]: list.filter((_, idx) => idx !== i) });
+  };
+
+  return (
+    <div className="rounded-xl border p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <h4 className="font-semibold">Match / Note {idx + 1}</h4>
+        {canRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="text-sm px-3 py-1 rounded-md border hover:bg-gray-50 dark:hover:bg-gray-800"
+          >
+            Remove
+          </button>
+        )}
+      </div>
+
+      {/* Opponent */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        {/* Name */}
+        <label className="grid gap-1">
+          <span className="text-sm">Opponent name</span>
+          <input
+            value={value.opponentName}
+            onChange={(e) => set("opponentName")(e.target.value)}
+            placeholder="e.g., Alex Smith"
+            className="px-3 py-2 h-10 rounded border bg-transparent"
+          />
+        </label>
+
+        {/* Rank */}
+        <label className="grid gap-1">
+          <span className="text-sm">Opponent rank (optional)</span>
+          <input
+            value={value.opponentRank}
+            onChange={(e) => set("opponentRank")(e.target.value)}
+            placeholder="e.g., Brown Belt"
+            className="px-3 py-2 h-10 rounded border bg-transparent"
+          />
+        </label>
+
+        {/* Club */}
+        <label className="grid gap-1">
+          <span className="text-sm">Opponent club (optional)</span>
+          <input
+            value={value.opponentClub}
+            onChange={(e) => set("opponentClub")(e.target.value)}
+            placeholder="e.g., Tokyo JC"
+            className="px-3 py-2 h-10 rounded border bg-transparent"
+          />
+        </label>
+
+        {/* Country — the component renders its own label */}
+        <CountrySelect
+          label="Country"
+          value={value.opponentCountry}
+          onChange={set("opponentCountry")}
+        />
+      </div>
+
+      {/* Notes */}
+      <Editor
+        name={`whatWentWell_${idx}`}
+        label="What went well"
+        text={value.whatWentWell}
+        onChange={set("whatWentWell")}
+      />
+      <Editor
+        name={`reinforce_${idx}`}
+        label="What we should reinforce"
+        text={value.reinforce}
+        onChange={set("reinforce")}
+      />
+      <Editor
+        name={`needsFix_${idx}`}
+        label="What we need to fix"
+        text={value.needsFix}
+        onChange={set("needsFix")}
+      />
+
+      {/* Techniques */}
+      <TechniqueTagInput
+        label="Techniques (ours)"
+        name={`techniquesOurs_${idx}`}
+        suggestions={suggestions}
+        selected={value.techOurs}
+        onAdd={addUnique("techOurs")}
+        onDelete={delAt("techOurs")}
+      />
+      <TechniqueTagInput
+        label="Techniques (theirs)"
+        name={`techniquesTheirs_${idx}`}
+        suggestions={suggestions}
+        selected={value.techTheirs}
+        onAdd={addUnique("techTheirs")}
+        onDelete={delAt("techTheirs")}
+      />
+
+      {/* Result / Score */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Select
+          label="Result"
+          value={value.result}
+          onChange={set("result")}
+        >
+          <option value="">Result</option>
+          <option value="win">Win</option>
+          <option value="loss">Loss</option>
+          <option value="draw">Draw</option>
+        </Select>
+        <TextInput
+          label="Score"
+          value={value.score}
+          onChange={set("score")}
+          placeholder="e.g., Ippon, 2-1"
+        />
+      </div>
+
+      <Editor
+        name={`notes_${idx}`}
+        label="More notes (optional)"
+        text={value.notes}
+        onChange={set("notes")}
+      />
+    </div>
+  );
+};
+
+/* ---------------- main component ---------------- */
+const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [notes, setNotes] = useState([emptyNote()]);
-  const [saving, setSaving] = useState(false);
 
-  // Load technique suggestions from /api/techniques (same source as scouting)
+  // multi-note state
+  const [notes, setNotes] = useState([emptyNote()]);
+
+  // load techniques for suggestions
   const [loadedTechniques, setLoadedTechniques] = useState([]);
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         const res = await fetch("/api/techniques", { cache: "no-store" });
-        const data = await res.json();
-        const arr = Array.isArray(data) ? data : [];
+        const data = await res.json().catch(() => []);
+        const arr = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.techniques)
+          ? data.techniques
+          : [];
+
         const sorted = [...arr].sort((a, b) =>
           String(a?.name ?? "").localeCompare(
             String(b?.name ?? ""),
@@ -50,7 +233,7 @@ const AddCoachMatchModalButton = ({ slug, entryId }) => {
         );
         if (alive) setLoadedTechniques(sorted);
       } catch (e) {
-        console.error("Error fetching techniques:", e);
+        console.error("Failed to fetch techniques:", e);
         if (alive) setLoadedTechniques([]);
       }
     })();
@@ -64,293 +247,134 @@ const AddCoachMatchModalButton = ({ slug, entryId }) => {
     [loadedTechniques]
   );
 
-  const addAnother = () => setNotes((prev) => [...prev, emptyNote()]);
-  const removeNote = (idx) =>
-    setNotes((prev) =>
-      prev.length === 1 ? prev : prev.filter((_, i) => i !== idx)
-    );
+  const disabled = !slug || !eventId || !entryId;
 
-  const update = (idx, key, value) =>
-    setNotes((prev) => {
-      const next = [...prev];
-      next[idx] = { ...next[idx], [key]: value };
-      return next;
-    });
+  const resetForm = () => setNotes([emptyNote()]);
 
-  const addTech = (idx, field /* 'techOursTags' | 'techTheirsTags' */, item) =>
-    setNotes((prev) => {
-      const next = [...prev];
-      const arr = next[idx][field] || [];
-      next[idx][field] = [...arr, item];
-      return next;
-    });
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (disabled) {
+      toast.error("Missing team/event/entry identifiers.");
+      return;
+    }
 
-  const delTech = (idx, field, removeIndex) =>
-    setNotes((prev) => {
-      const next = [...prev];
-      const arr = next[idx][field] || [];
-      next[idx][field] = arr.filter((_, i) => i !== removeIndex);
-      return next;
-    });
-
-  const saveAll = useCallback(async () => {
     try {
-      setSaving(true);
+      // Transform UI notes -> API payload(s)
+      const payload = notes.map((n) => ({
+        opponent: {
+          name: n.opponentName || "",
+          rank: n.opponentRank || "",
+          club: n.opponentClub || "",
+          country: n.opponentCountry || "",
+        },
+        whatWentWell: n.whatWentWell,
+        reinforce: n.reinforce,
+        needsFix: n.needsFix,
+        techniques: {
+          ours: (n.techOurs || []).map((t) => t.label),
+          theirs: (n.techTheirs || []).map((t) => t.label),
+        },
+        result: n.result,
+        score: n.score,
+        notes: n.notes,
+      }));
 
-      // Skip completely empty blocks
-      const nonEmpty = notes.filter((n) => {
-        const s = (x) => (x || "").trim();
-        const anyTech =
-          (n.techOursTags?.length || 0) + (n.techTheirsTags?.length || 0) > 0;
-        return (
-          s(n.opponentName) ||
-          s(n.opponentRank) ||
-          s(n.opponentClub) ||
-          s(n.opponentCountry) ||
-          s(n.wentWell) ||
-          s(n.reinforce) ||
-          s(n.needsFix) ||
-          anyTech ||
-          s(n.result) ||
-          s(n.score) ||
-          s(n.notes)
-        );
-      });
-
-      if (!nonEmpty.length) {
-        toast.info("Nothing to save yet.");
-        return;
-      }
-
-      // Post each note independently to existing single-note route
-      for (const n of nonEmpty) {
-        const payload = {
-          opponent: {
-            name: n.opponentName,
-            rank: n.opponentRank,
-            club: n.opponentClub,
-            country: n.opponentCountry,
-          },
-          whatWentWell: n.wentWell,
-          reinforce: n.reinforce,
-          needsFix: n.needsFix,
-          techniques: {
-            // match scouting’s serialization: array of lowercased strings
-            ours: (n.techOursTags || [])
-              .map((t) => (t?.label || "").toLowerCase())
-              .filter(Boolean),
-            theirs: (n.techTheirsTags || [])
-              .map((t) => (t?.label || "").toLowerCase())
-              .filter(Boolean),
-          },
-          result: n.result,
-          score: n.score,
-          notes: n.notes,
-        };
-
-        const res = await fetch(
-          `/api/teams/${slug}/coach-notes/entries/${entryId}/matches`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          }
-        );
-
-        if (!res.ok) {
-          let msg = `Failed to add a match note (${res.status})`;
-          try {
-            const j = await res.json();
-            if (j?.error) msg = j.error;
-          } catch {}
-          throw new Error(msg);
+      const res = await fetch(
+        `/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ notes: payload }),
         }
+      );
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          data?.error || data?.message || "Failed to add note(s)"
+        );
       }
 
       toast.success(
-        nonEmpty.length === 1
-          ? "Match note saved"
-          : `${nonEmpty.length} notes saved`
+        Array.isArray(data?.notes) && data.notes.length > 1
+          ? "Match notes added"
+          : "Match note added"
       );
-      setNotes([emptyNote()]);
+
+      resetForm();
       setOpen(false);
       router.refresh();
     } catch (err) {
-      toast.error(err?.message || "Failed to save note(s)");
-    } finally {
-      setSaving(false);
+      console.error(err);
+      toast.error(err.message || "Server error");
     }
-  }, [notes, slug, entryId, router]);
+  };
 
   return (
     <>
       <button
+        type="button"
+        disabled={disabled}
         onClick={() => setOpen(true)}
-        className="px-3 py-1 rounded bg-black text-white dark:bg-white dark:text-black"
+        className={`px-3 py-2 rounded-md ${
+          disabled
+            ? "opacity-50 cursor-not-allowed border"
+            : "bg-black text-white dark:bg-white dark:text-black"
+        }`}
+        title={
+          disabled
+            ? "Missing event or athlete — cannot add note"
+            : "Add a new match/note"
+        }
       >
         Add Note
       </button>
 
       <ModalLayout
         isOpen={open}
-        onClose={setOpen}
+        onClose={() => setOpen(false)}
         title="Add New Match / Note"
         description="Record match details for this athlete."
         withCard
       >
-        <div className="grid gap-6">
-          {notes.map((n, idx) => (
-            <div
-              key={idx}
-              className="grid gap-3 rounded-xl border p-3"
-            >
-              <div className="flex items-center justify-between">
-                <h4 className="font-semibold">Note {idx + 1}</h4>
-                {notes.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeNote(idx)}
-                    className="text-red-600 text-sm"
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-
-              {/* Top row — consistent height */}
-              <div className="grid gap-2 sm:grid-cols-2">
-                <input
-                  value={n.opponentName}
-                  onChange={(e) => update(idx, "opponentName", e.target.value)}
-                  name={`opponentName_${idx}`}
-                  placeholder="Opponent name"
-                  className="px-3 py-2 h-10 rounded border bg-transparent"
-                />
-                <input
-                  value={n.opponentRank}
-                  onChange={(e) => update(idx, "opponentRank", e.target.value)}
-                  name={`opponentRank_${idx}`}
-                  placeholder="Opponent rank (optional)"
-                  className="px-3 py-2 h-10 rounded border bg-transparent"
-                />
-
-                <input
-                  value={n.opponentClub}
-                  onChange={(e) => update(idx, "opponentClub", e.target.value)}
-                  name={`opponentClub_${idx}`}
-                  placeholder="Opponent club (optional)"
-                  className="px-3 py-2 h-10 rounded border bg-transparent"
-                />
-                <div className="grid gap-1">
-                  <label className="text-sm">Country</label>
-                  <CountrySelect
-                    name={`opponentCountry_${idx}`}
-                    value={n.opponentCountry}
-                    onChange={(val) => update(idx, "opponentCountry", val)}
-                    placeholder="Opponent country (optional)"
-                    className="px-3 py-2 h-10 rounded border bg-transparent"
-                  />
-                </div>
-              </div>
-
-              {/* Editor-based fields */}
-              <div className="grid gap-2">
-                <label className="text-sm">What went well</label>
-                <Editor
-                  value={n.wentWell}
-                  onChange={(v) => update(idx, "wentWell", v)}
-                  placeholder="Notes on what went well…"
-                />
-              </div>
-              <div className="grid gap-2">
-                <label className="text-sm">What we should reinforce</label>
-                <Editor
-                  value={n.reinforce}
-                  onChange={(v) => update(idx, "reinforce", v)}
-                  placeholder="Key points to reinforce…"
-                />
-              </div>
-              <div className="grid gap-2">
-                <label className="text-sm">What we need to fix</label>
-                <Editor
-                  value={n.needsFix}
-                  onChange={(v) => update(idx, "needsFix", v)}
-                  placeholder="Issues to address / fix…"
-                />
-              </div>
-
-              {/* Technique tags (ours / theirs) — same component/shape as scouting */}
-              <TechniqueTagInput
-                label="Techniques (ours)"
-                name={`techOurs_${idx}`}
-                suggestions={suggestions}
-                selected={n.techOursTags}
-                onAdd={(item) => addTech(idx, "techOursTags", item)}
-                onDelete={(removeIndex) =>
-                  delTech(idx, "techOursTags", removeIndex)
-                }
-              />
-              <TechniqueTagInput
-                label="Techniques (theirs)"
-                name={`techTheirs_${idx}`}
-                suggestions={suggestions}
-                selected={n.techTheirsTags}
-                onAdd={(item) => addTech(idx, "techTheirsTags", item)}
-                onDelete={(removeIndex) =>
-                  delTech(idx, "techTheirsTags", removeIndex)
-                }
-              />
-
-              <div className="grid gap-2 sm:grid-cols-2">
-                <select
-                  value={n.result}
-                  onChange={(e) => update(idx, "result", e.target.value)}
-                  name={`result_${idx}`}
-                  className="px-3 py-2 h-10 rounded border bg-transparent"
-                >
-                  <option value="">Result</option>
-                  <option value="win">Win</option>
-                  <option value="loss">Loss</option>
-                  <option value="draw">Draw</option>
-                </select>
-                <input
-                  value={n.score}
-                  onChange={(e) => update(idx, "score", e.target.value)}
-                  name={`score_${idx}`}
-                  placeholder="Score (e.g., Ippon, Waza-ari, 2-1)"
-                  className="px-3 py-2 h-10 rounded border bg-transparent"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <label className="text-sm">More notes (optional)</label>
-                <Editor
-                  value={n.notes}
-                  onChange={(v) => update(idx, "notes", v)}
-                  placeholder="Any additional observations…"
-                />
-              </div>
-            </div>
+        <form
+          onSubmit={handleSubmit}
+          className="grid gap-5"
+        >
+          {notes.map((n, i) => (
+            <NoteBlock
+              key={i}
+              idx={i}
+              value={n}
+              suggestions={suggestions}
+              onChange={(val) =>
+                setNotes((prev) => prev.map((p, idx) => (idx === i ? val : p)))
+              }
+              onRemove={() =>
+                setNotes((prev) => prev.filter((_, idx) => idx !== i))
+              }
+              canRemove={notes.length > 1}
+            />
           ))}
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={addAnother}
-              className="px-4 py-2 rounded-xl shadow bg-gray-200 dark:bg-zinc-800"
+              onClick={() => setNotes((prev) => [...prev, emptyNote()])}
+              className="px-4 py-2 rounded-xl border"
             >
-              Add another note for this athlete
+              ➕ Add another note for this athlete
             </button>
+
             <button
-              type="button"
-              onClick={saveAll}
-              disabled={saving}
-              className="px-4 py-2 rounded-xl shadow bg-black text-white dark:bg-white dark:text-black disabled:opacity-60"
+              type="submit"
+              className="px-4 py-2 rounded-xl shadow bg-black text-white dark:bg-white dark:text-black"
+              disabled={disabled}
             >
-              {saving ? "Saving…" : "Save Note(s)"}
+              Save Note(s)
             </button>
           </div>
-        </div>
+        </form>
       </ModalLayout>
     </>
   );

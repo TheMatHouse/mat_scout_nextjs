@@ -1,3 +1,4 @@
+// components/shared/ModalLayout.jsx
 "use client";
 
 import {
@@ -15,31 +16,41 @@ import {
   CardDescription as CardDesc,
 } from "@/components/ui/card";
 
-export default function ModalLayout({
+const ModalLayout = ({
   isOpen,
   onClose,
   title,
   description,
   children,
   withCard = false,
-}) {
+}) => {
+  const hasDescription = Boolean(
+    description && String(description).trim().length
+  );
+
   return (
     <Dialog
       open={isOpen}
       onOpenChange={onClose}
     >
-      <DialogContent className="dialog-content-custom max-w-3xl w-full p-0 overflow-y-auto">
-        {/* Accessibility: Always include DialogHeader */}
+      <DialogContent
+        className="dialog-content-custom max-w-3xl w-full p-0 overflow-y-auto"
+        // If there is no textual description, explicitly unset aria-describedby
+        aria-describedby={hasDescription ? undefined : undefined}
+      >
+        {/* Always render header for semantics; hide visually when we use Card */}
         <DialogHeader className={withCard ? "sr-only" : ""}>
           <DialogTitle>{title}</DialogTitle>
-          {description && <DialogDescription>{description}</DialogDescription>}
+          {hasDescription && (
+            <DialogDescription>{description}</DialogDescription>
+          )}
         </DialogHeader>
 
         {withCard ? (
           <Card className="card-dark w-full shadow-md">
             <CardHdr>
               <CardTitle>{title}</CardTitle>
-              {description && <CardDesc>{description}</CardDesc>}
+              {hasDescription && <CardDesc>{description}</CardDesc>}
             </CardHdr>
             <CardContent>{children}</CardContent>
           </Card>
@@ -51,4 +62,6 @@ export default function ModalLayout({
       </DialogContent>
     </Dialog>
   );
-}
+};
+
+export default ModalLayout;
