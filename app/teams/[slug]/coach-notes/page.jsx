@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { headers, cookies } from "next/headers";
-import AddCoachEventModalButton from "@/components/teams/forms/AddCoachEventModalButton";
+import AddCoachEventModalButton from "@/components/teams/coach-notes/forms/AddCoachEventModalButton";
 
 /* -------- helpers (server) -------- */
 const getBaseUrl = async () => {
