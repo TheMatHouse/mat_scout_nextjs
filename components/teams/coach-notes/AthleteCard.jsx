@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";
-import AddCoachMatchModalButton from "@/components/teams/forms/AddCoachMatchModalButton";
+import AddCoachMatchModalButton from "@/components/teams/coach-notes/forms/AddCoachMatchModalButton";
 import ViewAthleteNotesModal from "./ViewAthleteNotesModal";
 
 const AthleteCard = ({ slug, entry, showDelete = true }) => {

@@ -1,15 +1,24 @@
 "use client";
 export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 export default function TeamTabs({ tabs }) {
-  const pathname = usePathname();
+  const pathname = usePathname() || "/";
+
+  // helper for nested route matching
+  const isActivePath = (current, base) => {
+    const clean = (s) => (s.endsWith("/") && s !== "/" ? s.slice(0, -1) : s);
+    const p = clean(current);
+    const b = clean(base);
+    return p === b || p.startsWith(b + "/");
+  };
 
   return (
     <nav className="flex gap-6 px-4 py-3 border-b border-gray-300 dark:border-gray-700 overflow-x-auto">
       {tabs.map((tab) => {
-        const isActive = pathname === tab.href;
+        const isActive = isActivePath(pathname, tab.href);
         return (
           <Link
             key={tab.href}
