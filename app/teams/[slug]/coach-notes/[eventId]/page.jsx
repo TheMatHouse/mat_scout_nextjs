@@ -1,15 +1,13 @@
-// app/teams/[slug]/coach-notes/[eventId]/page.jsx
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { headers, cookies } from "next/headers";
 
-import AddCoachMatchModalButton from "@/components/teams/coach-notes/forms/AddCoachMatchModalButton";
-import NoteRowActions from "@/components/teams/coach-notes/NoteRowActions";
-
-/* ✅ Add Athlete modal trigger */
 import AddCoachAthleteModalButton from "@/components/teams/coach-notes/forms/AddCoachAthleteModalButton";
+import AddCoachMatchModalButton from "@/components/teams/coach-notes/forms/AddCoachMatchModalButton"; // adjust if path differs
+import NoteRowActions from "@/components/teams/coach-notes/NoteRowActions";
+import RemoveEntryButton from "@/components/teams/coach-notes/RemoveEntryButton";
 
 /* ---------------- helpers ---------------- */
 const getBaseUrl = async () => {
@@ -204,15 +202,17 @@ const AthleteCard = async ({ slug, eventId, entry }) => {
             {entry.athlete?.name}
           </div>
           <div className="text-sm text-gray-900 dark:text-gray-100/80">
-            {[entry.athlete?.club, entry.athlete?.country]
-              .filter(Boolean)
-              .join(" • ")}
+            {[entry.athlete?.club].filter(Boolean).join(" • ")}
           </div>
         </div>
 
         <div className="shrink-0 flex items-center gap-2">
-          {/* Add Note (match) for this athlete */}
           <AddCoachMatchModalButton
+            slug={slug}
+            eventId={eventId}
+            entryId={entry._id}
+          />
+          <RemoveEntryButton
             slug={slug}
             eventId={eventId}
             entryId={entry._id}
@@ -231,7 +231,7 @@ const AthleteCard = async ({ slug, eventId, entry }) => {
 
 /* ---------------- page ---------------- */
 const EventDetailPage = async ({ params }) => {
-  const { slug, eventId } = await params; // Next.js 15 awaited-params pattern
+  const { slug, eventId } = await params; // Next 15 awaited-params pattern
   if (!slug || !eventId) return notFound();
 
   const [evt, entriesRes] = await Promise.all([
@@ -256,12 +256,18 @@ const EventDetailPage = async ({ params }) => {
             {evt.location ? ` • ${evt.location}` : ""}
           </div>
         </div>
-        <Link
-          href={`/teams/${slug}/coach-notes`}
-          className="text-sm underline text-gray-900 dark:text-gray-100"
-        >
-          Back to events
-        </Link>
+        <div className="flex items-center gap-2">
+          <AddCoachAthleteModalButton
+            slug={slug}
+            eventId={eventId}
+          />
+          <Link
+            href={`/teams/${slug}/coach-notes`}
+            className="text-sm underline text-gray-900 dark:text-gray-100"
+          >
+            Back to events
+          </Link>
+        </div>
       </div>
 
       {loadErr ? (
@@ -270,42 +276,28 @@ const EventDetailPage = async ({ params }) => {
         </div>
       ) : null}
 
-      {/* Header for Athletes + Add Athlete button */}
-      <div className="flex items-center justify-between">
+      <div className="space-y-4">
         <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
           Athletes
         </h3>
 
-        {/* ✅ Add Athlete to this event */}
-        <AddCoachAthleteModalButton
-          slug={slug}
-          eventId={eventId}
-        />
-      </div>
-
-      {/* List or empty state */}
-      {entries.length ? (
-        <div className="grid gap-4">
-          {entries.map((e) => (
-            <AthleteCard
-              key={String(e?._id)}
-              slug={slug}
-              eventId={eventId}
-              entry={e}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-xl border p-6 bg-white dark:bg-neutral-900">
-          <div className="text-sm text-gray-900 dark:text-gray-100/80 mb-3">
+        {entries.length ? (
+          <div className="grid gap-4">
+            {entries.map((e) => (
+              <AthleteCard
+                key={String(e?._id)}
+                slug={slug}
+                eventId={eventId}
+                entry={e}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="text-sm text-gray-900 dark:text-gray-100/80">
             No athletes yet for this event.
           </div>
-          <AddCoachEntryModalButton
-            slug={slug}
-            eventId={eventId}
-          />
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
