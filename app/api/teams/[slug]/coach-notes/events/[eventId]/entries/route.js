@@ -5,6 +5,7 @@ import { requireTeamRole } from "@/lib/authz/teamRoles";
 import CoachEvent from "@/models/coachEventModel";
 import CoachEntry from "@/models/coachEntryModel";
 import User from "@/models/userModel";
+import FamilyMember from "@/models/familyMemberModel";
 
 export async function GET(_req, { params }) {
   await connectDB();
@@ -32,7 +33,7 @@ export async function POST(req, { params }) {
     return NextResponse.json({ error: gate.reason }, { status: gate.status });
 
   const body = await req.json().catch(() => ({}));
-  const { athleteUserId, athlete } = body || {};
+  const { athleteUserId, athleteFamilyMemberId, athlete } = body || {};
 
   const event = await CoachEvent.findById(eventId).lean();
   if (!event)
@@ -41,7 +42,6 @@ export async function POST(req, { params }) {
   let payload;
 
   if (athleteUserId) {
-    // MEMBER path (like Scouting): link to user + snapshot
     const u = await User.findById(athleteUserId).lean();
     if (!u)
       return NextResponse.json(
@@ -53,24 +53,51 @@ export async function POST(req, { params }) {
       [u.firstName, u.lastName].filter(Boolean).join(" ") ||
       u.username ||
       "Athlete";
+
     payload = {
       event: event._id,
       team: gate.teamId,
       athlete: {
         user: u._id,
+        familyMember: null,
         name: fullName,
         club: u.club || "",
         country: u.country || "",
       },
       createdBy: user._id,
     };
-  } else if (athlete?.name) {
-    // GUEST path (like Scouting’s external option)
+  } else if (athleteFamilyMemberId) {
+    const fm = await FamilyMember.findById(athleteFamilyMemberId).lean();
+    if (!fm)
+      return NextResponse.json(
+        { error: "Family member not found" },
+        { status: 404 }
+      );
+
+    const fullName =
+      [fm.firstName, fm.lastName].filter(Boolean).join(" ") ||
+      fm.username ||
+      "Athlete";
+
     payload = {
       event: event._id,
       team: gate.teamId,
       athlete: {
         user: null,
+        familyMember: fm._id,
+        name: fullName,
+        club: fm.club || "",
+        country: fm.country || "",
+      },
+      createdBy: user._id,
+    };
+  } else if (athlete?.name) {
+    payload = {
+      event: event._id,
+      team: gate.teamId,
+      athlete: {
+        user: null,
+        familyMember: null,
         name: String(athlete.name).trim(),
         club: athlete.club || "",
         country: athlete.country || "",
@@ -79,7 +106,10 @@ export async function POST(req, { params }) {
     };
   } else {
     return NextResponse.json(
-      { error: "Provide either athleteUserId or athlete { name }" },
+      {
+        error:
+          "Provide athleteUserId OR athleteFamilyMemberId OR athlete { name }",
+      },
       { status: 400 }
     );
   }
