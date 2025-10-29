@@ -46,30 +46,35 @@ export default function FamilyMemberForm({ user, onClose, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const payload = {
-      ...formData,
-      userId: user._id,
-    };
+    const payload = { ...formData, userId: user._id };
 
     try {
       const res = await fetch(`/api/dashboard/${user._id}/family`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        toast.success("Family member added successfully");
-        onClose();
-        onSuccess(data);
-      } else {
-        const errorData = await res.json();
-        console.error("❌ Server error:", errorData);
-        toast.error(errorData.message || "Failed to add family member");
+      if (!res.ok) {
+        // Read raw text first to avoid "Unexpected end of JSON input"
+        const text = await res.text();
+        let msg = `Failed to add family member (HTTP ${res.status})`;
+        try {
+          const maybe = JSON.parse(text || "{}");
+          if (maybe?.message) msg = maybe.message;
+          if (maybe?.error) msg = maybe.error;
+        } catch {
+          if (text) msg = text;
+        }
+        console.error("❌ Server error:", text);
+        toast.error(msg);
+        return;
       }
+
+      const data = await res.json();
+      toast.success("Family member added successfully");
+      onClose?.();
+      onSuccess?.(data);
     } catch (err) {
       console.error("❗ Unexpected error:", err);
       toast.error("Unexpected error");
