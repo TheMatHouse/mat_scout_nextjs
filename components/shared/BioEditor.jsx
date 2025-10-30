@@ -1,6 +1,7 @@
+// components/profile/BioEditor.jsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Editor from "@/components/shared/Editor";
 import { Button } from "@/components/ui/button";
 
@@ -84,9 +85,7 @@ function sanitizeForBio(dirtyHtml = "") {
       }
     }
     toRemove.forEach((n) => el.removeAttribute(n));
-
-    const children = Array.from(el.childNodes);
-    children.forEach((c) => cleanNode(c));
+    Array.from(el.childNodes).forEach((c) => cleanNode(c));
   }
 
   Array.from(root.childNodes).forEach((n) => cleanNode(n));
@@ -105,21 +104,26 @@ function sanitizeForBio(dirtyHtml = "") {
 
 const MAX = 2000;
 
-export default function BioEditor({
+const BioEditor = ({
   initialHtml = "",
   onSave,
   saving = false,
   className = "",
   label = null,
   helperText = "Add a short bio (up to 2000 characters). It will appear on your public profile.",
-}) {
+}) => {
   const [html, setHtml] = useState(initialHtml || "");
   const [isSaving, setIsSaving] = useState(false);
   const [localError, setLocalError] = useState("");
+  const lastAppliedRef = useRef(initialHtml || "");
 
-  // Keep editor in sync when parent updates initialHtml
+  // Keep editor in sync when parent updates initialHtml (but ignore no-op repeats)
   useEffect(() => {
-    setHtml(initialHtml || "");
+    const incoming = initialHtml || "";
+    if (incoming !== lastAppliedRef.current) {
+      lastAppliedRef.current = incoming;
+      setHtml(incoming);
+    }
   }, [initialHtml]);
 
   const plain = useMemo(() => htmlToText(html), [html]);
@@ -149,16 +153,18 @@ export default function BioEditor({
       className={`rounded-xl border border-border bg-white dark:bg-gray-900 shadow p-6 ${className}`}
     >
       {label && (
-        <h2 className="text-lg font-semibold mb-2 text-black dark:text-white">
+        <h2 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">
           {label}
         </h2>
       )}
 
       {helperText && (
-        <p className="text-sm text-muted-foreground mb-4">{helperText}</p>
+        <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+          {helperText}
+        </p>
       )}
 
-      {/* Shared Editor (now without indent/outdent) */}
+      {/* Shared Editor (now caret-safe) */}
       <Editor
         name="bio"
         text={html}
@@ -169,7 +175,7 @@ export default function BioEditor({
       <div className="mt-3 flex items-center justify-between">
         <span
           className={`text-xs ${
-            overLimit ? "text-red-600" : "text-muted-foreground"
+            overLimit ? "text-red-600" : "text-gray-700 dark:text-gray-300"
           }`}
         >
           {plain.length}/{MAX}
@@ -188,4 +194,6 @@ export default function BioEditor({
       {localError && <p className="mt-2 text-xs text-red-600">{localError}</p>}
     </section>
   );
-}
+};
+
+export default BioEditor;

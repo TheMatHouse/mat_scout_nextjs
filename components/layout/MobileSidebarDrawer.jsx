@@ -104,6 +104,10 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
                         href: "/dashboard/scouting",
                         label: "Scouting Reports",
                       },
+                      {
+                        href: "/dashboard/coach-notes",
+                        label: "Coach's Notes",
+                      },
                       { href: "/dashboard/family", label: "Family" },
                     ].map((sub) => (
                       <Link

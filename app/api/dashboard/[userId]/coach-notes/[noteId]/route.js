@@ -1,29 +1,28 @@
 // app/api/dashboard/[userId]/coach-notes/[noteId]/route.js
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
+
 import CoachMatchNote from "@/models/coachMatchNoteModel";
-import "@/models/coachEntryModel";
-import "@/models/coachEventModel";
-import "@/models/teamModel"; // ensure Team is registered
+import CoachEntry from "@/models/coachEntryModel";
+import CoachEvent from "@/models/coachEventModel";
+import Team from "@/models/teamModel";
+import User from "@/models/userModel";
 
 const isValidId = (id) => !!id && Types.ObjectId.isValid(id);
 const oid = (id) => new Types.ObjectId(id);
 const jserr = (status, message) =>
   NextResponse.json({ ok: false, message }, { status });
 
-export async function OPTIONS() {
-  return NextResponse.json({}, { status: 204 });
-}
-
-// GET /api/dashboard/:userId/coach-notes/:noteId
-export async function GET(_req, { params }) {
+export async function GET(req, { params }) {
   await connectDB();
 
   const { userId, noteId } = await params;
+
   if (!isValidId(userId)) return jserr(400, "Invalid userId");
   if (!isValidId(noteId)) return jserr(400, "Invalid noteId");
 
@@ -31,11 +30,21 @@ export async function GET(_req, { params }) {
   if (!me) return jserr(401, "Not authenticated");
   if (String(me._id) !== String(userId)) return jserr(403, "Not authorized");
 
-  // Aggregate to (1) enforce athlete ownership, (2) enrich event/team/coach, (3) project clean fields
+  // Build a small, robust aggregation that:
+  // 1) Finds the note by _id
+  // 2) Joins entry to figure out the athlete (across legacy shapes)
+  // 3) Enforces visibility: createdBy == user OR athlete == user
+  // 4) Joins event, team, coach for display fields
   const pipeline = [
-    { $match: { _id: oid(noteId), deletedAt: null } },
+    // Note by id, not soft-deleted (support both styles)
+    {
+      $match: {
+        _id: oid(noteId),
+        $or: [{ deletedAt: null }, { deleted: { $ne: true } }],
+      },
+    },
 
-    // Verify the note is for this athlete via CoachEntry
+    // Join entry
     {
       $lookup: {
         from: "coachentries",
@@ -44,10 +53,39 @@ export async function GET(_req, { params }) {
         as: "entry",
       },
     },
-    { $unwind: "$entry" },
-    { $match: { "entry.athlete.user": oid(userId) } },
+    { $unwind: { path: "$entry", preserveNullAndEmptyArrays: true } },
 
-    // Event (authoritative source for team)
+    // Normalize athlete user id across possible shapes
+    {
+      $addFields: {
+        _athleteRaw: {
+          $ifNull: [
+            "$entry.athlete.user",
+            { $ifNull: ["$entry.athlete.userId", "$entry.athleteId"] },
+          ],
+        },
+      },
+    },
+    {
+      $addFields: {
+        athleteUserForMatch: {
+          $cond: [
+            { $eq: [{ $type: "$_athleteRaw" }, "string"] },
+            { $toObjectId: "$_athleteRaw" },
+            "$_athleteRaw",
+          ],
+        },
+      },
+    },
+
+    // Visibility gate (same rule as the list endpoint)
+    {
+      $match: {
+        $or: [{ createdBy: oid(userId) }, { athleteUserForMatch: oid(userId) }],
+      },
+    },
+
+    // Join event (authoritative team)
     {
       $lookup: {
         from: "coachevents",
@@ -58,10 +96,10 @@ export async function GET(_req, { params }) {
     },
     { $unwind: { path: "$event", preserveNullAndEmptyArrays: true } },
 
-    // Resolve team id: event.team → note.team → entry.team
+    // Coalesce team id: event.team → note.team → entry.team
     {
       $addFields: {
-        teamIdForLookup: {
+        _teamIdRaw: {
           $ifNull: ["$event.team", { $ifNull: ["$team", "$entry.team"] }],
         },
       },
@@ -70,15 +108,15 @@ export async function GET(_req, { params }) {
       $addFields: {
         teamIdForLookup: {
           $cond: [
-            { $eq: [{ $type: "$teamIdForLookup" }, "string"] },
-            { $toObjectId: "$teamIdForLookup" },
-            "$teamIdForLookup",
+            { $eq: [{ $type: "$_teamIdRaw" }, "string"] },
+            { $toObjectId: "$_teamIdRaw" },
+            "$_teamIdRaw",
           ],
         },
       },
     },
 
-    // Team
+    // Join team
     {
       $lookup: {
         from: "teams",
@@ -89,7 +127,7 @@ export async function GET(_req, { params }) {
     },
     { $unwind: { path: "$team", preserveNullAndEmptyArrays: true } },
 
-    // Coach display
+    // Join coach user → display name
     {
       $lookup: {
         from: "users",
@@ -99,6 +137,8 @@ export async function GET(_req, { params }) {
       },
     },
     { $unwind: { path: "$coach", preserveNullAndEmptyArrays: true } },
+
+    // Compose coachName
     {
       $addFields: {
         coachName: {
@@ -128,9 +168,22 @@ export async function GET(_req, { params }) {
     // Final projection
     {
       $project: {
-        _id: 1,
+        _id: { $toString: "$_id" },
         createdAt: 1,
         updatedAt: 1,
+
+        // denormalized for preview
+        team: {
+          teamId: { $toString: "$team._id" },
+          teamName: "$team.teamName",
+          teamSlug: "$team.teamSlug",
+        },
+        event: {
+          eventId: { $toString: "$event._id" },
+          name: "$event.name",
+          startDate: "$event.startDate",
+        },
+
         athleteName: 1,
         opponent: 1,
         whatWentWell: 1,
@@ -140,57 +193,46 @@ export async function GET(_req, { params }) {
         result: 1,
         score: 1,
         notes: 1,
+
+        // video is optional in schema
+        video: 1,
+
+        coachId: { $toString: "$createdBy" },
         coachName: 1,
-        event: {
-          _id: "$event._id",
-          name: "$event.name",
-          startDate: "$event.startDate",
-        },
-        team: {
-          _id: "$team._id",
-          teamName: "$team.teamName", // your schema
-          teamSlug: "$team.teamSlug", // your schema
-        },
       },
     },
   ];
 
   try {
-    const rows = await CoachMatchNote.aggregate(pipeline).limit(1);
-    if (!rows.length) return jserr(404, "Note not found");
+    const rows = await CoachMatchNote.aggregate(pipeline);
+    if (!rows || rows.length === 0) {
+      // Either not found or not visible to this user
+      return jserr(404, "Note not found");
+    }
 
-    const n = rows[0];
-    const note = {
-      _id: String(n._id),
-      createdAt: n.createdAt,
-      updatedAt: n.updatedAt,
-      athleteName: n.athleteName || "",
-      opponent: n.opponent || {},
-      whatWentWell: n.whatWentWell || "",
-      reinforce: n.reinforce || "",
-      needsFix: n.needsFix || "",
-      techniques: n.techniques || { ours: [], theirs: [] },
-      result: n.result || "",
-      score: n.score || "",
-      notes: n.notes || "",
-      coachName: n.coachName || "Coach",
-      event: n.event
-        ? {
-            _id: n.event._id ? String(n.event._id) : null,
-            name: n.event.name || "Event",
-            startDate: n.event.startDate || null,
-          }
-        : null,
-      team: n.team
-        ? {
-            _id: n.team._id ? String(n.team._id) : null,
-            teamName: n.team.teamName || n.team.teamSlug || "Team",
-            teamSlug: n.team.teamSlug || null,
-          }
-        : null,
-    };
+    const note = rows[0];
 
-    return NextResponse.json({ ok: true, note }, { status: 200 });
+    // Convenience: compute a YouTube embed URL if applicable (for the preview)
+    let video = note.video || null;
+    if (video?.url) {
+      const idMatch = String(video.url).match(
+        /(?:youtube\.com\/.*[?&]v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/|youtube-nocookie\.com\/embed\/)([^&?/]+)/i
+      );
+      if (idMatch) {
+        const startMs = Math.max(0, Number(video.startMs || 0) || 0);
+        const startSec = Math.floor(startMs / 1000);
+        const base = `https://www.youtube-nocookie.com/embed/${idMatch[1]}`;
+        video = {
+          ...video,
+          embedUrl: startSec > 0 ? `${base}?start=${startSec}` : base,
+        };
+      }
+    }
+
+    return NextResponse.json(
+      { ok: true, note: { ...note, video } },
+      { status: 200 }
+    );
   } catch (err) {
     console.error(
       "GET /api/dashboard/[userId]/coach-notes/[noteId] error:",

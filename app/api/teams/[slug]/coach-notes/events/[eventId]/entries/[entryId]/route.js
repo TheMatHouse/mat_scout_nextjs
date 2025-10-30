@@ -6,7 +6,6 @@ import { connectDB } from "@/lib/mongo";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import { requireTeamRole } from "@/lib/authz/teamRoles";
 import CoachEntry from "@/models/coachEntryModel";
-import CoachMatch from "@/models/coachMatchNoteModel";
 
 export async function DELETE(req, { params }) {
   try {

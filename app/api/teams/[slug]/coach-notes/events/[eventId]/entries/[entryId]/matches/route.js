@@ -12,6 +12,93 @@ import CoachMatchNote from "@/models/coachMatchNoteModel";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+/* --------------------- helpers: youtube & timecode --------------------- */
+function timecodeToMs(tc = "") {
+  const parts = String(tc)
+    .trim()
+    .split(":")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (!parts.length) return 0;
+  let s = 0;
+  if (parts.length === 1) s = Number(parts[0] || 0);
+  else if (parts.length === 2)
+    s = Number(parts[0] || 0) * 60 + Number(parts[1] || 0);
+  else if (parts.length === 3)
+    s =
+      Number(parts[0] || 0) * 3600 +
+      Number(parts[1] || 0) * 60 +
+      Number(parts[2] || 0);
+  return Number.isFinite(s) && s > 0 ? Math.round(s * 1000) : 0;
+}
+
+function parseSecondsFromQueryVal(val = "") {
+  // supports "90", "90s", "1m30s"
+  const t = String(val).trim();
+  if (!t) return 0;
+  if (/m|s/i.test(t)) {
+    const m = Number(t.match(/(\d+)m/i)?.[1] ?? 0);
+    const s = Number(t.match(/(\d+)s/i)?.[1] ?? 0);
+    const total = m * 60 + s;
+    return Number.isFinite(total) && total > 0 ? total : 0;
+  }
+  const num = Number(t);
+  return Number.isFinite(num) && num > 0 ? num : 0;
+}
+
+function extractYouTubeId(url = "") {
+  if (typeof url !== "string") return null;
+  const u = url.trim();
+  if (!u) return null;
+  if (!/(youtube\.com|youtu\.be|youtube-nocookie\.com)/i.test(u)) return null;
+  const re =
+    /(?:youtube\.com\/.*[?&]v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/|youtube-nocookie\.com\/embed\/)([^&?/]+)/i;
+  const m = u.match(re);
+  return m ? m[1] : null;
+}
+
+function toNoCookieEmbedUrl(videoId, startSeconds = 0) {
+  const base = `https://www.youtube-nocookie.com/embed/${videoId}`;
+  return startSeconds > 0 ? `${base}?start=${startSeconds}` : base;
+}
+
+function normalizeVideoFromRaw(raw) {
+  // raw: { url, start, label }
+  const rawUrl = typeof raw?.url === "string" ? raw.url.trim() : "";
+  const rawStart = typeof raw?.start === "string" ? raw.start.trim() : "";
+  const label = typeof raw?.label === "string" ? raw.label.trim() : "";
+
+  if (!rawUrl) return {};
+
+  const id = extractYouTubeId(rawUrl);
+  if (!id) return {};
+
+  // UI time wins; if absent, try URL query (?t= or ?start=)
+  let ms = timecodeToMs(rawStart);
+  if (!ms) {
+    try {
+      const u = new URL(rawUrl);
+      const tParam = u.searchParams.get("t") || u.searchParams.get("start");
+      if (tParam) {
+        const sec = parseSecondsFromQueryVal(tParam);
+        if (sec > 0) ms = sec * 1000;
+      }
+    } catch {
+      // ignore URL parse errors
+    }
+  }
+  const startSeconds = Math.round((ms || 0) / 1000);
+  return {
+    url: toNoCookieEmbedUrl(id, startSeconds),
+    publicId: null,
+    startMs: ms || 0,
+    label,
+    width: null,
+    height: null,
+    duration: null,
+  };
+}
+
 /* ---------------------  GET: list all matches --------------------- */
 export async function GET(req, { params }) {
   try {
@@ -120,41 +207,53 @@ export async function POST(req, { params }) {
     // --- Parse body (allow single, array, or {notes:[...]})
     const raw = await req.json().catch(() => ({}));
 
-    const normalize = (obj) => ({
-      // write BOTH field names to satisfy either schema
-      team: team._id,
-      teamId: team._id,
+    const normalize = (obj) => {
+      // --- normalize video from obj.videoRaw (optional)
+      const video =
+        obj?.videoRaw && typeof obj.videoRaw === "object"
+          ? normalizeVideoFromRaw(obj.videoRaw)
+          : {};
 
-      event: event._id,
-      eventId, // keep the param too, if your schema stored string id
+      return {
+        // write BOTH field names to satisfy either schema
+        team: team._id,
+        teamId: team._id,
 
-      entry: entry._id,
-      entryId: entryId,
+        event: event._id,
+        eventId, // keep the param too, if your schema stored string id
 
-      athleteId: athleteId || null,
-      athleteName,
+        entry: entry._id,
+        entryId: entryId,
 
-      opponent: {
-        name: obj?.opponent?.name || "",
-        rank: obj?.opponent?.rank || "",
-        club: obj?.opponent?.club || "",
-        country: obj?.opponent?.country || "",
-      },
-      whatWentWell: obj?.whatWentWell || "",
-      reinforce: obj?.reinforce || "",
-      needsFix: obj?.needsFix || "",
-      techniques: {
-        ours: Array.isArray(obj?.techniques?.ours) ? obj.techniques.ours : [],
-        theirs: Array.isArray(obj?.techniques?.theirs)
-          ? obj.techniques.theirs
-          : [],
-      },
-      result: obj?.result || "",
-      score: obj?.score || "",
-      notes: obj?.notes || "",
-      deleted: false,
-      createdBy: me._id,
-    });
+        athleteId: athleteId || null,
+        athleteName,
+
+        opponent: {
+          name: obj?.opponent?.name || "",
+          rank: obj?.opponent?.rank || "",
+          club: obj?.opponent?.club || "",
+          country: obj?.opponent?.country || "",
+        },
+        whatWentWell: obj?.whatWentWell || "",
+        reinforce: obj?.reinforce || "",
+        needsFix: obj?.needsFix || "",
+        techniques: {
+          ours: Array.isArray(obj?.techniques?.ours) ? obj.techniques.ours : [],
+          theirs: Array.isArray(obj?.techniques?.theirs)
+            ? obj.techniques.theirs
+            : [],
+        },
+        result: obj?.result || "",
+        score: obj?.score || "",
+        notes: obj?.notes || "",
+
+        // NEW: normalized YouTube video (empty object if none/invalid)
+        video,
+
+        deleted: false,
+        createdBy: me._id,
+      };
+    };
 
     const docsPayload = Array.isArray(raw)
       ? raw.map(normalize)
@@ -184,8 +283,15 @@ export async function PATCH(req) {
       return NextResponse.json({ error: "Missing match ID" }, { status: 400 });
 
     await connectDB();
-    const update = { ...body, updatedAt: new Date() };
+
+    // If client sends videoRaw on edit, normalize it here
+    let update = { ...body, updatedAt: new Date() };
     delete update._id;
+
+    if (update.videoRaw && typeof update.videoRaw === "object") {
+      update.video = normalizeVideoFromRaw(update.videoRaw);
+      delete update.videoRaw;
+    }
 
     const updated = await CoachMatchNote.findByIdAndUpdate(
       matchId,

@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Eye, Trash2 } from "lucide-react";
 import { toast } from "react-toastify";
 
-import EditCoachMatchModalButton from "@/components/teams/coach-notes/EditCoachMatchModalButton";
+import EditCoachMatchModalButton from "@/components/teams/coach-notes/forms/EditCoachMatchModalButton";
 import PreviewAthleteNotesButton from "@/components/teams/coach-notes/PreviewAthleteNotesButton";
 
 export default function NoteRowActions({
