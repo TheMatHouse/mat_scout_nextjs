@@ -1,4 +1,3 @@
-// components/teams/forms/AddCoachMatchModalButton.jsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -8,6 +7,7 @@ import ModalLayout from "@/components/shared/ModalLayout";
 import CountrySelect from "@/components/shared/CountrySelect";
 import Editor from "@/components/shared/Editor";
 import TechniqueTagInput from "@/components/shared/TechniqueTagInput";
+import ClubAutosuggest from "@/components/shared/ClubAutosuggest";
 
 /* ---------------- small inputs ---------------- */
 const TextInput = ({ label, value, onChange, placeholder }) => (
@@ -17,6 +17,19 @@ const TextInput = ({ label, value, onChange, placeholder }) => (
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
+      className="px-3 py-2 rounded border bg-transparent"
+    />
+  </label>
+);
+
+const NumberInput = ({ label, value, onChange, min = 0 }) => (
+  <label className="grid gap-1">
+    {label && <span className="text-sm">{label}</span>}
+    <input
+      type="number"
+      min={min}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
       className="px-3 py-2 rounded border bg-transparent"
     />
   </label>
@@ -35,6 +48,21 @@ const Select = ({ label, value, onChange, children }) => (
   </label>
 );
 
+/* ---------------- youtube helpers ---------------- */
+const extractYouTubeId = (url = "") => {
+  if (typeof url !== "string") return null;
+  const u = url.trim();
+  if (!u) return null;
+  const re =
+    /(?:youtube\.com\/.*[?&]v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/|youtube-nocookie\.com\/embed\/)([^&?/]+)/i;
+  const m = u.match(re);
+  return m ? m[1] : null;
+};
+const toNoCookieEmbedUrl = (videoId, startSeconds = 0) => {
+  const base = `https://www.youtube-nocookie.com/embed/${videoId}`;
+  return startSeconds > 0 ? `${base}?start=${startSeconds}` : base;
+};
+
 /* ---------------- note block ---------------- */
 const emptyNote = () => ({
   opponentName: "",
@@ -49,6 +77,11 @@ const emptyNote = () => ({
   result: "",
   score: "",
   notes: "",
+  videoTitle: "",
+  videoUrlRaw: "",
+  videoH: "0",
+  videoM: "0",
+  videoS: "0",
 });
 
 const NoteBlock = ({
@@ -59,10 +92,8 @@ const NoteBlock = ({
   onRemove,
   canRemove,
 }) => {
-  // helpers to update subfields
   const set = (key) => (v) => onChange({ ...value, [key]: v });
 
-  // technique dedup helpers
   const addUnique = (listKey) => (tag) => {
     const list = value[listKey] || [];
     if (list.some((p) => p.label.toLowerCase() === tag.label.toLowerCase()))
@@ -73,6 +104,14 @@ const NoteBlock = ({
     const list = value[listKey] || [];
     onChange({ ...value, [listKey]: list.filter((_, idx) => idx !== i) });
   };
+
+  const h = Math.max(0, parseInt(value.videoH || "0", 10) || 0);
+  const m = Math.max(0, parseInt(value.videoM || "0", 10) || 0);
+  const s = Math.max(0, parseInt(value.videoS || "0", 10) || 0);
+  const startSeconds = h * 3600 + m * 60 + s;
+
+  const vidId = extractYouTubeId(value.videoUrlRaw);
+  const previewSrc = vidId ? toNoCookieEmbedUrl(vidId, startSeconds) : "";
 
   return (
     <div className="rounded-xl border p-4 space-y-4">
@@ -89,9 +128,8 @@ const NoteBlock = ({
         )}
       </div>
 
-      {/* Opponent */}
+      {/* Opponent fields */}
       <div className="grid gap-3 sm:grid-cols-2">
-        {/* Name */}
         <label className="grid gap-1">
           <span className="text-sm">Opponent name</span>
           <input
@@ -101,8 +139,6 @@ const NoteBlock = ({
             className="px-3 py-2 h-10 rounded border bg-transparent"
           />
         </label>
-
-        {/* Rank */}
         <label className="grid gap-1">
           <span className="text-sm">Opponent rank (optional)</span>
           <input
@@ -112,19 +148,19 @@ const NoteBlock = ({
             className="px-3 py-2 h-10 rounded border bg-transparent"
           />
         </label>
-
-        {/* Club */}
-        <label className="grid gap-1">
+        {/* Club with autosuggest */}
+        <div className="grid gap-1">
           <span className="text-sm">Opponent club (optional)</span>
-          <input
-            value={value.opponentClub}
-            onChange={(e) => set("opponentClub")(e.target.value)}
-            placeholder="e.g., Tokyo JC"
-            className="px-3 py-2 h-10 rounded border bg-transparent"
+          <ClubAutosuggest
+            value={value.opponentClub || ""}
+            onChange={set("opponentClub")}
+            minChars={2}
           />
-        </label>
-
-        {/* Country — the component renders its own label */}
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Type the opponent’s club name — if it exists, you can select it;
+            otherwise, enter it manually.
+          </p>
+        </div>
         <CountrySelect
           label="Country"
           value={value.opponentCountry}
@@ -196,6 +232,57 @@ const NoteBlock = ({
         text={value.notes}
         onChange={set("notes")}
       />
+
+      {/* Video section */}
+      <div className="rounded-lg border p-4 space-y-4">
+        <div className="text-sm font-semibold">Video (optional)</div>
+
+        <TextInput
+          label="Video Title"
+          value={value.videoTitle}
+          onChange={set("videoTitle")}
+          placeholder="First exchange"
+        />
+        <TextInput
+          label="YouTube URL"
+          value={value.videoUrlRaw}
+          onChange={set("videoUrlRaw")}
+          placeholder="Paste YouTube link"
+        />
+
+        <div className="space-y-2">
+          <div className="text-sm">Timestamp</div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <NumberInput
+              label="Hours"
+              value={value.videoH}
+              onChange={set("videoH")}
+            />
+            <NumberInput
+              label="Minutes"
+              value={value.videoM}
+              onChange={set("videoM")}
+            />
+            <NumberInput
+              label="Seconds"
+              value={value.videoS}
+              onChange={set("videoS")}
+            />
+          </div>
+        </div>
+
+        {previewSrc && (
+          <div className="rounded-md overflow-hidden border">
+            <iframe
+              className="w-full aspect-video"
+              src={previewSrc}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              title={`YouTube video ${vidId}`}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -204,12 +291,9 @@ const NoteBlock = ({
 const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-
-  // multi-note state
   const [notes, setNotes] = useState([emptyNote()]);
-
-  // load techniques for suggestions
   const [loadedTechniques, setLoadedTechniques] = useState([]);
+
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -221,7 +305,6 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
           : Array.isArray(data?.techniques)
           ? data.techniques
           : [];
-
         const sorted = [...arr].sort((a, b) =>
           String(a?.name ?? "").localeCompare(
             String(b?.name ?? ""),
@@ -232,8 +315,7 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
           )
         );
         if (alive) setLoadedTechniques(sorted);
-      } catch (e) {
-        console.error("Failed to fetch techniques:", e);
+      } catch {
         if (alive) setLoadedTechniques([]);
       }
     })();
@@ -248,7 +330,6 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
   );
 
   const disabled = !slug || !eventId || !entryId;
-
   const resetForm = () => setNotes([emptyNote()]);
 
   const handleSubmit = async (e) => {
@@ -259,25 +340,36 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
     }
 
     try {
-      // Transform UI notes -> API payload(s)
-      const payload = notes.map((n) => ({
-        opponent: {
-          name: n.opponentName || "",
-          rank: n.opponentRank || "",
-          club: n.opponentClub || "",
-          country: n.opponentCountry || "",
-        },
-        whatWentWell: n.whatWentWell,
-        reinforce: n.reinforce,
-        needsFix: n.needsFix,
-        techniques: {
-          ours: (n.techOurs || []).map((t) => t.label),
-          theirs: (n.techTheirs || []).map((t) => t.label),
-        },
-        result: n.result,
-        score: n.score,
-        notes: n.notes,
-      }));
+      const payload = notes.map((n) => {
+        const h = Math.max(0, parseInt(n.videoH || "0", 10) || 0);
+        const m = Math.max(0, parseInt(n.videoM || "0", 10) || 0);
+        const s = Math.max(0, parseInt(n.videoS || "0", 10) || 0);
+        const start = `${h}:${m}:${s}`;
+
+        return {
+          opponent: {
+            name: n.opponentName || "",
+            rank: n.opponentRank || "",
+            club: n.opponentClub || "",
+            country: n.opponentCountry || "",
+          },
+          whatWentWell: n.whatWentWell,
+          reinforce: n.reinforce,
+          needsFix: n.needsFix,
+          techniques: {
+            ours: (n.techOurs || []).map((t) => t.label),
+            theirs: (n.techTheirs || []).map((t) => t.label),
+          },
+          result: n.result,
+          score: n.score,
+          notes: n.notes,
+          videoRaw: {
+            url: n.videoUrlRaw || "",
+            start,
+            label: n.videoTitle || "",
+          },
+        };
+      });
 
       const res = await fetch(
         `/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches`,
@@ -289,23 +381,17 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
       );
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(
-          data?.error || data?.message || "Failed to add note(s)"
-        );
-      }
+      if (!res.ok) throw new Error(data?.error || "Failed to add note(s)");
 
       toast.success(
         Array.isArray(data?.notes) && data.notes.length > 1
           ? "Match notes added"
           : "Match note added"
       );
-
       resetForm();
       setOpen(false);
       router.refresh();
     } catch (err) {
-      console.error(err);
       toast.error(err.message || "Server error");
     }
   };
@@ -321,11 +407,6 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
             ? "opacity-50 cursor-not-allowed border"
             : "bg-black text-white dark:bg-white dark:text-black"
         }`}
-        title={
-          disabled
-            ? "Missing event or athlete — cannot add note"
-            : "Add a new match/note"
-        }
       >
         Add Note
       </button>
@@ -365,7 +446,6 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
             >
               ➕ Add another note for this athlete
             </button>
-
             <button
               type="submit"
               className="px-4 py-2 rounded-xl shadow bg-black text-white dark:bg-white dark:text-black"

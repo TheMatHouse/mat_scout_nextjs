@@ -7,7 +7,6 @@ import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import { requireTeamRole } from "@/lib/authz/teamRoles";
 import CoachEvent from "@/models/coachEventModel";
 import CoachEntry from "@/models/coachEntryModel";
-import CoachMatchNotes from "@/models/coachMatchNoteModel"; // used when cascading "notes"
 
 export async function DELETE(req, { params }) {
   try {

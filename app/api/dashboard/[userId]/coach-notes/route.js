@@ -1,14 +1,17 @@
 // app/api/dashboard/[userId]/coach-notes/route.js
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import CoachMatchNote from "@/models/coachMatchNoteModel";
+
+// Ensure these models are registered for $lookup stages
 import "@/models/coachEntryModel";
 import "@/models/coachEventModel";
-import "@/models/teamModel"; // ensure Team is registered so $lookup can hydrate correctly
+import "@/models/teamModel";
 
 const isValidId = (id) => !!id && Types.ObjectId.isValid(id);
 const oid = (id) => new Types.ObjectId(id);
@@ -21,7 +24,9 @@ export async function OPTIONS() {
 
 /**
  * GET /api/dashboard/:userId/coach-notes?teamId=<id>&sort=recent|alpha
- * Returns teams grouped with events and notes for the signed-in athlete.
+ * Shows coach notes visible to the signed-in user:
+ *  - Notes AUTHORED by this user (createdBy == userId), OR
+ *  - Notes where the entry’s athlete IS this user.
  */
 export async function GET(req, { params }) {
   await connectDB();
@@ -38,9 +43,10 @@ export async function GET(req, { params }) {
   const sortMode = (searchParams.get("sort") || "recent").toLowerCase();
 
   const pipeline = [
-    { $match: { deletedAt: null } },
+    // accept both soft-delete styles
+    { $match: { $or: [{ deletedAt: null }, { deleted: { $ne: true } }] } },
 
-    // Join entry to verify athlete is this user; also provides entry.team fallback
+    // join entry (source of athlete mapping and team fallback)
     {
       $lookup: {
         from: "coachentries",
@@ -50,9 +56,38 @@ export async function GET(req, { params }) {
       },
     },
     { $unwind: "$entry" },
-    { $match: { "entry.athlete.user": oid(userId) } },
 
-    // Join event (authoritative source of team)
+    // normalize athlete id across legacy/new shapes
+    {
+      $addFields: {
+        _athleteRaw: {
+          $ifNull: [
+            "$entry.athlete.user",
+            { $ifNull: ["$entry.athlete.userId", "$entry.athleteId"] },
+          ],
+        },
+      },
+    },
+    {
+      $addFields: {
+        athleteUserForMatch: {
+          $cond: [
+            { $eq: [{ $type: "$_athleteRaw" }, "string"] },
+            { $toObjectId: "$_athleteRaw" },
+            "$_athleteRaw",
+          ],
+        },
+      },
+    },
+
+    // visibility: authored by user OR athlete is user
+    {
+      $match: {
+        $or: [{ createdBy: oid(userId) }, { athleteUserForMatch: oid(userId) }],
+      },
+    },
+
+    // join event (authoritative team)
     {
       $lookup: {
         from: "coachevents",
@@ -63,7 +98,7 @@ export async function GET(req, { params }) {
     },
     { $unwind: { path: "$event", preserveNullAndEmptyArrays: true } },
 
-    // Coalesce team id: event.team → note.team → entry.team
+    // coalesce team id from event → note.team → entry.team
     {
       $addFields: {
         teamIdForLookup: {
@@ -71,8 +106,7 @@ export async function GET(req, { params }) {
         },
       },
     },
-
-    // Force ObjectId type for lookups even if a string slipped in
+    // ensure ObjectId type for lookups (string → ObjectId)
     {
       $addFields: {
         teamIdForLookup: {
@@ -85,12 +119,11 @@ export async function GET(req, { params }) {
       },
     },
 
-    // Optional filter by team
     ...(teamId && isValidId(teamId)
       ? [{ $match: { teamIdForLookup: oid(teamId) } }]
       : []),
 
-    // Lookup Team — NOTE: your fields are teamName / teamSlug
+    // team lookup
     {
       $lookup: {
         from: "teams",
@@ -101,7 +134,7 @@ export async function GET(req, { params }) {
     },
     { $unwind: { path: "$team", preserveNullAndEmptyArrays: true } },
 
-    // Lookup Coach user for display name
+    // coach user lookup → display name
     {
       $lookup: {
         from: "users",
@@ -111,8 +144,6 @@ export async function GET(req, { params }) {
       },
     },
     { $unwind: { path: "$coach", preserveNullAndEmptyArrays: true } },
-
-    // Compose coachName with fallbacks
     {
       $addFields: {
         coachName: {
@@ -139,13 +170,13 @@ export async function GET(req, { params }) {
       },
     },
 
-    // GROUP: TEAM + EVENT (to produce events under each team)
+    // group by TEAM+EVENT
     {
       $group: {
         _id: {
           teamId: "$team._id",
-          teamName: "$team.teamName", // <-- correct field
-          teamSlug: "$team.teamSlug", // <-- correct field
+          teamName: "$team.teamName",
+          teamSlug: "$team.teamSlug",
           eventId: "$event._id",
           eventName: "$event.name",
           eventStartDate: "$event.startDate",
@@ -168,17 +199,17 @@ export async function GET(req, { params }) {
       },
     },
 
-    // Sort notes inside event (newest first)
+    // sort notes within each event (newest first)
     {
       $addFields: {
         notes: { $sortArray: { input: "$notes", sortBy: { createdAt: -1 } } },
       },
     },
 
-    // Sort events (newest event first, then name)
+    // sort events
     { $sort: { "_id.eventStartDate": -1, "_id.eventName": 1 } },
 
-    // REGROUP: by TEAM (collect events)
+    // regroup by TEAM
     {
       $group: {
         _id: {
@@ -201,12 +232,12 @@ export async function GET(req, { params }) {
       },
     },
 
-    // Sort teams: most recent first (or A–Z)
+    // sort teams recent-first (or A–Z)
     ...(sortMode === "alpha"
       ? [{ $sort: { "_id.teamName": 1, latestDate: -1 } }]
       : [{ $sort: { latestDate: -1, "_id.teamName": 1 } }]),
 
-    // Final projection (fall back to teamSlug only if teamName missing)
+    // final projection
     {
       $project: {
         _id: 0,
@@ -253,7 +284,11 @@ export async function GET(req, { params }) {
 
     return NextResponse.json({ ok: true, teams }, { status: 200 });
   } catch (err) {
-    console.error("GET /api/dashboard/[userId]/coach-notes error:", err);
+    // Log the real reason to server console
+    console.error(
+      "GET /api/dashboard/[userId]/coach-notes aggregation error:",
+      err
+    );
     return jserr(500, "Failed to fetch coach notes");
   }
 }

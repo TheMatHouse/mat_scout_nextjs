@@ -1,29 +1,71 @@
+// components/.../Editor.jsx
 "use client";
 
 import { useEffect, useRef } from "react";
 
-export default function Editor({ name, onChange, text, label }) {
+/* =========================
+   Caret + Debounce Helpers
+   ========================= */
+
+const CARET_ID = "__ms_caret_marker__";
+
+const placeCaretMarker = (rootEl) => {
+  const sel = window.getSelection?.();
+  if (!sel || sel.rangeCount === 0) return null;
+
+  const range = sel.getRangeAt(0).cloneRange();
+  const marker = document.createElement("span");
+  marker.id = CARET_ID;
+  marker.appendChild(document.createTextNode("\uFEFF")); // zero-width no-break space
+  range.insertNode(marker);
+
+  const after = document.createRange();
+  after.setStartAfter(marker);
+  after.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(after);
+  return marker;
+};
+
+const restoreCaretFromMarker = (rootEl) => {
+  const marker = rootEl.querySelector(`#${CARET_ID}`);
+  if (!marker) return;
+  const sel = window.getSelection?.();
+  if (!sel) return;
+
+  const range = document.createRange();
+  range.setStartAfter(marker);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+  marker.remove();
+};
+
+const debounce = (fn, ms = 300) => {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+};
+
+/* =========================
+   Editor Component (arrow)
+   ========================= */
+
+const Editor = ({ name, onChange, text, label }) => {
   const editorRef = useRef(null);
-  const normalizingRef = useRef(false);
+  const isFocusedRef = useRef(false);
+  const lastEmittedRef = useRef(null);
 
-  /* ---------------- helpers ---------------- */
+  // allowlists
+  const ALLOWED = useRef(
+    new Set(["P", "BR", "B", "STRONG", "I", "EM", "U", "UL", "OL", "LI", "A"])
+  ).current;
+  const URL_ATTR = useRef(new Set(["href"])).current;
 
-  const ALLOWED = new Set([
-    "P",
-    "BR",
-    "B",
-    "STRONG",
-    "I",
-    "EM",
-    "U",
-    "UL",
-    "OL",
-    "LI",
-    "A",
-  ]);
-  const URL_ATTR = new Set(["href"]);
-
-  function sanitizeHtml(dirty = "") {
+  /* ---------- Sanitizer ---------- */
+  const sanitizeHtml = (dirty = "") => {
     if (!dirty) return "";
 
     let html = dirty
@@ -81,65 +123,101 @@ export default function Editor({ name, onChange, text, label }) {
       .replace(/caret-color\s*:\s*[^;"]+;?/gi, "")
       .replace(/border-color\s*:\s*[^;"]+;?/gi, "")
       .trim();
-  }
-
-  function emitChange() {
-    if (editorRef.current && onChange) {
-      onChange(editorRef.current.innerHTML);
-    }
-  }
-
-  /* ---------------- lifecycle ---------------- */
-
-  useEffect(() => {
-    if (!editorRef.current || text === undefined) return;
-    if (editorRef.current.innerHTML === text) return;
-
-    const sel = window.getSelection?.();
-    const hadRange = sel && sel.rangeCount > 0;
-    let range;
-    if (hadRange) range = sel.getRangeAt(0);
-
-    editorRef.current.innerHTML = text;
-
-    if (hadRange && sel) {
-      sel.removeAllRanges();
-      sel.addRange(range);
-    }
-  }, [text]);
-
-  // Normalize content after every input/paste
-  const normalizeNow = () => {
-    if (!editorRef.current || normalizingRef.current) return;
-    const cleaned = sanitizeHtml(editorRef.current.innerHTML);
-    if (cleaned !== editorRef.current.innerHTML) {
-      normalizingRef.current = true;
-      editorRef.current.innerHTML = cleaned;
-      setTimeout(() => {
-        normalizingRef.current = false;
-        emitChange();
-      }, 0);
-    } else {
-      emitChange();
-    }
   };
 
+  /* ---------- Normalizer (handles nbsp, empty blocks, lists) ---------- */
+  const normalizeHtml = (raw = "") => {
+    if (!raw) return "";
+    let html = raw;
+
+    html = html.replace(/\\00a0/gi, ""); // CSS-escaped NBSP
+    html = html.replace(/&nbsp;/gi, " ").replace(/\u00a0/g, " "); // NBSP → space
+
+    html = html
+      .replace(/<p>\s*<\/p>/gi, "<p><br/></p>")
+      .replace(/<div>\s*<\/div>/gi, "<p><br/></p>");
+
+    html = html
+      .replace(/<p><br\/><\/p>(\s*<(ul|ol)\b)/gi, "$1")
+      .replace(/(<\/(ul|ol)>\s*)<p><br\/><\/p>/gi, "$1");
+
+    html = html
+      .replace(/(<(ul|ol)[^>]*>)\s+/gi, "$1")
+      .replace(/\s+(<\/(ul|ol)>)/gi, "$1")
+      .replace(/<(li)>\s*<\/\1>/gi, "<li><br/></li>");
+
+    return html;
+  };
+
+  const rewriteHtmlPreservingCaret = (el, nextHtml) => {
+    if (!el) return;
+    placeCaretMarker(el);
+    el.innerHTML = nextHtml;
+    restoreCaretFromMarker(el);
+  };
+
+  const emitChange = () => {
+    if (!editorRef.current) return;
+    const html = editorRef.current.innerHTML;
+    lastEmittedRef.current = html;
+    onChange?.(html);
+  };
+
+  /* ---------- Lifecycle ---------- */
+
+  // Hydrate from external prop ONLY when not focused
   useEffect(() => {
-    // Ensure paragraphs instead of divs, and prevent inline style formatting
+    if (!editorRef.current) return;
+    if (text === undefined) return;
+    if (isFocusedRef.current) return;
+
+    const incoming = normalizeHtml(sanitizeHtml(text));
+    if (editorRef.current.innerHTML === incoming) return;
+
+    editorRef.current.innerHTML = incoming;
+  }, [text]);
+
+  useEffect(() => {
     document.execCommand("defaultParagraphSeparator", false, "p");
     document.execCommand("styleWithCSS", false, false);
   }, []);
 
-  /* ---------------- handlers ---------------- */
+  // Debounced emit (no rewrite) while typing
+  const debouncedEmit = useRef(debounce(emitChange, 300)).current;
 
-  const handleInput = () => normalizeNow();
+  // Full normalize + caret-preserving rewrite
+  const runNormalize = () => {
+    if (!editorRef.current) return;
+    const sanitized = sanitizeHtml(editorRef.current.innerHTML);
+    const cleaned = normalizeHtml(sanitized);
+    if (cleaned !== editorRef.current.innerHTML) {
+      rewriteHtmlPreservingCaret(editorRef.current, cleaned);
+    }
+    emitChange();
+  };
+
+  /* ---------- Handlers ---------- */
+
+  const handleFocus = () => {
+    isFocusedRef.current = true;
+  };
+
+  const handleBlur = () => {
+    isFocusedRef.current = false;
+    runNormalize(); // final clean + emit on blur
+  };
+
+  const handleInput = () => {
+    // smooth typing: do not rewrite DOM here
+    debouncedEmit(); // keep parent state roughly in sync without fighting the caret
+  };
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && e.shiftKey) {
       e.preventDefault();
       document.execCommand("insertLineBreak");
-      normalizeNow();
-      return;
+      // no immediate rewrite; keep it smooth
+      debouncedEmit();
     }
   };
 
@@ -153,23 +231,23 @@ export default function Editor({ name, onChange, text, label }) {
     if (html || textPlain) {
       e.preventDefault();
       const toInsert = html
-        ? sanitizeHtml(html)
+        ? normalizeHtml(sanitizeHtml(html))
         : escapeHtml(textPlain).replace(/\n/g, "<br>");
       document.execCommand("insertHTML", false, toInsert);
-      normalizeNow();
+      runNormalize(); // clean immediately after paste
     }
   };
 
   const applyCommand = (command, value = null) => {
     editorRef.current?.focus();
     document.execCommand(command, false, value);
-    normalizeNow();
+    runNormalize(); // clean after bold/italic/underline or list toggles
   };
 
   const toolbarBtn =
     "px-3 py-1 rounded-md text-sm font-medium bg-white dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 border border-gray-300 dark:border-gray-600";
 
-  /* ---------------- render ---------------- */
+  /* ---------- Render ---------- */
 
   return (
     <div className="w-full space-y-2">
@@ -212,6 +290,8 @@ export default function Editor({ name, onChange, text, label }) {
         name={name}
         role="textbox"
         aria-multiline="true"
+        onFocus={handleFocus}
+        onBlur={handleBlur}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
@@ -222,7 +302,7 @@ export default function Editor({ name, onChange, text, label }) {
           sm:text-sm p-3 min-h-[150px]`}
       />
 
-      {/* Content styling & underline fix */}
+      {/* Content styling (no :empty::before here) */}
       <style
         jsx
         global
@@ -231,13 +311,11 @@ export default function Editor({ name, onChange, text, label }) {
         .editor-content * {
           color: inherit !important;
         }
-        /* Ensure underlines always visible */
         .editor-content u,
         .editor-content span[style*="underline"],
         .editor-content [style*="text-decoration: underline"] {
           text-decoration: underline !important;
         }
-        /* Paragraph spacing */
         .editor-content p {
           margin: 0 0 12px;
           line-height: 1.5;
@@ -246,7 +324,6 @@ export default function Editor({ name, onChange, text, label }) {
           margin: 0;
           line-height: 1.5;
         }
-        /* Lists */
         .editor-content ul {
           list-style: disc;
           padding-left: 1.25rem;
@@ -260,16 +337,12 @@ export default function Editor({ name, onChange, text, label }) {
           margin: 4px 0;
           line-height: 1.5;
         }
-        /* Empty line display */
-        .editor-content p:empty::before,
-        .editor-content div:empty::before {
-          content: "\\00a0";
-          white-space: pre;
-        }
       `}</style>
     </div>
   );
-}
+};
+
+export default Editor;
 
 /* Escape text when pasting plain content */
 function escapeHtml(s = "") {

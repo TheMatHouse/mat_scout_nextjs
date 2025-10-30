@@ -4,8 +4,8 @@ import { connectDB } from "@/lib/mongo";
 import { getCurrentUser } from "@/lib/auth-server";
 import CoachEntry from "@/models/coachEntryModel";
 import CoachEvent from "@/models/coachEventModel";
-import CoachMatchNote from "@/models/coachMatchNoteModel";
 import { requireTeamRole, canDelete } from "@/lib/authz/teamRoles";
+import CoachMatchNote from "@/models/coachMatchNoteModel";
 
 export async function GET(_, { params }) {
   await connectDB();
