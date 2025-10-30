@@ -7,13 +7,14 @@ import AuthenticatedSidebar from "@/components/layout/AuthenticatedSidebar";
 
 /**
  * LayoutClient
- * - Handles whether a sidebar should be shown.
- * - Prevents layout shift on public pages.
+ * - Shows/hides the sidebar based on route.
+ * - Reserves space for the sidebar so content AND footer never sit underneath it.
+ * - Sidebar is FIXED (like before). Content uses left padding to avoid overlap.
  */
-export default function LayoutClient({ children }) {
+function LayoutClient({ children }) {
   const pathname = usePathname() || "/";
 
-  // Adjust these prefixes to match routes that should display the sidebar.
+  // Routes that should display the authenticated sidebar
   const needsSidebar = useMemo(() => {
     return (
       pathname.startsWith("/dashboard") ||
@@ -23,27 +24,26 @@ export default function LayoutClient({ children }) {
     );
   }, [pathname]);
 
-  // Width of your fixed sidebar on large screens
-  const SIDEBAR_WIDTH = 280; // px
-
   return (
     <div
       className={[
-        "flex-1 w-full min-w-0 overflow-x-clip",
-        needsSidebar ? `lg:pl-[${SIDEBAR_WIDTH}px]` : "",
+        "flex-1 flex flex-col w-full min-w-0 overflow-x-clip",
+        needsSidebar ? "lg:pl-[280px]" : "",
       ]
         .filter(Boolean)
         .join(" ")}
     >
-      {/* Sidebar only visible when needed */}
+      {/* Sidebar (fixed, like before) */}
       {needsSidebar && (
         <div className="hidden lg:block fixed left-0 top-16 bottom-0 w-[280px] border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 z-30">
           <AuthenticatedSidebar />
         </div>
       )}
 
-      {/* Page content */}
-      <div className="w-full min-w-0">{children}</div>
+      {/* Main content + footer (passed from app/layout) */}
+      <main className="flex-1 w-full min-w-0 flex flex-col">{children}</main>
     </div>
   );
 }
+
+export default LayoutClient;

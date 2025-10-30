@@ -12,11 +12,10 @@ import {
   Users as UsersIcon,
   User as UserIcon,
   Shield,
-  HelpCircle, // <-- added
 } from "lucide-react";
 import Spinner from "@/components/shared/Spinner";
 
-export default function AuthenticatedSidebar() {
+const AuthenticatedSidebar = () => {
   const { user, loading } = useUser();
   const pathname = usePathname();
 
@@ -60,8 +59,9 @@ export default function AuthenticatedSidebar() {
   };
 
   return (
-    <aside className="hidden md:flex w-64 h-full bg-[hsl(222.2_47.4%_11.2%)] text-white flex-col justify-between py-8 px-6">
-      <nav className="space-y-4">
+    <aside className="hidden md:flex w-64 h-full bg-[hsl(222.2_47.4%_11.2%)] text-white flex-col">
+      {/* (A) Scroll area (quiet — scrollbar hidden) */}
+      <nav className="flex-1 min-h-0 overflow-y-auto no-scrollbar py-8 px-6 pb-28 space-y-4">
         {/* Dashboard */}
         <div>
           <Link
@@ -130,7 +130,7 @@ export default function AuthenticatedSidebar() {
           )}
         </div>
 
-        {/* Users — RIGHT AFTER Teams */}
+        {/* Users */}
         <div>
           <Link
             href="/users"
@@ -144,39 +144,38 @@ export default function AuthenticatedSidebar() {
             Users
           </Link>
         </div>
+      </nav>
 
-        {/* Profile */}
-        <div>
+      {/* (B) Bottom section (always reachable, extra bottom padding so it never feels clipped) */}
+      <div className="px-6 pt-4 pb-6 border-t border-gray-700 space-y-2 bg-[hsl(222.2_47.4%_10%)]">
+        <Link
+          href={`/${user.username}`}
+          className={cn(
+            "flex items-center gap-2 text-lg font-medium px-2 py-2 rounded-md transition hover:text-ms-light-red hover:bg-[hsl(222_47%_20%)]",
+            isMainActive(`/${user.username}`) &&
+              "bg-[hsl(222_47%_25%)] text-ms-light-red font-semibold border-l-4 border-[var(--ms-light-red)]"
+          )}
+        >
+          <UserIcon size={18} />
+          Profile
+        </Link>
+
+        {user?.isAdmin && (
           <Link
-            href={`/${user.username}`}
+            href="/admin"
             className={cn(
               "flex items-center gap-2 text-lg font-medium px-2 py-2 rounded-md transition hover:text-ms-light-red hover:bg-[hsl(222_47%_20%)]",
-              isMainActive(`/${user.username}`) &&
+              pathname.startsWith("/admin") &&
                 "bg-[hsl(222_47%_25%)] text-ms-light-red font-semibold border-l-4 border-[var(--ms-light-red)]"
             )}
           >
-            <UserIcon size={18} />
-            Profile
+            <Shield size={18} />
+            Admin Panel
           </Link>
-        </div>
-
-        {/* Admin link for admins only */}
-        {user?.isAdmin && (
-          <div className="mt-6 space-y-2">
-            <Link
-              href="/admin"
-              className={cn(
-                "flex items-center gap-2 text-lg font-medium px-2 py-2 rounded-md transition hover:text-ms-light-red hover:bg-[hsl(222_47%_20%)]",
-                pathname.startsWith("/admin") &&
-                  "bg-[hsl(222_47%_25%)] text-ms-light-red font-semibold border-l-4 border-[var(--ms-light-red)]"
-              )}
-            >
-              <Shield size={18} />
-              Admin Panel
-            </Link>
-          </div>
         )}
-      </nav>
+      </div>
     </aside>
   );
-}
+};
+
+export default AuthenticatedSidebar;

@@ -92,8 +92,10 @@ export default function RootLayout({ children }) {
           />
           <UserProvider>
             <Header />
-            <LayoutClient>{children}</LayoutClient>
-            <Footer />
+            <LayoutClient>
+              {children}
+              <Footer />
+            </LayoutClient>
           </UserProvider>
         </ThemeProvider>
       </body>
