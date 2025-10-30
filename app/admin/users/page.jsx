@@ -6,7 +6,7 @@ import { Trash2, ShieldCheck, Eye } from "lucide-react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
-export default function AdminUsersPage() {
+const AdminUsersPage = () => {
   const [users, setUsers] = useState([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -31,12 +31,10 @@ export default function AdminUsersPage() {
     }
   }
 
-  // Initial load
   useEffect(() => {
     fetchUsers();
   }, []);
 
-  // Debounced search
   useEffect(() => {
     const t = setTimeout(() => fetchUsers(query), 400);
     return () => clearTimeout(t);
@@ -50,7 +48,7 @@ export default function AdminUsersPage() {
       });
       if (!res.ok) throw new Error("Failed to update role");
       toast.success("User role updated successfully!");
-      await fetchUsers(query); // refresh list
+      await fetchUsers(query);
     } catch (err) {
       console.error("Error toggling admin role:", err);
       toast.error("Failed to update role");
@@ -94,8 +92,8 @@ export default function AdminUsersPage() {
         )}
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-md border border-gray-300 dark:border-gray-700">
+      {/* Desktop Table */}
+      <div className="hidden md:block overflow-x-auto rounded-md border border-gray-300 dark:border-gray-700">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-gray-100 dark:bg-[hsl(222_47%_12%)] text-gray-900 dark:text-gray-100">
@@ -116,7 +114,6 @@ export default function AdminUsersPage() {
               </th>
             </tr>
           </thead>
-
           <tbody>
             {loading ? (
               <tr>
@@ -164,7 +161,6 @@ export default function AdminUsersPage() {
                   </td>
                   <td className="border border-gray-300 dark:border-gray-700 px-2 py-2">
                     <div className="flex flex-col sm:flex-row gap-2 justify-center">
-                      {/* View */}
                       <Link
                         href={`/admin/users/${u._id}`}
                         className="w-full sm:w-auto px-3 py-2 rounded bg-gray-600 hover:bg-gray-700 text-white flex items-center justify-center gap-2"
@@ -172,8 +168,6 @@ export default function AdminUsersPage() {
                         <Eye size={16} />
                         View
                       </Link>
-
-                      {/* Toggle Admin */}
                       <button
                         onClick={() => toggleAdmin(u._id)}
                         disabled={actionLoadingId === u._id}
@@ -194,8 +188,6 @@ export default function AdminUsersPage() {
                           ? "Revoke Admin"
                           : "Make Admin"}
                       </button>
-
-                      {/* Delete (disabled placeholder) */}
                       <button
                         disabled
                         className="w-full sm:w-auto px-3 py-2 rounded bg-red-600/70 text-white flex items-center justify-center gap-2 opacity-60 cursor-not-allowed"
@@ -212,6 +204,90 @@ export default function AdminUsersPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Mobile Cards */}
+      <div className="block md:hidden space-y-4">
+        {loading ? (
+          <div className="text-center text-gray-600 dark:text-gray-300 py-6">
+            Loading users…
+          </div>
+        ) : users.length === 0 ? (
+          <div className="text-center text-gray-500 dark:text-gray-400 py-6">
+            No users found.
+          </div>
+        ) : (
+          users.map((u) => (
+            <div
+              key={u._id}
+              className="rounded-lg border border-gray-300 dark:border-gray-700 p-4 bg-white dark:bg-[hsl(222_47%_8%)] text-gray-900 dark:text-gray-100 shadow-sm"
+            >
+              <div className="font-semibold text-lg mb-1">
+                {u.firstName} {u.lastName}
+              </div>
+              <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">
+                <strong>Email:</strong> {u.email}
+              </div>
+              <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">
+                <strong>Username:</strong> {u.username}
+              </div>
+              <div className="text-sm mb-3">
+                <strong>Role:</strong>{" "}
+                {u.isAdmin ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
+                    Admin
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-700 dark:bg-gray-700/40 dark:text-gray-200">
+                    User
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Link
+                  href={`/admin/users/${u._id}`}
+                  className="w-full sm:w-auto px-3 py-2 rounded bg-gray-600 hover:bg-gray-700 text-white flex items-center justify-center gap-2"
+                >
+                  <Eye size={16} />
+                  View
+                </Link>
+
+                <button
+                  onClick={() => toggleAdmin(u._id)}
+                  disabled={actionLoadingId === u._id}
+                  className={`w-full sm:w-auto px-3 py-2 rounded text-white font-medium flex items-center justify-center gap-2 transition ${
+                    u.isAdmin
+                      ? "bg-yellow-600 hover:bg-yellow-700"
+                      : "bg-blue-600 hover:bg-blue-700"
+                  } ${
+                    actionLoadingId === u._id
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
+                  }`}
+                >
+                  <ShieldCheck size={16} />
+                  {actionLoadingId === u._id
+                    ? "Updating…"
+                    : u.isAdmin
+                    ? "Revoke Admin"
+                    : "Make Admin"}
+                </button>
+
+                <button
+                  disabled
+                  className="w-full sm:w-auto px-3 py-2 rounded bg-red-600/70 text-white flex items-center justify-center gap-2 opacity-60 cursor-not-allowed"
+                  title="Delete coming soon"
+                >
+                  <Trash2 size={16} />
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
     </>
   );
-}
+};
+
+export default AdminUsersPage;
