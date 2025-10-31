@@ -43,6 +43,7 @@ const AuthenticatedSidebar = () => {
     { href: "/dashboard/styles", label: "Styles/Sports" },
     { href: "/dashboard/matches", label: "Match Reports" },
     { href: "/dashboard/scouting", label: "Scouting Reports" },
+    { href: "/dashboard/coach-notes", label: "Coach's Notes" },
     { href: "/dashboard/family", label: "Family" },
   ];
 
