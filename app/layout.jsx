@@ -93,8 +93,10 @@ export default function RootLayout({ children }) {
           <UserProvider>
             <Header />
             <LayoutClient>
-              {children}
-              <Footer />
+              <div className="flex flex-col min-h-screen">
+                <div className="flex-1">{children}</div>
+                <Footer />
+              </div>
             </LayoutClient>
           </UserProvider>
         </ThemeProvider>
