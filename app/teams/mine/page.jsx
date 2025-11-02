@@ -1,3 +1,4 @@
+// app/teams/mine/page.jsx
 "use client";
 export const dynamic = "force-dynamic";
 
@@ -63,12 +64,11 @@ function toRoleLabel(team) {
   if (r === "coach") return "Coach";
   if (r === "member") return "Member";
 
-  // Sometimes APIs use booleans/flags—fall back gracefully
   if (team?.isManager || team?.isOwner || team?.isAdmin) return "Manager";
   if (team?.isCoach) return "Coach";
   if (team?.isMember) return "Member";
 
-  return ""; // unknown → hide line
+  return "";
 }
 
 export default function MyTeamsPage() {
@@ -78,7 +78,8 @@ export default function MyTeamsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`/api/teams?limit=0`, { cache: "no-store" });
+        // ⬇️ unified owned + member list
+        const res = await fetch(`/api/teams/mine`, { cache: "no-store" });
         const data = await res.json();
         setMyTeams(normalizeTeams(data));
       } catch {
@@ -163,7 +164,6 @@ export default function MyTeamsPage() {
 
                   <h3 className="text-lg font-bold">{name}</h3>
 
-                  {/* My Role under the team name */}
                   {roleLabel && (
                     <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
                       {roleLabel}
