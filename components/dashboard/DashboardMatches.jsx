@@ -351,8 +351,14 @@ const DashboardMatches = ({ user }) => {
           }
         };
 
+        // explicit button styles so we don't depend on .icon-btn at all
+        const btn =
+          "h-9 w-9 grid place-items-center rounded-md border bg-transparent " +
+          "border-slate-300 hover:bg-slate-100 " +
+          "dark:border-slate-600 dark:hover:bg-slate-800 transition";
+
         return (
-          <div className="flex justify-center gap-3">
+          <div className="flex justify-center gap-2 min-w-[112px]">
             <button
               onClick={async () => {
                 const full = await fetchFullReport();
@@ -360,9 +366,10 @@ const DashboardMatches = ({ user }) => {
                 setPreviewOpen(true);
               }}
               title="View Match Details"
-              className="icon-btn"
+              className={btn}
+              type="button"
             >
-              <Eye className="w-5 h-5 text-blue-500" />
+              <Eye className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             </button>
 
             <button
@@ -375,17 +382,19 @@ const DashboardMatches = ({ user }) => {
                 setOpen(true);
               }}
               title="Edit Match"
-              className="icon-btn"
+              className={btn}
+              type="button"
             >
-              <Edit className="w-5 h-5 text-green-500" />
+              <Edit className="w-5 h-5 text-green-600 dark:text-green-400" />
             </button>
 
             <button
               onClick={() => handleDeleteMatch(minimal)}
               title="Delete Match"
-              className="icon-btn"
+              className={btn}
+              type="button"
             >
-              <Trash className="w-5 h-5 text-red-500" />
+              <Trash className="w-5 h-5 text-red-600 dark:text-red-400" />
             </button>
           </div>
         );

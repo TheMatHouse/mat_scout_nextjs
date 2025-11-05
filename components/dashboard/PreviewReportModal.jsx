@@ -14,6 +14,8 @@ import moment from "moment";
 /* ---------- tiny helpers ---------- */
 const safeStr = (v, fallback = "") => (v == null ? fallback : String(v).trim());
 
+const isObjectId = (v) => typeof v === "string" && /^[0-9a-f]{24}$/i.test(v);
+
 const genderLabel = (g) => {
   const s = safeStr(g).toLowerCase();
   if (s === "male") return "Men";
@@ -23,14 +25,20 @@ const genderLabel = (g) => {
 };
 
 const computeDivisionDisplay = (division) => {
-  if (!division) return "—";
-  if (typeof division === "string") return division || "—";
-  if (typeof division === "object") {
-    const name = safeStr(division?.name);
-    const glab = genderLabel(division?.gender);
-    return name ? (glab ? `${name} — ${glab}` : name) : "—";
+  if (!division) return "";
+  if (typeof division === "string") {
+    // If it's just a Mongo ObjectId string, do NOT display it.
+    return isObjectId(division) ? "" : division;
   }
-  return "—";
+  if (typeof division === "object") {
+    const label =
+      safeStr(division?.label) ||
+      safeStr(division?.name) ||
+      safeStr(division?.code);
+    const glab = genderLabel(division?.gender);
+    if (label) return glab ? `${label} — ${glab}` : label;
+  }
+  return "";
 };
 
 /** Convert common YouTube/Vimeo sources to embeddable URL; fall back to raw URL. */
@@ -147,8 +155,12 @@ const PreviewReportModal = ({
   }, [previewOpen, setPreviewOpen]);
 
   const derived = useMemo(() => {
-    const divisionDisplay =
-      report.divisionDisplay || computeDivisionDisplay(report?.division);
+    // Prefer populated division object -> then divisionDisplay (unless it's an ObjectId) -> then compute fallback
+    const divisionFromObject = computeDivisionDisplay(report?.division);
+    const divisionDisplaySnapshot = !isObjectId(report?.divisionDisplay)
+      ? safeStr(report?.divisionDisplay)
+      : "";
+    const divisionDisplay = divisionFromObject || divisionDisplaySnapshot || "";
 
     // Prefer saved snapshot label for weight
     const weightLabel = safeStr(report?.weightLabel);
@@ -166,7 +178,7 @@ const PreviewReportModal = ({
       weightUnit &&
       !/\b(kg|lb)s?\b/i.test(weightDisplayBase)
         ? `${weightDisplayBase} ${weightUnit}`
-        : weightDisplayBase || "—";
+        : weightDisplayBase || "";
 
     return {
       divisionDisplay,
