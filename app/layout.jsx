@@ -1,14 +1,10 @@
 // app/layout.jsx
 import "@/app/globals.css";
-import { ThemeProvider } from "next-themes";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
-import Header from "@/components/layout/Header";
-import Footer from "@/components/layout/Footer";
-import { UserProvider } from "@/context/UserContext";
-import LayoutClient from "@/components/layout/LayoutClient";
 import AnalyticsBeacon from "@/components/analytics/AnalyticsBeacon";
+import ChromeGate from "@/components/layout/ChromeGate";
 
 export const dynamic = "force-dynamic";
 
@@ -70,7 +66,6 @@ export default function RootLayout({ children }) {
       suppressHydrationWarning
     >
       <head>
-        {/* Force the correct Open Graph form */}
         {FB_APP_ID ? (
           <meta
             key="fb-app-id"
@@ -79,27 +74,21 @@ export default function RootLayout({ children }) {
           />
         ) : null}
       </head>
-      <body className="font-sans flex flex-col min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] w-full overflow-x-hidden">
+      <body
+        className="font-sans flex flex-col min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] w-full overflow-x-hidden"
+        data-scroll-behavior="smooth"
+      >
+        {/* Analytics beacon stays global */}
         <AnalyticsBeacon />
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-        >
-          <ToastContainer
-            position="top-right"
-            autoClose={5000}
-          />
-          <UserProvider>
-            <Header />
-            <LayoutClient>
-              <div className="flex flex-col min-h-screen">
-                <div className="flex-1">{children}</div>
-                <Footer />
-              </div>
-            </LayoutClient>
-          </UserProvider>
-        </ThemeProvider>
+
+        {/* ChromeGate owns ThemeProvider, UserProvider, Header, Footer, etc. */}
+        <ChromeGate>{children}</ChromeGate>
+
+        {/* Toast container here as fallback for minimal pages */}
+        <ToastContainer
+          position="top-right"
+          autoClose={5000}
+        />
       </body>
     </html>
   );

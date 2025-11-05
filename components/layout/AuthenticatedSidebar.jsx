@@ -12,6 +12,15 @@ import {
   Users as UsersIcon,
   User as UserIcon,
   Shield,
+  Wrench,
+  Settings,
+  Gauge,
+  FileBarChart2,
+  BarChart3,
+  MessageSquare,
+  BookOpen,
+  HelpCircle,
+  UsersRound,
 } from "lucide-react";
 import Spinner from "@/components/shared/Spinner";
 
@@ -21,10 +30,12 @@ const AuthenticatedSidebar = () => {
 
   const [isDashboardOpen, setDashboardOpen] = useState(false);
   const [isTeamsOpen, setTeamsOpen] = useState(false);
+  const [isAdminOpen, setAdminOpen] = useState(false);
 
   useEffect(() => {
     setDashboardOpen(pathname.startsWith("/dashboard"));
     setTeamsOpen(pathname.startsWith("/teams"));
+    setAdminOpen(pathname === "/admin" || pathname.startsWith("/admin/"));
   }, [pathname]);
 
   if (loading) {
@@ -36,6 +47,12 @@ const AuthenticatedSidebar = () => {
   }
 
   if (!user) return null;
+
+  const isAdmin =
+    !!user &&
+    (user.isAdmin === true ||
+      user.role === "admin" ||
+      user.roles?.includes?.("admin"));
 
   const dashboardSubLinks = [
     { href: "/dashboard/settings", label: "Settings" },
@@ -53,21 +70,71 @@ const AuthenticatedSidebar = () => {
     { href: "/teams/new", label: "Create Team" },
   ];
 
+  // Your original admin links (order preserved), with sensible icons
+  const adminSubLinks = [
+    { href: "/admin/dashboard", label: "Dashboard", icon: <Gauge size={16} /> },
+    { href: "/admin/users", label: "Users", icon: <UsersIcon size={16} /> },
+    {
+      href: "/admin/family-members",
+      label: "Family Members",
+      icon: <UsersRound size={16} />,
+    },
+    { href: "/admin/teams", label: "Teams", icon: <UsersIcon size={16} /> },
+    {
+      href: "/admin/reports",
+      label: "Reports",
+      icon: <FileBarChart2 size={16} />,
+    },
+    {
+      href: "/admin/settings",
+      label: "Settings",
+      icon: <Settings size={16} />,
+    },
+    {
+      href: "/admin/analytics",
+      label: "Analytics",
+      icon: <BarChart3 size={16} />,
+    },
+    {
+      href: "/admin/messages",
+      label: "Messages",
+      icon: <MessageSquare size={16} />,
+    },
+    {
+      href: "/admin/techniques",
+      label: "Techniques",
+      icon: <BookOpen size={16} />,
+    },
+    { href: "/admin/faqs", label: "FAQs", icon: <HelpCircle size={16} /> },
+    {
+      href: "/admin/maintenance",
+      label: "Maintenance",
+      icon: <Wrench size={16} />,
+    },
+  ];
+
   const isMainActive = (href) => {
     if (href === "/dashboard") return pathname.startsWith("/dashboard");
     if (href === "/teams") return pathname.startsWith("/teams");
+    if (href === "/admin")
+      return pathname === "/admin" || pathname.startsWith("/admin/");
     return pathname === href;
   };
 
   return (
     <aside className="hidden md:flex w-64 h-full bg-[hsl(222.2_47.4%_11.2%)] text-white flex-col">
-      {/* (A) Scroll area (quiet — scrollbar hidden) */}
+      {/* (A) Scroll area */}
       <nav className="flex-1 min-h-0 overflow-y-auto no-scrollbar py-8 px-6 pb-28 space-y-4">
         {/* Dashboard */}
         <div>
           <Link
             href="/dashboard"
-            onClick={() => setDashboardOpen(!isDashboardOpen)}
+            onClick={(e) => {
+              if (pathname.startsWith("/dashboard")) {
+                e.preventDefault();
+                setDashboardOpen((s) => !s);
+              }
+            }}
             className={cn(
               "flex items-center gap-2 text-lg font-medium px-2 py-2 rounded-md transition hover:text-ms-light-red hover:bg-[hsl(222_47%_20%)]",
               isMainActive("/dashboard") &&
@@ -101,7 +168,12 @@ const AuthenticatedSidebar = () => {
         <div>
           <Link
             href="/teams"
-            onClick={() => setTeamsOpen(!isTeamsOpen)}
+            onClick={(e) => {
+              if (pathname.startsWith("/teams")) {
+                e.preventDefault();
+                setTeamsOpen((s) => !s);
+              }
+            }}
             className={cn(
               "flex items-center gap-2 text-lg font-medium px-2 py-2 rounded-md transition hover:text-ms-light-red hover:bg-[hsl(222_47%_20%)]",
               isMainActive("/teams") &&
@@ -131,49 +203,64 @@ const AuthenticatedSidebar = () => {
           )}
         </div>
 
-        {/* Users */}
-        <div>
-          <Link
-            href="/users"
-            className={cn(
-              "flex items-center gap-2 text-lg font-medium px-2 py-2 rounded-md transition hover:text-ms-light-red hover:bg-[hsl(222_47%_20%)]",
-              isMainActive("/users") &&
-                "bg-[hsl(222_47%_25%)] text-ms-light-red font-semibold border-l-4 border-[var(--ms-light-red)]"
+        {/* Admin (only when user is admin OR already on /admin route) */}
+        {(isAdmin || pathname.startsWith("/admin")) && (
+          <div>
+            <Link
+              href="/admin/dashboard"
+              onClick={(e) => {
+                if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+                  e.preventDefault();
+                  setAdminOpen((s) => !s);
+                }
+              }}
+              className={cn(
+                "flex items-center gap-2 text-lg font-medium px-2 py-2 rounded-md transition hover:text-ms-light-red hover:bg-[hsl(222_47%_20%)]",
+                isMainActive("/admin") &&
+                  "bg-[hsl(222_47%_25%)] text-ms-light-red font-semibold border-l-4 border-[var(--ms-light-red)]"
+              )}
+            >
+              <Shield size={18} />
+              Admin Panel
+            </Link>
+
+            {isAdminOpen && (
+              <div className="pl-6 mt-2 space-y-2 text-sm text-ms-blue-gray">
+                {adminSubLinks.map((sub) => (
+                  <Link
+                    key={sub.href}
+                    href={sub.href}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1 rounded-md transition hover:bg-[hsl(222_47%_20%)] hover:text-white",
+                      (pathname === sub.href ||
+                        pathname.startsWith(sub.href + "/")) &&
+                        "bg-[hsl(222_47%_25%)] text-white font-semibold border-l-4 border-[var(--ms-light-red)]"
+                    )}
+                  >
+                    {sub.icon}
+                    <span>{sub.label}</span>
+                  </Link>
+                ))}
+              </div>
             )}
-          >
-            <UsersIcon size={18} />
-            Users
-          </Link>
-        </div>
+          </div>
+        )}
       </nav>
 
-      {/* (B) Bottom section (always reachable, extra bottom padding so it never feels clipped) */}
+      {/* (B) Bottom section */}
       <div className="px-6 pt-4 pb-6 border-t border-gray-700 space-y-2 bg-[hsl(222.2_47.4%_10%)]">
         <Link
           href={`/${user.username}`}
           className={cn(
             "flex items-center gap-2 text-lg font-medium px-2 py-2 rounded-md transition hover:text-ms-light-red hover:bg-[hsl(222_47%_20%)]",
-            isMainActive(`/${user.username}`) &&
+            pathname === `/${user.username}` &&
               "bg-[hsl(222_47%_25%)] text-ms-light-red font-semibold border-l-4 border-[var(--ms-light-red)]"
           )}
         >
           <UserIcon size={18} />
           Profile
         </Link>
-
-        {user?.isAdmin && (
-          <Link
-            href="/admin"
-            className={cn(
-              "flex items-center gap-2 text-lg font-medium px-2 py-2 rounded-md transition hover:text-ms-light-red hover:bg-[hsl(222_47%_20%)]",
-              pathname.startsWith("/admin") &&
-                "bg-[hsl(222_47%_25%)] text-ms-light-red font-semibold border-l-4 border-[var(--ms-light-red)]"
-            )}
-          >
-            <Shield size={18} />
-            Admin Panel
-          </Link>
-        )}
+        {/* No extra Admin link here—admin lives in the section above */}
       </div>
     </aside>
   );
