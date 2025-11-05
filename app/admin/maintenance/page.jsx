@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useMemo, useState } from "react";
 
-export default function AdminMaintenancePage() {
+const AdminMaintenancePage = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -82,8 +82,6 @@ export default function AdminMaintenancePage() {
         : {};
 
       if (!res.ok || data?.ok === false) {
-        // 403 likely means you’re not authenticated as admin or middleware blocked.
-        // Show helpful hint + keep values intact.
         if (res.status === 403) {
           throw new Error(
             "Forbidden. Make sure you’re logged in as an admin. If the site is in maintenance/updating, click “Bypass & retry”."
@@ -108,123 +106,139 @@ export default function AdminMaintenancePage() {
   }
 
   function bypassAndRetry() {
-    // Sets the bypass cookie then returns to this page without the query string.
     const url = new URL(window.location.href);
     url.searchParams.set("bypass_maintenance", "1");
     window.location.href = url.toString();
   }
 
   return (
-    <div className="max-w-3xl mx-auto p-6">
+    <div className="max-w-3xl mx-auto p-4 md:p-6">
       <h1 className="text-2xl font-bold mb-4">Maintenance Mode</h1>
 
       {banner}
 
-      {loading ? (
-        <div>Loading…</div>
-      ) : (
-        <>
-          {error && (
-            <div className="mb-4 rounded-lg border px-4 py-3 bg-red-50 border-red-200 text-red-800 dark:bg-red-900/30 dark:text-red-100">
-              {error}
-              {mode !== "off" && (
-                <div className="mt-2">
-                  <button
-                    onClick={bypassAndRetry}
-                    className="inline-flex items-center px-3 py-1.5 rounded-md border border-yellow-300 text-yellow-900 bg-yellow-100 hover:bg-yellow-200 dark:text-yellow-100 dark:bg-yellow-900/30 dark:border-yellow-700"
-                  >
-                    Bypass & retry
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {okMsg && (
-            <div className="mb-4 rounded-lg border px-4 py-3 bg-green-50 border-green-200 text-green-800 dark:bg-green-900/30 dark:text-green-100">
-              {okMsg}
-            </div>
-          )}
-
-          <div className="space-y-6">
-            <div>
-              <div className="font-medium mb-2">Mode</div>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="mode"
-                    value="off"
-                    checked={mode === "off"}
-                    onChange={() => setMode("off")}
-                  />
-                  <span>Off</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="mode"
-                    value="maintenance"
-                    checked={mode === "maintenance"}
-                    onChange={() => setMode("maintenance")}
-                  />
-                  <span>Maintenance</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="mode"
-                    value="updating"
-                    checked={mode === "updating"}
-                    onChange={() => setMode("updating")}
-                  />
-                  <span>Updating</span>
-                </label>
+      <div
+        className={[
+          "rounded-2xl border",
+          "bg-white/70 dark:bg-black/20",
+          "border-gray-200 dark:border-gray-700",
+          "shadow-sm",
+          "p-4 md:p-6",
+        ].join(" ")}
+      >
+        {loading ? (
+          <div className="py-10 text-center opacity-80">Loading…</div>
+        ) : (
+          <>
+            {error && (
+              <div className="mb-4 rounded-lg border px-4 py-3 bg-red-50 border-red-200 text-red-800 dark:bg-red-900/30 dark:text-red-100">
+                <div className="font-semibold">Save / Load Error</div>
+                <div className="text-sm mt-1">{error}</div>
+                {mode !== "off" && (
+                  <div className="mt-3">
+                    <button
+                      onClick={bypassAndRetry}
+                      className="inline-flex items-center px-3 py-1.5 rounded-md border border-yellow-300 text-yellow-900 bg-yellow-100 hover:bg-yellow-200 dark:text-yellow-100 dark:bg-yellow-900/30 dark:border-yellow-700"
+                    >
+                      Bypass & retry
+                    </button>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
 
-            <div>
-              <div className="font-medium mb-2">Maintenance message</div>
-              <textarea
-                className="w-full min-h-[90px] rounded-md border px-3 py-2 bg-white/70 dark:bg-black/20"
-                value={maintenanceMessage}
-                onChange={(e) => setMaintenanceMessage(e.target.value)}
-                placeholder="Optional message shown during Maintenance."
-              />
-            </div>
+            {okMsg && (
+              <div className="mb-4 rounded-lg border px-4 py-3 bg-green-50 border-green-200 text-green-800 dark:bg-green-900/30 dark:text-green-100">
+                {okMsg}
+              </div>
+            )}
 
-            <div>
-              <div className="font-medium mb-2">Updating message</div>
-              <textarea
-                className="w-full min-h-[90px] rounded-md border px-3 py-2 bg-white/70 dark:bg-black/20"
-                value={updatingMessage}
-                onChange={(e) => setUpdatingMessage(e.target.value)}
-                placeholder="Message shown during Updating (brief deploys)."
-              />
-            </div>
+            <div className="space-y-8">
+              {/* Mode */}
+              <section>
+                <div className="font-medium mb-2">Mode</div>
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="mode"
+                      value="off"
+                      checked={mode === "off"}
+                      onChange={() => setMode("off")}
+                    />
+                    <span>Off</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="mode"
+                      value="maintenance"
+                      checked={mode === "maintenance"}
+                      onChange={() => setMode("maintenance")}
+                    />
+                    <span>Maintenance</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="mode"
+                      value="updating"
+                      checked={mode === "updating"}
+                      onChange={() => setMode("updating")}
+                    />
+                    <span>Updating</span>
+                  </label>
+                </div>
+              </section>
 
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => save()}
-                disabled={saving}
-                className="inline-flex items-center px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
-              >
-                {saving ? "Saving…" : "Save"}
-              </button>
+              {/* Maintenance message */}
+              <section>
+                <div className="font-medium mb-2">Maintenance message</div>
+                <textarea
+                  className="w-full min-h-[100px] rounded-xl border px-3 py-2 bg-white/80 dark:bg-black/30 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={maintenanceMessage}
+                  onChange={(e) => setMaintenanceMessage(e.target.value)}
+                  placeholder="Optional message shown during Maintenance."
+                />
+              </section>
 
-              {mode !== "off" && (
+              {/* Updating message */}
+              <section>
+                <div className="font-medium mb-2">Updating message</div>
+                <textarea
+                  className="w-full min-h-[100px] rounded-xl border px-3 py-2 bg-white/80 dark:bg-black/30 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={updatingMessage}
+                  onChange={(e) => setUpdatingMessage(e.target.value)}
+                  placeholder="Message shown during Updating (brief deploys)."
+                />
+              </section>
+
+              {/* Actions */}
+              <section className="flex flex-wrap items-center gap-3">
                 <button
-                  onClick={() => save("off")}
+                  onClick={() => save()}
                   disabled={saving}
-                  className="inline-flex items-center px-4 py-2 rounded-md bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-60"
+                  className="inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
                 >
-                  Turn Off Now
+                  {saving ? "Saving…" : "Save"}
                 </button>
-              )}
+
+                {mode !== "off" && (
+                  <button
+                    onClick={() => save("off")}
+                    disabled={saving}
+                    className="inline-flex items-center px-4 py-2 rounded-lg bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-60"
+                  >
+                    Turn Off Now
+                  </button>
+                )}
+              </section>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
-}
+};
+
+export default AdminMaintenancePage;
