@@ -29,7 +29,7 @@ export async function POST(req, ctx) {
 
     const { slug } = await ctx.params;
 
-    // NOTE: Your Team model uses teamSlug (per your existing code)
+    // Team uses teamSlug
     const team = await Team.findOne({ teamSlug: slug });
     if (!team) {
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
@@ -88,20 +88,18 @@ export async function POST(req, ctx) {
       );
     }
 
-    // Ensure target user is an ACTIVE manager (your described flow).
-    // If you want "any active member", change role filter to: { $in: ["member","coach","manager"] }
+    // Ensure target user is a manager (no status field in your schema)
     const targetMembership = await TeamMember.findOne({
       teamId: team._id,
       userId: targetUser._id,
       role: "manager",
-      status: "active",
     });
 
     if (!targetMembership) {
       return NextResponse.json(
         {
           message:
-            "Target user must be an active manager of the team before transferring ownership.",
+            "Target user must be a manager of the team before transferring ownership.",
         },
         { status: 400 }
       );
@@ -115,7 +113,7 @@ export async function POST(req, ctx) {
       team.user = targetUser._id;
       await team.save({ session });
 
-      // 2) Ensure new owner has TeamMember row; set role to "owner" (or keep manager if you prefer)
+      // 2) Ensure new owner has a TeamMember row; set role to "owner"
       const newOwnerMember = await TeamMember.findOne({
         teamId: team._id,
         userId: targetUser._id,
@@ -123,7 +121,6 @@ export async function POST(req, ctx) {
 
       if (newOwnerMember) {
         newOwnerMember.role = "owner";
-        newOwnerMember.status = "active";
         await newOwnerMember.save({ session });
       } else {
         await TeamMember.create(
@@ -132,7 +129,6 @@ export async function POST(req, ctx) {
               teamId: team._id,
               userId: targetUser._id,
               role: "owner",
-              status: "active",
             },
           ],
           { session }
@@ -147,7 +143,6 @@ export async function POST(req, ctx) {
 
       if (prevOwnerMember) {
         prevOwnerMember.role = myNewRole;
-        prevOwnerMember.status = "active";
         await prevOwnerMember.save({ session });
       } else {
         await TeamMember.create(
@@ -156,7 +151,6 @@ export async function POST(req, ctx) {
               teamId: team._id,
               userId: previousOwnerId,
               role: myNewRole,
-              status: "active",
             },
           ],
           { session }
