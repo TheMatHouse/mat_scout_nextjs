@@ -8,6 +8,7 @@ import User from "@/models/userModel";
 import { getCurrentUser } from "@/lib/auth-server";
 import { sendEmail } from "@/lib/email/email";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
+import { createNotification } from "@/lib/createNotification";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,6 @@ export async function POST(req, ctx) {
     }
 
     const newOwnerUserId = String(body?.newOwnerUserId || "").trim();
-    // honor myNewRole if valid; otherwise default to "manager"
     const requestedRole = String(body?.myNewRole || "")
       .trim()
       .toLowerCase();
@@ -145,8 +145,19 @@ export async function POST(req, ctx) {
         await doTransfer(session);
       });
     } else {
-      // Fallback path if sessions are unavailable
       await doTransfer(null);
+    }
+
+    // In-app notification to the NEW OWNER (best-effort)
+    try {
+      await createNotification({
+        userId: targetUser._id,
+        type: "Team Update",
+        body: `You are now the owner of ${team.teamName}`,
+        link: `/teams/${slug}/settings`,
+      });
+    } catch (e) {
+      console.error("Ownership notification failed:", e);
     }
 
     // Emails (best-effort, outside transaction)
@@ -172,6 +183,8 @@ export async function POST(req, ctx) {
           <p>Ownership of <strong>${team.teamName}</strong> has been transferred to you.</p>
           <p>You can now manage team settings and members.</p>
         `,
+        logoUrl:
+          "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png",
       });
 
       const htmlPrev = baseEmailTemplate({
@@ -181,6 +194,8 @@ export async function POST(req, ctx) {
           <p>You transferred ownership of <strong>${team.teamName}</strong> to ${ownerName}.</p>
           <p>Your role on the team is now <strong>${prevOwnerNewRole}</strong>.</p>
         `,
+        logoUrl:
+          "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png",
       });
 
       await Promise.all([
