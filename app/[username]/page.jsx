@@ -8,9 +8,7 @@ import User from "@/models/userModel";
 import "@/models/matchReportModel";
 import UserProfileClient from "@/components/profile/UserProfileClient";
 
-function escapeRegex(s = "") {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+const escapeRegex = (s = "") => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export async function generateMetadata({ params }) {
   const { username } = await params;
@@ -22,7 +20,7 @@ export async function generateMetadata({ params }) {
 
   if (!member) {
     return {
-      title: "Profile Not Found | MatScout",
+      title: "Profile Not Found · MatScout",
       description: "The profile you are looking for does not exist.",
     };
   }
@@ -34,10 +32,15 @@ export async function generateMetadata({ params }) {
     member.firstName || member.username
   }'s grappling profile on MatScout.`;
 
-  return { title: `${title} | MatScout`, description };
+  // only setting the <title> and meta description
+  // inherits all OG/Twitter tags from root layout
+  return {
+    title: `${title} · MatScout`,
+    description,
+  };
 }
 
-export default async function UserProfilePage({ params }) {
+const UserProfilePage = async ({ params }) => {
   const { username } = await params;
   await connectDB();
 
@@ -87,4 +90,6 @@ export default async function UserProfilePage({ params }) {
       </section>
     </main>
   );
-}
+};
+
+export default UserProfilePage;
