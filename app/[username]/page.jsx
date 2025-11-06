@@ -34,23 +34,33 @@ export async function generateMetadata({ params }) {
   }'s grappling profile on MatScout.`;
 
   const profileUrl = `https://matscout.com/${member.username}`;
+  const defaultOg = "https://matscout.com/default-og.png"; // ← same file you use in layout
 
   return {
-    // Browser tab
+    // Browser tab title
     title: `${title} · MatScout`,
     description,
 
-    // Keep FB generic, but point OG to the correct page URL
-    openGraph: { url: profileUrl },
-
-    // Make X show the person's name while reusing the global image
-    twitter: {
+    // Override OG just enough to keep your brand image & fix per-page URL
+    openGraph: {
+      url: profileUrl,
       title: `${title} · MatScout`,
       description,
-      // card/images inherit from root
+      images: [
+        {
+          url: defaultOg,
+          width: 1200,
+          height: 630,
+          alt: "MatScout",
+        },
+      ],
     },
-
-    // Help both platforms pick the right URL
+    twitter: {
+      card: "summary_large_image",
+      title: `${title} · MatScout`,
+      description,
+      images: [defaultOg],
+    },
     alternates: { canonical: profileUrl },
   };
 }
