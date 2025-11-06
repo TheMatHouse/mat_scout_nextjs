@@ -1,5 +1,6 @@
 // app/api/teams/[slug]/transfer-owner/route.js
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connectDB } from "@/lib/mongo";
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
@@ -10,161 +11,237 @@ import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
 export const dynamic = "force-dynamic";
 
+const ALLOWED_NEW_ROLES_FOR_PREV_OWNER = new Set([
+  "member",
+  "manager",
+  "coach",
+]);
+
 export async function POST(req, ctx) {
   await connectDB();
 
-  const me = await getCurrentUser();
-  if (!me)
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-
-  const { slug } = await ctx.params;
-
-  const team = await Team.findOne({ teamSlug: slug });
-  if (!team)
-    return NextResponse.json({ message: "Team not found" }, { status: 404 });
-
-  const isOwner = team.user?.toString() === me._id.toString();
-  if (!isOwner) {
-    return NextResponse.json(
-      { message: "Only the team owner can transfer ownership." },
-      { status: 403 }
-    );
-  }
-
-  let body;
+  const session = await startSessionSafe();
   try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ message: "Invalid JSON body" }, { status: 400 });
-  }
+    const me = await getCurrentUser();
+    if (!me) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
 
-  const newOwnerUserId = String(body?.newOwnerUserId || "").trim();
-  if (!newOwnerUserId) {
-    return NextResponse.json(
-      { message: "newOwnerUserId is required." },
-      { status: 400 }
+    const { slug } = await ctx.params;
+
+    // NOTE: Your Team model uses teamSlug (per your existing code)
+    const team = await Team.findOne({ teamSlug: slug });
+    if (!team) {
+      return NextResponse.json({ message: "Team not found" }, { status: 404 });
+    }
+
+    const isOwner = team.user?.toString() === me._id.toString();
+    if (!isOwner) {
+      return NextResponse.json(
+        { message: "Only the team owner can transfer ownership." },
+        { status: 403 }
+      );
+    }
+
+    let body;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { message: "Invalid JSON body" },
+        { status: 400 }
+      );
+    }
+
+    const newOwnerUserId = String(body?.newOwnerUserId || "").trim();
+    const myNewRole = String(body?.myNewRole || "")
+      .trim()
+      .toLowerCase();
+
+    if (!newOwnerUserId) {
+      return NextResponse.json(
+        { message: "newOwnerUserId is required." },
+        { status: 400 }
+      );
+    }
+    if (!ALLOWED_NEW_ROLES_FOR_PREV_OWNER.has(myNewRole)) {
+      return NextResponse.json(
+        { message: "Invalid myNewRole." },
+        { status: 400 }
+      );
+    }
+    if (newOwnerUserId === me._id.toString()) {
+      return NextResponse.json(
+        { message: "You already own this team." },
+        { status: 400 }
+      );
+    }
+
+    // Ensure target user exists
+    const targetUser = await User.findById(newOwnerUserId).select(
+      "_id email firstName lastName username"
     );
-  }
+    if (!targetUser) {
+      return NextResponse.json(
+        { message: "Target user not found." },
+        { status: 404 }
+      );
+    }
 
-  if (newOwnerUserId === me._id.toString()) {
-    return NextResponse.json(
-      { message: "You already own this team." },
-      { status: 400 }
-    );
-  }
-
-  // Ensure target user exists
-  const targetUser = await User.findById(newOwnerUserId).select(
-    "_id email firstName lastName username"
-  );
-  if (!targetUser) {
-    return NextResponse.json(
-      { message: "Target user not found." },
-      { status: 404 }
-    );
-  }
-
-  // Ensure target user is a team member
-  let targetMembership = await TeamMember.findOne({
-    teamId: team._id,
-    userId: targetUser._id,
-  });
-
-  if (!targetMembership) {
-    return NextResponse.json(
-      {
-        message:
-          "User must be a member of the team before transferring ownership.",
-      },
-      { status: 400 }
-    );
-  }
-
-  // Flip ownership
-  const previousOwnerId = team.user.toString();
-  team.user = targetUser._id;
-  await team.save();
-
-  // Role hygiene (optional, but recommended):
-  // - Ensure new owner at least has "manager"
-  if (targetMembership.role !== "manager") {
-    targetMembership.role = "manager";
-    await targetMembership.save();
-  }
-  // - Ensure previous owner remains as "manager" (if they have a membership)
-  let prevMembership = await TeamMember.findOne({
-    teamId: team._id,
-    userId: previousOwnerId,
-  });
-  if (!prevMembership) {
-    prevMembership = await TeamMember.create({
+    // Ensure target user is an ACTIVE manager (your described flow).
+    // If you want "any active member", change role filter to: { $in: ["member","coach","manager"] }
+    const targetMembership = await TeamMember.findOne({
       teamId: team._id,
-      userId: previousOwnerId,
+      userId: targetUser._id,
       role: "manager",
+      status: "active",
     });
-  } else if (prevMembership.role !== "manager") {
-    prevMembership.role = "manager";
-    await prevMembership.save();
-  }
 
-  // Notify both parties by email (best-effort)
-  try {
-    const ownerName =
-      [targetUser.firstName, targetUser.lastName].filter(Boolean).join(" ") ||
-      targetUser.username ||
-      "New Owner";
-    const prevOwnerUser = await User.findById(previousOwnerId).select(
-      "email firstName lastName username"
+    if (!targetMembership) {
+      return NextResponse.json(
+        {
+          message:
+            "Target user must be an active manager of the team before transferring ownership.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const previousOwnerId = team.user.toString();
+
+    // === Transaction for atomicity ===
+    await session.withTransaction(async () => {
+      // 1) Set new owner on Team
+      team.user = targetUser._id;
+      await team.save({ session });
+
+      // 2) Ensure new owner has TeamMember row; set role to "owner" (or keep manager if you prefer)
+      const newOwnerMember = await TeamMember.findOne({
+        teamId: team._id,
+        userId: targetUser._id,
+      }).session(session);
+
+      if (newOwnerMember) {
+        newOwnerMember.role = "owner";
+        newOwnerMember.status = "active";
+        await newOwnerMember.save({ session });
+      } else {
+        await TeamMember.create(
+          [
+            {
+              teamId: team._id,
+              userId: targetUser._id,
+              role: "owner",
+              status: "active",
+            },
+          ],
+          { session }
+        );
+      }
+
+      // 3) Previous owner becomes myNewRole (ensure a membership exists)
+      const prevOwnerMember = await TeamMember.findOne({
+        teamId: team._id,
+        userId: previousOwnerId,
+      }).session(session);
+
+      if (prevOwnerMember) {
+        prevOwnerMember.role = myNewRole;
+        prevOwnerMember.status = "active";
+        await prevOwnerMember.save({ session });
+      } else {
+        await TeamMember.create(
+          [
+            {
+              teamId: team._id,
+              userId: previousOwnerId,
+              role: myNewRole,
+              status: "active",
+            },
+          ],
+          { session }
+        );
+      }
+    });
+
+    // === Emails (best-effort, outside the transaction) ===
+    try {
+      const ownerName =
+        [targetUser.firstName, targetUser.lastName].filter(Boolean).join(" ") ||
+        targetUser.username ||
+        "New Owner";
+      const prevOwnerUser = await User.findById(previousOwnerId).select(
+        "email firstName lastName username"
+      );
+
+      const htmlNew = baseEmailTemplate({
+        title: "You are now the owner of the team",
+        message: `
+          <p>Hello ${ownerName},</p>
+          <p>Ownership of <strong>${team.teamName}</strong> has been transferred to you.</p>
+          <p>You can now manage team settings and members.</p>
+        `,
+      });
+
+      const prevOwnerName =
+        [prevOwnerUser?.firstName, prevOwnerUser?.lastName]
+          .filter(Boolean)
+          .join(" ") ||
+        prevOwnerUser?.username ||
+        "";
+
+      const htmlPrev = baseEmailTemplate({
+        title: "Team ownership transferred",
+        message: `
+          <p>Hello ${prevOwnerName},</p>
+          <p>You transferred ownership of <strong>${team.teamName}</strong> to ${ownerName}.</p>
+          <p>Your new role on the team is <strong>${myNewRole}</strong>.</p>
+        `,
+      });
+
+      await Promise.all([
+        targetUser?.email
+          ? sendEmail({
+              to: targetUser.email,
+              subject: "MatScout — Team ownership updated",
+              html: htmlNew,
+            })
+          : null,
+        prevOwnerUser?.email
+          ? sendEmail({
+              to: prevOwnerUser.email,
+              subject: "MatScout — Team ownership transferred",
+              html: htmlPrev,
+            })
+          : null,
+      ]);
+    } catch (e) {
+      console.error("transfer-owner email failed:", e);
+    }
+
+    return NextResponse.json(
+      { message: "Ownership transferred.", teamSlug: team.teamSlug },
+      { status: 200 }
     );
-
-    const htmlNew = baseEmailTemplate({
-      title: "You are now the owner of the team",
-      message: `
-        <p>Hello ${ownerName},</p>
-        <p>Ownership of <strong>${team.teamName}</strong> has been transferred to you.</p>
-        <p>You can now manage team settings and members.</p>
-      `,
-    });
-
-    const htmlPrev = baseEmailTemplate({
-      title: "Team ownership transferred",
-      message: `
-        <p>Hello ${
-          [prevOwnerUser?.firstName, prevOwnerUser?.lastName]
-            .filter(Boolean)
-            .join(" ") ||
-          prevOwnerUser?.username ||
-          ""
-        },</p>
-        <p>You transferred ownership of <strong>${
-          team.teamName
-        }</strong> to ${ownerName}.</p>
-        <p>You remain a manager on the team.</p>
-      `,
-    });
-
-    await Promise.all([
-      targetUser?.email
-        ? sendEmail({
-            to: targetUser.email,
-            subject: "MatScout — Team ownership updated",
-            html: htmlNew,
-          })
-        : null,
-      prevOwnerUser?.email
-        ? sendEmail({
-            to: prevOwnerUser.email,
-            subject: "MatScout — Team ownership transferred",
-            html: htmlPrev,
-          })
-        : null,
-    ]);
-  } catch (e) {
-    console.error("transfer-owner email failed:", e);
+  } catch (err) {
+    console.error("POST /transfer-owner error", err);
+    return NextResponse.json({ message: "Server error" }, { status: 500 });
+  } finally {
+    endSessionSafe(session);
   }
+}
 
-  return NextResponse.json(
-    { message: "Ownership transferred.", teamSlug: team.teamSlug },
-    { status: 200 }
-  );
+async function startSessionSafe() {
+  try {
+    return await mongoose.startSession();
+  } catch {
+    return null;
+  }
+}
+function endSessionSafe(session) {
+  if (session) {
+    try {
+      session.endSession();
+    } catch {}
+  }
 }

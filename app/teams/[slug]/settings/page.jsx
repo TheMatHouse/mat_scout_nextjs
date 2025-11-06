@@ -21,6 +21,11 @@ import Spinner from "@/components/shared/Spinner";
 // ✅ New shared country select (native <select> + pinned countries)
 import CountrySelect from "@/components/shared/CountrySelect";
 
+// ✅ Added: modal layout + content-only body for transfer ownership
+import ModalLayout from "@/components/shared/ModalLayout";
+import TransferOwnershipContent from "@/components/teams/[slug]/settings/TransferOwnershipContent";
+import { useUser } from "@/context/UserContext";
+
 const PhoneInputField = forwardRef((props, ref) => (
   <input
     ref={ref}
@@ -30,12 +35,13 @@ const PhoneInputField = forwardRef((props, ref) => (
 ));
 PhoneInputField.displayName = "PhoneInputField";
 
-export default function TeamSettingsPage() {
+const TeamSettingsPage = () => {
   const router = useRouter();
   const params = useParams();
   const teamSlug = params.slug;
 
   const { team, setTeam } = useTeam();
+  const { user } = useUser(); // ✅ Added to compute isOwner
 
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -43,6 +49,12 @@ export default function TeamSettingsPage() {
   const [logoPreview, setLogoPreview] = useState(team?.logoURL || null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const fileInputRef = useRef();
+
+  // ✅ Added: modal open state
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
+
+  // ✅ Compute isOwner
+  const isOwner = !!team && !!user && String(team.user) === String(user._id);
 
   const shapeFormFromTeam = (t) => {
     if (!t) return null;
@@ -236,7 +248,7 @@ export default function TeamSettingsPage() {
                   className="w-24 h-24 rounded-full border object-cover"
                 />
               ) : (
-                <div className="w-24 h-24 rounded-full border bg-gray-200 dark:bg-gray-700" />
+                <div className="w-24 h-24 rounded-full border bg-gray-2 00 dark:bg-gray-700" />
               )}
               <input
                 type="file"
@@ -357,12 +369,53 @@ export default function TeamSettingsPage() {
         </div>
       </form>
 
+      {/* ✅ Ownership Section (owner only) */}
+      {isOwner && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Ownership</CardTitle>
+          </CardHeader>
+          <CardContent className="flex items-center justify-between gap-4">
+            <p className="text-sm text-gray-700 dark:text-gray-200">
+              You are the current team owner. Transfer ownership to a manager
+              and set your new role.
+            </p>
+            <Button
+              onClick={() => setIsTransferOpen(true)}
+              className="btn btn-primary"
+            >
+              Transfer Ownership
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {team && (
         <DeleteTeamSection
           teamSlug={team.teamSlug}
           teamName={team.teamName}
         />
       )}
+
+      {/* ✅ ModalLayout wrapping the content-only transfer form */}
+      <ModalLayout
+        isOpen={isTransferOpen}
+        onClose={() => setIsTransferOpen(false)}
+        title="Transfer Team Ownership"
+        description="Select a manager to become the new owner and choose your new role."
+        withCard
+      >
+        <TransferOwnershipContent
+          slug={teamSlug}
+          onClose={() => setIsTransferOpen(false)}
+          onComplete={() => {
+            // Hard refresh ensures fresh team context/role after transfer
+            window.location.reload();
+          }}
+        />
+      </ModalLayout>
     </div>
   );
-}
+};
+
+export default TeamSettingsPage;
