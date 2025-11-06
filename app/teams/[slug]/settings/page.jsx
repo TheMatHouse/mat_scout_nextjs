@@ -23,7 +23,7 @@ import CountrySelect from "@/components/shared/CountrySelect";
 
 // ✅ Added: modal layout + content-only body for transfer ownership
 import ModalLayout from "@/components/shared/ModalLayout";
-import TransferOwnershipContent from "@/components/teams/[slug]/settings/TransferOwnershipContent";
+import TransferOwnershipContent from "@/components/teams/settings/TransferOwnershipContent";
 import { useUser } from "@/context/UserContext";
 
 const PhoneInputField = forwardRef((props, ref) => (
