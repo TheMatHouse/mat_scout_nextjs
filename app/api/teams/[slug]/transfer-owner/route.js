@@ -11,12 +11,6 @@ import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED_NEW_ROLES_FOR_PREV_OWNER = new Set([
-  "member",
-  "manager",
-  "coach",
-]);
-
 export async function POST(req, ctx) {
   await connectDB();
 
@@ -35,14 +29,15 @@ export async function POST(req, ctx) {
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
     }
 
-    const isOwner = team.user?.toString() === me._id.toString();
-    if (!isOwner) {
+    // Must be the current owner
+    if (team.user?.toString() !== me._id.toString()) {
       return NextResponse.json(
         { message: "Only the team owner can transfer ownership." },
         { status: 403 }
       );
     }
 
+    // Parse body
     let body;
     try {
       body = await req.json();
@@ -54,19 +49,9 @@ export async function POST(req, ctx) {
     }
 
     const newOwnerUserId = String(body?.newOwnerUserId || "").trim();
-    const myNewRole = String(body?.myNewRole || "")
-      .trim()
-      .toLowerCase();
-
     if (!newOwnerUserId) {
       return NextResponse.json(
         { message: "newOwnerUserId is required." },
-        { status: 400 }
-      );
-    }
-    if (!ALLOWED_NEW_ROLES_FOR_PREV_OWNER.has(myNewRole)) {
-      return NextResponse.json(
-        { message: "Invalid myNewRole." },
         { status: 400 }
       );
     }
@@ -88,18 +73,17 @@ export async function POST(req, ctx) {
       );
     }
 
-    // Ensure target user is a manager (no status field in your schema)
+    // Ensure target user is currently a MANAGER (TeamMember) on THIS team
     const targetMembership = await TeamMember.findOne({
       teamId: team._id,
       userId: targetUser._id,
       role: "manager",
     });
-
     if (!targetMembership) {
       return NextResponse.json(
         {
           message:
-            "Target user must be a manager of the team before transferring ownership.",
+            "Target user must be a manager of this team before transferring ownership.",
         },
         { status: 400 }
       );
@@ -107,58 +91,55 @@ export async function POST(req, ctx) {
 
     const previousOwnerId = team.user.toString();
 
-    // === Transaction for atomicity ===
-    await session.withTransaction(async () => {
-      // 1) Set new owner on Team
+    // Helpers to perform changes with or without session
+    const doTransfer = async (sess) => {
+      // 1) Update team.user to new owner
       team.user = targetUser._id;
-      await team.save({ session });
+      await team.save(sess ? { session: sess } : undefined);
 
-      // 2) Ensure new owner has a TeamMember row; set role to "owner"
-      const newOwnerMember = await TeamMember.findOne({
-        teamId: team._id,
-        userId: targetUser._id,
-      }).session(session);
+      // 2) Delete the new owner's TeamMember row for THIS team (owners do not have TeamMember rows)
+      await TeamMember.deleteMany(
+        { teamId: team._id, userId: targetUser._id },
+        sess ? { session: sess } : undefined
+      );
 
-      if (newOwnerMember) {
-        newOwnerMember.role = "owner";
-        await newOwnerMember.save({ session });
-      } else {
-        await TeamMember.create(
-          [
-            {
-              teamId: team._id,
-              userId: targetUser._id,
-              role: "owner",
-            },
-          ],
-          { session }
-        );
-      }
+      // 3) Upsert previous owner's TeamMember row as role "manager" on THIS team
+      const existingPrev = await TeamMember.findOne(
+        { teamId: team._id, userId: previousOwnerId },
+        null,
+        sess ? { session: sess } : undefined
+      );
 
-      // 3) Previous owner becomes myNewRole (ensure a membership exists)
-      const prevOwnerMember = await TeamMember.findOne({
-        teamId: team._id,
-        userId: previousOwnerId,
-      }).session(session);
-
-      if (prevOwnerMember) {
-        prevOwnerMember.role = myNewRole;
-        await prevOwnerMember.save({ session });
+      if (existingPrev) {
+        if (existingPrev.role !== "manager") {
+          existingPrev.role = "manager";
+          await existingPrev.save(sess ? { session: sess } : undefined);
+        }
       } else {
         await TeamMember.create(
           [
             {
               teamId: team._id,
               userId: previousOwnerId,
-              role: myNewRole,
+              role: "manager",
             },
           ],
-          { session }
+          sess ? { session: sess } : undefined
         );
       }
-    });
+    };
 
-    // === Emails (best-effort, outside the transaction) ===
+    // Transaction (with fallback)
+    if (session) {
+      await session.withTransaction(async () => {
+        await doTransfer(session);
+      });
+    } else {
+      // Fallback path if sessions are unavailable
+      await doTransfer(null);
+    }
+
+    // Emails (best-effort, outside transaction)
     try {
       const ownerName =
         [targetUser.firstName, targetUser.lastName].filter(Boolean).join(" ") ||
@@ -167,6 +148,12 @@ export async function POST(req, ctx) {
       const prevOwnerUser = await User.findById(previousOwnerId).select(
         "email firstName lastName username"
       );
+      const prevOwnerName =
+        [prevOwnerUser?.firstName, prevOwnerUser?.lastName]
+          .filter(Boolean)
+          .join(" ") ||
+        prevOwnerUser?.username ||
+        "";
 
       const htmlNew = baseEmailTemplate({
         title: "You are now the owner of the team",
@@ -177,19 +164,12 @@ export async function POST(req, ctx) {
         `,
       });
 
-      const prevOwnerName =
-        [prevOwnerUser?.firstName, prevOwnerUser?.lastName]
-          .filter(Boolean)
-          .join(" ") ||
-        prevOwnerUser?.username ||
-        "";
-
       const htmlPrev = baseEmailTemplate({
         title: "Team ownership transferred",
         message: `
           <p>Hello ${prevOwnerName},</p>
           <p>You transferred ownership of <strong>${team.teamName}</strong> to ${ownerName}.</p>
-          <p>Your new role on the team is <strong>${myNewRole}</strong>.</p>
+          <p>Your role on the team is now <strong>manager</strong>.</p>
         `,
       });
 
