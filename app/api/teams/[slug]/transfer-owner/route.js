@@ -11,6 +11,8 @@ import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
 export const dynamic = "force-dynamic";
 
+const ALLOWED_ROLES = new Set(["member", "manager", "coach"]);
+
 export async function POST(req, ctx) {
   await connectDB();
 
@@ -49,6 +51,14 @@ export async function POST(req, ctx) {
     }
 
     const newOwnerUserId = String(body?.newOwnerUserId || "").trim();
+    // honor myNewRole if valid; otherwise default to "manager"
+    const requestedRole = String(body?.myNewRole || "")
+      .trim()
+      .toLowerCase();
+    const prevOwnerNewRole = ALLOWED_ROLES.has(requestedRole)
+      ? requestedRole
+      : "manager";
+
     if (!newOwnerUserId) {
       return NextResponse.json(
         { message: "newOwnerUserId is required." },
@@ -73,7 +83,7 @@ export async function POST(req, ctx) {
       );
     }
 
-    // Ensure target user is currently a MANAGER (TeamMember) on THIS team
+    // Ensure target user is currently a MANAGER on THIS team
     const targetMembership = await TeamMember.findOne({
       teamId: team._id,
       userId: targetUser._id,
@@ -103,7 +113,7 @@ export async function POST(req, ctx) {
         sess ? { session: sess } : undefined
       );
 
-      // 3) Upsert previous owner's TeamMember row as role "manager" on THIS team
+      // 3) Upsert previous owner's TeamMember row with the chosen role on THIS team
       const existingPrev = await TeamMember.findOne(
         { teamId: team._id, userId: previousOwnerId },
         null,
@@ -111,8 +121,8 @@ export async function POST(req, ctx) {
       );
 
       if (existingPrev) {
-        if (existingPrev.role !== "manager") {
-          existingPrev.role = "manager";
+        if (existingPrev.role !== prevOwnerNewRole) {
+          existingPrev.role = prevOwnerNewRole;
           await existingPrev.save(sess ? { session: sess } : undefined);
         }
       } else {
@@ -121,7 +131,7 @@ export async function POST(req, ctx) {
             {
               teamId: team._id,
               userId: previousOwnerId,
-              role: "manager",
+              role: prevOwnerNewRole,
             },
           ],
           sess ? { session: sess } : undefined
@@ -169,7 +179,7 @@ export async function POST(req, ctx) {
         message: `
           <p>Hello ${prevOwnerName},</p>
           <p>You transferred ownership of <strong>${team.teamName}</strong> to ${ownerName}.</p>
-          <p>Your role on the team is now <strong>manager</strong>.</p>
+          <p>Your role on the team is now <strong>${prevOwnerNewRole}</strong>.</p>
         `,
       });
 
