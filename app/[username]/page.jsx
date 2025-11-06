@@ -28,15 +28,30 @@ export async function generateMetadata({ params }) {
   const title =
     `${member.firstName || ""} ${member.lastName || ""}`.trim() ||
     member.username;
+
   const description = `View ${
     member.firstName || member.username
   }'s grappling profile on MatScout.`;
 
-  // only setting the <title> and meta description
-  // inherits all OG/Twitter tags from root layout
+  const profileUrl = `https://matscout.com/${member.username}`;
+
   return {
+    // Browser tab
     title: `${title} · MatScout`,
     description,
+
+    // Keep FB generic, but point OG to the correct page URL
+    openGraph: { url: profileUrl },
+
+    // Make X show the person's name while reusing the global image
+    twitter: {
+      title: `${title} · MatScout`,
+      description,
+      // card/images inherit from root
+    },
+
+    // Help both platforms pick the right URL
+    alternates: { canonical: profileUrl },
   };
 }
 
