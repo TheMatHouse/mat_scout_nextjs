@@ -4,11 +4,11 @@ import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { Input } from "@/components/ui/input"; // shadcn input
 
-export default function PasswordInput({
+const PasswordInput = ({
   className = "",
   autoComplete = "new-password",
   ...props
-}) {
+}) => {
   const [show, setShow] = useState(false);
 
   return (
@@ -16,6 +16,8 @@ export default function PasswordInput({
       <Input
         type={show ? "text" : "password"}
         autoComplete={autoComplete}
+        // This prevents extension-injected attrs (e.g. fdprocessedid) from causing hydration warnings
+        suppressHydrationWarning
         {...props}
       />
       <button
@@ -35,4 +37,6 @@ export default function PasswordInput({
       </button>
     </div>
   );
-}
+};
+
+export default PasswordInput;
