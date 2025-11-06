@@ -9,7 +9,7 @@ const Footer = () => {
     process.env.NODE_ENV === "production";
 
   return (
-    <footer className="bg-ms-blue text-ms-nav-text dark:bg-[hsl(222.2_47.4%_11.2%)] dark:text-white py-6 px-8">
+    <footer className="mt-auto bg-ms-blue text-ms-nav-text dark:bg-[hsl(222.2_47.4%_11.2%)] dark:text-white py-6 px-8">
       {/* 3-zone layout on md+; stacks nicely on mobile */}
       <div className="max-w-7xl mx-auto grid gap-4 md:grid-cols-3 items-center">
         {/* Left: Copyright */}

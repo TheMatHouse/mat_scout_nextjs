@@ -9,22 +9,24 @@ import ChromeGate from "@/components/layout/ChromeGate";
 export const dynamic = "force-dynamic";
 
 /** Helpers */
-function stripTrailingSlash(url) {
-  return url ? url.replace(/\/+$/, "") : url;
-}
+const stripTrailingSlash = (url) => (url ? url.replace(/\/+$/, "") : url);
+
 const SITE_URL =
   stripTrailingSlash(process.env.NEXT_PUBLIC_BASE_URL) ||
   stripTrailingSlash(process.env.NEXT_PUBLIC_DOMAIN) ||
   "https://matscout.com";
-function absUrl(path = "/") {
+
+const absUrl = (path = "/") => {
   try {
     return new URL(path, SITE_URL).toString();
   } catch {
     return SITE_URL;
   }
-}
+};
+
 const DEFAULT_OG = absUrl("/default-og.png");
 
+/** Metadata */
 export async function generateMetadata() {
   const base = new URL(SITE_URL);
   const baseTitle = "MatScout";
@@ -53,7 +55,8 @@ export async function generateMetadata() {
   };
 }
 
-export default function RootLayout({ children }) {
+/** Layout */
+const RootLayout = ({ children }) => {
   const FB_APP_ID =
     process.env.NEXT_PUBLIC_FACEBOOK_APP_ID ||
     process.env.NEXT_PUBLIC_FB_APP_ID ||
@@ -81,10 +84,12 @@ export default function RootLayout({ children }) {
         {/* Analytics beacon stays global */}
         <AnalyticsBeacon />
 
-        {/* ChromeGate owns ThemeProvider, UserProvider, Header, Footer, etc. */}
-        <ChromeGate>{children}</ChromeGate>
+        {/* ChromeGate wraps ThemeProvider, Header, Footer, etc. */}
+        <main className="flex-1 flex flex-col">
+          <ChromeGate>{children}</ChromeGate>
+        </main>
 
-        {/* Toast container here as fallback for minimal pages */}
+        {/* Toast fallback for pages without providers */}
         <ToastContainer
           position="top-right"
           autoClose={5000}
@@ -92,4 +97,6 @@ export default function RootLayout({ children }) {
       </body>
     </html>
   );
-}
+};
+
+export default RootLayout;
