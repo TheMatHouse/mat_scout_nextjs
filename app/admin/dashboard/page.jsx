@@ -1,3 +1,4 @@
+// app/admin/dashboard/page.jsx
 import Link from "next/link";
 import {
   Users,
@@ -8,7 +9,8 @@ import {
   ClipboardList,
   Search,
   BarChart3,
-  HelpCircle, // 🆕 add for FAQ card icon
+  StickyNote,
+  HelpCircle,
 } from "lucide-react";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
@@ -16,124 +18,145 @@ import Team from "@/models/teamModel";
 import FamilyMember from "@/models/familyMemberModel";
 import MatchReport from "@/models/matchReportModel";
 import ScoutingReport from "@/models/scoutingReportModel";
+import CoachMatchNote from "@/models/coachMatchNoteModel";
 
-export default async function AdminDashboardPage() {
+const CardShell = ({ children, interactive = false, label }) => {
+  const base =
+    "rounded-2xl p-5 sm:p-6 h-full flex flex-col justify-between border transition-shadow bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700";
+  const hover =
+    "motion-safe:hover:shadow-lg motion-safe:dark:hover:shadow-black/20";
+  const focus =
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--ms-light-red,#ef4444)] dark:focus-visible:ring-offset-gray-900";
+  const className = interactive ? `${base} ${hover} ${focus}` : base;
+
+  return (
+    <div
+      className={className}
+      role={interactive ? undefined : "group"}
+      aria-label={interactive ? undefined : label}
+    >
+      {children}
+    </div>
+  );
+};
+
+const StatTile = ({ label, value, Icon, href }) => {
+  const Content = (
+    <CardShell
+      interactive={!!href}
+      label={`${label}: ${value}`}
+    >
+      <div className="flex items-center gap-4 mb-4">
+        <div className="p-3 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+          <Icon
+            size={24}
+            aria-hidden="true"
+          />
+        </div>
+        <div>
+          <p className="text-sm sm:text-[0.95rem] font-medium text-gray-900 dark:text-gray-100">
+            {label}
+          </p>
+          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">
+            {String(value)}
+          </h2>
+        </div>
+      </div>
+
+      {href ? (
+        <span className="inline-flex items-center gap-1 text-[var(--ms-light-red,#ef4444)] font-medium">
+          <span className="underline underline-offset-2">Open</span>
+          <span className="sr-only">{label}</span>
+        </span>
+      ) : null}
+    </CardShell>
+  );
+
+  return href ? (
+    <Link
+      href={href}
+      aria-label={`${label}: ${value}. Open`}
+      className="block focus:outline-none"
+    >
+      {Content}
+    </Link>
+  ) : (
+    <div className="block">{Content}</div>
+  );
+};
+
+const AdminDashboardPage = async () => {
   await connectDB();
 
-  // Fetch counts in parallel
   const [
     userCount,
     familyCount,
     teamCount,
     matchReportCount,
     scoutingReportCount,
+    coachNotesCount,
   ] = await Promise.all([
     User.countDocuments(),
     FamilyMember.countDocuments(),
     Team.countDocuments(),
     MatchReport.countDocuments(),
     ScoutingReport.countDocuments(),
+    CoachMatchNote.countDocuments(),
   ]);
 
+  // Link ONLY to pages that exist today.
   const cards = [
     {
       label: "Total Users",
-      value: userCount.toString(),
-      icon: <Users size={24} />,
+      value: userCount,
+      icon: Users,
       href: "/admin/users",
     },
     {
-      label: "Family Members",
-      value: familyCount.toString(),
-      icon: <UserPlus size={24} />,
-      href: "/admin/family-members",
-    },
-    {
       label: "Total Teams",
-      value: teamCount.toString(),
-      icon: <Shield size={24} />,
+      value: teamCount,
+      icon: Shield,
       href: "/admin/teams",
     },
-    {
-      label: "Match Reports",
-      value: matchReportCount.toString(),
-      icon: <ClipboardList size={24} />,
-      href: "/admin/reports/matches",
-    },
-    {
-      label: "Scouting Reports",
-      value: scoutingReportCount.toString(),
-      icon: <Search size={24} />,
-      href: "/admin/reports/scouting",
-    },
-    {
-      label: "Reports",
-      value: "-",
-      icon: <FileText size={24} />,
-      href: "/admin/reports",
-    },
+    { label: "Family Members", value: familyCount, icon: UserPlus },
+    { label: "Match Reports", value: matchReportCount, icon: ClipboardList },
+    { label: "Scouting Reports", value: scoutingReportCount, icon: Search },
+    { label: "Coach’s Notes", value: coachNotesCount, icon: StickyNote },
+    { label: "Reports", value: "-", icon: FileText },
     {
       label: "Analytics",
       value: "-",
-      icon: <BarChart3 size={24} />,
+      icon: BarChart3,
       href: "/admin/analytics",
-    },
-    {
-      label: "Settings",
-      value: "-",
-      icon: <Settings size={24} />,
-      href: "/admin/settings",
-    },
-    // 🆕 Add FAQ Manager card
-    {
-      label: "Manage FAQs",
-      value: "-",
-      icon: <HelpCircle size={24} />,
-      href: "/admin/faqs",
-    },
+    }, // now opens
+    { label: "Settings", value: "-", icon: Settings },
+    { label: "Manage FAQs", value: "-", icon: HelpCircle },
   ];
 
   return (
-    <main className="relative w-full no-x-overflow">
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div>
-          <h1 className="text-3xl font-bold mb-6 text-gray-900 dark:text-gray-100">
-            Admin Dashboard
-          </h1>
-          <p className="mb-8 text-gray-700 dark:text-gray-300">
-            Welcome to the Admin Panel. Use the cards below to manage users,
-            family members, teams, and reports.
-          </p>
+    <main className="relative w-full">
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <h1 className="text-2xl sm:text-3xl font-bold mb-3 sm:mb-4 text-gray-900 dark:text-gray-100">
+          Admin Dashboard
+        </h1>
+        <p className="mb-6 sm:mb-8 text-gray-900 dark:text-gray-100/90">
+          At-a-glance stats. Tiles only link where a management page exists.
+        </p>
 
-          {/* Responsive grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {cards.map((card) => (
-              <Link
-                key={card.label}
-                href={card.href}
-                className="bg-white dark:bg-gray-900 shadow hover:shadow-lg dark:hover:border dark:border-gray-700 rounded-lg p-6 flex flex-col justify-between transition h-full"
-              >
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="p-3 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-                    {card.icon}
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-700 dark:text-gray-300">
-                      {card.label}
-                    </p>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                      {card.value}
-                    </h2>
-                  </div>
-                </div>
-                <span className="text-ms-light-red font-medium hover:underline">
-                  Manage
-                </span>
-              </Link>
-            ))}
-          </div>
+        <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+          {cards.map(({ label, value, icon: Icon, href }) => (
+            <StatTile
+              key={label}
+              label={label}
+              value={value}
+              Icon={Icon}
+              href={href}
+            />
+          ))}
         </div>
       </section>
     </main>
   );
-}
+};
+
+export default AdminDashboardPage;

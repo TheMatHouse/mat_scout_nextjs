@@ -1,152 +1,134 @@
 // app/api/admin/teams/route.js
-import { NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongo";
-import { getCurrentUser } from "@/lib/auth-server";
-import User from "@/models/userModel";
-import Team from "@/models/teamModel";
-import TeamMember from "@/models/teamMemberModel";
-import TeamInvitation from "@/models/teamInvitationModel";
-
 export const dynamic = "force-dynamic";
 
-function escapeRegex(str = "") {
-  return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+import { NextResponse } from "next/server";
+import { connectDB } from "@/lib/mongo";
+import Team from "@/models/teamModel";
+import TeamMember from "@/models/teamMemberModel";
+import User from "@/models/userModel";
 
 export async function GET(req) {
   try {
     await connectDB();
 
-    const me = await getCurrentUser();
-    if (!me)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const meDoc = await User.findById(me._id).select("role isAdmin").lean();
-    const isAdmin = !!(meDoc?.isAdmin || meDoc?.role === "admin");
-    if (!isAdmin)
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
     const { searchParams } = new URL(req.url);
-    const q = (searchParams.get("q") || "").trim();
     const page = Math.max(parseInt(searchParams.get("page") || "1", 10), 1);
-    const limit = Math.min(
-      Math.max(parseInt(searchParams.get("limit") || "20", 10), 1),
-      100
-    );
+    const limit = Math.max(parseInt(searchParams.get("limit") || "20", 10), 1);
+    const q = (searchParams.get("q") || "").trim();
 
     const filter = {};
     if (q) {
-      const re = new RegExp(escapeRegex(q), "i");
-      filter.$or = [{ teamName: re }, { teamSlug: re }];
+      filter.$or = [
+        { teamName: { $regex: q, $options: "i" } },
+        { teamSlug: { $regex: q, $options: "i" } },
+      ];
     }
 
-    const total = await Team.countDocuments(filter);
+    const projection = {
+      teamName: 1,
+      teamSlug: 1,
+      user: 1,
+      createdAt: 1,
+      logoURL: 1, // <-- IMPORTANT
+      // If you also store alternates:
+      logoUrl: 1,
+      logo: 1,
+    };
 
-    const teams = await Team.find(filter)
-      .select("_id teamName teamSlug logo user createdAt")
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean();
+    const [total, teams] = await Promise.all([
+      Team.countDocuments(filter),
+      Team.find(filter)
+        .select(projection)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+    ]);
 
+    // Precompute counts + owner name
     const teamIds = teams.map((t) => t._id);
+    const ownerIds = teams.map((t) => t.user).filter(Boolean);
 
-    // Member counts (active vs pending)
-    const memberAgg = await TeamMember.aggregate([
-      { $match: { teamId: { $in: teamIds } } },
-      {
-        $group: {
-          _id: "$teamId",
-          activeMembers: {
-            $sum: {
-              $cond: [{ $in: ["$role", ["manager", "coach", "member"]] }, 1, 0],
+    const [membersByTeam, ownerUsers] = await Promise.all([
+      TeamMember.aggregate([
+        { $match: { teamId: { $in: teamIds } } },
+        {
+          $group: {
+            _id: "$teamId",
+            active: {
+              $sum: {
+                $cond: [{ $eq: ["$status", "active"] }, 1, 0],
+              },
+            },
+            pending: {
+              $sum: {
+                $cond: [{ $eq: ["$status", "pending"] }, 1, 0],
+              },
             },
           },
-          pendingMembers: {
-            $sum: { $cond: [{ $eq: ["$role", "pending"] }, 1, 0] },
-          },
-          totalMembers: { $sum: 1 },
         },
-      },
+      ]),
+      ownerIds.length
+        ? User.find({ _id: { $in: ownerIds } })
+            .select("firstName lastName username")
+            .lean()
+        : [],
     ]);
 
-    const memberMap = Object.fromEntries(
-      memberAgg.map((m) => [
+    const ownersById = new Map(
+      ownerUsers.map((u) => [
+        String(u._id),
+        {
+          name:
+            [u.firstName, u.lastName].filter(Boolean).join(" ") ||
+            u.username ||
+            "User",
+        },
+      ])
+    );
+
+    const countsByTeamId = new Map(
+      membersByTeam.map((m) => [
         String(m._id),
         {
-          activeMembers: m.activeMembers || 0,
-          pendingMembers: m.pendingMembers || 0,
-          totalMembers: m.totalMembers || 0,
+          active: m.active || 0,
+          pending: m.pending || 0,
         },
       ])
     );
-
-    // Pending invites
-    const inviteAgg = await TeamInvitation.aggregate([
-      {
-        $match: {
-          teamId: { $in: teamIds },
-          revokedAt: { $exists: false },
-          acceptedAt: { $exists: false },
-          expiresAt: { $gt: new Date() },
-        },
-      },
-      { $group: { _id: "$teamId", pendingInvites: { $sum: 1 } } },
-    ]);
-
-    const inviteMap = Object.fromEntries(
-      inviteAgg.map((i) => [
-        String(i._id),
-        { pendingInvites: i.pendingInvites || 0 },
-      ])
-    );
-
-    const users = await User.find({
-      _id: { $in: teams.map((t) => t.user).filter(Boolean) },
-    })
-      .select("_id firstName lastName username email")
-      .lean();
-    const ownerMap = Object.fromEntries(users.map((u) => [String(u._id), u]));
 
     const rows = teams.map((t) => {
-      const key = String(t._id);
-      const memberStats = memberMap[key] || {
-        activeMembers: 0,
-        pendingMembers: 0,
-        totalMembers: 0,
+      const counts = countsByTeamId.get(String(t._id)) || {
+        active: 0,
+        pending: 0,
       };
-      const inviteStats = inviteMap[key] || { pendingInvites: 0 };
-      const owner = t.user ? ownerMap[String(t.user)] : null;
+      const owner = ownersById.get(String(t.user)) || null;
 
       return {
         _id: String(t._id),
         teamName: t.teamName,
         teamSlug: t.teamSlug,
-        logo: t.logo || null,
-        owner: owner
-          ? {
-              _id: String(owner._id),
-              name:
-                [owner.firstName, owner.lastName].filter(Boolean).join(" ") ||
-                owner.username ||
-                owner.email,
-            }
-          : null,
         createdAt: t.createdAt,
-        ...memberStats,
-        ...inviteStats,
+        owner,
+        // Make sure admin client receives this:
+        logoURL:
+          t.logoURL ||
+          t.logoUrl ||
+          (t.logo && (t.logo.secure_url || t.logo.url)) ||
+          null,
+        activeMembers: counts.active,
+        pendingMembers: counts.pending,
+        // keep “invites” if you derive it elsewhere; default 0 here
+        pendingInvites: 0,
       };
     });
 
-    return NextResponse.json({
-      teams: rows,
-      page,
-      limit,
-      total,
-      pages: Math.ceil(total / limit),
-    });
+    return NextResponse.json({ total, teams: rows });
   } catch (err) {
-    console.error("GET /api/admin/teams failed:", err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    console.error(err);
+    return NextResponse.json(
+      { error: "Failed to load teams" },
+      { status: 500 }
+    );
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "react-toastify";
 import FormField from "@/components/shared/FormField";
 import FormSelect from "@/components/shared/FormSelect";
@@ -12,9 +12,110 @@ const GENDER_OPTIONS = [
   { value: "not specified", label: "Not specified" },
 ];
 
-export default function AdminUserDetailClient({ initialData }) {
+// Role precedence for merging duplicates
+const ROLE_RANK = {
+  owner: 4,
+  manager: 3,
+  coach: 2,
+  member: 1,
+  // anything else -> 0
+};
+
+function rankOf(role) {
+  return ROLE_RANK[String(role || "").toLowerCase()] || 0;
+}
+
+/**
+ * Normalize various shapes into a consistent entry:
+ *  { key, team: { name, slug }, role }
+ *
+ * Supports:
+ * - Memberships items like:
+ *    { _id, role, team: { name, slug } }
+ * - Owner teams items like:
+ *    { _id, teamName, teamSlug }
+ */
+function normalizeMembershipItem(item) {
+  if (!item) return null;
+
+  // Shape 1: membership doc with nested team
+  if (item.team && (item.team.name || item.team.slug)) {
+    return {
+      key: item._id || `${item.team.slug}-${item.role || "member"}`,
+      team: {
+        name: item.team.name || item.team.teamName || "Unknown Team",
+        slug: item.team.slug || item.team.teamSlug || null,
+      },
+      role: (item.role || "member").toLowerCase(),
+    };
+  }
+
+  // Shape 2: owner team document
+  if ((item.teamName || item.teamSlug) && !item.team) {
+    return {
+      key: item._id || `${item.teamSlug}-owner`,
+      team: {
+        name: item.teamName || "Unknown Team",
+        slug: item.teamSlug || null,
+      },
+      role: "owner",
+    };
+  }
+
+  // Shape 3: already-normalized or unexpected
+  if (item.team && item.role) {
+    return {
+      key: item.key || item._id || `${item.team.slug}-${item.role}`,
+      team: {
+        name: item.team.name || "Unknown Team",
+        slug: item.team.slug || null,
+      },
+      role: String(item.role).toLowerCase(),
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Merge memberships + ownerTeams, dedupe by team.slug, and keep the highest role.
+ */
+function useMergedTeams(memberships = [], ownerTeams = []) {
+  return useMemo(() => {
+    const normalized = [
+      ...memberships.map(normalizeMembershipItem),
+      ...ownerTeams.map(normalizeMembershipItem),
+    ].filter(Boolean);
+
+    const bySlug = new Map();
+    for (const entry of normalized) {
+      const slug =
+        entry.team?.slug || `__no_slug__:${entry.team?.name || "unknown"}`;
+      const existing = bySlug.get(slug);
+
+      if (!existing) {
+        bySlug.set(slug, entry);
+        continue;
+      }
+
+      // keep whichever has higher role rank
+      if (rankOf(entry.role) > rankOf(existing.role)) {
+        bySlug.set(slug, entry);
+      }
+    }
+
+    // Sort by role rank desc, then by name
+    return Array.from(bySlug.values()).sort((a, b) => {
+      const rdiff = rankOf(b.role) - rankOf(a.role);
+      if (rdiff !== 0) return rdiff;
+      return (a.team?.name || "").localeCompare(b.team?.name || "");
+    });
+  }, [memberships, ownerTeams]);
+}
+
+const AdminUserDetailClient = ({ initialData }) => {
   const [bundle, setBundle] = useState(initialData);
-  const { user, family, memberships, stats } = bundle || {};
+  const { user, family, memberships, stats, ownerTeams } = bundle || {};
 
   const [form, setForm] = useState({
     firstName: user.firstName || "",
@@ -28,6 +129,8 @@ export default function AdminUserDetailClient({ initialData }) {
     allowPublic: !!user.allowPublic,
     gender: user.gender || "not specified",
   });
+
+  const mergedTeams = useMergedTeams(memberships, ownerTeams);
 
   const [saving, setSaving] = useState(false);
   const id = user?._id;
@@ -60,23 +163,21 @@ export default function AdminUserDetailClient({ initialData }) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             {user.firstName} {user.lastName}{" "}
             <Link
               href={`/${user.username}`}
-              className="text-gray-500 hover:underline"
+              className="text-gray-600 dark:text-gray-300 hover:underline"
             >
               @{user.username}
             </Link>
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
             {user.email} • Last login:{" "}
             {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : "—"}
           </p>
         </div>
-        <div className="flex gap-2">
-          {/* action buttons if you add later */}
-        </div>
+        <div className="flex gap-2">{/* actions in future */}</div>
       </div>
 
       {/* Tabs */}
@@ -91,7 +192,7 @@ export default function AdminUserDetailClient({ initialData }) {
                 className={`pb-2 text-sm font-medium ${
                   active
                     ? "text-blue-600 dark:text-[var(--ms-light-red)] border-b-2 border-blue-600 dark:border-[var(--ms-light-red)]"
-                    : "text-gray-500 hover:text-blue-500 dark:text-gray-400 dark:hover:text-[var(--ms-light-red)]"
+                    : "text-gray-600 hover:text-blue-500 dark:text-gray-300 dark:hover:text-[var(--ms-light-red)]"
                 }`}
               >
                 {t}
@@ -138,7 +239,6 @@ export default function AdminUserDetailClient({ initialData }) {
             />
           </div>
 
-          {/* Gender */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <FormField
               label="City"
@@ -217,17 +317,17 @@ export default function AdminUserDetailClient({ initialData }) {
                   key={m._id}
                   className="py-3"
                 >
-                  <div className="font-medium">
+                  <div className="font-medium text-gray-900 dark:text-gray-100">
                     {m.firstName} {m.lastName}
                   </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                  <div className="text-sm text-gray-600 dark:text-gray-300">
                     DOB: {m.bDay}/{m.bMonth}/{m.bYear}
                   </div>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-gray-500 dark:text-gray-400">
+            <p className="text-gray-600 dark:text-gray-300">
               No family members.
             </p>
           )}
@@ -236,18 +336,18 @@ export default function AdminUserDetailClient({ initialData }) {
 
       {tab === "Teams" && (
         <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-          {memberships?.length ? (
+          {mergedTeams?.length ? (
             <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-              {memberships.map((m) => (
+              {mergedTeams.map((m) => (
                 <li
-                  key={m._id}
+                  key={m.key}
                   className="py-3 flex items-center justify-between"
                 >
                   <div>
-                    <div className="font-medium">
+                    <div className="font-medium text-gray-900 dark:text-gray-100">
                       {m.team?.name || "Unknown Team"}
                     </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                    <div className="text-sm text-gray-600 dark:text-gray-300 capitalize">
                       Role: {m.role}
                     </div>
                   </div>
@@ -263,7 +363,7 @@ export default function AdminUserDetailClient({ initialData }) {
               ))}
             </ul>
           ) : (
-            <p className="text-gray-500 dark:text-gray-400">
+            <p className="text-gray-600 dark:text-gray-300">
               No team memberships.
             </p>
           )}
@@ -279,7 +379,7 @@ export default function AdminUserDetailClient({ initialData }) {
             </div>
             <div className="mt-2">
               <Link
-                href={`/dashboard/matches`}
+                href={`/admin/users/${user._id}/reports/matches`}
                 className="underline"
               >
                 Open matches
@@ -304,4 +404,6 @@ export default function AdminUserDetailClient({ initialData }) {
       )}
     </div>
   );
-}
+};
+
+export default AdminUserDetailClient;
