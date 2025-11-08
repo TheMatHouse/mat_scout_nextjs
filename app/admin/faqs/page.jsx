@@ -122,7 +122,9 @@ export default function AdminFaqsPage() {
             </span>
             <input
               value={form.question}
-              onChange={(e) => setForm({ ...form, question: e.target.value })}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, question: e.target.value }))
+              }
               className="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1b1c24] px-3 py-2 text-gray-900 dark:text-gray-100"
               required
             />
@@ -134,7 +136,9 @@ export default function AdminFaqsPage() {
               name="answer"
               label="Answer"
               text={form.answer}
-              onChange={(html) => setForm({ ...form, answer: html })}
+              onChange={(html) =>
+                setForm((prev) => ({ ...prev, answer: html }))
+              }
             />
           </div>
 
@@ -145,7 +149,9 @@ export default function AdminFaqsPage() {
               </span>
               <input
                 value={form.tags}
-                onChange={(e) => setForm({ ...form, tags: e.target.value })}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, tags: e.target.value }))
+                }
                 className="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1b1c24] px-3 py-2 text-gray-900 dark:text-gray-100"
                 placeholder="team,billing,profile"
               />
@@ -158,7 +164,9 @@ export default function AdminFaqsPage() {
               <input
                 type="number"
                 value={form.order}
-                onChange={(e) => setForm({ ...form, order: e.target.value })}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, order: e.target.value }))
+                }
                 className="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1b1c24] px-3 py-2 text-gray-900 dark:text-gray-100"
               />
             </label>
@@ -168,7 +176,10 @@ export default function AdminFaqsPage() {
                 type="checkbox"
                 checked={form.isPublished}
                 onChange={(e) =>
-                  setForm({ ...form, isPublished: e.target.checked })
+                  setForm((prev) => ({
+                    ...prev,
+                    isPublished: e.target.checked,
+                  }))
                 }
               />
               <span className="text-gray-900 dark:text-gray-100">
