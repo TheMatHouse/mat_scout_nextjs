@@ -1,5 +1,6 @@
 // components/layout/Header.jsx
 "use client";
+
 import Link from "next/link";
 import Image from "next/image";
 import logoDesktop from "@/assets/matScout_logo.png";
@@ -8,10 +9,9 @@ import Navbar from "@/components/layout/Navbar";
 import NotificationBell from "@/components/notifications/NotificationBell";
 import { useUser } from "@/context/UserContext";
 
-export default function Header() {
+const Header = () => {
   const { user, loading } = useUser();
 
-  // Keep the header height stable while auth state loads
   if (loading) {
     return (
       <header className="sticky top-0 inset-x-0 z-50 bg-ms-blue shadow-sm h-16 md:h-20" />
@@ -20,20 +20,24 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 inset-x-0 z-50 bg-ms-blue text-ms-nav-text dark:text-white shadow-sm">
-      {/* Constrained inner content; outer header provides the full-bleed background */}
-      <div className="mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8">
+      {/* Constrained inner content */}
+      <div className="mx-auto max-w-7xl w-full sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Mobile Logo */}
           <Link
             href="/"
-            className="block md:hidden h-10"
+            className="block md:hidden -ml-4"
           >
-            <Image
-              src={logoMobile}
-              alt="MatScout Logo"
-              priority
-              className="h-10 w-auto"
-            />
+            <div className="relative h-16 w-44 flex items-center">
+              <Image
+                src={logoMobile}
+                alt="MatScout Logo"
+                fill
+                className="object-contain"
+                priority
+                sizes="(max-width: 768px) 176px"
+              />
+            </div>
           </Link>
 
           {/* Desktop Logo */}
@@ -68,4 +72,6 @@ export default function Header() {
       </div>
     </header>
   );
-}
+};
+
+export default Header;
