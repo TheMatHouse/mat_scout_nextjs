@@ -74,9 +74,10 @@ export default function MembersPage() {
   const fetchInvites = useCallback(async () => {
     setInvitesLoading(true);
     try {
-      const res = await fetch(`/api/teams/${slug}/invites?ts=${Date.now()}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `/api/teams/${slug}/invites?status=pending&ts=${Date.now()}`,
+        { cache: "no-store" }
+      );
 
       const { data } = await parseJsonSafe(res);
       if (!res.ok) {
