@@ -12,6 +12,9 @@ import { createNotification } from "@/lib/createNotification";
 import { Mail } from "@/lib/email/mailer";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
+// ✅ NEW: import the reconciler from /lib/teams
+import { reconcileTeamInvites } from "@/lib/teams/reconcileTeamInvites";
+
 export async function PATCH(request, { params }) {
   try {
     await connectDB();
@@ -153,11 +156,27 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ success: true }, { status: 200 });
     }
 
+    // Save the new role
     const updated = await TeamMember.findByIdAndUpdate(
       memberId,
       { role },
       { new: true }
     );
+
+    // ✅ NEW: if this was an approval (pending -> active), reconcile lingering pending invites
+    if (isApproval) {
+      try {
+        await reconcileTeamInvites({
+          teamId: team._id,
+          userId: updated.userId, // TeamMember.userId
+          email: (recipientUser.email || "").toLowerCase(), // safe fallback
+          acceptedByUserId: actor._id,
+        });
+      } catch (e) {
+        // Don't fail the whole request if reconciliation hiccups
+        console.error("reconcileTeamInvites failed:", e);
+      }
+    }
 
     return NextResponse.json(
       {
