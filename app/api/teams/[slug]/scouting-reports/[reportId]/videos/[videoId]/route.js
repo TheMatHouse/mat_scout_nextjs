@@ -1,3 +1,4 @@
+// app/api/teams/[slug]/scouting-reports/[reportId]/videos/[videoId]/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
@@ -28,10 +29,10 @@ export async function DELETE(req, context) {
       );
     }
 
-    // ✅ Delete the video document itself
+    // Delete the video document itself
     await video.deleteOne();
 
-    // ✅ Remove the reference from the report's videos array
+    // Remove the reference from the report's videos array
     await ScoutingReport.findByIdAndUpdate(reportId, {
       $pull: { videos: video._id },
     });

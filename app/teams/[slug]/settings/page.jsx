@@ -8,24 +8,30 @@ import { toast } from "react-toastify";
 import { useTeam } from "@/context/TeamContext";
 import "react-phone-number-input/style.css";
 
-import Editor from "@/components/shared/Editor"; // ✅ WYSIWYG back in
+import Editor from "@/components/shared/Editor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import FormField from "@/components/shared/FormField";
 import PhoneInput from "react-phone-number-input";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
-import { Settings } from "lucide-react";
+import {
+  Settings,
+  ShieldCheck,
+  Lock,
+  LockOpen,
+  KeyRound,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import DeleteTeamSection from "@/components/teams/DeleteTeamSection";
 import Spinner from "@/components/shared/Spinner";
-
-// ✅ New shared country select (native <select> + pinned countries)
 import CountrySelect from "@/components/shared/CountrySelect";
-
-// ✅ Added: modal layout + content-only body for transfer ownership
 import ModalLayout from "@/components/shared/ModalLayout";
 import TransferOwnershipContent from "@/components/teams/settings/TransferOwnershipContent";
 import { useUser } from "@/context/UserContext";
+import { changeTeamPassword } from "@/lib/crypto/teamLock";
 
+/* ---------------- Phone input field ---------------- */
 const PhoneInputField = forwardRef((props, ref) => (
   <input
     ref={ref}
@@ -35,13 +41,66 @@ const PhoneInputField = forwardRef((props, ref) => (
 ));
 PhoneInputField.displayName = "PhoneInputField";
 
+/* ------------- Minimal crypto helpers (client) ------------- */
+async function pbkdf2DeriveKeyBytes(
+  password,
+  saltBytes,
+  iterations = 250000,
+  length = 32
+) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const params = {
+    name: "PBKDF2",
+    hash: "SHA-256",
+    salt: saltBytes,
+    iterations,
+  };
+  const bits = await crypto.subtle.deriveBits(params, keyMaterial, length * 8);
+  return new Uint8Array(bits);
+}
+async function sha256(bytes) {
+  const buf = await crypto.subtle.digest("SHA-256", bytes);
+  return new Uint8Array(buf);
+}
+function b64encode(uint8) {
+  let binary = "";
+  for (let i = 0; i < uint8.byteLength; i++)
+    binary += String.fromCharCode(uint8[i]);
+  return btoa(binary);
+}
+function b64decode(str) {
+  const bin = atob(str);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+/** Derive KDF params + verifier for *initial* server storage */
+async function deriveKdfAndVerifier(password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iterations = 250000;
+  const dk = await pbkdf2DeriveKeyBytes(password, salt, iterations, 32);
+  const verifierBytes = await sha256(dk);
+  return {
+    kdf: { saltB64: b64encode(salt), iterations },
+    verifierB64: b64encode(verifierBytes),
+  };
+}
+
+/* ---------------- Page ---------------- */
 const TeamSettingsPage = () => {
   const router = useRouter();
   const params = useParams();
   const teamSlug = params.slug;
 
   const { team, setTeam } = useTeam();
-  const { user } = useUser(); // ✅ Added to compute isOwner
+  const { user } = useUser();
 
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -50,11 +109,20 @@ const TeamSettingsPage = () => {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const fileInputRef = useRef();
 
-  // ✅ Added: modal open state
+  // Transfer ownership modal
   const [isTransferOpen, setIsTransferOpen] = useState(false);
 
-  // ✅ Compute isOwner
+  // Owner gate
   const isOwner = !!team && !!user && String(team.user) === String(user._id);
+
+  // Security UI
+  const lockEnabled = !!team?.security?.lockEnabled;
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [pwVisible1, setPwVisible1] = useState(false);
+  const [pwVisible2, setPwVisible2] = useState(false);
+  const [savingSecurity, setSavingSecurity] = useState(false);
+  const [encrypting, setEncrypting] = useState(false);
 
   const shapeFormFromTeam = (t) => {
     if (!t) return null;
@@ -68,11 +136,11 @@ const TeamSettingsPage = () => {
       city: t.city || "",
       state: t.state || "",
       postalCode: t.postalCode || "",
-      country: t.country || "US", // we store ISO-3 codes in CountrySelect; default to US
+      country: t.country || "US",
     };
   };
 
-  // Hydrate quickly from context (SSR)
+  // Hydrate from context (SSR fast path)
   useEffect(() => {
     if (!team) return;
     setForm(shapeFormFromTeam(team));
@@ -80,12 +148,15 @@ const TeamSettingsPage = () => {
     setHydrating(false);
   }, [team]);
 
-  // Helper: refetch full team from API and hydrate context + form
+  // Fetch full team (owner gets fullSecurity if asked)
   const refetchTeam = async () => {
     try {
-      const res = await fetch(`/api/teams/${teamSlug}?ts=${Date.now()}`, {
-        credentials: "include",
-      });
+      const res = await fetch(
+        `/api/teams/${encodeURIComponent(
+          teamSlug
+        )}?fullSecurity=1&ts=${Date.now()}`,
+        { credentials: "include" }
+      );
       const text = await res.text();
       let payload = null;
       try {
@@ -106,13 +177,13 @@ const TeamSettingsPage = () => {
     }
   };
 
-  // Definitive refetch to ensure all fields present
   useEffect(() => {
     if (!teamSlug) return;
     refetchTeam();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamSlug]);
 
+  /* ------------ Logo upload ------------ */
   const handleLogoChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -141,15 +212,14 @@ const TeamSettingsPage = () => {
     }
   };
 
+  /* ------------ Team info save ------------ */
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
-
   const handlePhoneChange = (value) => {
     setForm((prev) => ({ ...prev, phone: value || "" }));
   };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form) return;
@@ -160,39 +230,20 @@ const TeamSettingsPage = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-
       const text = await res.text();
       let payload = null;
       try {
         payload = JSON.parse(text);
       } catch {}
-
       if (!res.ok) {
         console.error("Update failed:", res.status, text);
-        const msg = payload?.message || `Update failed (${res.status})`;
-        toast.error(msg);
+        toast.error(payload?.message || `Update failed (${res.status})`);
         return;
       }
-
-      const updatedTeam = payload?.team ?? payload;
-      if (updatedTeam?._id) {
-        setTeam((prev) => ({ ...(prev || {}), ...updatedTeam }));
-        const mergedForForm = shapeFormFromTeam({
-          ...(team || {}),
-          ...updatedTeam,
-        });
-        setForm((prev) => ({ ...(prev || {}), ...(mergedForForm || {}) }));
-        if (updatedTeam.logoURL) setLogoPreview(updatedTeam.logoURL);
-      } else {
-        await refetchTeam();
-      }
-
+      await refetchTeam();
       toast.success("Team info updated successfully!");
-
-      // ✅ Smooth scroll to top after save
       window.scrollTo({ top: 0, behavior: "smooth" });
-
-      // If slug changed, navigate
+      const updatedTeam = payload?.team ?? payload;
       if (updatedTeam?.teamSlug && updatedTeam.teamSlug !== teamSlug) {
         router.replace(`/teams/${updatedTeam.teamSlug}/settings`);
       }
@@ -201,6 +252,94 @@ const TeamSettingsPage = () => {
       toast.error("Something went wrong.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  /* ------------ SECURITY: create or update ------------ */
+  const callSetupPOST = async (password) => {
+    const { kdf, verifierB64 } = await deriveKdfAndVerifier(password);
+    const res = await fetch(
+      `/api/teams/${encodeURIComponent(teamSlug)}/security/setup`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ kdf, verifierB64 }),
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data?.message || "Failed to initialize team lock");
+    }
+    return data;
+  };
+
+  const handleEnableOrUpdatePassword = async () => {
+    if (!isOwner) return;
+    if (!pw || !pw2) {
+      toast.error("Please enter and confirm the team password.");
+      return;
+    }
+    if (pw !== pw2) {
+      toast.error("Passwords do not match.");
+      return;
+    }
+
+    setSavingSecurity(true);
+    try {
+      const hasKdf =
+        !!team?.security?.kdf?.saltB64 && !!team?.security?.verifierB64;
+
+      if (!hasKdf) {
+        // Initial setup: just store KDF/verifier; TBK is created on first use
+        await callSetupPOST(pw);
+        toast.success("Team password set. Lock enabled.");
+      } else {
+        // Password change: preserve TBK using the new helper
+        await changeTeamPassword(team, pw);
+        toast.success("Team password updated.");
+      }
+
+      setPw("");
+      setPw2("");
+      await refetchTeam();
+    } catch (e) {
+      console.error(e);
+      toast.error(e.message || "Failed to set team password.");
+    } finally {
+      setSavingSecurity(false);
+    }
+  };
+
+  const handleDisableLock = async () => {
+    if (!isOwner) return;
+    if (
+      !window.confirm(
+        "Disable team lock? Team reports will no longer require unlocking."
+      )
+    ) {
+      return;
+    }
+    setSavingSecurity(true);
+    try {
+      const res = await fetch(
+        `/api/teams/${encodeURIComponent(teamSlug)}/security`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ lockEnabled: false }),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || "Failed to disable lock");
+      toast.success("Team lock disabled.");
+      await refetchTeam();
+    } catch (e) {
+      console.error(e);
+      toast.error(e.message || "Failed to disable lock.");
+    } finally {
+      setSavingSecurity(false);
     }
   };
 
@@ -230,6 +369,7 @@ const TeamSettingsPage = () => {
         </div>
       </div>
 
+      {/* Team info form */}
       <form
         onSubmit={handleSubmit}
         className="space-y-8"
@@ -248,7 +388,7 @@ const TeamSettingsPage = () => {
                   className="w-24 h-24 rounded-full border object-cover"
                 />
               ) : (
-                <div className="w-24 h-24 rounded-full border bg-gray-2 00 dark:bg-gray-700" />
+                <div className="w-24 h-24 rounded-full border bg-gray-200 dark:bg-gray-700" />
               )}
               <input
                 type="file"
@@ -264,7 +404,7 @@ const TeamSettingsPage = () => {
           </CardContent>
         </Card>
 
-        {/* Public Info (WYSIWYG) */}
+        {/* Public Info */}
         <Card>
           <CardHeader>
             <CardTitle>Public Info</CardTitle>
@@ -279,7 +419,7 @@ const TeamSettingsPage = () => {
           </CardContent>
         </Card>
 
-        {/* Contact */}
+        {/* Contact + Address */}
         <Card>
           <CardHeader>
             <CardTitle>Contact Details</CardTitle>
@@ -290,7 +430,6 @@ const TeamSettingsPage = () => {
               name="email"
               value={form.email}
               onChange={handleChange}
-              className="input"
             />
             <div>
               <label className="block text-sm font-medium mb-1">Phone</label>
@@ -305,7 +444,6 @@ const TeamSettingsPage = () => {
           </CardContent>
         </Card>
 
-        {/* Address */}
         <Card>
           <CardHeader>
             <CardTitle>Address</CardTitle>
@@ -317,38 +455,33 @@ const TeamSettingsPage = () => {
                 name="address"
                 value={form.address}
                 onChange={handleChange}
-                className="sm:col-span-2 input"
+                className="sm:col-span-2"
               />
               <FormField
                 label="address 2"
                 name="address2"
                 value={form.address2}
                 onChange={handleChange}
-                className="sm:col-span-2 input"
+                className="sm:col-span-2"
               />
               <FormField
                 label="city"
                 name="city"
                 value={form.city}
                 onChange={handleChange}
-                className="input"
               />
               <FormField
                 label="state"
                 name="state"
                 value={form.state}
                 onChange={handleChange}
-                className="input"
               />
               <FormField
                 label="postal code"
                 name="postalCode"
                 value={form.postalCode}
                 onChange={handleChange}
-                className="input"
               />
-
-              {/* ✅ Unified Country select */}
               <CountrySelect
                 label="Country"
                 value={form.country}
@@ -369,7 +502,131 @@ const TeamSettingsPage = () => {
         </div>
       </form>
 
-      {/* ✅ Ownership Section (owner only) */}
+      {/* Team Password & Encryption (Owner only) */}
+      {isOwner && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              <CardTitle>Team Password &amp; Encryption</CardTitle>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              {lockEnabled ? (
+                <span className="inline-flex items-center gap-1 text-green-600">
+                  <Lock className="w-4 h-4" /> Lock Enabled
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-gray-500">
+                  <LockOpen className="w-4 h-4" /> Lock Disabled
+                </span>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              {/* Label above password fields */}
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {lockEnabled ? "Update Team Password" : "Create Team Password"}
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Password + eye toggle */}
+                <div className="relative">
+                  <FormField
+                    type={pwVisible1 ? "text" : "password"}
+                    label="Team Password"
+                    name="teamPassword"
+                    value={pw}
+                    onChange={(e) => setPw(e.target.value)}
+                    placeholder={
+                      lockEnabled
+                        ? "Enter new team password"
+                        : "Enter team password"
+                    }
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPwVisible1((v) => !v)}
+                    className="absolute right-3 top-8 text-gray-500 hover:text-gray-700"
+                    aria-label="Toggle password visibility"
+                  >
+                    {pwVisible1 ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <FormField
+                    type={pwVisible2 ? "text" : "password"}
+                    label="Confirm Password"
+                    name="teamPassword2"
+                    value={pw2}
+                    onChange={(e) => setPw2(e.target.value)}
+                    placeholder="Re-enter password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPwVisible2((v) => !v)}
+                    className="absolute right-3 top-8 text-gray-500 hover:text-gray-700"
+                    aria-label="Toggle password visibility"
+                  >
+                    {pwVisible2 ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Button
+                onClick={handleEnableOrUpdatePassword}
+                disabled={savingSecurity || !pw || !pw2}
+                className="inline-flex items-center gap-2 bg-ms-blue-gray hover:bg-ms-blue text-white"
+              >
+                <KeyRound className="w-4 h-4" />
+                {lockEnabled ? "Update Password" : "Enable Lock"}
+              </Button>
+
+              {lockEnabled && (
+                <Button
+                  onClick={handleDisableLock}
+                  disabled={savingSecurity}
+                  variant="outline"
+                  className="inline-flex items-center gap-2"
+                >
+                  <LockOpen className="w-4 h-4" />
+                  Disable Lock
+                </Button>
+              )}
+            </div>
+
+            {/* Base explanation */}
+            <p className="text-xs text-muted-foreground">
+              Turning on the lock gates access to team scouting reports (and
+              later coach’s notes) behind the team password. Existing reports
+              stay plaintext until edited or batch-encrypted.
+            </p>
+
+            {/* Extra note when updating */}
+            {lockEnabled && (
+              <p className="text-xs text-gray-600 dark:text-gray-300">
+                When you update the team password, you’ll be asked for the
+                current password first (if this browser isn’t already unlocked).
+                Your team’s encrypted scouting reports stay readable, and only
+                the password used to protect them is rotated.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Ownership Section (owner only) */}
       {isOwner && (
         <Card>
           <CardHeader>
@@ -397,7 +654,7 @@ const TeamSettingsPage = () => {
         />
       )}
 
-      {/* ✅ ModalLayout wrapping the content-only transfer form */}
+      {/* Transfer Ownership Modal */}
       <ModalLayout
         isOpen={isTransferOpen}
         onClose={() => setIsTransferOpen(false)}
@@ -409,7 +666,6 @@ const TeamSettingsPage = () => {
           slug={teamSlug}
           onClose={() => setIsTransferOpen(false)}
           onComplete={() => {
-            // Hard refresh ensures fresh team context/role after transfer
             window.location.reload();
           }}
         />

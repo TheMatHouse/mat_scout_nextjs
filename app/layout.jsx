@@ -1,6 +1,5 @@
 // app/layout.jsx
 import "@/app/globals.css";
-import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 import AnalyticsBeacon from "@/components/analytics/AnalyticsBeacon";
@@ -88,12 +87,6 @@ const RootLayout = ({ children }) => {
         <main className="flex-1 flex flex-col">
           <ChromeGate>{children}</ChromeGate>
         </main>
-
-        {/* Toast fallback for pages without providers */}
-        <ToastContainer
-          position="top-right"
-          autoClose={5000}
-        />
       </body>
     </html>
   );

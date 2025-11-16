@@ -1,3 +1,4 @@
+// models/teamScoutingReportModel.js
 import mongoose from "mongoose";
 
 const reportForSchema = new mongoose.Schema(
@@ -8,23 +9,20 @@ const reportForSchema = new mongoose.Schema(
   { _id: false }
 );
 
-// --- Encryption container for Option B (Team Password + Team Box Key) ---
-// This does NOT change your current behavior yet.
-// When you start sending encrypted payloads from the client, populate this block.
-// Keep routing/metadata fields (like teamId, reportFor, division, etc.) in plaintext.
+// --- Encryption container for team scouting reports ---
 const cryptoSchema = new mongoose.Schema(
   {
-    version: { type: Number, default: 1 }, // schema/version tag for future tweaks
-    alg: { type: String, trim: true }, // e.g., "AES-GCM-256"
-    ivB64: { type: String, trim: true }, // base64 IV for the report ciphertext
-    ciphertextB64: { type: String, trim: true }, // base64 ciphertext for encrypted body fields
-    wrappedReportKeyB64: { type: String, trim: true }, // base64 of [IV||ct] where ReportKey is wrapped with TBK
+    version: { type: Number, default: 1 },
+    alg: { type: String, trim: true }, // e.g., "TEAMLOCK-NOTES-V1"
+    ivB64: { type: String, trim: true }, // reserved if we move to real AES-GCM envelope keys
+    ciphertextB64: { type: String, trim: true }, // encrypted JSON body
+    wrappedReportKeyB64: { type: String, trim: true }, // reserved for future
     teamKeyVersion: { type: Number, default: 0 }, // copy of TeamSecurity.encryption.keyVersion at encrypt time
   },
   { _id: false }
 );
 
-const scoutingReportSchema = new mongoose.Schema(
+const teamScoutingReportSchema = new mongoose.Schema(
   {
     // WHO/ACCESS
     reportFor: {
@@ -32,8 +30,10 @@ const scoutingReportSchema = new mongoose.Schema(
       validate: {
         validator: function (value) {
           const seen = new Set();
-          for (const entry of value) {
-            const key = `${entry.athleteId.toString()}-${entry.athleteType}`;
+          for (const entry of value || []) {
+            const key = `${entry.athleteId?.toString?.() || ""}-${
+              entry.athleteType
+            }`;
             if (seen.has(key)) return false;
             seen.add(key);
           }
@@ -52,22 +52,32 @@ const scoutingReportSchema = new mongoose.Schema(
 
     // CONTEXT
     matchType: { type: String, required: true },
-    // Optional but useful to drive the division list in the form
     style: { type: mongoose.Schema.Types.ObjectId, ref: "styleModel" },
 
-    // TARGET ATHLETE
-    athleteFirstName: { type: String, required: true },
-    athleteLastName: { type: String, required: true },
+    // TARGET ATHLETE (conditionally required)
+    athleteFirstName: {
+      type: String,
+      required: function () {
+        // If we DON'T have an encrypted body, require name in plaintext.
+        return !this.crypto || !this.crypto.ciphertextB64;
+      },
+    },
+    athleteLastName: {
+      type: String,
+      required: function () {
+        return !this.crypto || !this.crypto.ciphertextB64;
+      },
+    },
     athleteNationalRank: String,
     athleteWorldRank: String,
 
-    // 🔁 NEW: replace plain strings with refs + stable display fields
-    division: { type: mongoose.Schema.Types.ObjectId, ref: "division" }, // e.g., "Senior Men"
+    // Division / weight (team version)
+    division: { type: mongoose.Schema.Types.ObjectId, ref: "division" },
     weightCategory: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "weightCategory",
     },
-    weightLabel: { type: String }, // e.g., "66 kg" or "77"
+    weightLabel: { type: String },
     weightUnit: { type: String, enum: ["kg", "lb"] },
 
     athleteClub: String,
@@ -80,30 +90,29 @@ const scoutingReportSchema = new mongoose.Schema(
     accessList: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
     // --- Encrypted payload (optional) ---
-    // When populated, the sensitive "body" lives in ciphertextB64.
-    // Keep metadata (above) in plaintext so you can still filter/list server-side.
     crypto: { type: cryptoSchema, default: null },
   },
   { timestamps: true }
 );
 
-// ✅ Optional guard to ensure weightLabel matches the selected category and to sync unit
-scoutingReportSchema.pre("validate", async function () {
+// ✅ Keep your weight sanity-check like the original scoutingReportSchema
+teamScoutingReportSchema.pre("validate", async function () {
   if (this.weightCategory && this.weightLabel) {
     const cat = await this.model("weightCategory")
       .findById(this.weightCategory)
       .lean();
     if (cat) {
       const ok = (cat.items || []).some((i) => i.label === this.weightLabel);
-      if (!ok)
+      if (!ok) {
         this.invalidate("weightLabel", "Weight not in selected category");
+      }
       this.weightUnit = cat.unit; // auto-sync unit
     }
   }
 });
 
-const ScoutingReport =
-  mongoose.models.ScoutingReport ||
-  mongoose.model("ScoutingReport", scoutingReportSchema);
+const TeamScoutingReport =
+  mongoose.models.TeamScoutingReport ||
+  mongoose.model("TeamScoutingReport", teamScoutingReportSchema);
 
-export default ScoutingReport;
+export default TeamScoutingReport;

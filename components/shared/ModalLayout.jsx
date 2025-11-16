@@ -16,6 +16,21 @@ import {
   CardDescription as CardDesc,
 } from "@/components/ui/card";
 
+function sizeToMaxWidth(size) {
+  switch (size) {
+    case "sm":
+      return "max-w-lg";
+    case "md":
+      return "max-w-3xl";
+    case "lg":
+      return "max-w-4xl";
+    case "xl":
+      return "max-w-6xl";
+    default:
+      return "max-w-3xl";
+  }
+}
+
 const ModalLayout = ({
   isOpen,
   onClose,
@@ -23,10 +38,14 @@ const ModalLayout = ({
   description,
   children,
   withCard = false,
+  // NEW: control modal width per-usage
+  size = "md", // "sm" | "md" | "lg" | "xl"
 }) => {
   const hasDescription = Boolean(
     description && String(description).trim().length
   );
+
+  const maxWidthClass = sizeToMaxWidth(size);
 
   return (
     <Dialog
@@ -34,7 +53,7 @@ const ModalLayout = ({
       onOpenChange={onClose}
     >
       <DialogContent
-        className="dialog-content-custom max-w-3xl w-full p-0 overflow-y-auto"
+        className={`dialog-content-custom ${maxWidthClass} w-full p-0 overflow-y-auto`}
         // If there is no textual description, explicitly unset aria-describedby
         aria-describedby={hasDescription ? undefined : undefined}
       >

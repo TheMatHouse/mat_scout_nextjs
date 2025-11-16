@@ -13,74 +13,167 @@ import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 export const dynamic = "force-dynamic";
 
 // ✅ GET: Fetch team details
-export async function GET(request, ctx) {
-  await connectDB();
-  const { slug } = await ctx.params;
-  console.log("TEAM ROUTE HIT!");
+export async function GET(req, ctx) {
   try {
-    const team = await Team.findOne({ teamSlug: slug }).lean();
-    if (!team) {
+    await connectDB();
+
+    const { slug } = await ctx.params;
+    const url = new URL(req.url);
+    const wantFullSecurity = url.searchParams.get("fullSecurity") === "1";
+
+    const actor = await getCurrentUser();
+    const team = await Team.findOne({ teamSlug: slug });
+    if (!team)
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
+
+    const isOwner = actor && String(team.user) === String(actor._id);
+
+    const minimalSecurity = {
+      lockEnabled: !!team.security?.lockEnabled,
+      encVersion: team.security?.encVersion || "v1",
+    };
+
+    const base = {
+      _id: String(team._id),
+      teamName: team.teamName,
+      teamSlug: team.teamSlug,
+      logoURL: team.logoURL,
+      logoType: team.logoType,
+      user: String(team.user),
+      // add other public fields you rely on…
+    };
+
+    if (isOwner && wantFullSecurity) {
+      return NextResponse.json({
+        team: {
+          ...base,
+          security: {
+            ...minimalSecurity,
+            kdf: {
+              saltB64: team.security?.kdf?.saltB64 || "",
+              iterations: team.security?.kdf?.iterations || 250000,
+            },
+            verifierB64: team.security?.verifierB64 || "",
+          },
+        },
+      });
     }
-    return NextResponse.json({ team }, { status: 200 });
-  } catch (error) {
-    console.error("Error fetching team:", error);
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+
+    return NextResponse.json({
+      team: {
+        ...base,
+        security: minimalSecurity,
+      },
+    });
+  } catch (err) {
+    console.error("Team GET error:", err);
+    return NextResponse.json(
+      { message: "Server error: " + err.message },
+      { status: 500 }
+    );
   }
 }
 
 // ✅ PATCH: Update team (owner only). Return the FULL updated document.
-export async function PATCH(req, ctx) {
+export async function PATCH(req, { params }) {
   try {
     await connectDB();
-    const { slug } = await ctx.params;
 
-    const currentUser = await getCurrentUser();
-    if (!currentUser) {
+    const actor = await getCurrentUser();
+    if (!actor) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const team = await Team.findOne({ teamSlug: slug });
-    if (!team) {
+    const { slug } = params;
+    const body = await req.json().catch(() => ({}));
+
+    // Disable lock
+    if (body?.lockEnabled === false) {
+      const res = await Team.updateOne(
+        { teamSlug: slug },
+        {
+          $set: {
+            "security.lockEnabled": false,
+          },
+        }
+      );
+
+      if (res.matchedCount === 0) {
+        return NextResponse.json(
+          { message: "Team not found" },
+          { status: 404 }
+        );
+      }
+
+      const fresh = await Team.findOne({ teamSlug: slug }).lean();
+      return NextResponse.json(
+        {
+          message: "Team lock disabled",
+          matchedCount: res.matchedCount,
+          modifiedCount: res.modifiedCount,
+          team: {
+            _id: String(fresh?._id || ""),
+            teamSlug: fresh?.teamSlug || slug,
+            security: fresh?.security || null,
+          },
+        },
+        { status: 200 }
+      );
+    }
+
+    // Enable/update lock
+    const saltB64 = body?.kdf?.saltB64?.trim();
+    const iterations = Number(body?.kdf?.iterations ?? 0);
+    const verifierB64 = body?.verifierB64?.trim();
+
+    if (!saltB64 || !iterations || !verifierB64) {
+      return NextResponse.json(
+        {
+          message:
+            "Missing required fields. Expecting { kdf: { saltB64, iterations }, verifierB64 }.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const res = await Team.updateOne(
+      { teamSlug: slug },
+      {
+        $set: {
+          security: {
+            lockEnabled: true,
+            encVersion: "v1",
+            kdf: { saltB64, iterations },
+            verifierB64,
+          },
+        },
+      }
+    );
+
+    if (res.matchedCount === 0) {
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
     }
 
-    // Owner-only (you can relax to manager later if desired)
-    if (team.user.toString() !== currentUser._id.toString()) {
-      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-    }
-
-    const body = await req.json();
-
-    // Only allow these fields to be updated
-    const allowed = [
-      "info",
-      "email",
-      "phone",
-      "address",
-      "address2",
-      "city",
-      "state",
-      "postalCode",
-      "country",
-      // add more allowed fields here if needed
-    ];
-    for (const k of allowed) {
-      if (Object.prototype.hasOwnProperty.call(body, k)) {
-        team[k] = body[k] ?? "";
-      }
-    }
-
-    await team.save();
-
-    // 🔁 Re-fetch to ensure we return the FULL up-to-date doc (no select restrictions)
-    const full = await Team.findById(team._id).lean();
-
-    // Return the full object directly so the client can re-hydrate context + form
-    return NextResponse.json(full, { status: 200 });
+    const fresh = await Team.findOne({ teamSlug: slug }).lean();
+    return NextResponse.json(
+      {
+        message: "Team password updated",
+        matchedCount: res.matchedCount,
+        modifiedCount: res.modifiedCount,
+        team: {
+          _id: String(fresh?._id || ""),
+          teamSlug: fresh?.teamSlug || slug,
+          security: fresh?.security || null,
+        },
+      },
+      { status: 200 }
+    );
   } catch (err) {
-    console.error("PATCH /api/teams/[slug] error:", err);
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+    console.error("security PATCH error:", err);
+    return NextResponse.json(
+      { message: "Server error: " + err.message },
+      { status: 500 }
+    );
   }
 }
 

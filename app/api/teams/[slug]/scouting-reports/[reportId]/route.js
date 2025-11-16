@@ -1,25 +1,85 @@
-// app/api/teams/[slug]/scoutingReports/[reportId]/route.js
+// app/api/teams/[slug]/scouting-reports/[reportId]/route.js
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 import Team from "@/models/teamModel";
-import ScoutingReport from "@/models/scoutingReportModel";
+import TeamScoutingReport from "@/models/teamScoutingReportModel";
 import Video from "@/models/videoModel";
 import FamilyMember from "@/models/familyMemberModel";
 import User from "@/models/userModel";
 import { createNotification } from "@/lib/createNotification";
 
-// ⬇️ centralized mailer + template
+// centralized mailer + template
 import { Mail } from "@/lib/email/mailer";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
-export async function PATCH(req, { params }) {
+// ============================================================
+// GET: Fetch a single team scouting report (includes crypto)
+// ============================================================
+export async function GET(_req, { params }) {
+  try {
+    await connectDB();
+    const { slug, reportId } = await params; // ⬅️ Next 15: await params
+
+    if (!Types.ObjectId.isValid(reportId)) {
+      return NextResponse.json(
+        { message: "Invalid report ID" },
+        { status: 400 }
+      );
+    }
+
+    // Tolerant team lookup (_ vs -)
+    const team =
+      (await Team.findOne({ teamSlug: slug }).select(
+        "_id teamName teamSlug"
+      )) ||
+      (await Team.findOne({ teamSlug: slug.replace(/[-_]/g, "") }).select(
+        "_id teamName teamSlug"
+      )) ||
+      (await Team.findOne({ teamSlug: slug.replace(/_/g, "-") }).select(
+        "_id teamName teamSlug"
+      ));
+
+    if (!team) {
+      return NextResponse.json({ message: "Team not found" }, { status: 404 });
+    }
+
+    const report = await TeamScoutingReport.findOne({
+      _id: reportId,
+      teamId: team._id,
+    })
+      .populate("videos")
+      .populate("division") // ⬅️ NEW: bring back full division doc
+      .lean();
+
+    if (!report) {
+      return NextResponse.json(
+        { message: "Scouting report not found" },
+        { status: 404 }
+      );
+    }
+
+    // Return as-is; client will decrypt if report.crypto is present.
+    return NextResponse.json({ report }, { status: 200 });
+  } catch (err) {
+    console.error("GET single scouting report error:", err);
+    return NextResponse.json(
+      { message: "Server error: " + err.message },
+      { status: 500 }
+    );
+  }
+}
+
+// ============================================================
+// PATCH: Update a Scouting Report (supports crypto updates)
+// ============================================================
+export async function PATCH(req, context) {
   try {
     await connectDB();
 
-    const { slug, reportId } = params;
+    const { slug, reportId } = await context.params;
     const currentUser = await getCurrentUserFromCookies();
     if (!currentUser || !currentUser._id) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
@@ -27,15 +87,23 @@ export async function PATCH(req, { params }) {
 
     const body = await req.json();
 
-    // Fetch team (for email copy + link) and validate report belongs to team
-    const team = await Team.findOne({ teamSlug: slug }).select(
-      "_id teamName teamSlug"
-    );
+    // Tolerant team lookup (_ vs -)
+    const team =
+      (await Team.findOne({ teamSlug: slug }).select(
+        "_id teamName teamSlug"
+      )) ||
+      (await Team.findOne({ teamSlug: slug.replace(/[-_]/g, "") }).select(
+        "_id teamName teamSlug"
+      )) ||
+      (await Team.findOne({ teamSlug: slug.replace(/_/g, "-") }).select(
+        "_id teamName teamSlug"
+      ));
+
     if (!team) {
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
     }
 
-    const report = await ScoutingReport.findOne({
+    const report = await TeamScoutingReport.findOne({
       _id: reportId,
       teamId: team._id,
     });
@@ -46,13 +114,10 @@ export async function PATCH(req, { params }) {
       );
     }
 
-    // ---- Compute newly added assignees -------------------------------------
-    // Previous keys
+    // ---- Compute newly added assignees -------------------------------
     const prevKeys = new Set(
       (report.reportFor || []).map((e) => `${e.athleteType}:${e.athleteId}`)
     );
-
-    // Deduplicate incoming reportFor & build list
     const incoming = Array.isArray(body.reportFor)
       ? body.reportFor
       : report.reportFor || [];
@@ -63,13 +128,11 @@ export async function PATCH(req, { params }) {
       seen.add(k);
       return true;
     });
-
-    // Newly added entries = in incoming but not in prev
     const newlyAdded = dedupedIncoming.filter(
       (e) => !prevKeys.has(`${e.athleteType}:${e.athleteId}`)
     );
 
-    // ---- Update standard fields -------------------------------------------
+    // ---- Update allowed plaintext fields -----------------------------
     const allowedFields = [
       "title",
       "notes",
@@ -96,12 +159,23 @@ export async function PATCH(req, { params }) {
       }
     });
 
-    // Save any new techniques
+    // ✅ optional crypto update (for encrypted payload changes)
+    if (body.crypto && typeof body.crypto === "object") {
+      report.crypto = {
+        version: body.crypto.version || 1,
+        alg: body.crypto.alg || "AES-GCM-256",
+        ivB64: body.crypto.ivB64 || "",
+        ciphertextB64: body.crypto.ciphertextB64 || "",
+        wrappedReportKeyB64: body.crypto.wrappedReportKeyB64 || "",
+        teamKeyVersion: body.crypto.teamKeyVersion || 0,
+      };
+    }
+
+    // ---- Save related entities ---------------------------------------
     await saveUnknownTechniques(
       Array.isArray(body.athleteAttacks) ? body.athleteAttacks : []
     );
 
-    // New videos
     if (Array.isArray(body.newVideos) && body.newVideos.length) {
       for (const vid of body.newVideos) {
         const newVid = await Video.create({
@@ -115,7 +189,6 @@ export async function PATCH(req, { params }) {
       }
     }
 
-    // Updated videos
     if (Array.isArray(body.updatedVideos) && body.updatedVideos.length) {
       for (const vid of body.updatedVideos) {
         await Video.findByIdAndUpdate(vid._id, {
@@ -126,7 +199,6 @@ export async function PATCH(req, { params }) {
       }
     }
 
-    // Deleted videos
     if (Array.isArray(body.deletedVideos) && body.deletedVideos.length) {
       for (const videoId of body.deletedVideos) {
         await Video.findByIdAndDelete(videoId);
@@ -136,12 +208,11 @@ export async function PATCH(req, { params }) {
 
     await report.save();
 
-    // ---- Notify & email only the newly added assignees ---------------------
+    // ---- Notify & email newly added assignees -------------------------
     try {
       await Promise.all(
         newlyAdded.map(async (entry) => {
           if (entry.athleteType === "user") {
-            // In-app
             await createNotification({
               userId: entry.athleteId,
               type: "Scouting Report",
@@ -149,7 +220,6 @@ export async function PATCH(req, { params }) {
               link: `/teams/${team.teamSlug}/scouting-reports`,
             });
 
-            // Email (respects prefs + 24h dedupe)
             const recipient = await User.findById(entry.athleteId);
             if (recipient) {
               const subject = `Scouting report shared in ${team.teamName}`;
@@ -163,7 +233,7 @@ export async function PATCH(req, { params }) {
                   <a href="https://matscout.com/teams/${encodeURIComponent(
                     team.teamSlug
                   )}/scouting-reports"
-                    style="display:inline-block;background-color:#1a73e8;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;border-radius:4px;font-weight:bold;">
+                    style="display:inline-block;background-color:#1a73e8;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:bold;">
                     View Scouting Reports
                   </a>
                 </p>
@@ -180,14 +250,13 @@ export async function PATCH(req, { params }) {
                 toUser: recipient,
                 subject,
                 html,
-                relatedUserId: entry.athleteId.toString(), // dedupe per athlete
+                relatedUserId: entry.athleteId.toString(),
                 teamId: team._id.toString(),
               });
             }
           } else if (entry.athleteType === "family") {
             const familyMember = await FamilyMember.findById(entry.athleteId);
             if (familyMember?.userId) {
-              // In-app to the parent
               await createNotification({
                 userId: familyMember.userId,
                 type: "Scouting Report",
@@ -195,7 +264,6 @@ export async function PATCH(req, { params }) {
                 link: `/teams/${team.teamSlug}/scouting-reports`,
               });
 
-              // Email to the parent (respects prefs + 24h dedupe)
               const parentUser = await User.findById(familyMember.userId);
               if (parentUser) {
                 const subject = `Scouting report for ${familyMember.firstName} ${familyMember.lastName}`;
@@ -211,7 +279,7 @@ export async function PATCH(req, { params }) {
                     <a href="https://matscout.com/teams/${encodeURIComponent(
                       team.teamSlug
                     )}/scouting-reports"
-                      style="display:inline-block;background-color:#1a73e8;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:bold;">
+                      style="display:inline-block;background-color:#1a73e8;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:bold%;">
                       View Scouting Reports
                     </a>
                   </p>
@@ -228,7 +296,7 @@ export async function PATCH(req, { params }) {
                   toUser: parentUser,
                   subject,
                   html,
-                  relatedUserId: familyMember._id.toString(), // dedupe per family athlete
+                  relatedUserId: familyMember._id.toString(),
                   teamId: team._id.toString(),
                 });
               }
@@ -238,7 +306,6 @@ export async function PATCH(req, { params }) {
       );
     } catch (notifyErr) {
       console.error("❌ Scouting report update notify/email error:", notifyErr);
-      // Do not fail the request on email/notify errors
     }
 
     return NextResponse.json(
@@ -254,10 +321,13 @@ export async function PATCH(req, { params }) {
   }
 }
 
-export async function DELETE(_request, { params }) {
+// ============================================================
+// DELETE: Delete Scouting Report (no crypto changes)
+// ============================================================
+export async function DELETE(_request, context) {
   await connectDB();
-  const { slug, reportId } = params;
 
+  const { slug, reportId } = await context.params;
   const currentUser = await getCurrentUserFromCookies();
 
   if (!Types.ObjectId.isValid(reportId)) {
@@ -275,7 +345,10 @@ export async function DELETE(_request, { params }) {
   }
 
   try {
-    const team = await Team.findOne({ teamSlug: slug });
+    const team =
+      (await Team.findOne({ teamSlug: slug })) ||
+      (await Team.findOne({ teamSlug: slug.replace(/[-_]/g, "") })) ||
+      (await Team.findOne({ teamSlug: slug.replace(/_/g, "-") }));
 
     if (!team) {
       return new NextResponse(JSON.stringify({ message: "Team not found" }), {
@@ -284,7 +357,7 @@ export async function DELETE(_request, { params }) {
       });
     }
 
-    const report = await ScoutingReport.findOne({
+    const report = await TeamScoutingReport.findOne({
       _id: reportId,
       teamId: team._id,
     });
@@ -305,7 +378,7 @@ export async function DELETE(_request, { params }) {
     }
 
     // Delete the report
-    await ScoutingReport.findByIdAndDelete(reportId);
+    await TeamScoutingReport.findByIdAndDelete(reportId);
 
     return new NextResponse(
       JSON.stringify({
