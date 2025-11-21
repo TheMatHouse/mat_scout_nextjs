@@ -111,12 +111,15 @@ export default async function TeamLayout({ children, params }) {
     tabs.push({ label: "Members", href: `/teams/${slug}/members` }); // visible to all members
   }
 
-  if (isManager || isCoach) {
+  if (isMember) {
     tabs.push({
       label: "Scouting Reports",
       href: `/teams/${slug}/scouting-reports`,
     });
-    // NEW: Coach's Notes tab for managers/coaches
+  }
+
+  // Only Manager/Coach sees Coach’s Notes
+  if (isManager || isCoach) {
     tabs.push({
       label: "Coach's Notes",
       href: `/teams/${slug}/coach-notes`,

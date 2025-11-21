@@ -21,7 +21,7 @@ import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 export async function GET(_req, { params }) {
   try {
     await connectDB();
-    const { slug, reportId } = await params; // ⬅️ Next 15: await params
+    const { slug, reportId } = await params; // Next 15: await params
 
     if (!Types.ObjectId.isValid(reportId)) {
       return NextResponse.json(
@@ -51,7 +51,7 @@ export async function GET(_req, { params }) {
       teamId: team._id,
     })
       .populate("videos")
-      .populate("division") // ⬅️ NEW: bring back full division doc
+      .populate("division")
       .lean();
 
     if (!report) {
@@ -132,7 +132,23 @@ export async function PATCH(req, context) {
       (e) => !prevKeys.has(`${e.athleteType}:${e.athleteId}`)
     );
 
+    const isEncryptedUpdate = !!(
+      body.crypto && typeof body.crypto === "object"
+    );
+
     // ---- Update allowed plaintext fields -----------------------------
+    const sensitiveFields = [
+      "athleteFirstName",
+      "athleteLastName",
+      "athleteNationalRank",
+      "athleteWorldRank",
+      "athleteClub",
+      "athleteCountry",
+      "athleteGrip",
+      "athleteAttacks",
+      "athleteAttackNotes",
+    ];
+
     const allowedFields = [
       "title",
       "notes",
@@ -154,21 +170,41 @@ export async function PATCH(req, context) {
     allowedFields.forEach((field) => {
       if (field === "reportFor") {
         report.reportFor = dedupedIncoming;
-      } else if (body[field] !== undefined) {
+        return;
+      }
+
+      // If this is an encrypted update, ignore any incoming *sensitive* field values.
+      if (isEncryptedUpdate && sensitiveFields.includes(field)) {
+        return;
+      }
+
+      if (body[field] !== undefined) {
         report[field] = body[field];
       }
     });
 
     // ✅ optional crypto update (for encrypted payload changes)
-    if (body.crypto && typeof body.crypto === "object") {
+    if (isEncryptedUpdate) {
       report.crypto = {
         version: body.crypto.version || 1,
-        alg: body.crypto.alg || "AES-GCM-256",
+        alg: body.crypto.alg || "TBK-AES-GCM-256",
         ivB64: body.crypto.ivB64 || "",
         ciphertextB64: body.crypto.ciphertextB64 || "",
         wrappedReportKeyB64: body.crypto.wrappedReportKeyB64 || "",
-        teamKeyVersion: body.crypto.teamKeyVersion || 0,
+        teamKeyVersion:
+          body.crypto.teamKeyVersion != null ? body.crypto.teamKeyVersion : 1,
       };
+
+      // Enforce blank sensitive fields whenever crypto is present
+      report.athleteFirstName = "";
+      report.athleteLastName = "";
+      report.athleteNationalRank = "";
+      report.athleteWorldRank = "";
+      report.athleteClub = "";
+      report.athleteCountry = "";
+      report.athleteGrip = "";
+      report.athleteAttacks = [];
+      report.athleteAttackNotes = "";
     }
 
     // ---- Save related entities ---------------------------------------

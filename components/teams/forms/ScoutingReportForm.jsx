@@ -13,7 +13,6 @@ import FormSelect from "@/components/shared/FormSelect";
 import FormMultiSelect from "@/components/shared/FormMultiSelect";
 import CountrySelect from "@/components/shared/CountrySelect";
 import {
-  maybeDecryptNotes,
   encryptScoutingBody,
   decryptScoutingBody,
 } from "@/lib/crypto/teamLock";
@@ -290,7 +289,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
   /* --------------------- populate / reset on report change ---------------------- */
   useEffect(() => {
     if (report) {
-      // Base: use whatever is in the document (for non-encrypted teams)
+      // Base: use whatever is in the document
       setMatchType(report.matchType || "");
       setAthleteFirstName(report.athleteFirstName || "");
       setAthleteLastName(report.athleteLastName || "");
@@ -342,10 +341,9 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
       appliedInitialDivisionRef.current = false;
       appliedInitialWeightRef.current = false;
 
-      // Now layer in decryption if this team uses a lock
+      // Now layer in decrypt for TBK-encrypted reports (if present)
       (async () => {
         try {
-          // Preferred path: full scouting body stored in report.crypto
           if (report.crypto && report.crypto.ciphertextB64) {
             const decrypted = await decryptScoutingBody(team, report);
             if (decrypted) {
@@ -369,18 +367,13 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
             }
           }
 
-          // Backward-compat: older reports where ONLY notes were encrypted
-          if (report.athleteAttackNotes) {
-            const { plaintext } = await maybeDecryptNotes(
-              team,
-              report.athleteAttackNotes
-            );
-            setAthleteAttackNotes(plaintext || "");
-          } else {
-            setAthleteAttackNotes("");
-          }
-        } catch {
-          // If anything fails, fall back to whatever was stored
+          // No crypto or decrypt failed → fall back to stored notes
+          setAthleteAttackNotes(report.athleteAttackNotes || "");
+        } catch (err) {
+          console.warn(
+            "[ScoutingReportForm] decrypt failed; falling back to stored report body",
+            err
+          );
           setAthleteAttackNotes(report.athleteAttackNotes || "");
         }
       })();
@@ -794,13 +787,13 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
     let crypto = null;
     let protectedBody = sensitiveBody;
 
-    // Try to encrypt for teams that have a lock
+    // Try to encrypt for teams that have a lock (and TBK)
     try {
       const result = await encryptScoutingBody(team, sensitiveBody);
       crypto = result.crypto;
       protectedBody = result.body;
     } catch {
-      // If anything fails, we just fall back to plaintext (crypto stays null)
+      // If anything fails, fall back to plaintext
       protectedBody = sensitiveBody;
       crypto = null;
     }

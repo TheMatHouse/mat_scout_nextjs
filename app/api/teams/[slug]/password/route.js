@@ -4,6 +4,24 @@ import { connectDB } from "@/lib/mongo";
 import Team from "@/models/teamModel";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
 
+/**
+ * PATCH /api/teams/[slug]/password
+ *
+ * This endpoint is responsible for:
+ *  - Persisting the team password KDF metadata (saltB64, iterations, verifierB64)
+ *  - Persisting the wrapped Team Box Key (wrappedTeamKeyB64) + teamKeyVersion
+ *
+ * All TBK creation / wrapping is done on the client:
+ *  - Client derives key with KDF
+ *  - Client wraps TBK with that key
+ *  - Client sends the wrapped TBK + KDF params here
+ *
+ * IMPORTANT:
+ *  - This endpoint does NOT re-encrypt any scouting reports.
+ *  - Changing the password only re-wraps the existing TBK.
+ *  - Reports remain encrypted with the same TBK at rest.
+ */
+
 export async function PATCH(req, context) {
   try {
     await connectDB();
@@ -38,11 +56,15 @@ export async function PATCH(req, context) {
       );
     }
 
+    const safeIterations = Number(iterations) > 0 ? Number(iterations) : 250000;
+
     // Handle slug normalization (_ vs -) the same way as other team routes
+    const decodedSlug = decodeURIComponent(String(slug || "")).toLowerCase();
+
     const team =
-      (await Team.findOne({ teamSlug: slug })) ||
-      (await Team.findOne({ teamSlug: slug.replace(/[-_]/g, "") })) ||
-      (await Team.findOne({ teamSlug: slug.replace(/_/g, "-") }));
+      (await Team.findOne({ teamSlug: decodedSlug })) ||
+      (await Team.findOne({ teamSlug: decodedSlug.replace(/[-_]/g, "") })) ||
+      (await Team.findOne({ teamSlug: decodedSlug.replace(/_/g, "-") }));
 
     if (!team) {
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
@@ -53,14 +75,23 @@ export async function PATCH(req, context) {
     if (!team.security.kdf) team.security.kdf = {};
     if (!team.security.encryption) team.security.encryption = {};
 
+    // KDF + verifier (password metadata)
     team.security.kdf.saltB64 = saltB64;
-    team.security.kdf.iterations = iterations || 250000;
+    team.security.kdf.iterations = safeIterations;
     team.security.verifierB64 = verifierB64;
-    team.security.lockEnabled = true;
 
+    // Turning on lock here is fine; UI can still toggle lockEnabled separately
+    team.security.lockEnabled = true;
+    team.security.encVersion = team.security.encVersion || "v1";
+
+    // TBK wrapping metadata
     team.security.encryption.wrappedTeamKeyB64 = wrappedTeamKeyB64;
     if (typeof teamKeyVersion === "number") {
       team.security.encryption.teamKeyVersion = teamKeyVersion;
+    }
+    // Optional: record algorithm used for TBK-wrapped reports (helps future migrations)
+    if (!team.security.encryption.algorithm) {
+      team.security.encryption.algorithm = "TBK-AES-GCM-256";
     }
 
     await team.save();

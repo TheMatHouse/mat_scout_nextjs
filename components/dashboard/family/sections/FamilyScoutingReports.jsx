@@ -72,12 +72,17 @@ async function fetchDivisionWeights(divisionId) {
 
 const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
   const router = useRouter();
-  const [scoutingReports, setScoutingReports] = useState([]);
+
+  // Parent-created / personal reports for this family member
+  const [familyReports, setFamilyReports] = useState([]);
+  // Team-owned scouting reports about this family member
+  const [teamReports, setTeamReports] = useState([]);
+
   const [open, setOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
 
-  // maps for pretty labels
+  // maps for pretty labels (used for family reports)
   const [divisionMap, setDivisionMap] = useState({});
   const [weightsMap, setWeightsMap] = useState({});
 
@@ -109,11 +114,54 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
       );
       if (!res.ok) throw new Error("Failed to fetch scouting reports");
       const data = await res.json();
-      const list = Array.isArray(data) ? data : [];
-      setScoutingReports(list);
 
-      // Hydrate pretty maps for division/weights
-      await Promise.all([hydrateDivisionMap(list), hydrateWeightsMap(list)]);
+      let personal = [];
+      let team = [];
+
+      // If the API already splits them, use that
+      if (
+        Array.isArray(data?.familyReports) ||
+        Array.isArray(data?.teamReports)
+      ) {
+        personal = Array.isArray(data.familyReports) ? data.familyReports : [];
+        team = Array.isArray(data.teamReports) ? data.teamReports : [];
+      } else if (Array.isArray(data)) {
+        // Legacy: single array — heuristically split by presence of team fields
+        data.forEach((r) => {
+          const hasTeam =
+            r?.teamId ||
+            r?.teamSlug ||
+            r?.teamName ||
+            (r?.team && (r.team.teamSlug || r.team.teamName));
+          if (hasTeam) {
+            team.push(r);
+          } else {
+            personal.push(r);
+          }
+        });
+      } else if (Array.isArray(data?.reports)) {
+        data.reports.forEach((r) => {
+          const hasTeam =
+            r?.teamId ||
+            r?.teamSlug ||
+            r?.teamName ||
+            (r?.team && (r.team.teamSlug || r.team.teamName));
+          if (hasTeam) {
+            team.push(r);
+          } else {
+            personal.push(r);
+          }
+        });
+      }
+
+      setFamilyReports(personal);
+      setTeamReports(team);
+
+      // Hydrate pretty maps for division/weights (only needed for personal)
+      await Promise.all([
+        hydrateDivisionMap(personal),
+        hydrateWeightsMap(personal),
+      ]);
     } catch (err) {
       console.error(err);
       toast.error("Could not load scouting reports.");
@@ -202,7 +250,7 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
       const data = await res.json();
       if (res.ok) {
         toast.success(data.message || "Deleted.");
-        setScoutingReports((prev) => prev.filter((r) => r._id !== report._id));
+        setFamilyReports((prev) => prev.filter((r) => r._id !== report._id));
         setSelectedReport(null);
         router.refresh();
       } else {
@@ -247,9 +295,9 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
     }
   }, [member?.userId, member?._id, stylesForMember]);
 
-  // Derive pretty division/weight for the table and mobile cards
+  // Derive pretty division/weight for the table and mobile cards (personal only)
   const tableData = useMemo(() => {
-    return (scoutingReports || []).map((r) => {
+    return (familyReports || []).map((r) => {
       const divDisplay =
         (r?.division && typeof r.division === "object"
           ? divisionPrettyFromObj(r.division)
@@ -282,7 +330,7 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
 
       return { ...r, divisionDisplay: divDisplay, weightDisplay };
     });
-  }, [scoutingReports, divisionMap, weightsMap]);
+  }, [familyReports, divisionMap, weightsMap]);
 
   const columns = [
     {
@@ -421,6 +469,25 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
     String(member?._id || "")
   )}&ts=${Date.now()}`;
 
+  // Group team reports by teamSlug for the bottom section
+  const teamSummaries = useMemo(() => {
+    const map = new Map();
+    (teamReports || []).forEach((r) => {
+      const slug =
+        r.teamSlug || r.slug || r?.team?.teamSlug || r?.team?.slug || "";
+      if (!slug) return;
+      const key = slug;
+      const existing = map.get(key) || {
+        teamSlug: slug,
+        teamName: r.teamName || r?.team?.teamName || "Team",
+        count: 0,
+      };
+      existing.count += 1;
+      map.set(key, existing);
+    });
+    return Array.from(map.values());
+  }, [teamReports]);
+
   return (
     <div>
       {/* Header: Title + Add on the LEFT, Export on the RIGHT */}
@@ -452,7 +519,7 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Modal (personal / parent-created reports) */}
       <ModalLayout
         isOpen={open}
         onClose={() => setOpen(false)}
@@ -496,7 +563,7 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
         )}
       </ModalLayout>
 
-      {/* Mobile cards (use pretty strings) */}
+      {/* Mobile cards (personal reports only) */}
       <div className="grid grid-cols-1 sm:hidden gap-4 mb-6">
         {tableData.length > 0 ? (
           tableData.map((report) => (
@@ -558,7 +625,7 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
         )}
       </div>
 
-      {/* Desktop Table */}
+      {/* Desktop Table (personal reports only) */}
       <div className="hidden md:block overflow-x-auto">
         <div className="min-w-[800px]">
           <ReportDataTable
@@ -586,6 +653,62 @@ const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
           reportType="scouting"
         />
       )}
+
+      {/* Team Scouting Reports section */}
+      <div className="mt-10 space-y-3">
+        <h2 className="text-xl font-semibold">Team Scouting Reports</h2>
+        <p className="text-sm text-gray-900 dark:text-gray-100">
+          These are scouting reports created by coaches on this family member’s
+          teams. They’re owned by the team and gated by the team’s password.
+        </p>
+
+        {teamSummaries.length === 0 ? (
+          <p className="text-sm text-gray-900 dark:text-gray-100">
+            No team scouting reports found for this family member yet.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {teamSummaries.map((team) => (
+              <div
+                key={team.teamSlug}
+                className="flex flex-col justify-between border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 shadow-sm p-4 gap-3"
+              >
+                <div>
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">
+                    {team.teamName}
+                  </p>
+                  <p className="text-xs text-gray-900 dark:text-gray-100 mt-1">
+                    {team.count} team scouting report
+                    {team.count === 1 ? "" : "s"}.
+                  </p>
+                </div>
+
+                <div className="flex justify-end mt-2">
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      router.push(
+                        `/teams/${encodeURIComponent(
+                          team.teamSlug
+                        )}/scouting-reports`
+                      )
+                    }
+                    className="bg-ms-blue-gray hover:bg-ms-blue text-white text-sm"
+                  >
+                    View Team Reports
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <p className="text-xs text-gray-900 dark:text-gray-100">
+          Team reports open on the team’s scouting page. If the team has a
+          password set, you’ll be prompted once per session before the reports
+          are unlocked.
+        </p>
+      </div>
     </div>
   );
 };

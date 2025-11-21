@@ -29,7 +29,7 @@ import CountrySelect from "@/components/shared/CountrySelect";
 import ModalLayout from "@/components/shared/ModalLayout";
 import TransferOwnershipContent from "@/components/teams/settings/TransferOwnershipContent";
 import { useUser } from "@/context/UserContext";
-import { changeTeamPassword } from "@/lib/crypto/teamLock";
+import { changeTeamPassword, encryptScoutingBody } from "@/lib/crypto/teamLock";
 
 /* ---------------- Phone input field ---------------- */
 const PhoneInputField = forwardRef((props, ref) => (
@@ -161,19 +161,24 @@ const TeamSettingsPage = () => {
       let payload = null;
       try {
         payload = JSON.parse(text);
-      } catch {}
+      } catch {
+        payload = null;
+      }
       if (!res.ok) {
         console.warn("Team refetch failed:", res.status, text);
-        return;
+        return null;
       }
       const fetchedTeam = payload?.team ?? payload;
       if (fetchedTeam?._id) {
         setTeam((prev) => ({ ...(prev || {}), ...fetchedTeam }));
         setForm(shapeFormFromTeam(fetchedTeam));
         setLogoPreview(fetchedTeam.logoURL || null);
+        return fetchedTeam;
       }
+      return null;
     } catch (err) {
       console.error("Refetch team failed:", err);
+      return null;
     }
   };
 
@@ -234,16 +239,18 @@ const TeamSettingsPage = () => {
       let payload = null;
       try {
         payload = JSON.parse(text);
-      } catch {}
+      } catch {
+        payload = null;
+      }
       if (!res.ok) {
         console.error("Update failed:", res.status, text);
         toast.error(payload?.message || `Update failed (${res.status})`);
         return;
       }
+      const updatedTeam = payload?.team ?? payload;
       await refetchTeam();
       toast.success("Team info updated successfully!");
       window.scrollTo({ top: 0, behavior: "smooth" });
-      const updatedTeam = payload?.team ?? payload;
       if (updatedTeam?.teamSlug && updatedTeam.teamSlug !== teamSlug) {
         router.replace(`/teams/${updatedTeam.teamSlug}/settings`);
       }
@@ -274,6 +281,152 @@ const TeamSettingsPage = () => {
     return data;
   };
 
+  // 🔐 Used only internally after first password is created
+  const bulkEncryptExistingReports = async (teamForCrypto) => {
+    if (!isOwner) return;
+
+    const effectiveTeam = teamForCrypto || team;
+    if (!effectiveTeam) {
+      console.warn("[BULK ENCRYPT] No team loaded, skipping.");
+      return;
+    }
+
+    console.log("[BULK ENCRYPT] starting for team", teamSlug);
+    setEncrypting(true);
+
+    try {
+      // 1) Load ALL reports for this team
+      const res = await fetch(
+        `/api/teams/${encodeURIComponent(
+          teamSlug
+        )}/scouting-reports?ts=${Date.now()}`,
+        {
+          credentials: "include",
+          headers: { accept: "application/json" },
+        }
+      );
+
+      const text = await res.text();
+      let data = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = null;
+      }
+
+      if (!res.ok) {
+        console.error("[BULK ENCRYPT] list failed:", res.status, text);
+        toast.error("Failed to load scouting reports for encryption.");
+        return;
+      }
+
+      const allReports = Array.isArray(data?.scoutingReports)
+        ? data.scoutingReports
+        : Array.isArray(data?.reports)
+        ? data.reports
+        : Array.isArray(data)
+        ? data
+        : [];
+
+      console.log("[BULK ENCRYPT] fetched total reports:", allReports.length);
+
+      // 2) Only encrypt reports that do NOT yet have ciphertext
+      const unencrypted = allReports.filter(
+        (r) => !r?.crypto || !r.crypto.ciphertextB64
+      );
+
+      console.log("[BULK ENCRYPT] unencrypted candidates:", unencrypted.length);
+
+      if (unencrypted.length === 0) {
+        toast.info("No existing reports needed encryption.");
+        return;
+      }
+
+      // 3) Encrypt each one on the client using the Team Box Key
+      const reportsPayload = [];
+
+      for (const r of unencrypted) {
+        try {
+          const { body, crypto } = await encryptScoutingBody(effectiveTeam, r);
+
+          if (!crypto) {
+            console.warn(
+              "[BULK ENCRYPT] encryptScoutingBody returned no crypto for",
+              r._id
+            );
+            continue;
+          }
+
+          reportsPayload.push({
+            _id: String(r._id || r.id),
+            body,
+            crypto,
+          });
+        } catch (err) {
+          console.warn(
+            "[BULK ENCRYPT] failed to encrypt report, skipping",
+            r._id,
+            err
+          );
+        }
+      }
+
+      console.log(
+        "[BULK ENCRYPT] prepared payload length:",
+        reportsPayload.length
+      );
+
+      if (reportsPayload.length === 0) {
+        toast.error("No reports could be encrypted.");
+        return;
+      }
+
+      // 4) Send encrypted payload to bulk-encrypt API
+      const bulkRes = await fetch(
+        `/api/teams/${encodeURIComponent(
+          teamSlug
+        )}/scouting-reports/bulk-encrypt`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            accept: "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({ reports: reportsPayload }),
+        }
+      );
+
+      const bulkText = await bulkRes.text();
+      let bulkData = null;
+      try {
+        bulkData = JSON.parse(bulkText);
+      } catch {
+        bulkData = null;
+      }
+
+      if (!bulkRes.ok) {
+        console.error(
+          "[BULK ENCRYPT] bulk-encrypt failed:",
+          bulkRes.status,
+          bulkText
+        );
+        toast.error(bulkData?.message || "Bulk encrypt failed.");
+        return;
+      }
+
+      toast.success(
+        bulkData?.message ||
+          `Encrypted ${reportsPayload.length} scouting report(s).`
+      );
+    } catch (e) {
+      console.error("[BULK ENCRYPT] unexpected error:", e);
+      toast.error(e.message || "Bulk encrypt failed.");
+    } finally {
+      setEncrypting(false);
+    }
+  };
+
   const handleEnableOrUpdatePassword = async () => {
     if (!isOwner) return;
     if (!pw || !pw2) {
@@ -291,18 +444,22 @@ const TeamSettingsPage = () => {
         !!team?.security?.kdf?.saltB64 && !!team?.security?.verifierB64;
 
       if (!hasKdf) {
-        // Initial setup: just store KDF/verifier; TBK is created on first use
+        // Initial setup: store KDF/verifier, then encrypt any existing reports
         await callSetupPOST(pw);
-        toast.success("Team password set. Lock enabled.");
+        const freshTeam = await refetchTeam();
+        await bulkEncryptExistingReports(freshTeam);
+        toast.success(
+          "Team password set. Existing and new reports are locked."
+        );
       } else {
-        // Password change: preserve TBK using the new helper
+        // Password change: preserve TBK using the helper
         await changeTeamPassword(team, pw);
+        await refetchTeam();
         toast.success("Team password updated.");
       }
 
       setPw("");
       setPw2("");
-      await refetchTeam();
     } catch (e) {
       console.error(e);
       toast.error(e.message || "Failed to set team password.");
@@ -311,16 +468,19 @@ const TeamSettingsPage = () => {
     }
   };
 
+  /* ------------ SECURITY: disable lock (no DB decrypt) ------------ */
   const handleDisableLock = async () => {
     if (!isOwner) return;
     if (
       !window.confirm(
-        "Disable team lock? Team reports will no longer require unlocking."
+        "Disabling the lock will stop the team password prompt for this team. All existing reports remain encrypted in the database. Continue?"
       )
     ) {
       return;
     }
+
     setSavingSecurity(true);
+
     try {
       const res = await fetch(
         `/api/teams/${encodeURIComponent(teamSlug)}/security`,
@@ -331,12 +491,31 @@ const TeamSettingsPage = () => {
           body: JSON.stringify({ lockEnabled: false }),
         }
       );
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message || "Failed to disable lock");
-      toast.success("Team lock disabled.");
+
+      const text = await res.text();
+      let payload = null;
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = null;
+      }
+
+      if (!res.ok) {
+        console.error(
+          "[DISABLE LOCK] Disable lock failed:",
+          res.status,
+          text || payload
+        );
+        toast.error(payload?.message || "Failed to disable team lock.");
+        return;
+      }
+
+      toast.success(
+        "Team lock disabled. Existing reports stay encrypted in the database."
+      );
       await refetchTeam();
     } catch (e) {
-      console.error(e);
+      console.error("[DISABLE LOCK] unexpected error:", e);
       toast.error(e.message || "Failed to disable lock.");
     } finally {
       setSavingSecurity(false);
@@ -524,6 +703,14 @@ const TeamSettingsPage = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-3">
+              <p className="text-sm text-gray-900 dark:text-gray-100 leading-5">
+                When you create a team password, all{" "}
+                <span className="font-semibold">existing and new</span> scouting
+                reports for this team are encrypted with your team key. Turning
+                the lock off later only removes the password prompt in the app;
+                the encrypted data always remains encrypted in the database.
+              </p>
+
               {/* Label above password fields */}
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 {lockEnabled ? "Update Team Password" : "Create Team Password"}
@@ -586,7 +773,7 @@ const TeamSettingsPage = () => {
             <div className="flex flex-wrap gap-3">
               <Button
                 onClick={handleEnableOrUpdatePassword}
-                disabled={savingSecurity || !pw || !pw2}
+                disabled={savingSecurity || encrypting || !pw || !pw2}
                 className="inline-flex items-center gap-2 bg-ms-blue-gray hover:bg-ms-blue text-white"
               >
                 <KeyRound className="w-4 h-4" />
@@ -609,8 +796,9 @@ const TeamSettingsPage = () => {
             {/* Base explanation */}
             <p className="text-xs text-muted-foreground">
               Turning on the lock gates access to team scouting reports (and
-              later coach’s notes) behind the team password. Existing reports
-              stay plaintext until edited or batch-encrypted.
+              later coach’s notes) behind the team password. The encrypted data
+              always stays encrypted in the database; disabling the lock only
+              turns off the password prompt until you re-enable it.
             </p>
 
             {/* Extra note when updating */}

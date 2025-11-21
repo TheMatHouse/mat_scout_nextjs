@@ -8,12 +8,23 @@ import { getCurrentUser } from "@/lib/auth-server";
 
 /**
  * GET /api/teams/[slug]/security
- *  - Always returns full security block for the team (lockEnabled, encVersion, kdf, verifierB64)
+ *  - Returns full security block for the team:
+ *    lockEnabled, encVersion, kdf, verifierB64, encryption{wrappedTeamKeyB64,...}
  *
  * PATCH /api/teams/[slug]/security
- * Body:
- *  - To disable lock: { lockEnabled: false }
- *  - To (re)enable/rotate: { lockEnabled: true, kdf: { saltB64, iterations }, verifierB64 }
+ *  - Simple gate toggle only:
+ *      { lockEnabled: false }  -> turn OFF the UI lock gate
+ *      { lockEnabled: true }   -> turn ON the UI lock gate
+ *
+ * IMPORTANT:
+ *  - This endpoint NEVER changes:
+ *      - security.kdf (saltB64, iterations)
+ *      - security.verifierB64
+ *      - security.encryption.wrappedTeamKeyB64 (Team Box Key)
+ *  - Initial password setup (KDF + verifier) happens via:
+ *      /api/teams/[slug]/security/setup  (POST)
+ *  - Password changes (re-wrapping the TBK) happen via:
+ *      /api/teams/[slug]/password        (PATCH)
  */
 
 export async function GET(req, { params }) {
@@ -24,7 +35,7 @@ export async function GET(req, { params }) {
       String((await params).slug || "")
     ).toLowerCase();
 
-    // Require auth just to avoid exposing anything to anonymous users
+    // Require auth
     const actor = await getCurrentUser();
     if (!actor) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
@@ -39,6 +50,7 @@ export async function GET(req, { params }) {
     }
 
     const sec = team.security || {};
+    const enc = sec.encryption || {};
 
     return NextResponse.json(
       {
@@ -53,6 +65,12 @@ export async function GET(req, { params }) {
               iterations: sec.kdf?.iterations || 250000,
             },
             verifierB64: sec.verifierB64 || "",
+            encryption: {
+              wrappedTeamKeyB64: enc.wrappedTeamKeyB64 || "",
+              teamKeyVersion:
+                enc.teamKeyVersion != null ? enc.teamKeyVersion : 1,
+              algorithm: enc.algorithm || "aes-256-gcm",
+            },
           },
         },
       },
@@ -89,13 +107,32 @@ export async function PATCH(req, { params }) {
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
     }
 
-    // For now, only the owner can change the lock
+    // Only team owner may update lock gate
     if (String(team.user) !== String(actor._id)) {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
-    // Disable lock
-    if (body?.lockEnabled === false) {
+    const hasKdfFields = body?.kdf || body?.verifierB64;
+
+    // This route is gate-only. Reject any attempt to change KDF / verifier here.
+    if (hasKdfFields) {
+      return NextResponse.json(
+        {
+          message:
+            "This endpoint only toggles lockEnabled. " +
+            "Use /api/teams/[slug]/security/setup for initial password setup " +
+            "or /api/teams/[slug]/password for password changes.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const lockFlag = body?.lockEnabled;
+
+    // ============================================
+    // 🔓 Disable lock (gate off, encryption unchanged)
+    // ============================================
+    if (lockFlag === false) {
       const res = await Team.updateOne(
         { _id: team._id },
         {
@@ -127,53 +164,49 @@ export async function PATCH(req, { params }) {
       );
     }
 
-    // Enable/update (rotate) lock
-    const saltB64 = body?.kdf?.saltB64?.trim();
-    const iterations = Number(body?.kdf?.iterations ?? 0);
-    const verifierB64 = body?.verifierB64?.trim();
+    // ============================================
+    // 🔒 Enable lock (gate on, password + TBK unchanged)
+    //  - KDF + verifier must already exist.
+    // ============================================
+    if (lockFlag === true) {
+      const res = await Team.updateOne(
+        { _id: team._id },
+        {
+          $set: {
+            "security.lockEnabled": true,
+          },
+        }
+      );
 
-    if (!saltB64 || !iterations || !verifierB64) {
+      const fresh = await Team.findById(team._id)
+        .select("_id teamSlug security")
+        .lean();
+
       return NextResponse.json(
         {
-          message:
-            "Missing required fields. Expecting { kdf: { saltB64, iterations }, verifierB64 }.",
+          message: "Team lock enabled",
+          writeStats: {
+            acknowledged: res.acknowledged,
+            matchedCount: res.matchedCount,
+            modifiedCount: res.modifiedCount,
+          },
+          team: {
+            _id: String(fresh?._id || team._id),
+            teamSlug: fresh?.teamSlug || team.teamSlug,
+            security: fresh?.security || null,
+          },
         },
-        { status: 400 }
+        { status: 200 }
       );
     }
 
-    const res = await Team.updateOne(
-      { _id: team._id },
-      {
-        $set: {
-          "security.lockEnabled": true,
-          "security.encVersion": "v1",
-          "security.kdf.saltB64": saltB64,
-          "security.kdf.iterations": iterations,
-          "security.verifierB64": verifierB64,
-        },
-      }
-    );
-
-    const fresh = await Team.findById(team._id)
-      .select("_id teamSlug security")
-      .lean();
-
+    // If we get here, there was nothing valid to update.
     return NextResponse.json(
       {
-        message: "Team password updated",
-        writeStats: {
-          acknowledged: res.acknowledged,
-          matchedCount: res.matchedCount,
-          modifiedCount: res.modifiedCount,
-        },
-        team: {
-          _id: String(fresh?._id || team._id),
-          teamSlug: fresh?.teamSlug || team.teamSlug,
-          security: fresh?.security || null,
-        },
+        message:
+          "Nothing to update. Send { lockEnabled: true } or { lockEnabled: false }.",
       },
-      { status: 200 }
+      { status: 400 }
     );
   } catch (err) {
     console.error("security PATCH error:", err);

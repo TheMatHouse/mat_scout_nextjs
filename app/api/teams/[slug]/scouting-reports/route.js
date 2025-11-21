@@ -7,9 +7,8 @@ import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 import Team from "@/models/teamModel";
 import TeamScoutingReport from "@/models/teamScoutingReportModel";
 import Video from "@/models/videoModel";
-import FamilyMember from "@/models/familyMemberModel";
-import User from "@/models/userModel";
-import { createNotification } from "@/lib/createNotification";
+import "@/models/divisionModel";
+import "@/models/weightCategoryModel";
 
 // ----------------------------------------------------------
 // YouTube / Video helpers (mirrors dashboard scouting route)
@@ -144,32 +143,55 @@ export async function POST(req, context) {
       return true;
     });
 
-    // ✅ Include optional crypto block
-    const cryptoBlock = body.crypto
-      ? {
-          version: body.crypto.version || 1,
-          alg: body.crypto.alg || "AES-GCM-256",
-          ivB64: body.crypto.ivB64 || "",
-          ciphertextB64: body.crypto.ciphertextB64 || "",
-          wrappedReportKeyB64: body.crypto.wrappedReportKeyB64 || "",
-          teamKeyVersion: body.crypto.teamKeyVersion || 0,
-        }
-      : null;
+    // ✅ Normalize optional crypto block
+    const cryptoBlock =
+      body.crypto && typeof body.crypto === "object"
+        ? {
+            version: body.crypto.version || 1,
+            alg: body.crypto.alg || "TBK-AES-GCM-256",
+            ivB64: body.crypto.ivB64 || "",
+            ciphertextB64: body.crypto.ciphertextB64 || "",
+            wrappedReportKeyB64: body.crypto.wrappedReportKeyB64 || "",
+            teamKeyVersion:
+              body.crypto.teamKeyVersion != null
+                ? body.crypto.teamKeyVersion
+                : 1,
+          }
+        : null;
 
-    // Create the report without videos first
-    const newReport = await TeamScoutingReport.create({
+    // Base doc from body (works for plaintext teams)
+    const createdByName = `${currentUser.firstName || ""} ${
+      currentUser.lastName || ""
+    }`.trim();
+
+    const doc = {
       ...body,
-      crypto: cryptoBlock,
-      videos: [],
       reportFor: dedupedReportFor,
       teamId: team._id,
       createdById: currentUser._id,
-      createdByName: `${currentUser.firstName || ""} ${
-        currentUser.lastName || ""
-      }`.trim(),
-    });
+      createdByName,
+      videos: [],
+    };
 
-    // Save unknown techniques
+    // If crypto is present, enforce that sensitive fields are blank on the server.
+    if (cryptoBlock) {
+      doc.crypto = cryptoBlock;
+      doc.athleteFirstName = "";
+      doc.athleteLastName = "";
+      doc.athleteNationalRank = "";
+      doc.athleteWorldRank = "";
+      doc.athleteClub = "";
+      doc.athleteCountry = "";
+      doc.athleteGrip = "";
+      doc.athleteAttacks = [];
+      doc.athleteAttackNotes = "";
+    }
+
+    // Create the report without videos first
+    const newReport = await TeamScoutingReport.create(doc);
+
+    // Save unknown techniques (plaintext flow will still work;
+    // encrypted flow may have empty athleteAttacks here, which is OK)
     await saveUnknownTechniques(
       Array.isArray(body.athleteAttacks) ? body.athleteAttacks : []
     );
@@ -186,13 +208,13 @@ export async function POST(req, context) {
       const normalizedDocs = [];
       for (const raw of incomingVideosRaw) {
         if (!raw || (!raw.url && !raw.videoURL)) continue;
-        const doc = normalizeIncomingVideoForCreate(
+        const videoDoc = normalizeIncomingVideoForCreate(
           raw,
           newReport._id,
           currentUser._id
         );
-        if (!doc || !doc.url) continue;
-        normalizedDocs.push(doc);
+        if (!videoDoc || !videoDoc.url) continue;
+        normalizedDocs.push(videoDoc);
       }
 
       if (normalizedDocs.length) {
@@ -238,13 +260,12 @@ export async function GET(_request, context) {
 
     const rawReports = await TeamScoutingReport.find({ teamId: team._id })
       .populate("videos")
-      .populate("division", "name label gender") // 👈 get division info
+      .populate("division", "name label gender")
       .sort({ createdAt: -1 })
       .lean();
 
     // Shape each report with a friendly divisionLabel
     const scoutingReports = rawReports.map((r) => {
-      // If something already set divisionLabel, keep it
       if (r.divisionLabel) return r;
 
       let divisionLabel = "";

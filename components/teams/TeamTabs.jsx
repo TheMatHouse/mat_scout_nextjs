@@ -7,11 +7,31 @@ import { usePathname } from "next/navigation";
 export default function TeamTabs({ tabs }) {
   const pathname = usePathname() || "/";
 
-  // helper for nested route matching
+  // Remove trailing slash except for root "/"
+  const clean = (s) => (s.endsWith("/") && s !== "/" ? s.slice(0, -1) : s);
+
+  /**
+   * Correct active-tab detection:
+   *
+   *  • For root team page (/teams/[slug]):
+   *       → ONLY match exact path
+   *
+   *  • For deeper tabs (scouting-reports, members, updates, coach-notes)
+   *       → match base or deeper nested pages
+   */
   const isActivePath = (current, base) => {
-    const clean = (s) => (s.endsWith("/") && s !== "/" ? s.slice(0, -1) : s);
     const p = clean(current);
     const b = clean(base);
+
+    // ROOT TEAM PAGE = /teams/<slug>
+    // That is exactly 3 segments: ["", "teams", "slug"]
+    const isRootTab = b.split("/").length === 3;
+
+    if (isRootTab) {
+      return p === b; // exact match ONLY
+    }
+
+    // Nested tabs → match exact or deeper pages
     return p === b || p.startsWith(b + "/");
   };
 
@@ -19,6 +39,7 @@ export default function TeamTabs({ tabs }) {
     <nav className="flex gap-6 px-4 py-3 border-b border-gray-300 dark:border-gray-700 overflow-x-auto">
       {tabs.map((tab) => {
         const isActive = isActivePath(pathname, tab.href);
+
         return (
           <Link
             key={tab.href}
