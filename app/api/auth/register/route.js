@@ -27,17 +27,18 @@ export async function POST(req) {
     await connectDB();
     const payload = await req.json();
 
-    // ✅ NEW: Extract reCAPTCHA token
+    // ⭐ NEW: Extract reCAPTCHA token
     const recaptchaToken = payload?.recaptchaToken;
 
-    // ✅ NEW: Verify reCAPTCHA token BEFORE anything else
+    // ⭐ NEW: Validate token exists
     if (!recaptchaToken) {
       return NextResponse.json(
-        { error: "reCAPTCHA token missing." },
+        { error: "Security verification failed. Please try again." },
         { status: 400 }
       );
     }
 
+    // ⭐ NEW: Verify reCAPTCHA token with Google
     try {
       const verifyRes = await fetch(
         "https://www.google.com/recaptcha/api/siteverify",
@@ -50,17 +51,18 @@ export async function POST(req) {
 
       const data = await verifyRes.json();
 
-      // Google recommends rejecting scores < 0.5 for signups
+      // Reject low scores or failure
       if (!data.success || (data.score !== undefined && data.score < 0.5)) {
+        console.warn("reCAPTCHA rejected signup:", data);
         return NextResponse.json(
-          { error: "reCAPTCHA validation failed." },
+          { error: "Failed security verification. Try again." },
           { status: 400 }
         );
       }
     } catch (err) {
       console.error("reCAPTCHA verification error:", err);
       return NextResponse.json(
-        { error: "Unable to validate reCAPTCHA." },
+        { error: "Unable to validate security token." },
         { status: 400 }
       );
     }
@@ -75,7 +77,6 @@ export async function POST(req) {
     const usernameIn = String(payload?.username ?? "").trim();
     const password = String(payload?.password ?? "");
 
-    // Basic presence checks
     if (!emailIn || !usernameIn || !password) {
       return NextResponse.json(
         { error: "Email, username, and password are required." },
@@ -83,7 +84,6 @@ export async function POST(req) {
       );
     }
 
-    // Email format check
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailIn)) {
       return NextResponse.json(
         { error: "Invalid email format." },
@@ -91,7 +91,6 @@ export async function POST(req) {
       );
     }
 
-    // Server-side username rules
     if (!isUsernameFormatValid(usernameIn)) {
       return NextResponse.json(
         {
