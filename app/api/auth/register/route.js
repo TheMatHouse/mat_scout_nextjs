@@ -51,6 +51,7 @@ export async function POST(req) {
       );
 
       const data = await verifyRes.json();
+      console.log("RECAPTCHA VERIFY DATA:", data);
 
       // Reject low scores or failure
       if (!data.success || (data.score !== undefined && data.score < 0.5)) {
