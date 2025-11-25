@@ -27,20 +27,34 @@ const RegisterForm = ({ redirect = "/dashboard" }) => {
 
   const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
 
-  // Load reCAPTCHA script
+  // Track whether reCAPTCHA is actually ready
+  const [recaptchaReady, setRecaptchaReady] = useState(false);
+
+  // Load reCAPTCHA script + wait for readiness
   useEffect(() => {
     if (!siteKey) {
       console.error("Missing reCAPTCHA site key");
       return;
     }
 
-    if (document.querySelector("#recaptcha-script")) return;
+    // Inject script once
+    if (!document.querySelector("#recaptcha-script")) {
+      const script = document.createElement("script");
+      script.id = "recaptcha-script";
+      script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}`;
+      script.async = true;
+      document.body.appendChild(script);
+    }
 
-    const script = document.createElement("script");
-    script.id = "recaptcha-script";
-    script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}`;
-    script.async = true;
-    document.body.appendChild(script);
+    // Poll until grecaptcha is ready
+    const interval = setInterval(() => {
+      if (window.grecaptcha && window.grecaptcha.execute) {
+        setRecaptchaReady(true);
+        clearInterval(interval);
+      }
+    }, 100);
+
+    return () => clearInterval(interval);
   }, [siteKey]);
 
   const form = useForm({
@@ -157,6 +171,11 @@ const RegisterForm = ({ redirect = "/dashboard" }) => {
   const onSubmit = async (values) => {
     setError("");
 
+    if (!recaptchaReady) {
+      setError("Please wait… security checks are still loading.");
+      return;
+    }
+
     if (
       usernameInvalid ||
       usernameCode === "invalid_format" ||
@@ -177,12 +196,6 @@ const RegisterForm = ({ redirect = "/dashboard" }) => {
     setLoading(true);
 
     try {
-      if (!window.grecaptcha) {
-        setError("reCAPTCHA failed to load. Please refresh the page.");
-        setLoading(false);
-        return;
-      }
-
       const recaptchaToken = await window.grecaptcha.execute(siteKey, {
         action: "register",
       });
@@ -215,6 +228,7 @@ const RegisterForm = ({ redirect = "/dashboard" }) => {
 
   const submitDisabled =
     loading ||
+    !recaptchaReady || // ← block until reCAPTCHA ready
     checkingUsername ||
     checkingEmail ||
     usernameInvalid ||
@@ -438,7 +452,11 @@ const RegisterForm = ({ redirect = "/dashboard" }) => {
               className="w-full py-2.5 rounded-lg font-semibold shadow-md text-white bg-[var(--ms-blue)] hover:bg-[var(--ms-blue-gray)] transition disabled:opacity-60"
               disabled={submitDisabled}
             >
-              {loading ? "Registering…" : "Sign Up"}
+              {loading
+                ? "Registering…"
+                : recaptchaReady
+                ? "Sign Up"
+                : "Loading…"}
             </button>
           </form>
         </Form>
