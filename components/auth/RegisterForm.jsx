@@ -21,9 +21,27 @@ import { Input } from "@/components/ui/input";
 import GoogleIcon from "@/components/icons/GoogleIcon";
 import PasswordInput from "@/components/shared/PasswordInput";
 
-export default function RegisterForm({ redirect = "/dashboard" }) {
+const RegisterForm = ({ redirect = "/dashboard" }) => {
   const router = useRouter();
   const { refreshUser } = useUser();
+
+  const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+
+  // Load reCAPTCHA script
+  useEffect(() => {
+    if (!siteKey) {
+      console.error("Missing reCAPTCHA site key");
+      return;
+    }
+
+    if (document.querySelector("#recaptcha-script")) return;
+
+    const script = document.createElement("script");
+    script.id = "recaptcha-script";
+    script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}`;
+    script.async = true;
+    document.body.appendChild(script);
+  }, [siteKey]);
 
   const form = useForm({
     defaultValues: {
@@ -39,11 +57,10 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Username / Email availability
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState(null);
   const [usernameCode, setUsernameCode] = useState(null);
-  const [usernameDebug, setUsernameDebug] = useState(null); // TEMP: show server debug
+  const [usernameDebug, setUsernameDebug] = useState(null);
 
   const [checkingEmail, setCheckingEmail] = useState(false);
   const [emailAvailable, setEmailAvailable] = useState(null);
@@ -54,7 +71,7 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
 
   const usernameInvalid = !!username && !isUsernameFormatValid(username);
 
-  // Debounced username check with debug
+  // Username availability check
   useEffect(() => {
     const u = (username || "").trim();
     if (!u) {
@@ -78,7 +95,7 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
           { cache: "no-store", headers: { "cache-control": "no-cache" } }
         );
         const data = await res.json().catch(() => null);
-        setUsernameDebug(data?.debug ?? null); // TEMP: keep a peek at server decision
+        setUsernameDebug(data?.debug ?? null);
 
         if (!res.ok || !data?.ok) {
           setUsernameAvailable(null);
@@ -99,7 +116,7 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
     return () => clearTimeout(t);
   }, [username]);
 
-  // Debounced email check
+  // Email availability check
   useEffect(() => {
     const e = (email || "").trim();
     if (!e) {
@@ -110,6 +127,7 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
 
     const t = setTimeout(async () => {
       setCheckingEmail(true);
+
       try {
         const res = await fetch(
           `/api/auth/check-email?email=${encodeURIComponent(e)}`,
@@ -135,6 +153,7 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
     return () => clearTimeout(t);
   }, [email]);
 
+  // Submit handler (with reCAPTCHA)
   const onSubmit = async (values) => {
     setError("");
 
@@ -155,13 +174,28 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
       return;
     }
 
-    const cleanUsername = sanitizeUsername(values.username);
-
     setLoading(true);
+
     try {
+      if (!window.grecaptcha) {
+        setError("reCAPTCHA failed to load. Please refresh the page.");
+        setLoading(false);
+        return;
+      }
+
+      const recaptchaToken = await window.grecaptcha.execute(siteKey, {
+        action: "register",
+      });
+
+      const cleanUsername = sanitizeUsername(values.username);
+
       const res = await apiFetch("/api/auth/register", {
         method: "POST",
-        body: JSON.stringify({ ...values, username: cleanUsername }),
+        body: JSON.stringify({
+          ...values,
+          username: cleanUsername,
+          recaptchaToken,
+        }),
         headers: { "Content-Type": "application/json" },
       });
 
@@ -177,12 +211,6 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
     } finally {
       setLoading(false);
     }
-  };
-
-  const setRedirectCookie = () => {
-    document.cookie = `post_auth_redirect=${encodeURIComponent(
-      redirect
-    )}; Path=/; Max-Age=600; SameSite=Lax`;
   };
 
   const submitDisabled =
@@ -214,6 +242,7 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
             onSubmit={form.handleSubmit(onSubmit)}
             className="space-y-6"
           >
+            {/* FIRST NAME */}
             <FormField
               control={form.control}
               name="firstName"
@@ -233,6 +262,7 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
               )}
             />
 
+            {/* LAST NAME */}
             <FormField
               control={form.control}
               name="lastName"
@@ -252,6 +282,7 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
               )}
             />
 
+            {/* USERNAME */}
             <FormField
               control={form.control}
               name="username"
@@ -276,6 +307,7 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
                       }
                     />
                   </FormControl>
+
                   <div className="mt-1 text-sm">
                     {field.value ? (
                       usernameInvalid || usernameCode === "invalid_format" ? (
@@ -302,7 +334,6 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
                     ) : null}
                   </div>
 
-                  {/* TEMP: surface server debug to the UI for now */}
                   {usernameDebug && (
                     <div className="mt-1 text-xs text-gray-500">
                       server: {usernameCode} — normalized:
@@ -332,6 +363,7 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
               )}
             />
 
+            {/* EMAIL */}
             <FormField
               control={form.control}
               name="email"
@@ -353,6 +385,7 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
                       autoComplete="email"
                     />
                   </FormControl>
+
                   <div className="mt-1 text-sm">
                     {field.value ? (
                       checkingEmail ? (
@@ -370,11 +403,13 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
                       )
                     ) : null}
                   </div>
+
                   <FormMessage />
                 </FormItem>
               )}
             />
 
+            {/* PASSWORD */}
             <FormField
               control={form.control}
               name="password"
@@ -397,12 +432,13 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
               )}
             />
 
+            {/* SUBMIT */}
             <button
               type="submit"
               className="w-full py-2.5 rounded-lg font-semibold shadow-md text-white bg-[var(--ms-blue)] hover:bg-[var(--ms-blue-gray)] transition disabled:opacity-60"
               disabled={submitDisabled}
             >
-              {loading ? "Registering..." : "Sign Up"}
+              {loading ? "Registering…" : "Sign Up"}
             </button>
           </form>
         </Form>
@@ -439,4 +475,6 @@ export default function RegisterForm({ redirect = "/dashboard" }) {
       </div>
     </div>
   );
-}
+};
+
+export default RegisterForm;

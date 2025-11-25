@@ -27,6 +27,46 @@ export async function POST(req) {
     await connectDB();
     const payload = await req.json();
 
+    // ✅ NEW: Extract reCAPTCHA token
+    const recaptchaToken = payload?.recaptchaToken;
+
+    // ✅ NEW: Verify reCAPTCHA token BEFORE anything else
+    if (!recaptchaToken) {
+      return NextResponse.json(
+        { error: "reCAPTCHA token missing." },
+        { status: 400 }
+      );
+    }
+
+    try {
+      const verifyRes = await fetch(
+        "https://www.google.com/recaptcha/api/siteverify",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: `secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${recaptchaToken}`,
+        }
+      );
+
+      const data = await verifyRes.json();
+
+      // Google recommends rejecting scores < 0.5 for signups
+      if (!data.success || (data.score !== undefined && data.score < 0.5)) {
+        return NextResponse.json(
+          { error: "reCAPTCHA validation failed." },
+          { status: 400 }
+        );
+      }
+    } catch (err) {
+      console.error("reCAPTCHA verification error:", err);
+      return NextResponse.json(
+        { error: "Unable to validate reCAPTCHA." },
+        { status: 400 }
+      );
+    }
+
+    // -------- ORIGINAL CODE BELOW (unchanged) --------
+
     const firstName = String(payload?.firstName ?? "").trim();
     const lastName = String(payload?.lastName ?? "").trim();
     const emailIn = String(payload?.email ?? "")
@@ -43,7 +83,7 @@ export async function POST(req) {
       );
     }
 
-    // Email format check (lightweight)
+    // Email format check
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailIn)) {
       return NextResponse.json(
         { error: "Invalid email format." },
@@ -51,8 +91,7 @@ export async function POST(req) {
       );
     }
 
-    // Server-side username rules (authoritative)
-    // Validate the *raw* input with our helper (which sanitizes internally)
+    // Server-side username rules
     if (!isUsernameFormatValid(usernameIn)) {
       return NextResponse.json(
         {
@@ -63,10 +102,8 @@ export async function POST(req) {
       );
     }
 
-    // Final username we will store (lowercase, URL-safe)
     const cleanUsername = sanitizeUsername(usernameIn);
 
-    // Case-insensitive availability checks (robust even if legacy rows weren't normalized)
     const [emailExists, usernameExists] = await Promise.all([
       User.findOne({ email: new RegExp(`^${escapeRegex(emailIn)}$`, "i") })
         .select("_id")
@@ -91,7 +128,6 @@ export async function POST(req) {
       );
     }
 
-    // Hash & create user
     if (password.length < 6) {
       return NextResponse.json(
         { error: "Password must be at least 6 characters." },
@@ -110,7 +146,6 @@ export async function POST(req) {
       verified: false,
     });
 
-    // Email verification token (24h)
     const token = jwt.sign(
       { sub: user._id.toString(), email: user.email },
       JWT_SECRET,
@@ -124,11 +159,9 @@ export async function POST(req) {
     ).replace(/\/+$/, "");
     const verifyUrl = `${base}/verify?token=${encodeURIComponent(token)}`;
 
-    // Send welcome + verify email (best-effort)
     try {
       await sendWelcomeAndVerifyEmail({ toUser: user, verifyUrl });
     } catch (e) {
-      // Don't block registration if email vendor hiccups
       console.warn("sendWelcomeAndVerifyEmail failed:", e?.message || e);
     }
 
@@ -140,7 +173,6 @@ export async function POST(req) {
       { status: 201 }
     );
   } catch (err) {
-    // Handle dup keys (race conditions)
     if (err?.code === 11000 && err?.keyPattern) {
       if (err.keyPattern.email) {
         return NextResponse.json(
