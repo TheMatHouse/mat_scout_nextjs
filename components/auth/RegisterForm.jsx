@@ -37,24 +37,22 @@ const RegisterForm = ({ redirect = "/dashboard" }) => {
       return;
     }
 
-    // Inject script once
-    if (!document.querySelector("#recaptcha-script")) {
-      const script = document.createElement("script");
-      script.id = "recaptcha-script";
-      script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}`;
-      script.async = true;
-      document.body.appendChild(script);
-    }
+    // Avoid double loading
+    if (window.grecaptcha) return;
 
-    // Poll until grecaptcha is ready
-    const interval = setInterval(() => {
-      if (window.grecaptcha && window.grecaptcha.execute) {
-        setRecaptchaReady(true);
-        clearInterval(interval);
+    const script = document.createElement("script");
+    script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}`;
+    script.async = true;
+
+    script.onload = () => {
+      if (window.grecaptcha) {
+        window.grecaptcha.ready(() => {
+          console.log("reCAPTCHA ready");
+        });
       }
-    }, 100);
+    };
 
-    return () => clearInterval(interval);
+    document.body.appendChild(script);
   }, [siteKey]);
 
   const form = useForm({
@@ -196,8 +194,14 @@ const RegisterForm = ({ redirect = "/dashboard" }) => {
     setLoading(true);
 
     try {
-      const recaptchaToken = await window.grecaptcha.execute(siteKey, {
-        action: "register",
+      // ⭐ FIX: Ensure grecaptcha is fully ready before execute()
+      const recaptchaToken = await new Promise((resolve, reject) => {
+        window.grecaptcha.ready(() => {
+          window.grecaptcha
+            .execute(siteKey, { action: "register" })
+            .then(resolve)
+            .catch(reject);
+        });
       });
 
       const cleanUsername = sanitizeUsername(values.username);
