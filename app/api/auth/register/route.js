@@ -26,6 +26,7 @@ export async function POST(req) {
 
     await connectDB();
     const payload = await req.json();
+    console.log("SERVER RECAPTCHA SECRET:", process.env.RECAPTCHA_SECRET_KEY);
 
     // ⭐ NEW: Extract reCAPTCHA token
     const recaptchaToken = payload?.recaptchaToken;
