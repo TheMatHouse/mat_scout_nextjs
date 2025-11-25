@@ -37,22 +37,38 @@ const RegisterForm = ({ redirect = "/dashboard" }) => {
       return;
     }
 
-    // Avoid double loading
-    if (window.grecaptcha) return;
+    // Already loaded?
+    if (window.grecaptcha && window.grecaptcha.execute) {
+      setRecaptchaReady(true);
+      return;
+    }
 
-    const script = document.createElement("script");
-    script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}`;
-    script.async = true;
+    // Add script if not present
+    const existing = document.querySelector("#recaptcha-script");
+    if (!existing) {
+      const script = document.createElement("script");
+      script.id = "recaptcha-script";
+      script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}`;
+      script.async = true;
+      document.body.appendChild(script);
+    }
 
-    script.onload = () => {
-      if (window.grecaptcha) {
+    // Poll until grecaptcha is really available AND initialized
+    const interval = setInterval(() => {
+      if (
+        window.grecaptcha &&
+        typeof window.grecaptcha.ready === "function" &&
+        typeof window.grecaptcha.execute === "function"
+      ) {
         window.grecaptcha.ready(() => {
-          console.log("reCAPTCHA ready");
+          setRecaptchaReady(true);
+          console.log("reCAPTCHA fully ready");
         });
+        clearInterval(interval);
       }
-    };
+    }, 200);
 
-    document.body.appendChild(script);
+    return () => clearInterval(interval);
   }, [siteKey]);
 
   const form = useForm({
@@ -194,13 +210,25 @@ const RegisterForm = ({ redirect = "/dashboard" }) => {
     setLoading(true);
 
     try {
-      // ⭐ FIX: Ensure grecaptcha is fully ready before execute()
+      // 🛑 NEW SAFETY: Ensure grecaptcha exists to prevent infinite loading
+      if (!window.grecaptcha || !window.grecaptcha.execute) {
+        setError(
+          "Security checks failed to initialize. Please refresh the page."
+        );
+        setLoading(false);
+        return;
+      }
+
+      // ⭐ FIX: Fully reliable reCAPTCHA execution
       const recaptchaToken = await new Promise((resolve, reject) => {
         window.grecaptcha.ready(() => {
           window.grecaptcha
             .execute(siteKey, { action: "register" })
             .then(resolve)
-            .catch(reject);
+            .catch((err) => {
+              console.error("reCAPTCHA execute error:", err);
+              reject(err);
+            });
         });
       });
 
