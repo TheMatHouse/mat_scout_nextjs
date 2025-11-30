@@ -3,11 +3,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
+
 import ModalLayout from "@/components/shared/ModalLayout";
 import CountrySelect from "@/components/shared/CountrySelect";
 import Editor from "@/components/shared/Editor";
 import TechniqueTagInput from "@/components/shared/TechniqueTagInput";
 import ClubAutosuggest from "@/components/shared/ClubAutosuggest";
+
+/*** 🔐 TEAM LOCK HELPERS ***/
+import {
+  teamHasLock,
+  ensureTeamPass,
+  encryptCoachNoteBody,
+} from "@/lib/crypto/teamLock";
 
 /* ---------------- small inputs ---------------- */
 const TextInput = ({ label, value, onChange, placeholder }) => (
@@ -53,17 +61,19 @@ const extractYouTubeId = (url = "") => {
   if (typeof url !== "string") return null;
   const u = url.trim();
   if (!u) return null;
+
   const re =
     /(?:youtube\.com\/.*[?&]v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/|youtube-nocookie\.com\/embed\/)([^&?/]+)/i;
   const m = u.match(re);
   return m ? m[1] : null;
 };
+
 const toNoCookieEmbedUrl = (videoId, startSeconds = 0) => {
   const base = `https://www.youtube-nocookie.com/embed/${videoId}`;
   return startSeconds > 0 ? `${base}?start=${startSeconds}` : base;
 };
 
-/* ---------------- note block ---------------- */
+/* ---------------- empty note ---------------- */
 const emptyNote = () => ({
   opponentName: "",
   opponentRank: "",
@@ -84,6 +94,7 @@ const emptyNote = () => ({
   videoS: "0",
 });
 
+/* ---------------- note UI block ---------------- */
 const NoteBlock = ({
   idx,
   value,
@@ -117,6 +128,7 @@ const NoteBlock = ({
     <div className="rounded-xl border p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h4 className="font-semibold">Match / Note {idx + 1}</h4>
+
         {canRemove && (
           <button
             type="button"
@@ -128,39 +140,31 @@ const NoteBlock = ({
         )}
       </div>
 
-      {/* Opponent fields */}
+      {/* Opponent */}
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="grid gap-1">
-          <span className="text-sm">Opponent name</span>
-          <input
-            value={value.opponentName}
-            onChange={(e) => set("opponentName")(e.target.value)}
-            placeholder="e.g., Alex Smith"
-            className="px-3 py-2 h-10 rounded border bg-transparent"
-          />
-        </label>
-        <label className="grid gap-1">
-          <span className="text-sm">Opponent rank (optional)</span>
-          <input
-            value={value.opponentRank}
-            onChange={(e) => set("opponentRank")(e.target.value)}
-            placeholder="e.g., Brown Belt"
-            className="px-3 py-2 h-10 rounded border bg-transparent"
-          />
-        </label>
-        {/* Club with autosuggest */}
+        <TextInput
+          label="Opponent name"
+          value={value.opponentName}
+          onChange={set("opponentName")}
+          placeholder="e.g., Alex Smith"
+        />
+
+        <TextInput
+          label="Opponent rank"
+          value={value.opponentRank}
+          onChange={set("opponentRank")}
+          placeholder="e.g., Brown Belt"
+        />
+
         <div className="grid gap-1">
-          <span className="text-sm">Opponent club (optional)</span>
+          <span className="text-sm">Opponent club</span>
           <ClubAutosuggest
             value={value.opponentClub || ""}
             onChange={set("opponentClub")}
             minChars={2}
           />
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            Type the opponent’s club name — if it exists, you can select it;
-            otherwise, enter it manually.
-          </p>
         </div>
+
         <CountrySelect
           label="Country"
           value={value.opponentCountry}
@@ -206,7 +210,7 @@ const NoteBlock = ({
         onDelete={delAt("techTheirs")}
       />
 
-      {/* Result / Score */}
+      {/* Result + score */}
       <div className="grid gap-3 sm:grid-cols-2">
         <Select
           label="Result"
@@ -218,24 +222,25 @@ const NoteBlock = ({
           <option value="loss">Loss</option>
           <option value="draw">Draw</option>
         </Select>
+
         <TextInput
           label="Score"
           value={value.score}
           onChange={set("score")}
-          placeholder="e.g., Ippon, 2-1"
+          placeholder="e.g., 2-1"
         />
       </div>
 
       <Editor
         name={`notes_${idx}`}
-        label="More notes (optional)"
+        label="More notes"
         text={value.notes}
         onChange={set("notes")}
       />
 
       {/* Video section */}
       <div className="rounded-lg border p-4 space-y-4">
-        <div className="text-sm font-semibold">Video (optional)</div>
+        <div className="font-semibold text-sm">Video (optional)</div>
 
         <TextInput
           label="Video Title"
@@ -243,6 +248,7 @@ const NoteBlock = ({
           onChange={set("videoTitle")}
           placeholder="First exchange"
         />
+
         <TextInput
           label="YouTube URL"
           value={value.videoUrlRaw}
@@ -252,7 +258,8 @@ const NoteBlock = ({
 
         <div className="space-y-2">
           <div className="text-sm">Timestamp</div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+
+          <div className="grid gap-3 sm:grid-cols-3">
             <NumberInput
               label="Hours"
               value={value.videoH}
@@ -278,7 +285,6 @@ const NoteBlock = ({
               src={previewSrc}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
-              title={`YouTube video ${vidId}`}
             />
           </div>
         )}
@@ -287,13 +293,35 @@ const NoteBlock = ({
   );
 };
 
-/* ---------------- main component ---------------- */
+/* -------------------------------------------- */
+/* ---------------- MAIN BUTTON --------------- */
+/* -------------------------------------------- */
+
 const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState([emptyNote()]);
   const [loadedTechniques, setLoadedTechniques] = useState([]);
+  const [team, setTeam] = useState(null);
 
+  /** Load team (needed for encryption) */
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/teams/${slug}`, { cache: "no-store" });
+        const data = await res.json();
+        if (alive) setTeam(data?.team || null);
+      } catch (err) {
+        if (alive) setTeam(null);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [slug]);
+
+  /** Load technique suggestions */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -332,6 +360,9 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
   const disabled = !slug || !eventId || !entryId;
   const resetForm = () => setNotes([emptyNote()]);
 
+  /** ---------------------------------------------
+   * 🔐 HANDLE SUBMIT WITH ENCRYPTION
+   * --------------------------------------------*/
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (disabled) {
@@ -340,36 +371,71 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
     }
 
     try {
-      const payload = notes.map((n) => {
+      // 🔐 Ensure team password if locked
+      let pass = "";
+      if (team && teamHasLock(team)) {
+        pass = await ensureTeamPass(team); // prompt if needed
+      }
+
+      const payload = [];
+      for (const n of notes) {
         const h = Math.max(0, parseInt(n.videoH || "0", 10) || 0);
         const m = Math.max(0, parseInt(n.videoM || "0", 10) || 0);
         const s = Math.max(0, parseInt(n.videoS || "0", 10) || 0);
-        const start = `${h}:${m}:${s}`;
 
-        return {
+        const baseNote = {
           opponent: {
             name: n.opponentName || "",
             rank: n.opponentRank || "",
             club: n.opponentClub || "",
             country: n.opponentCountry || "",
           },
-          whatWentWell: n.whatWentWell,
-          reinforce: n.reinforce,
-          needsFix: n.needsFix,
-          techniques: {
-            ours: (n.techOurs || []).map((t) => t.label),
-            theirs: (n.techTheirs || []).map((t) => t.label),
+
+          // SENSITIVE FIELDS
+          sensitive: {
+            whatWentWell: n.whatWentWell || "",
+            reinforce: n.reinforce || "",
+            needsFix: n.needsFix || "",
+            notes: n.notes || "",
+            techniques: {
+              ours: (n.techOurs || []).map((t) => t.label),
+              theirs: (n.techTheirs || []).map((t) => t.label),
+            },
+            result: n.result || "",
+            score: n.score || "",
           },
-          result: n.result,
-          score: n.score,
-          notes: n.notes,
+
+          // Video
           videoRaw: {
             url: n.videoUrlRaw || "",
-            start,
+            start: `${h}:${m}:${s}`,
             label: n.videoTitle || "",
           },
         };
-      });
+
+        // Encrypt if required
+        if (team && teamHasLock(team)) {
+          const { body, crypto } = await encryptCoachNoteBody(
+            team,
+            baseNote.sensitive
+          );
+
+          payload.push({
+            opponent: baseNote.opponent,
+            videoRaw: baseNote.videoRaw,
+            ...body, // blank fields
+            crypto,
+          });
+        } else {
+          // plaintext flow
+          payload.push({
+            opponent: baseNote.opponent,
+            videoRaw: baseNote.videoRaw,
+            ...baseNote.sensitive,
+            crypto: null,
+          });
+        }
+      }
 
       const res = await fetch(
         `/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches`,
@@ -388,6 +454,7 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
           ? "Match notes added"
           : "Match note added"
       );
+
       resetForm();
       setOpen(false);
       router.refresh();
@@ -446,6 +513,7 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
             >
               ➕ Add another note for this athlete
             </button>
+
             <button
               type="submit"
               className="px-4 py-2 rounded-xl shadow bg-black text-white dark:bg-white dark:text-black"

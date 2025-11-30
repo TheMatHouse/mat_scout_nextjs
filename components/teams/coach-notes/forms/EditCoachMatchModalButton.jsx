@@ -1,4 +1,3 @@
-// components/teams/coach-notes/forms/EditCoachMatchModalButton.jsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -9,6 +8,9 @@ import CountrySelect from "@/components/shared/CountrySelect";
 import Editor from "@/components/shared/Editor";
 import TechniqueTagInput from "@/components/shared/TechniqueTagInput";
 import ClubAutosuggest from "@/components/shared/ClubAutosuggest";
+
+// 🔐 TBK encryption
+import { encryptCoachNoteBody } from "@/lib/crypto/teamLock";
 
 /* ---------- tiny inputs ---------- */
 function TextInput({ label, value, onChange, placeholder }) {
@@ -48,7 +50,6 @@ const extractYouTubeId = (url = "") => {
   return m ? m[1] : null;
 };
 
-// Use regular youtube.com to avoid CSP mismatches
 const toEmbedUrl = (id, start = 0) =>
   id ? `https://www.youtube.com/embed/${id}?start=${start}` : "";
 
@@ -104,19 +105,21 @@ function EditCoachMatchModalButton({
   entryId,
   matchId,
   initialMatch,
+  team, // ← REQUIRED for TBK encryption
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState({});
   const [loadedTechniques, setLoadedTechniques] = useState([]);
 
-  // Video UI state
+  // Video state
   const [videoLoading, setVideoLoading] = useState(false);
-  const [hadSavedVideo, setHadSavedVideo] = useState(false); // from DB
-  const [editingNewVideo, setEditingNewVideo] = useState(false); // true when adding/changing
+  const [hadSavedVideo, setHadSavedVideo] = useState(false);
+  const [editingNewVideo, setEditingNewVideo] = useState(false);
 
   const disabled = !slug || !eventId || !entryId || !matchId;
 
+  /* ---------- techniques ---------- */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -128,6 +131,7 @@ function EditCoachMatchModalButton({
           : Array.isArray(data?.techniques)
           ? data.techniques
           : [];
+
         if (alive)
           setLoadedTechniques(
             arr
@@ -156,6 +160,7 @@ function EditCoachMatchModalButton({
       videoStartMs: 0,
     }));
 
+  /* ---------- hydrate decrypted note ---------- */
   const hydrate = (m) => {
     const v = m.video || {};
     const startSeconds = v.startMs ? Math.floor(v.startMs / 1000) : 0;
@@ -168,9 +173,12 @@ function EditCoachMatchModalButton({
       opponentRank: m.opponent?.rank || "",
       opponentClub: m.opponent?.club || "",
       opponentCountry: m.opponent?.country || "",
+
       whatWentWell: m.whatWentWell || "",
       reinforce: m.reinforce || "",
       needsFix: m.needsFix || "",
+      notes: m.notes || "",
+
       techOurs: (m.techniques?.ours || []).map((t, i) => ({
         value: i,
         label: t,
@@ -179,9 +187,10 @@ function EditCoachMatchModalButton({
         value: i,
         label: t,
       })),
+
       result: m.result || "",
       score: m.score || "",
-      notes: m.notes || "",
+
       videoLabel: v.label || "",
       videoUrl: v.url || "",
       videoH: String(h),
@@ -192,25 +201,26 @@ function EditCoachMatchModalButton({
 
     const exists = Boolean(v && v.url);
     setHadSavedVideo(exists);
-    setEditingNewVideo(!exists); // if no saved video, we start in "add" mode
+    setEditingNewVideo(!exists);
   };
 
+  /* ---------- load decrypted from server ---------- */
   useEffect(() => {
     if (!open) return;
-
-    if (initialMatch) hydrate(initialMatch);
 
     setVideoLoading(true);
     (async () => {
       try {
         const res = await fetch(
-          `/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches/${matchId}`,
+          `/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches/${matchId}?decrypt=1`,
           { cache: "no-store" }
         );
+
         const data = await res.json();
-        if (res.ok && data.match) hydrate(data.match);
-        else toast.error(data?.error || "Failed to load note");
-      } catch {
+        if (!res.ok || !data?.match) throw new Error(data?.error);
+
+        hydrate(data.match);
+      } catch (err) {
         toast.error("Failed to load note");
       } finally {
         setVideoLoading(false);
@@ -218,85 +228,94 @@ function EditCoachMatchModalButton({
     })();
   }, [open, slug, eventId, entryId, matchId]);
 
+  /* ---------- submit ---------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Build startMs EXACTLY like Add form
+    // build startMs
     const h = Number.parseInt(note.videoH ?? "0", 10) || 0;
     const m = Number.parseInt(note.videoM ?? "0", 10) || 0;
     const s = Number.parseInt(note.videoS ?? "0", 10) || 0;
     const startMs = (h * 3600 + m * 60 + s) * 1000;
 
     const trimmedUrl = (note.videoUrl || "").trim();
-    const trimmedLabel = (note.videoLabel || "").trim();
 
-    // Base payload (same shape as Add)
-    const body = {
+    // -------------------------------
+    // 🔐 build SENSITIVE BODY
+    // -------------------------------
+    const sensitiveBody = {
+      whatWentWell: note.whatWentWell,
+      reinforce: note.reinforce,
+      needsFix: note.needsFix,
+      notes: note.notes,
+      techniques: {
+        ours: note.techOurs?.map((t) => t.label) || [],
+        theirs: note.techTheirs?.map((t) => t.label) || [],
+      },
+      result: note.result,
+      score: note.score,
+    };
+
+    // -------------------------------
+    // 🔐 encrypt if team lock enabled
+    // -------------------------------
+    const { body: encryptedBody, crypto } = await encryptCoachNoteBody(
+      team,
+      sensitiveBody
+    );
+
+    // -------------------------------
+    // non-encrypted opponent + video
+    // -------------------------------
+    const finalPayload = {
       opponent: {
         name: note.opponentName,
         rank: note.opponentRank,
         club: note.opponentClub,
         country: note.opponentCountry,
       },
-      whatWentWell: note.whatWentWell,
-      reinforce: note.reinforce,
-      needsFix: note.needsFix,
-      techniques: {
-        ours: note.techOurs?.map((t) => t.label),
-        theirs: note.techTheirs?.map((t) => t.label),
-      },
-      result: note.result,
-      score: note.score,
-      notes: note.notes,
-      // ⬇️ video is handled below
+
+      ...encryptedBody, // always blank if encrypted, or plaintext if no lock
+      crypto,
     };
 
-    /**
-     * Video rules — IDENTICAL to Add behavior:
-     * - If user typed a URL => include a full `video` object (save/replace).
-     * - If user cleared URL *after hitting Remove* => send `video: null` (clear).
-     * - Otherwise (no change) => do not include `video` at all (keep original).
-     */
-    const userIsEditingVideo = true; // we’re in the edit form; deciding by current fields
+    // VIDEO rules (preserve your existing logic)
     const userClearedVideo = !trimmedUrl && (hadSavedVideo || editingNewVideo);
-
     if (trimmedUrl) {
-      body.video = { url: trimmedUrl, label: trimmedLabel, startMs };
+      finalPayload.video = { url: trimmedUrl, label: note.videoLabel, startMs };
     } else if (userClearedVideo) {
-      body.video = null; // explicit clear
+      finalPayload.video = null;
     }
-    // else: omit body.video completely -> backend leaves as-is
 
+    // -------------------------------
+    // PATCH
+    // -------------------------------
     const res = await fetch(
       `/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches/${matchId}`,
       {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify(finalPayload),
       }
     );
 
     const data = await res.json();
     if (!res.ok) return toast.error(data?.error || "Update failed");
+
     toast.success("Match updated");
     setOpen(false);
     router.refresh();
   };
 
-  // live preview timestamp for editing state
   const startSecs =
     (Number.parseInt(note.videoH ?? "0", 10) || 0) * 3600 +
     (Number.parseInt(note.videoM ?? "0", 10) || 0) * 60 +
     (Number.parseInt(note.videoS ?? "0", 10) || 0);
 
-  // UI logic:
-  // - If there was a saved video and we're NOT editingNewVideo => show preview + "Remove video" (no fields).
-  // - Otherwise (adding or changing) => show URL + Title + Timestamp fields, plus live preview if URL present.
   const showSavedPreviewOnly = hadSavedVideo && !editingNewVideo;
 
   return (
     <>
-      {/* DO NOT CHANGE THIS PENCIL */}
       <button
         type="button"
         onClick={() => setOpen(true)}
@@ -318,6 +337,7 @@ function EditCoachMatchModalButton({
           onSubmit={handleSubmit}
           className="grid gap-5"
         >
+          {/* OPPONENT */}
           <div className="grid sm:grid-cols-2 gap-3">
             <TextInput
               label="Opponent name"
@@ -343,6 +363,7 @@ function EditCoachMatchModalButton({
             />
           </div>
 
+          {/* Key notes */}
           <Editor
             name="well"
             label="What went well"
@@ -362,6 +383,7 @@ function EditCoachMatchModalButton({
             onChange={setField("needsFix")}
           />
 
+          {/* Techniques */}
           <TechniqueTagInput
             label="Techniques (ours)"
             name="ours"
@@ -397,36 +419,34 @@ function EditCoachMatchModalButton({
             }
           />
 
-          {/* VIDEO SECTION */}
+          {/* VIDEO */}
           <div className="border rounded-lg p-4 space-y-3">
             <div className="text-sm font-semibold">Video (optional)</div>
 
             {videoLoading ? (
               <div className="w-full aspect-video rounded border animate-pulse" />
             ) : showSavedPreviewOnly ? (
-              // Case: DB has a saved video and user is NOT editing it yet
-              <div className="space-y-3">
+              <>
                 <VideoPreview
                   url={note.videoUrl}
-                  startMs={note.videoStartMs || 0}
+                  startMs={note.videoStartMs}
                   label={note.videoLabel}
                 />
                 <div className="flex justify-end gap-2">
                   <button
                     type="button"
                     onClick={() => {
-                      setEditingNewVideo(true); // you're changing/adding a video now
-                      clearVideoFields(); // blank title/url/timestamp
+                      setEditingNewVideo(true);
+                      clearVideoFields();
                     }}
                     className="px-3 py-1.5 rounded border hover:bg-black/5 dark:hover:bg-white/10"
                   >
                     Remove video
                   </button>
                 </div>
-              </div>
+              </>
             ) : (
-              // Case: adding a new video OR changing an existing one
-              <div className="space-y-3">
+              <>
                 <TextInput
                   label="Video title"
                   value={note.videoLabel || ""}
@@ -434,15 +454,15 @@ function EditCoachMatchModalButton({
                   placeholder="e.g., First exchange"
                 />
                 <TextInput
-                  label="YouTube / MP4 / Cloudinary URL"
+                  label="YouTube / MP4 URL"
                   value={note.videoUrl || ""}
                   onChange={(v) => {
                     setField("videoUrl")(v);
-                    // ensure we remain in editing mode when user types
                     setEditingNewVideo(true);
                   }}
-                  placeholder="https://youtu.be/... or https://.../video.mp4"
+                  placeholder="https://youtu.be/... or mp4"
                 />
+
                 <div className="grid grid-cols-3 gap-3">
                   <NumberInput
                     label="Hours"
@@ -461,18 +481,18 @@ function EditCoachMatchModalButton({
                   />
                 </div>
 
-                {/* live preview while adding/changing (keeps fields visible) */}
-                {(note.videoUrl || "").trim() ? (
+                {note.videoUrl ? (
                   <VideoPreview
                     url={(note.videoUrl || "").trim()}
-                    startMs={(startSecs || 0) * 1000}
+                    startMs={startSecs * 1000}
                     label={note.videoLabel}
                   />
                 ) : null}
-              </div>
+              </>
             )}
           </div>
 
+          {/* footer */}
           <div className="flex gap-3">
             <button
               type="button"

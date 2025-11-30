@@ -9,14 +9,15 @@ import { toast } from "react-toastify";
 import EditCoachMatchModalButton from "@/components/teams/coach-notes/forms/EditCoachMatchModalButton";
 import PreviewAthleteNotesButton from "@/components/teams/coach-notes/PreviewAthleteNotesButton";
 
-export default function NoteRowActions({
+const NoteRowActions = ({
   slug,
   eventId,
   entryId,
   matchId,
   initialMatch,
   athleteName,
-}) {
+  team, // 🔐 passed from page → used by EditCoachMatchModalButton
+}) => {
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
 
@@ -49,13 +50,14 @@ export default function NoteRowActions({
         entryId={entryId}
         matchId={matchId}
         initialMatch={initialMatch}
+        team={team} // 🔐 give the team to the edit modal so it can encrypt
         onSaved={() => router.refresh()}
         className="flex items-center justify-center p-1.5 rounded-md hover:bg-amber-500/10 transition-colors"
         title="Edit"
         ariaLabel="Edit"
       />
 
-      {/* PREVIEW (Eye) */}
+      {/* PREVIEW */}
       <PreviewAthleteNotesButton
         slug={slug}
         eventId={eventId}
@@ -93,4 +95,6 @@ export default function NoteRowActions({
       </button>
     </div>
   );
-}
+};
+
+export default NoteRowActions;

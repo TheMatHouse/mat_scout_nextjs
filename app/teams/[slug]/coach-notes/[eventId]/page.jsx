@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { headers, cookies } from "next/headers";
 
 import AddCoachAthleteModalButton from "@/components/teams/coach-notes/forms/AddCoachAthleteModalButton";
-import AddCoachMatchModalButton from "@/components/teams/coach-notes/forms/AddCoachMatchModalButton"; // adjust if path differs
+import AddCoachMatchModalButton from "@/components/teams/coach-notes/forms/AddCoachMatchModalButton";
 import NoteRowActions from "@/components/teams/coach-notes/NoteRowActions";
 import RemoveEntryButton from "@/components/teams/coach-notes/RemoveEntryButton";
 
@@ -62,6 +62,24 @@ const serializeNote = (n = {}) => {
 };
 
 /* ---------------- data loaders ---------------- */
+const getTeam = async (slug) => {
+  try {
+    const base = await getBaseUrl();
+    const cookie = await getCookieHeader();
+
+    const res = await fetch(`${base}/api/teams/${slug}`, {
+      cache: "no-store",
+      headers: { cookie },
+    });
+
+    if (!res.ok) return null;
+    const data = await safeJson(res);
+    return data?.team || null;
+  } catch {
+    return null;
+  }
+};
+
 const getEntries = async (slug, eventId) => {
   try {
     const base = await getBaseUrl();
@@ -114,14 +132,14 @@ const getMatches = async (slug, eventId, entryId) => {
 };
 
 /* ---------------- subcomponents (server) ---------------- */
-const MatchList = async ({ slug, eventId, entry }) => {
+const MatchList = async ({ slug, eventId, entry, team }) => {
   const { notes, _error } = await getMatches(slug, eventId, entry._id);
 
   const sorted = Array.isArray(notes)
     ? [...notes].sort((a, b) => {
         const da = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
         const db = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return da - db; // entered order
+        return da - db;
       })
     : [];
 
@@ -181,6 +199,7 @@ const MatchList = async ({ slug, eventId, entry }) => {
                       }`.trim()
                     : "Athlete"
                 }
+                team={team}
               />
             </div>
           </div>
@@ -190,7 +209,7 @@ const MatchList = async ({ slug, eventId, entry }) => {
   );
 };
 
-const AthleteCard = async ({ slug, eventId, entry }) => {
+const AthleteCard = async ({ slug, eventId, entry, team }) => {
   return (
     <section
       id={`entry-${entry._id}`}
@@ -224,6 +243,7 @@ const AthleteCard = async ({ slug, eventId, entry }) => {
         slug={slug}
         eventId={eventId}
         entry={entry}
+        team={team}
       />
     </section>
   );
@@ -231,12 +251,13 @@ const AthleteCard = async ({ slug, eventId, entry }) => {
 
 /* ---------------- page ---------------- */
 const EventDetailPage = async ({ params }) => {
-  const { slug, eventId } = await params; // Next 15 awaited-params pattern
+  const { slug, eventId } = await params;
   if (!slug || !eventId) return notFound();
 
-  const [evt, entriesRes] = await Promise.all([
+  const [evt, entriesRes, team] = await Promise.all([
     getEventMeta(slug, eventId),
     getEntries(slug, eventId),
+    getTeam(slug),
   ]);
 
   if (!evt) return notFound();
@@ -289,6 +310,7 @@ const EventDetailPage = async ({ params }) => {
                 slug={slug}
                 eventId={eventId}
                 entry={e}
+                team={team}
               />
             ))}
           </div>
