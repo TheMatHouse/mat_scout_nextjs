@@ -2,8 +2,11 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
-import CoachEvent from "@/models/coachEventModel";
 import { requireTeamRole } from "@/lib/authz/teamRoles";
+
+import CoachEvent from "@/models/coachEventModel";
+import CoachEntry from "@/models/coachEntryModel";
+import FamilyMember from "@/models/familyMemberModel";
 
 export async function GET(_req, { params }) {
   try {
@@ -11,12 +14,70 @@ export async function GET(_req, { params }) {
     const { slug } = await params;
 
     const user = await getCurrentUserFromCookies().catch(() => null);
-    const gate = await requireTeamRole(user?._id, slug, ["manager", "coach"]);
+
+    // -----------------------------
+    // Determine role (owner → manager)
+    // -----------------------------
+    const gate = await requireTeamRole(user?._id, slug, [
+      "manager",
+      "coach",
+      "member",
+    ]);
+
     if (!gate.ok) {
       return NextResponse.json({ error: gate.reason }, { status: gate.status });
     }
 
-    const events = await CoachEvent.find({ team: gate.teamId, deletedAt: null })
+    const isManagerOrCoach = gate.role === "manager" || gate.role === "coach";
+    const teamId = gate.teamId;
+
+    // ============================
+    // A) MANagers/COACHES/OWNERS
+    // ============================
+    if (isManagerOrCoach) {
+      const events = await CoachEvent.find({
+        team: teamId,
+        deletedAt: null,
+      })
+        .sort({ startDate: -1 })
+        .lean();
+
+      return NextResponse.json({ events });
+    }
+
+    // ============================
+    // B) MEMBERS — RESTRICTED VIEW
+    // ============================
+
+    // 1) Get family members (children)
+    const kids = await FamilyMember.find({ userId: user._id })
+      .select("_id")
+      .lean();
+    const kidIds = kids.map((k) => k._id.toString());
+
+    // 2) Find entries belonging to user or their kids
+    const entries = await CoachEntry.find({
+      team: teamId,
+      deletedAt: null,
+      $or: [
+        { "athlete.user": user._id },
+        { "athlete.familyMember": { $in: kidIds } },
+      ],
+    })
+      .select("event")
+      .lean();
+
+    const eventIds = [...new Set(entries.map((e) => e.event.toString()))];
+
+    if (eventIds.length === 0) {
+      return NextResponse.json({ events: [] });
+    }
+
+    // 3) Load only the events they are tied to
+    const events = await CoachEvent.find({
+      _id: { $in: eventIds },
+      deletedAt: null,
+    })
       .sort({ startDate: -1 })
       .lean();
 
@@ -62,7 +123,7 @@ export async function POST(request, { params }) {
     }
 
     const evt = await CoachEvent.create({
-      team: gate.teamId, // ⬅️ teamId from requireTeamRole
+      team: gate.teamId,
       name: String(name).trim(),
       startDate: dStart,
       endDate: dEnd,
@@ -73,7 +134,6 @@ export async function POST(request, { params }) {
     return NextResponse.json({ event: evt });
   } catch (err) {
     console.error("POST coach-notes/events failed:", err);
-    // Try to surface duplicate index or validation errors cleanly
     const msg =
       err?.code === 11000
         ? "An event with this name and date already exists for this team."

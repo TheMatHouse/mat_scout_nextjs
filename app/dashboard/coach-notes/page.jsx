@@ -4,9 +4,10 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth-server";
 import DashboardCoachNotes from "@/components/dashboard/coach-notes/DashboardCoachNotes";
 
-async function Page() {
+const Page = async () => {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+
   const userId = String(user._id || user.id);
 
   return (
@@ -17,14 +18,15 @@ async function Page() {
             Coach&apos;s Notes
           </h1>
           <p className="mt-1 text-sm text-gray-900 dark:text-gray-100/80">
-            Match notes written by your coaches, grouped by team and event.
+            Match notes written by your coaches, grouped by team.
           </p>
         </header>
 
+        {/* FIXED — pass full user object AND userId */}
         <DashboardCoachNotes userId={userId} />
       </div>
     </main>
   );
-}
+};
 
 export default Page;

@@ -65,9 +65,9 @@ const Footer = () => {
           </Link>
 
           {/* Future icons — leave commented or add when ready */}
-          {/*
+
           <Link
-            href="https://x.com/your_handle"
+            href="https://x.com/thematscout"
             target="_blank"
             aria-label="MatScout on X"
             className="hover:text-white opacity-80 transition-opacity"
@@ -75,14 +75,13 @@ const Footer = () => {
             <FaTwitter />
           </Link>
           <Link
-            href="https://instagram.com/your_handle"
+            href="https://instagram.com/thematscout"
             target="_blank"
             aria-label="MatScout on Instagram"
             className="hover:text-white opacity-80 transition-opacity"
           >
             <FaInstagram />
           </Link>
-          */}
         </div>
       </div>
     </footer>

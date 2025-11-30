@@ -2,49 +2,64 @@
 "use client";
 
 import { useState } from "react";
+
 import FamilyMemberSettings from "./sections/FamilySettings";
 import FamilyStyles from "./sections/FamilyStyles";
 import FamilyMatches from "./sections/FamilyMatchReports";
 import FamilyScoutingReports from "./sections/FamilyScoutingReports";
-import FamilyBio from "./sections/FamilyBio"; // ⬅️ NEW
+import FamilyBio from "./sections/FamilyBio";
+
+import FamilyTeamCoachNotesTab from "./FamilyTeamCoachNotesTab";
+import { useUser } from "@/context/UserContext";
 
 const TABS = [
   { id: "settings", label: "Settings" },
-  { id: "bio", label: "Bio" }, // ⬅️ NEW
+  { id: "bio", label: "Bio" },
   { id: "styles", label: "Styles" },
   { id: "matches", label: "Match Reports" },
   { id: "scouting", label: "Scouting Reports" },
+  { id: "coachNotes", label: "Coach Notes" }, // NEW
 ];
 
 export default function FamilyMemberDashboard({ member }) {
+  const { user: parentUser } = useUser();
   const [activeTab, setActiveTab] = useState("settings");
-
-  const handleTabChange = (tabId) => {
-    setActiveTab(tabId);
-  };
 
   const renderTabContent = () => {
     switch (activeTab) {
       case "settings":
         return <FamilyMemberSettings member={member} />;
-      case "bio": // ⬅️ NEW
+
+      case "bio":
         return <FamilyBio member={member} />;
+
       case "styles":
         return <FamilyStyles member={member} />;
+
       case "matches":
         return (
           <FamilyMatches
             member={member}
-            onSwitchToStyles={() => handleTabChange("styles")}
+            onSwitchToStyles={() => setActiveTab("styles")}
           />
         );
+
       case "scouting":
         return (
           <FamilyScoutingReports
             member={member}
-            onSwitchToStyles={() => handleTabChange("styles")}
+            onSwitchToStyles={() => setActiveTab("styles")}
           />
         );
+
+      case "coachNotes":
+        return (
+          <FamilyTeamCoachNotesTab
+            parentUser={parentUser}
+            member={member}
+          />
+        );
+
       default:
         return null;
     }
@@ -57,7 +72,7 @@ export default function FamilyMemberDashboard({ member }) {
           {TABS.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => handleTabChange(tab.id)}
+              onClick={() => setActiveTab(tab.id)}
               className={`px-4 py-2 rounded-t-md font-medium transition-colors
                 ${
                   activeTab === tab.id
@@ -70,6 +85,7 @@ export default function FamilyMemberDashboard({ member }) {
           ))}
         </nav>
       </div>
+
       <div>{renderTabContent()}</div>
     </div>
   );

@@ -119,7 +119,7 @@ export default async function TeamLayout({ children, params }) {
   }
 
   // Only Manager/Coach sees Coach’s Notes
-  if (isManager || isCoach) {
+  if (isMember) {
     tabs.push({
       label: "Coach's Notes",
       href: `/teams/${slug}/coach-notes`,

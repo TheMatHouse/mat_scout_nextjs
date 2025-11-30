@@ -1,9 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { CalendarDays, MapPin, ChevronRight } from "lucide-react";
+
 import RemoveCoachEventButton from "@/components/teams/coach-notes/RemoveCoachEventButton";
+
+const STORAGE_KEY = (teamId) => `ms:teamlock:${teamId}`;
 
 function startOfToday() {
   const d = new Date();
@@ -14,12 +17,27 @@ function norm(s) {
   return (s ?? "").toString().toLowerCase();
 }
 
-function CoachNotesClient({ slug, events }) {
+function CoachNotesClient({ slug, events, teamId }) {
   const [scope, setScope] = useState("upcoming"); // "upcoming" | "past" | "all"
   const [q, setQ] = useState("");
+  const [teamPassword, setTeamPassword] = useState("");
 
   const today = startOfToday();
 
+  // -----------------------------
+  // Load decrypted team password
+  // -----------------------------
+  useEffect(() => {
+    if (!teamId) return;
+    try {
+      const pwd = sessionStorage.getItem(STORAGE_KEY(teamId)) || "";
+      if (pwd) setTeamPassword(pwd);
+    } catch {}
+  }, [teamId]);
+
+  // -----------------------------
+  // Counts (upcoming / past / all)
+  // -----------------------------
   const counts = useMemo(() => {
     return events.reduce(
       (acc, e) => {
@@ -34,26 +52,27 @@ function CoachNotesClient({ slug, events }) {
     );
   }, [events, today]);
 
+  // -----------------------------
+  // Filter & sort
+  // -----------------------------
   const filtered = useMemo(() => {
     let list = events.filter((e) => {
-      // scope filter
       const dt = e?.startDate ? new Date(e.startDate) : null;
       const isPast = dt ? dt < today : false;
+
       if (scope === "upcoming" && isPast) return false;
       if (scope === "past" && !isPast) return false;
 
-      // search
       if (!q) return true;
       const bag = `${norm(e?.name)} ${norm(e?.location)}`;
       return bag.includes(norm(q));
     });
 
-    // sorting
     list.sort((a, b) => {
       const da = a?.startDate ? new Date(a.startDate).getTime() : 0;
       const db = b?.startDate ? new Date(b.startDate).getTime() : 0;
-      if (scope === "past") return db - da; // most recent past first
-      return da - db; // soonest upcoming first (or all)
+      if (scope === "past") return db - da;
+      return da - db;
     });
 
     return list;
@@ -61,7 +80,7 @@ function CoachNotesClient({ slug, events }) {
 
   return (
     <section className="space-y-4">
-      {/* Tabs + Search (client-only) */}
+      {/* Tabs + Search */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         {/* Tabs */}
         <div className="inline-flex overflow-hidden rounded-xl border border-gray-300 dark:border-gray-700">
@@ -95,7 +114,7 @@ function CoachNotesClient({ slug, events }) {
           })}
         </div>
 
-        {/* Search (no navigation) */}
+        {/* Search */}
         <div className="flex items-stretch gap-2">
           <input
             value={q}
@@ -126,7 +145,7 @@ function CoachNotesClient({ slug, events }) {
               <li key={evt._id}>
                 <div className="group relative rounded-2xl border border-gray-300/60 dark:border-gray-700/70 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow">
                   <div className="p-4 sm:p-5 flex items-center justify-between gap-4">
-                    {/* Left: title + meta */}
+                    {/* Left */}
                     <div className="min-w-0">
                       <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
                         {evt.name}
@@ -149,10 +168,14 @@ function CoachNotesClient({ slug, events }) {
                       </div>
                     </div>
 
-                    {/* Right: actions */}
+                    {/* Right Actions */}
                     <div className="shrink-0 flex items-center gap-2">
                       <Link
-                        href={`/teams/${slug}/coach-notes/${evt._id}`}
+                        href={`/teams/${slug}/coach-notes/${evt._id}${
+                          teamPassword
+                            ? `?pwd=${encodeURIComponent(teamPassword)}`
+                            : ""
+                        }`}
                         className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm font-medium text-gray-900 dark:text-gray-100 hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 dark:focus:ring-gray-600"
                       >
                         Open
@@ -168,7 +191,6 @@ function CoachNotesClient({ slug, events }) {
                     </div>
                   </div>
 
-                  {/* decorative hover ring */}
                   <div className="pointer-events-none absolute inset-0 rounded-2xl ring-0 ring-gray-400/0 group-hover:ring-2 group-hover:ring-gray-300/60 dark:group-hover:ring-white/10 transition" />
                 </div>
               </li>

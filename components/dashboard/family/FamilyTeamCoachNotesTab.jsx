@@ -1,0 +1,306 @@
+// components/dashboard/family/FamilyTeamCoachNotesTab.jsx
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "react-toastify";
+
+import { Shield, Lock, LockOpen } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+import Spinner from "@/components/shared/Spinner";
+import { verifyPasswordLocally } from "@/lib/crypto/locker";
+
+const STORAGE_KEY = (teamId) => `ms:teamlock:${teamId}`;
+
+export default function FamilyTeamCoachNotesTab({ parentUser, member }) {
+  const router = useRouter();
+
+  const [teams, setTeams] = useState([]);
+  const [loadingTeams, setLoadingTeams] = useState(true);
+
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [activeTeam, setActiveTeam] = useState(null);
+  const [password, setPassword] = useState("");
+  const [submittingPassword, setSubmittingPassword] = useState(false);
+  const [unlockedTeams, setUnlockedTeams] = useState({});
+
+  // Load child's teams
+  useEffect(() => {
+    if (!parentUser?._id || !member?._id) return;
+
+    (async () => {
+      setLoadingTeams(true);
+      try {
+        const res = await fetch(
+          `/api/dashboard/${parentUser._id}/family/${member._id}/teams`,
+          {
+            cache: "no-store",
+            credentials: "include",
+            headers: { accept: "application/json" },
+          }
+        );
+
+        const json = await res.json().catch(() => ({}));
+        const list = Array.isArray(json?.teams) ? json.teams : [];
+
+        setTeams(list);
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load teams.");
+      } finally {
+        setLoadingTeams(false);
+      }
+    })();
+  }, [parentUser?._id, member?._id]);
+
+  // Navigate to team coach notes for this child
+  const goToTeamCoachNotes = (slug) => {
+    router.push(
+      `/teams/${encodeURIComponent(slug)}/coach-notes?familyMember=${
+        member._id
+      }`
+    );
+  };
+
+  // Handle team card click
+  const handleTeamClick = async (team) => {
+    const slug = team.teamSlug || team.slug || "";
+    if (!slug) return;
+
+    try {
+      const res = await fetch(`/api/teams/${slug}/security`, {
+        credentials: "include",
+        headers: { accept: "application/json" },
+      });
+
+      if (!res.ok) {
+        toast.error("Unable to load team security info.");
+        return;
+      }
+
+      const json = await res.json().catch(() => ({}));
+      const sec = json?.team?.security || {};
+      const lockEnabled = !!sec.lockEnabled;
+
+      if (!lockEnabled || unlockedTeams[slug]) {
+        goToTeamCoachNotes(slug);
+        return;
+      }
+
+      setActiveTeam({
+        _id: json.team._id,
+        slug,
+        teamName: json.team.teamName || "Team",
+        security: sec,
+      });
+      setPassword("");
+      setPasswordModalOpen(true);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load team security details.");
+    }
+  };
+
+  // Password submit
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!activeTeam?.slug) return;
+
+    const slug = activeTeam.slug;
+    const pwd = password.trim();
+    if (!pwd) {
+      toast.error("Please enter the team password.");
+      return;
+    }
+
+    setSubmittingPassword(true);
+
+    try {
+      const json = activeTeam;
+      const sec = json.security;
+
+      if (!sec?.lockEnabled) {
+        setUnlockedTeams((prev) => ({ ...prev, [slug]: true }));
+        goToTeamCoachNotes(slug);
+        return;
+      }
+
+      const normalizedSec = {
+        lockEnabled: true,
+        encVersion: sec.encVersion,
+        kdf: {
+          saltB64: sec.kdf?.saltB64,
+          iterations: sec.kdf?.iterations || 250000,
+        },
+        verifierB64: sec.verifierB64,
+      };
+
+      const ok = await verifyPasswordLocally(pwd, normalizedSec);
+      if (!ok) {
+        toast.error("Incorrect team password.");
+        return;
+      }
+
+      try {
+        sessionStorage.setItem(STORAGE_KEY(activeTeam._id), pwd);
+      } catch {}
+
+      setUnlockedTeams((prev) => ({ ...prev, [slug]: true }));
+      setPassword("");
+      setPasswordModalOpen(false);
+      goToTeamCoachNotes(slug);
+    } catch (err) {
+      console.error(err);
+      toast.error("Unable to verify password.");
+    } finally {
+      setSubmittingPassword(false);
+    }
+  };
+
+  // UI
+  if (loadingTeams) {
+    return (
+      <div className="flex flex-col justify-center items-center h-[40vh]">
+        <Spinner size={48} />
+        <p className="mt-2 text-base text-gray-900 dark:text-gray-100">
+          Loading teams…
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="space-y-6">
+        <div className="flex items-center gap-2">
+          <Shield className="w-5 h-5 text-ms-blue" />
+          <p className="text-sm text-gray-900 dark:text-gray-100">
+            Select a team to view Coach Notes for {member.firstName}.
+          </p>
+        </div>
+
+        {!teams.length ? (
+          <p className="text-sm text-gray-900 dark:text-gray-100">
+            This family member is not part of any teams.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {teams.map((team) => {
+              const slug = team.teamSlug || "";
+              const lockEnabled = !!team?.security?.lockEnabled;
+              const isUnlocked = unlockedTeams[slug];
+
+              return (
+                <div
+                  key={team._id || slug}
+                  className="flex flex-col justify-between border rounded-xl bg-white dark:bg-gray-900 p-4 shadow-sm gap-3"
+                >
+                  <div>
+                    <p className="font-semibold text-gray-900 dark:text-gray-100">
+                      {team.teamName}
+                    </p>
+
+                    <p className="text-xs mt-1 flex items-center gap-1">
+                      {lockEnabled ? (
+                        <>
+                          <Lock className="w-3 h-3 text-yellow-500" />
+                          <span className="text-yellow-300">
+                            {isUnlocked
+                              ? "Password verified"
+                              : "Password required"}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <LockOpen className="w-3 h-3 text-green-500" />
+                          <span className="text-green-300">
+                            No password set
+                          </span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="flex justify-end mt-2">
+                    <Button
+                      type="button"
+                      onClick={() => handleTeamClick(team)}
+                      className="bg-ms-blue-gray hover:bg-ms-blue text-white text-sm"
+                    >
+                      View Coach Notes
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Password Modal */}
+      {passwordModalOpen && activeTeam && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-xl bg-white dark:bg-gray-900 p-6 shadow-lg">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Enter team password
+            </h2>
+            <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">
+              To view Coach Notes for{" "}
+              <span className="font-medium">
+                {activeTeam.teamName || "this team"}
+              </span>
+              , enter the password.
+            </p>
+
+            <form
+              onSubmit={handlePasswordSubmit}
+              className="mt-4 space-y-4"
+            >
+              <div>
+                <label
+                  htmlFor="team-password"
+                  className="block text-sm font-medium text-gray-900 dark:text-gray-100"
+                >
+                  Team password
+                </label>
+                <input
+                  id="team-password"
+                  type="password"
+                  autoFocus
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="mt-1 block w-full rounded-md border bg-white dark:bg-gray-950 px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
+                  placeholder="Enter team password"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setPasswordModalOpen(false);
+                    setActiveTeam(null);
+                    setPassword("");
+                  }}
+                  disabled={submittingPassword}
+                >
+                  Cancel
+                </Button>
+
+                <Button
+                  type="submit"
+                  disabled={submittingPassword || !password.trim()}
+                  className="bg-ms-blue-gray hover:bg-ms-blue text-white"
+                >
+                  {submittingPassword ? "Verifying…" : "Unlock Team"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

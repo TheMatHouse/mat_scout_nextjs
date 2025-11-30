@@ -1,3 +1,4 @@
+// app/teams/[slug]/coach-notes/[eventId]/page.jsx
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
@@ -8,6 +9,14 @@ import AddCoachAthleteModalButton from "@/components/teams/coach-notes/forms/Add
 import AddCoachMatchModalButton from "@/components/teams/coach-notes/forms/AddCoachMatchModalButton";
 import NoteRowActions from "@/components/teams/coach-notes/NoteRowActions";
 import RemoveEntryButton from "@/components/teams/coach-notes/RemoveEntryButton";
+import TeamUnlockGate from "@/components/teams/TeamUnlockGate";
+
+import { getCurrentUserFromCookies } from "@/lib/auth-server";
+import { connectDB } from "@/lib/mongo";
+
+import Team from "@/models/teamModel";
+import TeamMember from "@/models/teamMemberModel";
+import FamilyMember from "@/models/familyMemberModel";
 
 /* ---------------- helpers ---------------- */
 const getBaseUrl = async () => {
@@ -33,6 +42,7 @@ const safeJson = async (res) => {
 };
 
 const toStr = (v) => (v == null ? "" : String(v));
+
 const serializeNote = (n = {}) => {
   const opp = n?.opponent || {};
   const tech = n?.techniques || {};
@@ -59,6 +69,41 @@ const serializeNote = (n = {}) => {
     createdAt: n?.createdAt ? new Date(n.createdAt).toISOString() : "",
     updatedAt: n?.updatedAt ? new Date(n.updatedAt).toISOString() : "",
   };
+};
+
+/* ---------------- role + family ---------------- */
+const getUserRoleAndFamily = async (slug) => {
+  await connectDB();
+
+  const user = await getCurrentUserFromCookies().catch(() => null);
+  if (!user) return { role: "none", user: null, familyIds: [] };
+
+  const team = await Team.findOne({ teamSlug: slug }).lean();
+  if (!team) return { role: "none", user, familyIds: [] };
+
+  const isOwner = team.user && String(team.user) === String(user._id);
+  if (isOwner) {
+    return { role: "manager", user, familyIds: [] };
+  }
+
+  const membership = await TeamMember.findOne({
+    teamId: team._id,
+    userId: user._id,
+    familyMemberId: null,
+  })
+    .select("role")
+    .lean();
+
+  let role = membership?.role ? membership.role.toLowerCase() : "none";
+
+  // load user's kids
+  const familyMembers = await FamilyMember.find({ userId: user._id })
+    .select("_id")
+    .lean();
+
+  const familyIds = familyMembers.map((f) => String(f._id));
+
+  return { role, user, familyIds };
 };
 
 /* ---------------- data loaders ---------------- */
@@ -131,8 +176,13 @@ const getMatches = async (slug, eventId, entryId) => {
   }
 };
 
+<<<<<<< Updated upstream
 /* ---------------- subcomponents (server) ---------------- */
 const MatchList = async ({ slug, eventId, entry, team }) => {
+=======
+/* ---------------- server components ---------------- */
+const MatchList = async ({ slug, eventId, entry, isManagerOrCoach }) => {
+>>>>>>> Stashed changes
   const { notes, _error } = await getMatches(slug, eventId, entry._id);
 
   const sorted = Array.isArray(notes)
@@ -185,6 +235,7 @@ const MatchList = async ({ slug, eventId, entry, team }) => {
               </div>
             </div>
 
+<<<<<<< Updated upstream
             <div className="shrink-0 flex items-center gap-2">
               <NoteRowActions
                 slug={slug}
@@ -202,6 +253,20 @@ const MatchList = async ({ slug, eventId, entry, team }) => {
                 team={team}
               />
             </div>
+=======
+            {isManagerOrCoach ? (
+              <div className="shrink-0 flex items-center gap-2">
+                <NoteRowActions
+                  slug={slug}
+                  eventId={eventId}
+                  entryId={entry._id}
+                  matchId={n._id}
+                  initialMatch={n}
+                  athleteName={entry?.athlete?.name || "Athlete"}
+                />
+              </div>
+            ) : null}
+>>>>>>> Stashed changes
           </div>
         );
       })}
@@ -209,7 +274,11 @@ const MatchList = async ({ slug, eventId, entry, team }) => {
   );
 };
 
+<<<<<<< Updated upstream
 const AthleteCard = async ({ slug, eventId, entry, team }) => {
+=======
+const AthleteCard = async ({ slug, eventId, entry, isManagerOrCoach }) => {
+>>>>>>> Stashed changes
   return (
     <section
       id={`entry-${entry._id}`}
@@ -225,36 +294,55 @@ const AthleteCard = async ({ slug, eventId, entry, team }) => {
           </div>
         </div>
 
-        <div className="shrink-0 flex items-center gap-2">
-          <AddCoachMatchModalButton
-            slug={slug}
-            eventId={eventId}
-            entryId={entry._id}
-          />
-          <RemoveEntryButton
-            slug={slug}
-            eventId={eventId}
-            entryId={entry._id}
-          />
-        </div>
+        {isManagerOrCoach ? (
+          <div className="shrink-0 flex items-center gap-2">
+            <AddCoachMatchModalButton
+              slug={slug}
+              eventId={eventId}
+              entryId={entry._id}
+            />
+            <RemoveEntryButton
+              slug={slug}
+              eventId={eventId}
+              entryId={entry._id}
+            />
+          </div>
+        ) : null}
       </div>
 
       <MatchList
         slug={slug}
         eventId={eventId}
         entry={entry}
+<<<<<<< Updated upstream
         team={team}
+=======
+        isManagerOrCoach={isManagerOrCoach}
+>>>>>>> Stashed changes
       />
     </section>
   );
 };
 
+<<<<<<< Updated upstream
 /* ---------------- page ---------------- */
 const EventDetailPage = async ({ params }) => {
   const { slug, eventId } = await params;
   if (!slug || !eventId) return notFound();
 
   const [evt, entriesRes, team] = await Promise.all([
+=======
+/* ---------------- PAGE ---------------- */
+const EventDetailPage = async ({ params, searchParams }) => {
+  const { slug, eventId } = await params;
+  const search = await searchParams;
+  const familyMemberId = search?.familyMember || null;
+
+  if (!slug || !eventId) return notFound();
+
+  const [{ role, user, familyIds }, evt, entriesRes] = await Promise.all([
+    getUserRoleAndFamily(slug),
+>>>>>>> Stashed changes
     getEventMeta(slug, eventId),
     getEntries(slug, eventId),
     getTeam(slug),
@@ -262,65 +350,108 @@ const EventDetailPage = async ({ params }) => {
 
   if (!evt) return notFound();
 
-  const entries = Array.isArray(entriesRes?.entries) ? entriesRes.entries : [];
+  const isManagerOrCoach = role === "manager" || role === "coach";
+
+  const allEntries = Array.isArray(entriesRes?.entries)
+    ? entriesRes.entries
+    : [];
+
   const loadErr = entriesRes?._error;
 
+  // FILTER VISIBLE ENTRIES
+  let visibleEntries = allEntries;
+
+  // If familyMember param exists → filter to child ONLY
+  if (familyMemberId) {
+    visibleEntries = visibleEntries.filter(
+      (e) =>
+        e.athlete?.familyMember &&
+        String(e.athlete.familyMember) === String(familyMemberId)
+    );
+  } else if (!isManagerOrCoach) {
+    // Normal member filtering
+    const userId = String(user._id);
+
+    visibleEntries = allEntries.filter((e) => {
+      const a = e.athlete || {};
+
+      const isSelf = a.user && String(a.user) === userId;
+      const isMyChild =
+        a.familyMember && familyIds.includes(String(a.familyMember));
+
+      return isSelf || isMyChild;
+    });
+  }
+
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {evt.name}
-          </h1>
-          <div className="text-sm text-gray-900 dark:text-gray-100/80">
-            {evt.startDate ? new Date(evt.startDate).toLocaleDateString() : ""}
-            {evt.location ? ` • ${evt.location}` : ""}
+    <TeamUnlockGate slug={slug}>
+      <div className="mx-auto max-w-6xl px-4 py-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+              {evt.name}
+            </h1>
+            <div className="text-sm text-gray-900 dark:text-gray-100/80">
+              {evt.startDate
+                ? new Date(evt.startDate).toLocaleDateString()
+                : ""}
+              {evt.location ? ` • ${evt.location}` : ""}
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <AddCoachAthleteModalButton
-            slug={slug}
-            eventId={eventId}
-          />
-          <Link
-            href={`/teams/${slug}/coach-notes`}
-            className="text-sm underline text-gray-900 dark:text-gray-100"
-          >
-            Back to events
-          </Link>
-        </div>
-      </div>
 
-      {loadErr ? (
-        <div className="text-sm text-red-600">
-          Failed to load athletes: {loadErr}
-        </div>
-      ) : null}
-
-      <div className="space-y-4">
-        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
-          Athletes
-        </h3>
-
-        {entries.length ? (
-          <div className="grid gap-4">
-            {entries.map((e) => (
-              <AthleteCard
-                key={String(e?._id)}
+          <div className="flex items-center gap-2">
+            {isManagerOrCoach ? (
+              <AddCoachAthleteModalButton
                 slug={slug}
                 eventId={eventId}
+<<<<<<< Updated upstream
                 entry={e}
                 team={team}
+=======
+>>>>>>> Stashed changes
               />
-            ))}
+            ) : null}
+
+            <Link
+              href={`/teams/${slug}/coach-notes`}
+              className="text-sm underline text-gray-900 dark:text-gray-100"
+            >
+              Back to events
+            </Link>
           </div>
-        ) : (
-          <div className="text-sm text-gray-900 dark:text-gray-100/80">
-            No athletes yet for this event.
+        </div>
+
+        {loadErr ? (
+          <div className="text-sm text-red-600">
+            Failed to load athletes: {loadErr}
           </div>
-        )}
+        ) : null}
+
+        <div className="space-y-4">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+            Athletes
+          </h3>
+
+          {visibleEntries.length ? (
+            <div className="grid gap-4">
+              {visibleEntries.map((e) => (
+                <AthleteCard
+                  key={String(e?._id)}
+                  slug={slug}
+                  eventId={eventId}
+                  entry={e}
+                  isManagerOrCoach={isManagerOrCoach}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-sm text-gray-900 dark:text-gray-100/80">
+              No athletes yet for this event.
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </TeamUnlockGate>
   );
 };
 
