@@ -1,3 +1,4 @@
+// app/api/dashboard/[userId]/teams/route.js
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
@@ -16,10 +17,12 @@ export async function GET(_request, context) {
 
     const viewer = await getCurrentUser();
     if (!viewer) {
+      // Keep your encryption-branch behavior:
       return NextResponse.json([], { status: 401 });
     }
 
     if (String(viewer._id) !== String(userId)) {
+      // Keep your encryption-branch behavior:
       return NextResponse.json([], { status: 403 });
     }
 
@@ -30,11 +33,12 @@ export async function GET(_request, context) {
 
     const memberTeamIds = memberLinks.map((m) => m.teamId).filter(Boolean);
 
-    const memberTeams = memberTeamIds.length
-      ? await Team.find({ _id: { $in: memberTeamIds } })
-          .select("teamName teamSlug logoURL security")
-          .lean()
-      : [];
+    const memberTeams =
+      memberTeamIds.length > 0
+        ? await Team.find({ _id: { $in: memberTeamIds } })
+            .select("teamName teamSlug logoURL security")
+            .lean()
+        : [];
 
     // --- TEAMS WHERE USER IS OWNER
     const ownerTeams = await Team.find({ user: userId })
@@ -45,6 +49,7 @@ export async function GET(_request, context) {
     const map = new Map();
 
     for (const t of memberTeams) map.set(String(t._id), t);
+
     for (const t of ownerTeams) {
       const id = String(t._id);
       if (!map.has(id)) map.set(id, t);
@@ -62,10 +67,12 @@ export async function GET(_request, context) {
       })
     );
 
-    // IMPORTANT: Return ONLY the ARRAY
+    // IMPORTANT: Return ONLY the ARRAY for this branch
     return NextResponse.json(enriched, { status: 200 });
   } catch (err) {
     console.error("Error in GET /api/dashboard/[userId]/teams:", err);
+
+    // Keep your encryption-branch behavior:
     return NextResponse.json([], { status: 500 });
   }
 }

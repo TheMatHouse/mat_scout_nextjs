@@ -66,6 +66,10 @@ const TeamScoutingReportsTab = ({ user }) => {
     })();
   }, [user?._id]);
 
+  useEffect(() => {
+    console.log("TeamScoutingReportsTab user =", user);
+    console.log("TeamScoutingReportsTab user._id =", user?._id);
+  }, [user]);
   // ------------------------------------------------------------------
   const goToTeamReports = (slug) => {
     if (!slug) return;
@@ -226,7 +230,9 @@ const TeamScoutingReportsTab = ({ user }) => {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {teams.map((team) => {
               const slug = team.teamSlug || team.slug || "";
-              const lockEnabled = !!team?.security?.lockEnabled;
+              const lockEnabled = team?.security
+                ? !!team.security.lockEnabled
+                : false;
               const isUnlocked = !!unlockedTeams[slug];
 
               return (
