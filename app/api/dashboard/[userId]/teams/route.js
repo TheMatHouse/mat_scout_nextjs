@@ -17,39 +17,40 @@ export async function GET(_request, context) {
 
     const viewer = await getCurrentUser();
     if (!viewer) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Only allow a user to load THEIR teams
     if (String(viewer._id) !== String(userId)) {
-      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    /* ------------------------------------------------------------------
-       1) TEAMS WHERE USER IS A MEMBER (TeamMember rows)
-    ------------------------------------------------------------------ */
+    /* ---------------------------------------------------------------
+       (1) Teams where user is a member (TeamMember rows)
+    ---------------------------------------------------------------- */
     const memberLinks = await TeamMember.find({
       $or: [{ userId: userId }, { familyMemberId: userId }],
     }).lean();
 
     const memberTeamIds = memberLinks.map((m) => m.teamId).filter(Boolean);
 
-    const memberTeams = memberTeamIds.length
-      ? await Team.find({ _id: { $in: memberTeamIds } })
-          .select("teamName teamSlug logoURL security")
-          .lean()
-      : [];
+    const memberTeams =
+      memberTeamIds.length > 0
+        ? await Team.find({ _id: { $in: memberTeamIds } })
+            .select("teamName teamSlug logoURL security")
+            .lean()
+        : [];
 
-    /* ------------------------------------------------------------------
-       2) TEAMS WHERE USER IS THE OWNER
-    ------------------------------------------------------------------ */
+    /* ---------------------------------------------------------------
+       (2) Teams where user is the owner
+    ---------------------------------------------------------------- */
     const ownerTeams = await Team.find({ user: userId })
       .select("teamName teamSlug logoURL security")
       .lean();
 
-    /* ------------------------------------------------------------------
-       3) MERGE TEAMS WITHOUT DUPLICATES
-    ------------------------------------------------------------------ */
+    /* ---------------------------------------------------------------
+       (3) Merge without duplicates
+    ---------------------------------------------------------------- */
     const map = new Map();
 
     for (const t of memberTeams) {
@@ -57,17 +58,17 @@ export async function GET(_request, context) {
     }
 
     for (const t of ownerTeams) {
-      const id = String(t._id);
-      if (!map.has(id)) {
-        map.set(id, t);
+      const tid = String(t._id);
+      if (!map.has(tid)) {
+        map.set(tid, t);
       }
     }
 
     const teamsArray = Array.from(map.values());
 
-    /* ------------------------------------------------------------------
-       4) COUNT SCOUTING REPORTS PER TEAM
-    ------------------------------------------------------------------ */
+    /* ---------------------------------------------------------------
+       (4) Count scouting reports for each team
+    ---------------------------------------------------------------- */
     const teamsWithCounts = await Promise.all(
       teamsArray.map(async (team) => {
         const count = await TeamScoutingReport.countDocuments({
@@ -81,11 +82,19 @@ export async function GET(_request, context) {
       })
     );
 
-    return NextResponse.json({ teams: teamsWithCounts }, { status: 200 });
+    // IMPORTANT FIX:
+    // Always return a clean JSON object, nothing else.
+    return new Response(JSON.stringify(teamsWithCounts), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
   } catch (err) {
     console.error("Error in GET /api/dashboard/[userId]/teams:", err);
+
     return NextResponse.json(
-      { message: "Failed to load dashboard teams" },
+      { error: "Failed to load dashboard teams" },
       { status: 500 }
     );
   }

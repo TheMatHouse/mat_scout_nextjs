@@ -2,67 +2,68 @@
 "use client";
 
 import { useState } from "react";
-
 import MyScoutingReportsTab from "@/components/dashboard/scouting/MyScoutingReportsTab";
 import TeamScoutingReportsTab from "@/components/dashboard/scouting/TeamScoutingReportsTab";
 
-const DashboardScouting = ({ user }) => {
-  const [activeTab, setActiveTab] = useState("my"); // "my" | "teams"
+function DashboardScouting({ user, refreshUser }) {
+  const [activeTab, setActiveTab] = useState("mine"); // "mine" | "team"
+
+  const tabs = [
+    { id: "mine", label: "My Reports" },
+    { id: "team", label: "Team Reports" },
+  ];
 
   return (
-    <div className="px-4 md:px-6 lg:px-8 py-4">
-      {/* Page header */}
+    <section className="space-y-6">
+      {/* Header */}
       <header className="mb-4">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
           Scouting Reports
         </h1>
-        <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">
+        <p className="mt-1 text-sm text-gray-900 dark:text-gray-200">
           Create your own scouting reports and access reports your teams create
           for you.
         </p>
       </header>
 
       {/* Tabs */}
-      <div className="mb-4 border-b border-gray-300 dark:border-gray-700">
-        <nav className="flex gap-4">
-          <button
-            type="button"
-            onClick={() => setActiveTab("my")}
-            className={[
-              "px-3 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors",
-              activeTab === "my"
-                ? "border-ms-blue text-gray-900 dark:text-gray-100"
-                : "border-transparent text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100",
-            ].join(" ")}
-          >
-            My Reports
-          </button>
+      <div className="border-b border-slate-300 dark:border-slate-700">
+        <div className="inline-flex gap-1">
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
 
-          <button
-            type="button"
-            onClick={() => setActiveTab("teams")}
-            className={[
-              "px-3 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors",
-              activeTab === "teams"
-                ? "border-ms-blue text-gray-900 dark:text-gray-100"
-                : "border-transparent text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100",
-            ].join(" ")}
-          >
-            Team Reports
-          </button>
-        </nav>
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2 text-sm font-semibold rounded-t-md transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ms-blue
+                  ${
+                    isActive
+                      ? "btn btn-primary"
+                      : "text-gray-900 dark:text-gray-100 hover:bg-slate-200 dark:hover:bg-slate-800"
+                  }
+                `}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Tab content */}
-      <div className="pb-4">
-        {activeTab === "my" ? (
-          <MyScoutingReportsTab user={user} />
-        ) : (
-          <TeamScoutingReportsTab user={user} />
+      {/* Content */}
+      <div className="mt-4">
+        {activeTab === "mine" && (
+          <MyScoutingReportsTab
+            user={user}
+            refreshUser={refreshUser}
+          />
         )}
+        {activeTab === "team" && <TeamScoutingReportsTab user={user} />}
       </div>
-    </div>
+    </section>
   );
-};
+}
 
 export default DashboardScouting;
