@@ -17,16 +17,18 @@ export async function GET(_request, context) {
 
     const viewer = await getCurrentUser();
     if (!viewer) {
-      // Keep your encryption-branch behavior:
+      // encryption-branch behavior
       return NextResponse.json([], { status: 401 });
     }
 
     if (String(viewer._id) !== String(userId)) {
-      // Keep your encryption-branch behavior:
+      // encryption-branch behavior
       return NextResponse.json([], { status: 403 });
     }
 
-    // --- TEAMS WHERE USER IS MEMBER
+    /* ---------------------------------------------------------------
+       Teams where user is a member
+    ---------------------------------------------------------------- */
     const memberLinks = await TeamMember.find({
       $or: [{ userId: userId }, { familyMemberId: userId }],
     }).lean();
@@ -40,12 +42,16 @@ export async function GET(_request, context) {
             .lean()
         : [];
 
-    // --- TEAMS WHERE USER IS OWNER
+    /* ---------------------------------------------------------------
+       Teams where user is the owner
+    ---------------------------------------------------------------- */
     const ownerTeams = await Team.find({ user: userId })
       .select("teamName teamSlug logoURL security")
       .lean();
 
-    // --- MERGE UNIQUE
+    /* ---------------------------------------------------------------
+       Merge without duplicates
+    ---------------------------------------------------------------- */
     const map = new Map();
 
     for (const t of memberTeams) map.set(String(t._id), t);
@@ -57,7 +63,9 @@ export async function GET(_request, context) {
 
     const teamsArray = Array.from(map.values());
 
-    // --- ADD SCOUTING REPORT COUNTS
+    /* ---------------------------------------------------------------
+       Count scouting reports for each team
+    ---------------------------------------------------------------- */
     const enriched = await Promise.all(
       teamsArray.map(async (team) => {
         const count = await TeamScoutingReport.countDocuments({
@@ -67,12 +75,12 @@ export async function GET(_request, context) {
       })
     );
 
-    // IMPORTANT: Return ONLY the ARRAY for this branch
+    // encryption-branch behavior: return array ONLY
     return NextResponse.json(enriched, { status: 200 });
   } catch (err) {
     console.error("Error in GET /api/dashboard/[userId]/teams:", err);
 
-    // Keep your encryption-branch behavior:
+    // encryption-branch behavior
     return NextResponse.json([], { status: 500 });
   }
 }

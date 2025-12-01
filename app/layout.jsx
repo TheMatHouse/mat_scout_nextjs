@@ -75,7 +75,15 @@ const RootLayout = ({ children }) => {
             content={FB_APP_ID}
           />
         ) : null}
+
+        {/* ✅ Google reCAPTCHA v3 script */}
+        <script
+          src={`https://www.google.com/recaptcha/api.js?render=${process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY}`}
+          async
+          defer
+        ></script>
       </head>
+
       <body
         className="font-sans flex flex-col min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] w-full overflow-x-hidden"
         data-scroll-behavior="smooth"
