@@ -9,8 +9,14 @@ import Editor from "@/components/shared/Editor";
 import TechniqueTagInput from "@/components/shared/TechniqueTagInput";
 import ClubAutosuggest from "@/components/shared/ClubAutosuggest";
 
-// 🔐 TBK encryption
-import { encryptCoachNoteBody } from "@/lib/crypto/teamLock";
+/*** 🔐 TBK Crypto ***/
+import {
+  teamHasLock,
+  decryptCoachNoteBody,
+  encryptCoachNoteBody,
+} from "@/lib/crypto/teamLock";
+
+const STORAGE_KEY = (teamId) => `ms:teamlock:${teamId}`;
 
 /* ---------- tiny inputs ---------- */
 function TextInput({ label, value, onChange, placeholder }) {
@@ -98,28 +104,32 @@ function VideoPreview({ url, startMs = 0, label }) {
   );
 }
 
-/* ---------- main ---------- */
+/* ----------------------------------------------------------
+   MAIN
+---------------------------------------------------------- */
 function EditCoachMatchModalButton({
   slug,
   eventId,
   entryId,
   matchId,
   initialMatch,
-  team, // ← REQUIRED for TBK encryption
+  team, // MUST contain encryption metadata + _id
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState({});
   const [loadedTechniques, setLoadedTechniques] = useState([]);
 
-  // Video state
+  // video UI state
   const [videoLoading, setVideoLoading] = useState(false);
   const [hadSavedVideo, setHadSavedVideo] = useState(false);
   const [editingNewVideo, setEditingNewVideo] = useState(false);
 
   const disabled = !slug || !eventId || !entryId || !matchId;
 
-  /* ---------- techniques ---------- */
+  /* ----------------------------------------------------------
+     Load technique suggestions
+  ---------------------------------------------------------- */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -160,10 +170,13 @@ function EditCoachMatchModalButton({
       videoStartMs: 0,
     }));
 
-  /* ---------- hydrate decrypted note ---------- */
+  /* ----------------------------------------------------------
+     Hydrate decrypted match into UI form state
+  ---------------------------------------------------------- */
   const hydrate = (m) => {
     const v = m.video || {};
     const startSeconds = v.startMs ? Math.floor(v.startMs / 1000) : 0;
+
     const h = Math.floor(startSeconds / 3600);
     const m_ = Math.floor((startSeconds % 3600) / 60);
     const s = startSeconds % 60;
@@ -204,35 +217,58 @@ function EditCoachMatchModalButton({
     setEditingNewVideo(!exists);
   };
 
-  /* ---------- load decrypted from server ---------- */
+  /* ----------------------------------------------------------
+     Load → decrypt (client-side)
+  ---------------------------------------------------------- */
   useEffect(() => {
     if (!open) return;
 
     setVideoLoading(true);
+
     (async () => {
       try {
+        // 1. load all matches for this entry
         const res = await fetch(
-          `/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches/${matchId}?decrypt=1`,
+          `/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches`,
           { cache: "no-store" }
         );
 
-        const data = await res.json();
-        if (!res.ok || !data?.match) throw new Error(data?.error);
+        const json = await res.json().catch(() => ({}));
+        const list = Array.isArray(json?.notes) ? json.notes : [];
 
-        hydrate(data.match);
+        const raw = list.find((x) => String(x?._id) === String(matchId));
+        if (!raw) throw new Error("Match not found");
+
+        let finalNote = raw;
+
+        // 2. if encrypted, decrypt
+        if (team && teamHasLock(team) && raw?.crypto?.ciphertextB64) {
+          const pwd =
+            (team?._id && sessionStorage.getItem(STORAGE_KEY(team._id))) || "";
+
+          if (!pwd) throw new Error("Team password missing – unlock again.");
+
+          const decrypted = await decryptCoachNoteBody(team, raw);
+          finalNote = { ...raw, ...decrypted };
+        }
+
+        // 3. hydrate into UI
+        hydrate(finalNote);
       } catch (err) {
+        console.error(err);
         toast.error("Failed to load note");
       } finally {
         setVideoLoading(false);
       }
     })();
-  }, [open, slug, eventId, entryId, matchId]);
+  }, [open, slug, eventId, entryId, matchId, team]);
 
-  /* ---------- submit ---------- */
+  /* ----------------------------------------------------------
+     Submit — encrypt → save
+  ---------------------------------------------------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // build startMs
     const h = Number.parseInt(note.videoH ?? "0", 10) || 0;
     const m = Number.parseInt(note.videoM ?? "0", 10) || 0;
     const s = Number.parseInt(note.videoS ?? "0", 10) || 0;
@@ -240,9 +276,7 @@ function EditCoachMatchModalButton({
 
     const trimmedUrl = (note.videoUrl || "").trim();
 
-    // -------------------------------
-    // 🔐 build SENSITIVE BODY
-    // -------------------------------
+    /** 🔐 SENSITIVE FIELDS **/
     const sensitiveBody = {
       whatWentWell: note.whatWentWell,
       reinforce: note.reinforce,
@@ -256,17 +290,13 @@ function EditCoachMatchModalButton({
       score: note.score,
     };
 
-    // -------------------------------
-    // 🔐 encrypt if team lock enabled
-    // -------------------------------
+    /** 🔐 ENCRYPT **/
     const { body: encryptedBody, crypto } = await encryptCoachNoteBody(
       team,
       sensitiveBody
     );
 
-    // -------------------------------
-    // non-encrypted opponent + video
-    // -------------------------------
+    /** Opponent + video **/
     const finalPayload = {
       opponent: {
         name: note.opponentName,
@@ -274,22 +304,21 @@ function EditCoachMatchModalButton({
         club: note.opponentClub,
         country: note.opponentCountry,
       },
-
-      ...encryptedBody, // always blank if encrypted, or plaintext if no lock
+      ...encryptedBody,
       crypto,
     };
 
-    // VIDEO rules (preserve your existing logic)
-    const userClearedVideo = !trimmedUrl && (hadSavedVideo || editingNewVideo);
     if (trimmedUrl) {
-      finalPayload.video = { url: trimmedUrl, label: note.videoLabel, startMs };
-    } else if (userClearedVideo) {
+      finalPayload.video = {
+        url: trimmedUrl,
+        label: note.videoLabel,
+        startMs,
+      };
+    } else if (!trimmedUrl && (hadSavedVideo || editingNewVideo)) {
       finalPayload.video = null;
     }
 
-    // -------------------------------
-    // PATCH
-    // -------------------------------
+    /** PATCH **/
     const res = await fetch(
       `/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches/${matchId}`,
       {
@@ -299,8 +328,11 @@ function EditCoachMatchModalButton({
       }
     );
 
-    const data = await res.json();
-    if (!res.ok) return toast.error(data?.error || "Update failed");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error(data?.error || "Update failed");
+      return;
+    }
 
     toast.success("Match updated");
     setOpen(false);
@@ -314,6 +346,9 @@ function EditCoachMatchModalButton({
 
   const showSavedPreviewOnly = hadSavedVideo && !editingNewVideo;
 
+  /* ----------------------------------------------------------
+     Render
+  ---------------------------------------------------------- */
   return (
     <>
       <button
@@ -349,6 +384,7 @@ function EditCoachMatchModalButton({
               value={note.opponentRank || ""}
               onChange={setField("opponentRank")}
             />
+
             <label className="grid gap-1">
               <span className="text-sm">Opponent club</span>
               <ClubAutosuggest
@@ -356,6 +392,7 @@ function EditCoachMatchModalButton({
                 onChange={setField("opponentClub")}
               />
             </label>
+
             <CountrySelect
               label="Country"
               value={note.opponentCountry || ""}
@@ -390,7 +427,10 @@ function EditCoachMatchModalButton({
             suggestions={loadedTechniques}
             selected={note.techOurs || []}
             onAdd={(t) =>
-              setNote((n) => ({ ...n, techOurs: [...(n.techOurs || []), t] }))
+              setNote((n) => ({
+                ...n,
+                techOurs: [...(n.techOurs || []), t],
+              }))
             }
             onDelete={(i) =>
               setNote((n) => ({

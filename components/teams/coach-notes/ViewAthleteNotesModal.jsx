@@ -1,7 +1,9 @@
+// components/teams/coach-notes/ViewAthleteNotesModal.jsx
 "use client";
 
 import { useEffect, useState } from "react";
 import ModalLayout from "@/components/shared/ModalLayout";
+import { teamHasLock, decryptCoachNoteBody } from "@/lib/crypto/teamLock";
 
 const toStr = (v) => (v == null ? "" : String(v));
 
@@ -43,15 +45,16 @@ const ViewAthleteNotesModal = ({
   eventId,
   entryId,
   noteId,
-  note,
+  note, // not required anymore but kept for compatibility
   athleteName = "Athlete",
+  team,
 }) => {
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState(null); // always load fresh data with decrypt
+  const [data, setData] = useState(null); // decrypted view-model
   const [error, setError] = useState("");
 
   // ---------------------------------------------------------------------
-  // Load + decrypt note
+  // Load + decrypt note (client-side, TBK-based)
   // ---------------------------------------------------------------------
   useEffect(() => {
     let alive = true;
@@ -63,18 +66,34 @@ const ViewAthleteNotesModal = ({
         setLoading(true);
         setError("");
 
+        // 1) load all notes for this entry
         const res = await fetch(
-          `/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches/${noteId}?decrypt=1`,
+          `/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches`,
           { cache: "no-store" }
         );
 
         const json = await res.json().catch(() => ({}));
-        if (!res.ok || !json?.match) {
-          throw new Error(json?.error || "Failed to load note");
+        if (!res.ok || !Array.isArray(json?.notes)) {
+          throw new Error(json?.error || "Failed to load notes");
+        }
+
+        const raw = json.notes.find((x) => String(x?._id) === String(noteId));
+        if (!raw) {
+          throw new Error("Note not found");
+        }
+
+        let merged = raw;
+
+        // 2) decrypt if locked and crypto present
+        if (team && teamHasLock(team) && raw?.crypto?.ciphertextB64) {
+          const dec = await decryptCoachNoteBody(team, raw);
+          if (dec) {
+            merged = { ...raw, ...dec };
+          }
         }
 
         if (!alive) return;
-        setData(serializeNote(json.match));
+        setData(serializeNote(merged));
       } catch (e) {
         if (alive) setError(e?.message || "Failed to load note");
       } finally {
@@ -86,7 +105,7 @@ const ViewAthleteNotesModal = ({
     return () => {
       alive = false;
     };
-  }, [isOpen, slug, eventId, entryId, noteId]);
+  }, [isOpen, slug, eventId, entryId, noteId, team]);
 
   // ---------------------------------------------------------------------
   // Section layout

@@ -2,7 +2,7 @@
 import pkg from "mongoose";
 const { Schema, model, models } = pkg;
 
-/* ---------------- Opponent (plaintext only, as requested) ---------------- */
+/* ---------------- Opponent (plaintext) ---------------- */
 const OpponentSchema = new Schema(
   {
     name: { type: String, trim: true },
@@ -13,7 +13,7 @@ const OpponentSchema = new Schema(
   { _id: false }
 );
 
-/* ---------------- Techniques (plaintext if unlocked, omitted if encrypted) ---------------- */
+/* ---------------- Techniques ---------------- */
 const TechniquesSchema = new Schema(
   {
     ours: [{ type: String, trim: true }],
@@ -22,7 +22,7 @@ const TechniquesSchema = new Schema(
   { _id: false }
 );
 
-/* ---------------- Optional video section ---------------- */
+/* ---------------- Video ---------------- */
 const VideoSchema = new Schema(
   {
     url: { type: String, default: null, trim: true },
@@ -36,20 +36,20 @@ const VideoSchema = new Schema(
   { _id: false }
 );
 
-/* ---------------- Encryption container (matches Team Scouting Reports) ---------------- */
+/* ---------------- Crypto (TBK AES-GCM) ---------------- */
 const CryptoSchema = new Schema(
   {
     version: { type: Number, default: 1 },
-    alg: { type: String, trim: true }, // e.g., "TEAMLOCK-COACH-NOTES-V1"
+    alg: { type: String, trim: true }, // "TEAMLOCK-COACH-NOTES-V1"
     ivB64: { type: String, trim: true },
-    ciphertextB64: { type: String, trim: true }, // encrypted JSON payload
-    wrappedReportKeyB64: { type: String, trim: true },
-    teamKeyVersion: { type: Number, default: 0 }, // copy of team.security.encryption.keyVersion at encryption time
+    ciphertextB64: { type: String, trim: true },
+    wrappedNoteKeyB64: { type: String, trim: true }, // <-- FIXED NAME
+    teamKeyVersion: { type: Number, default: 0 },
   },
   { _id: false }
 );
 
-/* ---------------- Main Coach Match Note Schema ---------------- */
+/* ---------------- Main Schema ---------------- */
 const CoachMatchNoteSchema = new Schema(
   {
     event: {
@@ -71,24 +71,42 @@ const CoachMatchNoteSchema = new Schema(
       index: true,
     },
 
-    athleteName: { type: String, required: true, trim: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+
+    athleteUserId: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    athleteFamilyMemberId: {
+      type: Schema.Types.ObjectId,
+      ref: "FamilyMember",
+      default: null,
+    },
+
+    /* Required in plaintext mode. Ignored when encrypted. */
+    athleteName: {
+      type: String,
+      required: function () {
+        return !this.crypto || !this.crypto.ciphertextB64;
+      },
+      trim: true,
+    },
 
     opponent: { type: OpponentSchema, default: {} },
 
-    // These will be empty when encrypted (payload stored in crypto)
+    /* Sensitive fields (blank when encrypted) */
     whatWentWell: { type: String, trim: true },
     reinforce: { type: String, trim: true },
     needsFix: { type: String, trim: true },
-    techniques: { type: TechniquesSchema, default: { ours: [], theirs: [] } },
     notes: { type: String, trim: true },
 
-    // Video information
+    techniques: { type: TechniquesSchema, default: { ours: [], theirs: [] } },
+
+    result: { type: String, trim: true },
+    score: { type: String, trim: true },
+
     video: { type: VideoSchema, default: () => ({}) },
 
-    createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
     deletedAt: { type: Date, default: null },
 
-    /* ---------------- Encrypted payload (optional) ---------------- */
+    /* Encrypted payload (AES-GCM TBK) */
     crypto: { type: CryptoSchema, default: null },
   },
   { timestamps: true }

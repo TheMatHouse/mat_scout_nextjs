@@ -16,26 +16,40 @@ const NoteRowActions = ({
   matchId,
   initialMatch,
   athleteName,
-  team, // 🔐 passed from page → used by EditCoachMatchModalButton
+  team,
 }) => {
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
 
   const handleDelete = async () => {
+    if (!matchId) {
+      toast.error("Invalid note ID");
+      return;
+    }
+
     if (!confirm("Are you sure you want to delete this note?")) return;
+
     try {
       setDeleting(true);
+
+      // ❗ FIX #1 — MUST await fetch
       const res = await fetch(
-        `/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches/${matchId}`,
+        `/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches?id=${matchId}`,
         { method: "DELETE" }
       );
+
+      // ❗ FIX #2 — ensure we read JSON from actual response
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Delete failed");
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Delete failed");
+      }
+
       toast.success("Note deleted");
       router.refresh();
     } catch (err) {
-      console.error(err);
-      toast.error("Delete failed");
+      console.error("Delete failed:", err);
+      toast.error(err.message || "Delete failed");
     } finally {
       setDeleting(false);
     }
@@ -50,7 +64,7 @@ const NoteRowActions = ({
         entryId={entryId}
         matchId={matchId}
         initialMatch={initialMatch}
-        team={team} // 🔐 give the team to the edit modal so it can encrypt
+        team={team}
         onSaved={() => router.refresh()}
         className="flex items-center justify-center p-1.5 rounded-md hover:bg-amber-500/10 transition-colors"
         title="Edit"

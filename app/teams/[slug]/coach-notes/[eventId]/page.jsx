@@ -44,10 +44,36 @@ const safeJson = async (res) => {
 const toStr = (v) => (v == null ? "" : String(v));
 
 const serializeNote = (n = {}) => {
+  const encrypted = n?.crypto?.ciphertextB64 ? true : false;
+
+  // If encrypted → DO NOT ATTEMPT TO READ PLAINTEXT FIELDS
+  if (encrypted) {
+    return {
+      _id: toStr(n?._id),
+      encrypted: true,
+      crypto: n.crypto,
+      opponent: n.opponent || {},
+      video: n.video || n.videoRaw || {},
+      createdAt: n?.createdAt ? new Date(n.createdAt).toISOString() : "",
+      updatedAt: n?.updatedAt ? new Date(n.updatedAt).toISOString() : "",
+
+      // blank placeholders - client will replace after decrypt
+      result: "",
+      score: "",
+      whatWentWell: "",
+      reinforce: "",
+      needsFix: "",
+      notes: "",
+      techniques: { ours: [], theirs: [] },
+    };
+  }
+
+  // Legacy plaintext note
   const opp = n?.opponent || {};
   const tech = n?.techniques || {};
   return {
     _id: toStr(n?._id),
+    encrypted: false,
     opponent: {
       firstName: toStr(opp?.firstName),
       lastName: toStr(opp?.lastName),
@@ -176,13 +202,8 @@ const getMatches = async (slug, eventId, entryId) => {
   }
 };
 
-<<<<<<< Updated upstream
 /* ---------------- subcomponents (server) ---------------- */
 const MatchList = async ({ slug, eventId, entry, team }) => {
-=======
-/* ---------------- server components ---------------- */
-const MatchList = async ({ slug, eventId, entry, isManagerOrCoach }) => {
->>>>>>> Stashed changes
   const { notes, _error } = await getMatches(slug, eventId, entry._id);
 
   const sorted = Array.isArray(notes)
@@ -222,7 +243,7 @@ const MatchList = async ({ slug, eventId, entry, isManagerOrCoach }) => {
         return (
           <div
             key={n._id || idx}
-            className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5"
+            className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-black/5 dark:hover:bg:white/5"
           >
             <div className="min-w-0">
               <div className="font-medium text-gray-900 dark:text-gray-100 truncate">
@@ -235,7 +256,6 @@ const MatchList = async ({ slug, eventId, entry, isManagerOrCoach }) => {
               </div>
             </div>
 
-<<<<<<< Updated upstream
             <div className="shrink-0 flex items-center gap-2">
               <NoteRowActions
                 slug={slug}
@@ -253,20 +273,6 @@ const MatchList = async ({ slug, eventId, entry, isManagerOrCoach }) => {
                 team={team}
               />
             </div>
-=======
-            {isManagerOrCoach ? (
-              <div className="shrink-0 flex items-center gap-2">
-                <NoteRowActions
-                  slug={slug}
-                  eventId={eventId}
-                  entryId={entry._id}
-                  matchId={n._id}
-                  initialMatch={n}
-                  athleteName={entry?.athlete?.name || "Athlete"}
-                />
-              </div>
-            ) : null}
->>>>>>> Stashed changes
           </div>
         );
       })}
@@ -274,11 +280,7 @@ const MatchList = async ({ slug, eventId, entry, isManagerOrCoach }) => {
   );
 };
 
-<<<<<<< Updated upstream
 const AthleteCard = async ({ slug, eventId, entry, team }) => {
-=======
-const AthleteCard = async ({ slug, eventId, entry, isManagerOrCoach }) => {
->>>>>>> Stashed changes
   return (
     <section
       id={`entry-${entry._id}`}
@@ -294,55 +296,36 @@ const AthleteCard = async ({ slug, eventId, entry, isManagerOrCoach }) => {
           </div>
         </div>
 
-        {isManagerOrCoach ? (
-          <div className="shrink-0 flex items-center gap-2">
-            <AddCoachMatchModalButton
-              slug={slug}
-              eventId={eventId}
-              entryId={entry._id}
-            />
-            <RemoveEntryButton
-              slug={slug}
-              eventId={eventId}
-              entryId={entry._id}
-            />
-          </div>
-        ) : null}
+        <div className="shrink-0 flex items-center gap-2">
+          <AddCoachMatchModalButton
+            slug={slug}
+            eventId={eventId}
+            entryId={entry._id}
+          />
+          <RemoveEntryButton
+            slug={slug}
+            eventId={eventId}
+            entryId={entry._id}
+          />
+        </div>
       </div>
 
       <MatchList
         slug={slug}
         eventId={eventId}
         entry={entry}
-<<<<<<< Updated upstream
         team={team}
-=======
-        isManagerOrCoach={isManagerOrCoach}
->>>>>>> Stashed changes
       />
     </section>
   );
 };
 
-<<<<<<< Updated upstream
 /* ---------------- page ---------------- */
 const EventDetailPage = async ({ params }) => {
   const { slug, eventId } = await params;
   if (!slug || !eventId) return notFound();
 
   const [evt, entriesRes, team] = await Promise.all([
-=======
-/* ---------------- PAGE ---------------- */
-const EventDetailPage = async ({ params, searchParams }) => {
-  const { slug, eventId } = await params;
-  const search = await searchParams;
-  const familyMemberId = search?.familyMember || null;
-
-  if (!slug || !eventId) return notFound();
-
-  const [{ role, user, familyIds }, evt, entriesRes] = await Promise.all([
-    getUserRoleAndFamily(slug),
->>>>>>> Stashed changes
     getEventMeta(slug, eventId),
     getEntries(slug, eventId),
     getTeam(slug),
@@ -350,6 +333,7 @@ const EventDetailPage = async ({ params, searchParams }) => {
 
   if (!evt) return notFound();
 
+  const { role, user, familyIds } = await getUserRoleAndFamily(slug);
   const isManagerOrCoach = role === "manager" || role === "coach";
 
   const allEntries = Array.isArray(entriesRes?.entries)
@@ -358,28 +342,16 @@ const EventDetailPage = async ({ params, searchParams }) => {
 
   const loadErr = entriesRes?._error;
 
-  // FILTER VISIBLE ENTRIES
   let visibleEntries = allEntries;
 
-  // If familyMember param exists → filter to child ONLY
-  if (familyMemberId) {
-    visibleEntries = visibleEntries.filter(
-      (e) =>
-        e.athlete?.familyMember &&
-        String(e.athlete.familyMember) === String(familyMemberId)
-    );
-  } else if (!isManagerOrCoach) {
-    // Normal member filtering
-    const userId = String(user._id);
-
+  if (!isManagerOrCoach) {
+    const userId = String(user?._id);
     visibleEntries = allEntries.filter((e) => {
       const a = e.athlete || {};
-
       const isSelf = a.user && String(a.user) === userId;
-      const isMyChild =
+      const isChild =
         a.familyMember && familyIds.includes(String(a.familyMember));
-
-      return isSelf || isMyChild;
+      return isSelf || isChild;
     });
   }
 
@@ -400,17 +372,10 @@ const EventDetailPage = async ({ params, searchParams }) => {
           </div>
 
           <div className="flex items-center gap-2">
-            {isManagerOrCoach ? (
-              <AddCoachAthleteModalButton
-                slug={slug}
-                eventId={eventId}
-<<<<<<< Updated upstream
-                entry={e}
-                team={team}
-=======
->>>>>>> Stashed changes
-              />
-            ) : null}
+            <AddCoachAthleteModalButton
+              slug={slug}
+              eventId={eventId}
+            />
 
             <Link
               href={`/teams/${slug}/coach-notes`}
@@ -440,7 +405,7 @@ const EventDetailPage = async ({ params, searchParams }) => {
                   slug={slug}
                   eventId={eventId}
                   entry={e}
-                  isManagerOrCoach={isManagerOrCoach}
+                  team={team}
                 />
               ))}
             </div>

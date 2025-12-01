@@ -1,3 +1,4 @@
+// components/teams/coach-notes/AddCoachMatchModalButton.jsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -98,22 +99,27 @@ const emptyNote = () => ({
 const NoteBlock = ({
   idx,
   value,
-  onChange,
+  update,
   suggestions,
   onRemove,
   canRemove,
 }) => {
-  const set = (key) => (v) => onChange({ ...value, [key]: v });
+  const onField = (field, v) => update(idx, field, v);
 
-  const addUnique = (listKey) => (tag) => {
-    const list = value[listKey] || [];
+  const addUnique = (field) => (tag) => {
+    const list = value[field] || [];
     if (list.some((p) => p.label.toLowerCase() === tag.label.toLowerCase()))
       return;
-    onChange({ ...value, [listKey]: [...list, tag] });
+    update(idx, field, [...list, tag]);
   };
-  const delAt = (listKey) => (i) => {
-    const list = value[listKey] || [];
-    onChange({ ...value, [listKey]: list.filter((_, idx) => idx !== i) });
+
+  const delAt = (field) => (i) => {
+    const list = value[field] || [];
+    update(
+      idx,
+      field,
+      list.filter((_, x) => x !== i)
+    );
   };
 
   const h = Math.max(0, parseInt(value.videoH || "0", 10) || 0);
@@ -145,22 +151,20 @@ const NoteBlock = ({
         <TextInput
           label="Opponent name"
           value={value.opponentName}
-          onChange={set("opponentName")}
-          placeholder="e.g., Alex Smith"
+          onChange={(v) => onField("opponentName", v)}
         />
 
         <TextInput
           label="Opponent rank"
           value={value.opponentRank}
-          onChange={set("opponentRank")}
-          placeholder="e.g., Brown Belt"
+          onChange={(v) => onField("opponentRank", v)}
         />
 
         <div className="grid gap-1">
           <span className="text-sm">Opponent club</span>
           <ClubAutosuggest
             value={value.opponentClub || ""}
-            onChange={set("opponentClub")}
+            onChange={(v) => onField("opponentClub", v)}
             minChars={2}
           />
         </div>
@@ -168,31 +172,31 @@ const NoteBlock = ({
         <CountrySelect
           label="Country"
           value={value.opponentCountry}
-          onChange={set("opponentCountry")}
+          onChange={(v) => onField("opponentCountry", v)}
         />
       </div>
 
-      {/* Notes */}
       <Editor
         name={`whatWentWell_${idx}`}
         label="What went well"
         text={value.whatWentWell}
-        onChange={set("whatWentWell")}
+        onChange={(v) => onField("whatWentWell", v)}
       />
+
       <Editor
         name={`reinforce_${idx}`}
         label="What we should reinforce"
         text={value.reinforce}
-        onChange={set("reinforce")}
+        onChange={(v) => onField("reinforce", v)}
       />
+
       <Editor
         name={`needsFix_${idx}`}
         label="What we need to fix"
         text={value.needsFix}
-        onChange={set("needsFix")}
+        onChange={(v) => onField("needsFix", v)}
       />
 
-      {/* Techniques */}
       <TechniqueTagInput
         label="Techniques (ours)"
         name={`techniquesOurs_${idx}`}
@@ -201,6 +205,7 @@ const NoteBlock = ({
         onAdd={addUnique("techOurs")}
         onDelete={delAt("techOurs")}
       />
+
       <TechniqueTagInput
         label="Techniques (theirs)"
         name={`techniquesTheirs_${idx}`}
@@ -210,12 +215,11 @@ const NoteBlock = ({
         onDelete={delAt("techTheirs")}
       />
 
-      {/* Result + score */}
       <div className="grid gap-3 sm:grid-cols-2">
         <Select
           label="Result"
           value={value.result}
-          onChange={set("result")}
+          onChange={(v) => onField("result", v)}
         >
           <option value="">Result</option>
           <option value="win">Win</option>
@@ -226,8 +230,7 @@ const NoteBlock = ({
         <TextInput
           label="Score"
           value={value.score}
-          onChange={set("score")}
-          placeholder="e.g., 2-1"
+          onChange={(v) => onField("score", v)}
         />
       </div>
 
@@ -235,45 +238,42 @@ const NoteBlock = ({
         name={`notes_${idx}`}
         label="More notes"
         text={value.notes}
-        onChange={set("notes")}
+        onChange={(v) => onField("notes", v)}
       />
 
-      {/* Video section */}
+      {/* Video */}
       <div className="rounded-lg border p-4 space-y-4">
         <div className="font-semibold text-sm">Video (optional)</div>
 
         <TextInput
           label="Video Title"
           value={value.videoTitle}
-          onChange={set("videoTitle")}
-          placeholder="First exchange"
+          onChange={(v) => onField("videoTitle", v)}
         />
 
         <TextInput
           label="YouTube URL"
           value={value.videoUrlRaw}
-          onChange={set("videoUrlRaw")}
-          placeholder="Paste YouTube link"
+          onChange={(v) => onField("videoUrlRaw", v)}
         />
 
         <div className="space-y-2">
           <div className="text-sm">Timestamp</div>
-
           <div className="grid gap-3 sm:grid-cols-3">
             <NumberInput
               label="Hours"
               value={value.videoH}
-              onChange={set("videoH")}
+              onChange={(v) => onField("videoH", v)}
             />
             <NumberInput
               label="Minutes"
               value={value.videoM}
-              onChange={set("videoM")}
+              onChange={(v) => onField("videoM", v)}
             />
             <NumberInput
               label="Seconds"
               value={value.videoS}
-              onChange={set("videoS")}
+              onChange={(v) => onField("videoS", v)}
             />
           </div>
         </div>
@@ -304,7 +304,7 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
   const [loadedTechniques, setLoadedTechniques] = useState([]);
   const [team, setTeam] = useState(null);
 
-  /** Load team (needed for encryption) */
+  /* load team */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -321,7 +321,7 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
     };
   }, [slug]);
 
-  /** Load technique suggestions */
+  /* load techniques */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -334,13 +334,7 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
           ? data.techniques
           : [];
         const sorted = [...arr].sort((a, b) =>
-          String(a?.name ?? "").localeCompare(
-            String(b?.name ?? ""),
-            undefined,
-            {
-              sensitivity: "base",
-            }
-          )
+          String(a?.name ?? "").localeCompare(String(b?.name ?? ""))
         );
         if (alive) setLoadedTechniques(sorted);
       } catch {
@@ -357,12 +351,16 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
     [loadedTechniques]
   );
 
-  const disabled = !slug || !eventId || !entryId;
-  const resetForm = () => setNotes([emptyNote()]);
+  const updateField = (idx, field, value) => {
+    setNotes((prev) => {
+      const copy = structuredClone(prev);
+      copy[idx][field] = value;
+      return copy;
+    });
+  };
 
-  /** ---------------------------------------------
-   * 🔐 HANDLE SUBMIT WITH ENCRYPTION
-   * --------------------------------------------*/
+  const disabled = !slug || !eventId || !entryId;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (disabled) {
@@ -371,68 +369,66 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
     }
 
     try {
-      // 🔐 Ensure team password if locked
       let pass = "";
-      if (team && teamHasLock(team)) {
-        pass = await ensureTeamPass(team); // prompt if needed
+      const locked = team && teamHasLock(team);
+      if (locked) {
+        pass = await ensureTeamPass(team);
       }
 
       const payload = [];
+
       for (const n of notes) {
-        const h = Math.max(0, parseInt(n.videoH || "0", 10) || 0);
-        const m = Math.max(0, parseInt(n.videoM || "0", 10) || 0);
-        const s = Math.max(0, parseInt(n.videoS || "0", 10) || 0);
+        const h = Math.max(0, parseInt(n.videoH || "0") || 0);
+        const m = Math.max(0, parseInt(n.videoM || "0") || 0);
+        const s = Math.max(0, parseInt(n.videoS || "0") || 0);
+        const startMs = (h * 3600 + m * 60 + s) * 1000;
 
-        const baseNote = {
-          opponent: {
-            name: n.opponentName || "",
-            rank: n.opponentRank || "",
-            club: n.opponentClub || "",
-            country: n.opponentCountry || "",
-          },
-
-          // SENSITIVE FIELDS
-          sensitive: {
-            whatWentWell: n.whatWentWell || "",
-            reinforce: n.reinforce || "",
-            needsFix: n.needsFix || "",
-            notes: n.notes || "",
-            techniques: {
-              ours: (n.techOurs || []).map((t) => t.label),
-              theirs: (n.techTheirs || []).map((t) => t.label),
-            },
-            result: n.result || "",
-            score: n.score || "",
-          },
-
-          // Video
-          videoRaw: {
-            url: n.videoUrlRaw || "",
-            start: `${h}:${m}:${s}`,
-            label: n.videoTitle || "",
-          },
+        const opponent = {
+          name: n.opponentName || "",
+          rank: n.opponentRank || "",
+          club: n.opponentClub || "",
+          country: n.opponentCountry || "",
         };
 
-        // Encrypt if required
-        if (team && teamHasLock(team)) {
-          const { body, crypto } = await encryptCoachNoteBody(
+        const sensitive = {
+          whatWentWell: n.whatWentWell || "",
+          reinforce: n.reinforce || "",
+          needsFix: n.needsFix || "",
+          notes: n.notes || "",
+          techniques: {
+            ours: (n.techOurs || []).map((t) => t.label),
+            theirs: (n.techTheirs || []).map((t) => t.label),
+          },
+          result: n.result || "",
+          score: n.score || "",
+        };
+
+        const video = n.videoUrlRaw
+          ? {
+              url: n.videoUrlRaw,
+              label: n.videoTitle || "",
+              startMs,
+            }
+          : {};
+
+        if (locked) {
+          const { body: encBody, crypto } = await encryptCoachNoteBody(
             team,
-            baseNote.sensitive
+            sensitive
           );
 
           payload.push({
-            opponent: baseNote.opponent,
-            videoRaw: baseNote.videoRaw,
-            ...body, // blank fields
+            opponent,
+            video,
             crypto,
+            ...encBody,
           });
         } else {
-          // plaintext flow
           payload.push({
-            opponent: baseNote.opponent,
-            videoRaw: baseNote.videoRaw,
-            ...baseNote.sensitive,
+            opponent,
+            video,
             crypto: null,
+            ...sensitive,
           });
         }
       }
@@ -455,7 +451,7 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
           : "Match note added"
       );
 
-      resetForm();
+      setNotes([emptyNote()]);
       setOpen(false);
       router.refresh();
     } catch (err) {
@@ -494,10 +490,8 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
               key={i}
               idx={i}
               value={n}
+              update={updateField}
               suggestions={suggestions}
-              onChange={(val) =>
-                setNotes((prev) => prev.map((p, idx) => (idx === i ? val : p)))
-              }
               onRemove={() =>
                 setNotes((prev) => prev.filter((_, idx) => idx !== i))
               }

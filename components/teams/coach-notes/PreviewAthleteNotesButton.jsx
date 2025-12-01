@@ -10,8 +10,9 @@ export default function PreviewAthleteNotesButton({
   eventId,
   entryId,
   noteId, // matchId
-  note, // initialMatch
+  note, // initialMatch (not used for decrypt anymore, but can stay)
   athleteName = "Athlete",
+  team,
   renderTrigger, // optional: ({ onOpen }) => JSX
 }) {
   const [open, setOpen] = useState(false);
@@ -43,6 +44,7 @@ export default function PreviewAthleteNotesButton({
           noteId={noteId}
           note={note}
           athleteName={athleteName}
+          team={team}
         />
       )}
     </>
