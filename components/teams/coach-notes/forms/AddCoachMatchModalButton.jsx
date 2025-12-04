@@ -1,4 +1,4 @@
-// components/teams/coach-notes/AddCoachMatchModalButton.jsx
+// components/teams/coach-notes/forms/AddCoachMatchModalButton.jsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -60,12 +60,9 @@ const Select = ({ label, value, onChange, children }) => (
 /* ---------------- youtube helpers ---------------- */
 const extractYouTubeId = (url = "") => {
   if (typeof url !== "string") return null;
-  const u = url.trim();
-  if (!u) return null;
-
   const re =
     /(?:youtube\.com\/.*[?&]v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/|youtube-nocookie\.com\/embed\/)([^&?/]+)/i;
-  const m = u.match(re);
+  const m = url.trim().match(re);
   return m ? m[1] : null;
 };
 
@@ -83,11 +80,11 @@ const emptyNote = () => ({
   whatWentWell: "",
   reinforce: "",
   needsFix: "",
+  notes: "",
   techOurs: [],
   techTheirs: [],
   result: "",
   score: "",
-  notes: "",
   videoTitle: "",
   videoUrlRaw: "",
   videoH: "0",
@@ -95,7 +92,7 @@ const emptyNote = () => ({
   videoS: "0",
 });
 
-/* ---------------- note UI block ---------------- */
+/* ---------------- NoteBlock ---------------- */
 const NoteBlock = ({
   idx,
   value,
@@ -122,9 +119,9 @@ const NoteBlock = ({
     );
   };
 
-  const h = Math.max(0, parseInt(value.videoH || "0", 10) || 0);
-  const m = Math.max(0, parseInt(value.videoM || "0", 10) || 0);
-  const s = Math.max(0, parseInt(value.videoS || "0", 10) || 0);
+  const h = Math.max(0, parseInt(value.videoH || "0") || 0);
+  const m = Math.max(0, parseInt(value.videoM || "0") || 0);
+  const s = Math.max(0, parseInt(value.videoS || "0") || 0);
   const startSeconds = h * 3600 + m * 60 + s;
 
   const vidId = extractYouTubeId(value.videoUrlRaw);
@@ -437,6 +434,7 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
         `/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches`,
         {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ notes: payload }),
         }

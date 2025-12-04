@@ -5,16 +5,16 @@ import { useState } from "react";
 import { Eye } from "lucide-react";
 import ViewAthleteNotesModal from "@/components/teams/coach-notes/ViewAthleteNotesModal";
 
-export default function PreviewAthleteNotesButton({
+const PreviewAthleteNotesButton = ({
   slug,
   eventId,
   entryId,
   noteId, // matchId
-  note, // initialMatch (not used for decrypt anymore, but can stay)
+  note, // initialMatch (still passed through)
   athleteName = "Athlete",
   team,
   renderTrigger, // optional: ({ onOpen }) => JSX
-}) {
+}) => {
   const [open, setOpen] = useState(false);
 
   const DefaultTrigger = ({ onOpen }) => (
@@ -34,6 +34,7 @@ export default function PreviewAthleteNotesButton({
   return (
     <>
       <Trigger onOpen={() => setOpen(true)} />
+
       {open && (
         <ViewAthleteNotesModal
           isOpen={open}
@@ -49,4 +50,6 @@ export default function PreviewAthleteNotesButton({
       )}
     </>
   );
-}
+};
+
+export default PreviewAthleteNotesButton;

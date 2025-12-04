@@ -113,23 +113,20 @@ function EditCoachMatchModalButton({
   entryId,
   matchId,
   initialMatch,
-  team, // MUST contain encryption metadata + _id
+  team,
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState({});
   const [loadedTechniques, setLoadedTechniques] = useState([]);
 
-  // video UI state
   const [videoLoading, setVideoLoading] = useState(false);
   const [hadSavedVideo, setHadSavedVideo] = useState(false);
   const [editingNewVideo, setEditingNewVideo] = useState(false);
 
   const disabled = !slug || !eventId || !entryId || !matchId;
 
-  /* ----------------------------------------------------------
-     Load technique suggestions
-  ---------------------------------------------------------- */
+  /* Load tech suggestions */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -170,9 +167,7 @@ function EditCoachMatchModalButton({
       videoStartMs: 0,
     }));
 
-  /* ----------------------------------------------------------
-     Hydrate decrypted match into UI form state
-  ---------------------------------------------------------- */
+  /* Hydrate decrypted note */
   const hydrate = (m) => {
     const v = m.video || {};
     const startSeconds = v.startMs ? Math.floor(v.startMs / 1000) : 0;
@@ -217,9 +212,7 @@ function EditCoachMatchModalButton({
     setEditingNewVideo(!exists);
   };
 
-  /* ----------------------------------------------------------
-     Load → decrypt (client-side)
-  ---------------------------------------------------------- */
+  /* Load & decrypt */
   useEffect(() => {
     if (!open) return;
 
@@ -227,7 +220,6 @@ function EditCoachMatchModalButton({
 
     (async () => {
       try {
-        // 1. load all matches for this entry
         const res = await fetch(
           `/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches`,
           { cache: "no-store" }
@@ -241,7 +233,6 @@ function EditCoachMatchModalButton({
 
         let finalNote = raw;
 
-        // 2. if encrypted, decrypt
         if (team && teamHasLock(team) && raw?.crypto?.ciphertextB64) {
           const pwd =
             (team?._id && sessionStorage.getItem(STORAGE_KEY(team._id))) || "";
@@ -252,7 +243,6 @@ function EditCoachMatchModalButton({
           finalNote = { ...raw, ...decrypted };
         }
 
-        // 3. hydrate into UI
         hydrate(finalNote);
       } catch (err) {
         console.error(err);
@@ -263,9 +253,7 @@ function EditCoachMatchModalButton({
     })();
   }, [open, slug, eventId, entryId, matchId, team]);
 
-  /* ----------------------------------------------------------
-     Submit — encrypt → save
-  ---------------------------------------------------------- */
+  /* Submit */
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -276,7 +264,6 @@ function EditCoachMatchModalButton({
 
     const trimmedUrl = (note.videoUrl || "").trim();
 
-    /** 🔐 SENSITIVE FIELDS **/
     const sensitiveBody = {
       whatWentWell: note.whatWentWell,
       reinforce: note.reinforce,
@@ -290,13 +277,11 @@ function EditCoachMatchModalButton({
       score: note.score,
     };
 
-    /** 🔐 ENCRYPT **/
     const { body: encryptedBody, crypto } = await encryptCoachNoteBody(
       team,
       sensitiveBody
     );
 
-    /** Opponent + video **/
     const finalPayload = {
       opponent: {
         name: note.opponentName,
@@ -318,7 +303,6 @@ function EditCoachMatchModalButton({
       finalPayload.video = null;
     }
 
-    /** PATCH **/
     const res = await fetch(
       `/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches/${matchId}`,
       {
@@ -346,9 +330,7 @@ function EditCoachMatchModalButton({
 
   const showSavedPreviewOnly = hadSavedVideo && !editingNewVideo;
 
-  /* ----------------------------------------------------------
-     Render
-  ---------------------------------------------------------- */
+  /* UI */
   return (
     <>
       <button
@@ -372,7 +354,7 @@ function EditCoachMatchModalButton({
           onSubmit={handleSubmit}
           className="grid gap-5"
         >
-          {/* OPPONENT */}
+          {/* Opponent */}
           <div className="grid sm:grid-cols-2 gap-3">
             <TextInput
               label="Opponent name"
@@ -400,7 +382,7 @@ function EditCoachMatchModalButton({
             />
           </div>
 
-          {/* Key notes */}
+          {/* Key Notes */}
           <Editor
             name="well"
             label="What went well"
@@ -459,7 +441,38 @@ function EditCoachMatchModalButton({
             }
           />
 
-          {/* VIDEO */}
+          {/* Result + Score */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="grid gap-1">
+              <span className="text-sm">Result</span>
+              <select
+                value={note.result || ""}
+                onChange={(e) => setField("result")(e.target.value)}
+                className="px-3 py-2 rounded border bg-transparent"
+              >
+                <option value="">Result</option>
+                <option value="win">Win</option>
+                <option value="loss">Loss</option>
+                <option value="draw">Draw</option>
+              </select>
+            </label>
+
+            <TextInput
+              label="Score"
+              value={note.score || ""}
+              onChange={setField("score")}
+            />
+          </div>
+
+          {/* ⭐ More notes (restored & correctly placed) */}
+          <Editor
+            name="moreNotes"
+            label="More notes"
+            text={note.notes || ""}
+            onChange={setField("notes")}
+          />
+
+          {/* Video */}
           <div className="border rounded-lg p-4 space-y-3">
             <div className="text-sm font-semibold">Video (optional)</div>
 
@@ -491,7 +504,6 @@ function EditCoachMatchModalButton({
                   label="Video title"
                   value={note.videoLabel || ""}
                   onChange={setField("videoLabel")}
-                  placeholder="e.g., First exchange"
                 />
                 <TextInput
                   label="YouTube / MP4 URL"
@@ -500,7 +512,6 @@ function EditCoachMatchModalButton({
                     setField("videoUrl")(v);
                     setEditingNewVideo(true);
                   }}
-                  placeholder="https://youtu.be/... or mp4"
                 />
 
                 <div className="grid grid-cols-3 gap-3">
@@ -532,7 +543,7 @@ function EditCoachMatchModalButton({
             )}
           </div>
 
-          {/* footer */}
+          {/* Footer */}
           <div className="flex gap-3">
             <button
               type="button"

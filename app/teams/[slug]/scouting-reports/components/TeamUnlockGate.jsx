@@ -1,4 +1,3 @@
-// app/teams/[slug]/scouting-reports/components/TeamUnlockGate.jsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -11,16 +10,15 @@ import {
   isWrappedTeamBoxKey,
 } from "@/lib/crypto/locker";
 
-// Store locally per team
 const STORE_KEY = (teamId) => `ms:teamlock:${teamId}`;
 
-export default function TeamUnlockGate({
+const TeamUnlockGate = ({
   slug,
   team,
   onTeamResolved,
   onUnlocked,
   children,
-}) {
+}) => {
   const [loadingTeam, setLoadingTeam] = useState(true);
   const [unlocking, setUnlocking] = useState(false);
   const [password, setPassword] = useState("");
@@ -28,12 +26,12 @@ export default function TeamUnlockGate({
   const [requiresPassword, setRequiresPassword] = useState(false);
 
   /* -------------------------------------------------------
-     Fetch full team security metadata first
+     Fetch full team security metadata
   ------------------------------------------------------- */
   useEffect(() => {
-    (async () => {
-      if (!slug) return;
+    if (!slug) return;
 
+    (async () => {
       try {
         const res = await fetch(`/api/teams/${slug}/security`, {
           cache: "no-store",
@@ -47,7 +45,6 @@ export default function TeamUnlockGate({
 
         const t = json.team;
         setTeamData(t);
-
         onTeamResolved?.(t);
 
         const locked = !!t.security?.lockEnabled;
@@ -59,27 +56,23 @@ export default function TeamUnlockGate({
         setLoadingTeam(false);
       }
     })();
-  }, [slug]);
+  }, [slug, onTeamResolved]);
 
   /* -------------------------------------------------------
-     If no password required → auto-unlock
+     Auto-unlock if password is not required
   ------------------------------------------------------- */
   useEffect(() => {
-    if (loadingTeam) return;
-    if (!teamData) return;
-
+    if (loadingTeam || !teamData) return;
     if (!requiresPassword) {
       onUnlocked?.();
     }
-  }, [loadingTeam, teamData, requiresPassword]);
+  }, [loadingTeam, teamData, requiresPassword, onUnlocked]);
 
   /* -------------------------------------------------------
-     Attempt cached password before showing UI
+     Try cached password
   ------------------------------------------------------- */
   useEffect(() => {
-    if (loadingTeam) return;
-
-    if (!teamData?.security?.lockEnabled) return;
+    if (loadingTeam || !teamData?.security?.lockEnabled) return;
 
     const cached = sessionStorage.getItem(STORE_KEY(teamData._id));
     if (!cached) return;
@@ -92,7 +85,6 @@ export default function TeamUnlockGate({
           return;
         }
 
-        // If password is valid → attempt unwrapping TBK
         const wrapped = teamData.security?.encryption?.wrappedTeamKeyB64 || "";
         if (wrapped && isWrappedTeamBoxKey(wrapped)) {
           try {
@@ -101,21 +93,20 @@ export default function TeamUnlockGate({
               wrapped,
               teamData.security?.kdf?.iterations
             );
-
             onUnlocked?.();
             setRequiresPassword(false);
           } catch {
-            // cached pass invalid for TBK
+            // cached pass invalid
           }
         }
       } catch {
         // cached pass invalid
       }
     })();
-  }, [loadingTeam, teamData]);
+  }, [loadingTeam, teamData, onUnlocked]);
 
   /* -------------------------------------------------------
-     Handle manual password submit
+     Manual password submit
   ------------------------------------------------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -149,9 +140,7 @@ export default function TeamUnlockGate({
         }
       }
 
-      // Cache password
       sessionStorage.setItem(STORE_KEY(teamData._id), password.trim());
-
       setRequiresPassword(false);
       onUnlocked?.();
     } finally {
@@ -160,7 +149,7 @@ export default function TeamUnlockGate({
   };
 
   /* -------------------------------------------------------
-     RENDER
+     Render
   ------------------------------------------------------- */
 
   if (loadingTeam) {
@@ -182,7 +171,6 @@ export default function TeamUnlockGate({
     );
   }
 
-  // If password required
   if (requiresPassword) {
     return (
       <div className="flex flex-col justify-center items-center h-[60vh] px-4">
@@ -219,6 +207,7 @@ export default function TeamUnlockGate({
     );
   }
 
-  // Unlocked → show children
   return <>{children}</>;
-}
+};
+
+export default TeamUnlockGate;

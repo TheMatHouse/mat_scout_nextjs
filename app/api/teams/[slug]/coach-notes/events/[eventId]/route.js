@@ -5,15 +5,16 @@ import mongoose from "mongoose";
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import { requireTeamRole } from "@/lib/authz/teamRoles";
+
 import CoachEvent from "@/models/coachEventModel";
 import CoachEntry from "@/models/coachEntryModel";
+import CoachMatchNote from "@/models/coachMatchNoteModel"; // ✅ FIXED
 
 export async function DELETE(req, { params }) {
   try {
     await connectDB();
     const { slug, eventId } = await params;
 
-    // optional diag
     console.log("[DELETE coach-event] hit", {
       slug,
       eventId,
@@ -21,18 +22,16 @@ export async function DELETE(req, { params }) {
     });
 
     const user = await getCurrentUserFromCookies().catch(() => null);
-    // Restrict to managers/coaches; add "owner" if needed in your role model
-    const gate = await requireTeamRole(user?._id, slug, [
-      "manager",
-      "coach",
-      "owner",
-    ]);
+
+    // Manager or Coach only (owner is equivalent to manager in your app)
+    const gate = await requireTeamRole(user?._id, slug, ["manager", "coach"]);
     if (!gate.ok) {
       return NextResponse.json({ error: gate.reason }, { status: gate.status });
     }
 
     const { searchParams } = new URL(req.url);
-    const cascade = (searchParams.get("cascade") || "none").toLowerCase(); // "none" | "entries" | "notes"
+    const cascade = (searchParams.get("cascade") || "none").toLowerCase();
+    // "none" | "entries" | "notes"
 
     // 1) Load event
     const found = await CoachEvent.findById(eventId).lean();
@@ -57,7 +56,7 @@ export async function DELETE(req, { params }) {
       );
     }
 
-    // 3) Idempotent: already removed?
+    // 3) Already deleted?
     if (found.deletedAt) {
       return NextResponse.json({
         ok: true,
@@ -66,20 +65,20 @@ export async function DELETE(req, { params }) {
       });
     }
 
-    // 4) Soft-delete the event
+    // 4) Soft-delete event
     await CoachEvent.updateOne(
       { _id: eventId },
       { $set: { deletedAt: new Date() } }
     );
 
-    // 5) Optional cascade:
-    //   - "entries": soft-delete all entries for this event
-    //   - "notes":   soft-delete entries AND their notes
+    // 5) Cascade options
     let cascadedEntries = false;
     let cascadedNotes = false;
 
     if (cascade === "entries" || cascade === "notes") {
       const now = new Date();
+
+      // Soft delete all entries under the event
       await CoachEntry.updateMany(
         { event: eventId, deletedAt: null },
         { $set: { deletedAt: now } }
@@ -87,7 +86,8 @@ export async function DELETE(req, { params }) {
       cascadedEntries = true;
 
       if (cascade === "notes") {
-        await CoachMatchNotes.updateMany(
+        // Soft delete all notes under the event
+        await CoachMatchNote.updateMany(
           { event: eventId, deletedAt: null },
           { $set: { deletedAt: now } }
         );

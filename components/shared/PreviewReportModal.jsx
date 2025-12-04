@@ -1,4 +1,3 @@
-// components/shared/PreviewReportModal.jsx
 "use client";
 
 import React, { useRef, useEffect, useMemo } from "react";
@@ -22,22 +21,16 @@ const genderLabel = (g) => {
   return s(g);
 };
 
-const isLikelyObjectId = (value) => {
-  const txt = s(value);
-  return /^[0-9a-fA-F]{24}$/.test(txt);
-};
+const isLikelyObjectId = (value) => /^[0-9a-fA-F]{24}$/.test(s(value));
 
 const computeDivisionDisplay = (division, report) => {
-  // 1) Prefer explicit display/label fields on the report itself
   const reportDisplay = s(report?.divisionDisplay) || s(report?.divisionLabel);
   if (reportDisplay) return reportDisplay;
 
-  // 2) Handle various shapes of "division"
   if (!division) return "—";
 
   if (typeof division === "string") {
     const txt = s(division);
-    // If it looks like a Mongo ObjectId, don't show the raw ID
     if (!txt || isLikelyObjectId(txt)) return "—";
     return txt;
   }
@@ -58,11 +51,13 @@ const computeWeightDisplay = (report) => {
     if (/\b(kg|lb)s?\b/i.test(label) || !unit) return label;
     return `${label} ${unit}`;
   }
+
   const cat =
     s(report?.weightCategoryLabel) ||
     (typeof report?.weightCategory === "object"
       ? s(report?.weightCategory?.label || report?.weightCategory?.name)
       : s(report?.weightCategory));
+
   if (cat) {
     if (/\b(kg|lb)s?\b/i.test(cat) || !unit) return cat;
     return `${cat} ${unit}`;
@@ -70,7 +65,6 @@ const computeWeightDisplay = (report) => {
   return "—";
 };
 
-// If a full <iframe ... src="..."> is pasted, extract the src; else return raw
 const extractUrlFromMaybeIframe = (raw) => {
   let url = s(raw);
   if (!url) return "";
@@ -82,12 +76,10 @@ const extractUrlFromMaybeIframe = (raw) => {
   return url;
 };
 
-// Build an embeddable URL and apply ?start= for YouTube if provided
 const toEmbedUrl = (rawUrl, startSeconds = 0) => {
   const url = extractUrlFromMaybeIframe(rawUrl);
   if (!url) return "";
 
-  // YouTube patterns
   const ytIdMatch =
     url.match(/(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/i) ||
     url.match(/youtube\.com\/shorts\/([^?]+)/i);
@@ -97,39 +89,17 @@ const toEmbedUrl = (rawUrl, startSeconds = 0) => {
     return start ? `${base}?start=${start}` : base;
   }
 
-  // Vimeo embeds are usually already in player form
   if (/player\.vimeo\.com\/video\//i.test(url)) return url;
-
-  // Fallback: return whatever we got
   return url;
 };
 
-// Field pickers by reportType
 const getFields = (report, reportType) => {
-  // Prefer any decrypted/HTML notes fields if the API provides them
   const resolvedNotesHtml =
     s(report?.decryptedAthleteAttackNotesHtml) ||
     s(report?.decryptedAthleteAttackNotes) ||
     s(report?.athleteAttackNotesHtml) ||
     s(report?.athleteAttackNotes);
 
-  if (reportType === "match") {
-    return {
-      firstName: s(report?.athleteFirstName),
-      lastName: s(report?.athleteLastName),
-      country: s(report?.athleteCountry),
-      nationalRank: s(report?.athleteNationalRank),
-      worldRank: s(report?.athleteWorldRank),
-      club: s(report?.athleteClub),
-      grip: s(report?.athleteGrip),
-      attacks: Array.isArray(report?.athleteAttacks)
-        ? report.athleteAttacks
-        : [],
-      notesHtml: resolvedNotesHtml,
-    };
-  }
-
-  // default: scouting report
   return {
     firstName: s(report?.athleteFirstName),
     lastName: s(report?.athleteLastName),
@@ -172,6 +142,9 @@ const PreviewReportModal = ({
   const weightDisplay = useMemo(() => computeWeightDisplay(report), [report]);
 
   const videos = Array.isArray(report?.videos) ? report.videos : [];
+  const decryptedVideoNotes = Array.isArray(report?.decryptedVideoNotes)
+    ? report.decryptedVideoNotes
+    : [];
 
   return (
     <Dialog
@@ -193,69 +166,69 @@ const PreviewReportModal = ({
           </DialogHeader>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-2 px-2 text-sm sm:text-base">
-            {/* -------- Athlete Info -------- */}
+            {/* ATHLETE INFO */}
             <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow p-6">
               <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4 border-b border-gray-300 dark:border-gray-700 pb-2">
                 Athlete Information
               </h3>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
-                  <span className="text-sm font-semibold text-muted-foreground">
+                <div>
+                  <span className="font-semibold text-muted-foreground text-sm">
                     First Name
                   </span>
                   <span>{firstName || "—"}</span>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-sm font-semibold text-muted-foreground">
+                <div>
+                  <span className="font-semibold text-muted-foreground text-sm">
                     Last Name
                   </span>
                   <span>{lastName || "—"}</span>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-sm font-semibold text-muted-foreground">
+                <div>
+                  <span className="font-semibold text-muted-foreground text-sm">
                     Country
                   </span>
                   <span>{country || "—"}</span>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-sm font-semibold text-muted-foreground">
+                <div>
+                  <span className="font-semibold text-muted-foreground text-sm">
                     National Rank
                   </span>
                   <span>{nationalRank || "—"}</span>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-sm font-semibold text-muted-foreground">
+                <div>
+                  <span className="font-semibold text-muted-foreground text-sm">
                     World Rank
                   </span>
                   <span>{worldRank || "—"}</span>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-sm font-semibold text-muted-foreground">
+                <div>
+                  <span className="font-semibold text-muted-foreground text-sm">
                     Club
                   </span>
                   <span>{club || "—"}</span>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-sm font-semibold text-muted-foreground">
+                <div>
+                  <span className="font-semibold text-muted-foreground text-sm">
                     Division
                   </span>
                   <span>{divisionDisplay}</span>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-sm font-semibold text-muted-foreground">
+                <div>
+                  <span className="font-semibold text-muted-foreground text-sm">
                     Weight Class
                   </span>
                   <span>{weightDisplay}</span>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-sm font-semibold text-muted-foreground">
+                <div>
+                  <span className="font-semibold text-muted-foreground text-sm">
                     Grip/Stance
                   </span>
                   <span>{grip || "—"}</span>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-sm font-semibold text-muted-foreground">
+                <div>
+                  <span className="font-semibold text-muted-foreground text-sm">
                     Match Type
                   </span>
                   <span>{s(report?.matchType) || "—"}</span>
@@ -280,7 +253,6 @@ const PreviewReportModal = ({
                   <h4 className="font-semibold text-gray-800 dark:text-gray-200">
                     Athlete Notes:
                   </h4>
-                  {/* Render WYSIWYG HTML with list support */}
                   <div
                     className="wysiwyg-content prose dark:prose-invert max-w-none text-sm"
                     dangerouslySetInnerHTML={{ __html: notesHtml }}
@@ -289,7 +261,7 @@ const PreviewReportModal = ({
               )}
             </div>
 
-            {/* -------- Videos -------- */}
+            {/* VIDEOS */}
             <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow p-6">
               <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4 border-b border-gray-300 dark:border-gray-700 pb-2">
                 Videos
@@ -299,13 +271,9 @@ const PreviewReportModal = ({
                 <div className="space-y-6">
                   {videos.map((video, i) => {
                     const title = s(video?.title);
-                    const notes = s(video?.notes);
-                    const url = s(video?.url);
-                    const start = Number.isFinite(
-                      parseInt(video?.startSeconds, 10)
-                    )
-                      ? parseInt(video.startSeconds, 10)
-                      : 0;
+                    const notesHtml = s(decryptedVideoNotes[i] || "");
+                    const url = s(video?.url || video?.urlCanonical);
+                    const start = parseInt(video?.startSeconds || 0, 10) || 0;
                     const embedUrl = toEmbedUrl(url, start);
 
                     return (
@@ -318,10 +286,10 @@ const PreviewReportModal = ({
                             {title}
                           </h4>
                         )}
-                        {notes && (
+                        {notesHtml && (
                           <div
                             className="wysiwyg-content prose dark:prose-invert text-sm max-w-none"
-                            dangerouslySetInnerHTML={{ __html: notes }}
+                            dangerouslySetInnerHTML={{ __html: notesHtml }}
                           />
                         )}
                         {embedUrl && (
@@ -346,7 +314,6 @@ const PreviewReportModal = ({
             </div>
           </div>
 
-          {/* Global minimal styles to ensure bullets & spacing show even without Typography plugin */}
           <style
             jsx
             global

@@ -4,6 +4,7 @@ import { Types } from "mongoose";
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
+
 import Team from "@/models/teamModel";
 import TeamScoutingReport from "@/models/teamScoutingReportModel";
 import Video from "@/models/videoModel";
@@ -11,17 +12,17 @@ import FamilyMember from "@/models/familyMemberModel";
 import User from "@/models/userModel";
 import { createNotification } from "@/lib/createNotification";
 
-// centralized mailer + template
+// central mail system
 import { Mail } from "@/lib/email/mailer";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
-// ============================================================
-// GET: Fetch a single team scouting report (includes crypto)
-// ============================================================
+/* -----------------------------------------------------------
+   GET — Fetch Single Scouting Report
+----------------------------------------------------------- */
 export async function GET(_req, { params }) {
   try {
     await connectDB();
-    const { slug, reportId } = await params; // Next 15: await params
+    const { slug, reportId } = await params;
 
     if (!Types.ObjectId.isValid(reportId)) {
       return NextResponse.json(
@@ -30,7 +31,6 @@ export async function GET(_req, { params }) {
       );
     }
 
-    // Tolerant team lookup (_ vs -)
     const team =
       (await Team.findOne({ teamSlug: slug }).select(
         "_id teamName teamSlug"
@@ -61,7 +61,6 @@ export async function GET(_req, { params }) {
       );
     }
 
-    // Return as-is; client will decrypt if report.crypto is present.
     return NextResponse.json({ report }, { status: 200 });
   } catch (err) {
     console.error("GET single scouting report error:", err);
@@ -72,22 +71,22 @@ export async function GET(_req, { params }) {
   }
 }
 
-// ============================================================
-// PATCH: Update a Scouting Report (supports crypto updates)
-// ============================================================
+/* -----------------------------------------------------------
+   PATCH — Update Scouting Report (FULL Encryption Mode)
+----------------------------------------------------------- */
 export async function PATCH(req, context) {
   try {
     await connectDB();
 
     const { slug, reportId } = await context.params;
     const currentUser = await getCurrentUserFromCookies();
-    if (!currentUser || !currentUser._id) {
+    if (!currentUser?._id) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
     const body = await req.json();
 
-    // Tolerant team lookup (_ vs -)
+    // tolerant team lookup
     const team =
       (await Team.findOne({ teamSlug: slug }).select(
         "_id teamName teamSlug"
@@ -99,14 +98,14 @@ export async function PATCH(req, context) {
         "_id teamName teamSlug"
       ));
 
-    if (!team) {
+    if (!team)
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
-    }
 
     const report = await TeamScoutingReport.findOne({
       _id: reportId,
       teamId: team._id,
     });
+
     if (!report) {
       return NextResponse.json(
         { message: "Scouting report not found" },
@@ -114,29 +113,37 @@ export async function PATCH(req, context) {
       );
     }
 
-    // ---- Compute newly added assignees -------------------------------
+    /* -----------------------------------------------------------
+       Dedupe reportFor + detect newly-added assignees
+    ----------------------------------------------------------- */
     const prevKeys = new Set(
       (report.reportFor || []).map((e) => `${e.athleteType}:${e.athleteId}`)
     );
-    const incoming = Array.isArray(body.reportFor)
-      ? body.reportFor
-      : report.reportFor || [];
+
+    const incomingList = Array.isArray(body.reportFor) ? body.reportFor : [];
     const seen = new Set();
-    const dedupedIncoming = incoming.filter((e) => {
-      const k = `${e.athleteId}-${e.athleteType}`;
+    const dedupedIncoming = incomingList.filter((e) => {
+      const k = `${e.athleteType}:${e.athleteId}`;
       if (seen.has(k)) return false;
       seen.add(k);
       return true;
     });
+
     const newlyAdded = dedupedIncoming.filter(
       (e) => !prevKeys.has(`${e.athleteType}:${e.athleteId}`)
     );
 
+    /* -----------------------------------------------------------
+       Encryption Mode Trigger
+    ----------------------------------------------------------- */
     const isEncryptedUpdate = !!(
       body.crypto && typeof body.crypto === "object"
     );
 
-    // ---- Update allowed plaintext fields -----------------------------
+    /* -----------------------------------------------------------
+       Sensitive Fields — MUST be blanked in encrypted mode
+       (Matches POST behavior exactly)
+    ----------------------------------------------------------- */
     const sensitiveFields = [
       "athleteFirstName",
       "athleteLastName",
@@ -149,41 +156,37 @@ export async function PATCH(req, context) {
       "athleteAttackNotes",
     ];
 
+    /* -----------------------------------------------------------
+       Allowed plain fields
+    ----------------------------------------------------------- */
     const allowedFields = [
       "title",
       "notes",
       "matchType",
-      "athleteFirstName",
-      "athleteLastName",
-      "athleteNationalRank",
-      "athleteWorldRank",
       "division",
       "weightCategory",
-      "athleteClub",
-      "athleteCountry",
-      "athleteGrip",
-      "athleteAttacks",
-      "athleteAttackNotes",
+      "weightLabel",
+      "weightUnit",
       "reportFor",
     ];
 
-    allowedFields.forEach((field) => {
-      if (field === "reportFor") {
-        report.reportFor = dedupedIncoming;
-        return;
-      }
+    /* -----------------------------------------------------------
+       Apply updates
+    ----------------------------------------------------------- */
+    if (body.reportFor) {
+      report.reportFor = dedupedIncoming;
+    }
 
-      // If this is an encrypted update, ignore any incoming *sensitive* field values.
-      if (isEncryptedUpdate && sensitiveFields.includes(field)) {
-        return;
-      }
-
+    for (const field of allowedFields) {
+      if (field === "reportFor") continue;
       if (body[field] !== undefined) {
         report[field] = body[field];
       }
-    });
+    }
 
-    // ✅ optional crypto update (for encrypted payload changes)
+    /* -----------------------------------------------------------
+       ENCRYPTION MODE: store crypto + blank sensitive fields
+    ----------------------------------------------------------- */
     if (isEncryptedUpdate) {
       report.crypto = {
         version: body.crypto.version || 1,
@@ -195,56 +198,78 @@ export async function PATCH(req, context) {
           body.crypto.teamKeyVersion != null ? body.crypto.teamKeyVersion : 1,
       };
 
-      // Enforce blank sensitive fields whenever crypto is present
-      report.athleteFirstName = "";
-      report.athleteLastName = "";
-      report.athleteNationalRank = "";
-      report.athleteWorldRank = "";
-      report.athleteClub = "";
-      report.athleteCountry = "";
-      report.athleteGrip = "";
-      report.athleteAttacks = [];
-      report.athleteAttackNotes = "";
+      // BLANK ALL sensitive fields
+      for (const f of sensitiveFields) {
+        report[f] = Array.isArray(report[f]) ? [] : "";
+      }
+    } else {
+      // Only apply sensitive fields if NOT encrypted
+      for (const f of sensitiveFields) {
+        if (body[f] !== undefined) {
+          report[f] = body[f];
+        }
+      }
     }
 
-    // ---- Save related entities ---------------------------------------
+    /* -----------------------------------------------------------
+       Save unknown techniques
+    ----------------------------------------------------------- */
     await saveUnknownTechniques(
       Array.isArray(body.athleteAttacks) ? body.athleteAttacks : []
     );
 
-    if (Array.isArray(body.newVideos) && body.newVideos.length) {
+    /* -----------------------------------------------------------
+       VIDEO LOGIC
+       - In encrypted mode: NO plaintext notes stored
+       - In plaintext mode: normal video storage
+    ----------------------------------------------------------- */
+
+    // NEW VIDEOS
+    if (Array.isArray(body.newVideos)) {
       for (const vid of body.newVideos) {
-        const newVid = await Video.create({
-          title: vid.title,
-          notes: vid.notes,
-          url: vid.url,
+        const doc = {
           report: report._id,
           createdBy: currentUser._id,
-        });
+          title: vid.title || "",
+          url: vid.url || "",
+        };
+
+        doc.notes = isEncryptedUpdate ? "" : vid.notes || "";
+
+        const newVid = await Video.create(doc);
         report.videos.push(newVid._id);
       }
     }
 
-    if (Array.isArray(body.updatedVideos) && body.updatedVideos.length) {
+    // UPDATED VIDEOS
+    if (Array.isArray(body.updatedVideos)) {
       for (const vid of body.updatedVideos) {
-        await Video.findByIdAndUpdate(vid._id, {
+        const update = {
           title: vid.title,
-          notes: vid.notes,
           url: vid.url,
-        });
+        };
+
+        update.notes = isEncryptedUpdate ? "" : vid.notes || "";
+
+        await Video.findByIdAndUpdate(vid._id, update);
       }
     }
 
-    if (Array.isArray(body.deletedVideos) && body.deletedVideos.length) {
+    // DELETED VIDEOS
+    if (Array.isArray(body.deletedVideos)) {
       for (const videoId of body.deletedVideos) {
         await Video.findByIdAndDelete(videoId);
-        report.videos = report.videos.filter((id) => id.toString() !== videoId);
+        report.videos = report.videos.filter(
+          (id) => id.toString() !== videoId.toString()
+        );
       }
     }
 
     await report.save();
 
-    // ---- Notify & email newly added assignees -------------------------
+    /* -----------------------------------------------------------
+       NOTIFICATIONS + EMAILS for newly added reportFor
+    ----------------------------------------------------------- */
     try {
       await Promise.all(
         newlyAdded.map(async (entry) => {
@@ -259,24 +284,16 @@ export async function PATCH(req, context) {
             const recipient = await User.findById(entry.athleteId);
             if (recipient) {
               const subject = `Scouting report shared in ${team.teamName}`;
-              const message = `
+              const msg = `
                 <p>Hi ${recipient.firstName || recipient.username},</p>
                 <p>A scouting report has been shared with you in <strong>${
                   team.teamName
                 }</strong>.</p>
-                <p>You can review it here after signing in.</p>
-                <p>
-                  <a href="https://matscout.com/teams/${encodeURIComponent(
-                    team.teamSlug
-                  )}/scouting-reports"
-                    style="display:inline-block;background-color:#1a73e8;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:bold;">
-                    View Scouting Reports
-                  </a>
-                </p>
+                <p>You can review it after signing in.</p>
               `;
               const html = baseEmailTemplate({
                 title: "New Scouting Report Shared",
-                message,
+                message: msg,
                 logoUrl:
                   "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png",
               });
@@ -290,58 +307,51 @@ export async function PATCH(req, context) {
                 teamId: team._id.toString(),
               });
             }
-          } else if (entry.athleteType === "family") {
-            const familyMember = await FamilyMember.findById(entry.athleteId);
-            if (familyMember?.userId) {
-              await createNotification({
-                userId: familyMember.userId,
-                type: "Scouting Report",
-                body: `A scouting report was shared for ${familyMember.firstName} ${familyMember.lastName} in ${team.teamName}`,
-                link: `/teams/${team.teamSlug}/scouting-reports`,
+          }
+
+          if (entry.athleteType === "family") {
+            const fm = await FamilyMember.findById(entry.athleteId);
+            if (!fm?.userId) return;
+
+            await createNotification({
+              userId: fm.userId,
+              type: "Scouting Report",
+              body: `A scouting report was shared for ${fm.firstName} ${fm.lastName} in ${team.teamName}`,
+              link: `/teams/${team.teamSlug}/scouting-reports`,
+            });
+
+            const parent = await User.findById(fm.userId);
+            if (parent) {
+              const subject = `Scouting report for ${fm.firstName} ${fm.lastName}`;
+              const msg = `
+                <p>Hi ${parent.firstName || parent.username},</p>
+                <p>A scouting report has been shared for <strong>${
+                  fm.firstName
+                } ${fm.lastName}</strong> in <strong>${
+                team.teamName
+              }</strong>.</p>
+              `;
+              const html = baseEmailTemplate({
+                title: "New Scouting Report Shared",
+                message: msg,
+                logoUrl:
+                  "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png",
               });
 
-              const parentUser = await User.findById(familyMember.userId);
-              if (parentUser) {
-                const subject = `Scouting report for ${familyMember.firstName} ${familyMember.lastName}`;
-                const message = `
-                  <p>Hi ${parentUser.firstName || parentUser.username},</p>
-                  <p>A scouting report has been shared for <strong>${
-                    familyMember.firstName
-                  } ${familyMember.lastName}</strong> in <strong>${
-                  team.teamName
-                }</strong>.</p>
-                  <p>You can review it here after signing in.</p>
-                  <p>
-                    <a href="https://matscout.com/teams/${encodeURIComponent(
-                      team.teamSlug
-                    )}/scouting-reports"
-                      style="display:inline-block;background-color:#1a73e8;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:bold%;">
-                      View Scouting Reports
-                    </a>
-                  </p>
-                `;
-                const html = baseEmailTemplate({
-                  title: "New Scouting Report Shared",
-                  message,
-                  logoUrl:
-                    "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png",
-                });
-
-                await Mail.sendEmail({
-                  type: Mail.kinds.SCOUTING_REPORT,
-                  toUser: parentUser,
-                  subject,
-                  html,
-                  relatedUserId: familyMember._id.toString(),
-                  teamId: team._id.toString(),
-                });
-              }
+              await Mail.sendEmail({
+                type: Mail.kinds.SCOUTING_REPORT,
+                toUser: parent,
+                subject,
+                html,
+                relatedUserId: fm._id.toString(),
+                teamId: team._id.toString(),
+              });
             }
           }
         })
       );
-    } catch (notifyErr) {
-      console.error("❌ Scouting report update notify/email error:", notifyErr);
+    } catch (e) {
+      console.error("Email notify error:", e);
     }
 
     return NextResponse.json(
@@ -357,27 +367,21 @@ export async function PATCH(req, context) {
   }
 }
 
-// ============================================================
-// DELETE: Delete Scouting Report (no crypto changes)
-// ============================================================
-export async function DELETE(_request, context) {
+/* -----------------------------------------------------------
+   DELETE — Remove Report + Videos
+----------------------------------------------------------- */
+export async function DELETE(_req, context) {
   await connectDB();
 
   const { slug, reportId } = await context.params;
   const currentUser = await getCurrentUserFromCookies();
 
   if (!Types.ObjectId.isValid(reportId)) {
-    return new NextResponse(JSON.stringify({ message: "Invalid report ID" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+    return NextResponse.json({ message: "Invalid report ID" }, { status: 400 });
   }
 
-  if (!currentUser || !currentUser._id) {
-    return new NextResponse(JSON.stringify({ message: "Unauthorized" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
+  if (!currentUser?._id) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
   try {
@@ -387,10 +391,7 @@ export async function DELETE(_request, context) {
       (await Team.findOne({ teamSlug: slug.replace(/_/g, "-") }));
 
     if (!team) {
-      return new NextResponse(JSON.stringify({ message: "Team not found" }), {
-        status: 404,
-        headers: { "Content-Type": "application/json" },
-      });
+      return NextResponse.json({ message: "Team not found" }, { status: 404 });
     }
 
     const report = await TeamScoutingReport.findOne({
@@ -399,40 +400,28 @@ export async function DELETE(_request, context) {
     });
 
     if (!report) {
-      return new NextResponse(
-        JSON.stringify({ message: "Scouting report not found" }),
-        {
-          status: 404,
-          headers: { "Content-Type": "application/json" },
-        }
+      return NextResponse.json(
+        { message: "Scouting report not found" },
+        { status: 404 }
       );
     }
 
-    // Delete associated videos if any
-    if (report.videos && report.videos.length > 0) {
+    // delete videos
+    if (report.videos?.length) {
       await Video.deleteMany({ _id: { $in: report.videos } });
     }
 
-    // Delete the report
     await TeamScoutingReport.findByIdAndDelete(reportId);
 
-    return new NextResponse(
-      JSON.stringify({
-        message: "Scouting report and associated videos deleted",
-      }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }
+    return NextResponse.json(
+      { message: "Scouting report and associated videos deleted" },
+      { status: 200 }
     );
   } catch (err) {
-    console.error("DELETE team scouting report error:", err);
-    return new NextResponse(
-      JSON.stringify({ message: "Server error: " + err.message }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }
+    console.error("DELETE error:", err);
+    return NextResponse.json(
+      { message: "Server error: " + err.message },
+      { status: 500 }
     );
   }
 }

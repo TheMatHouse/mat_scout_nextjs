@@ -10,24 +10,17 @@ import Video from "@/models/videoModel";
 import "@/models/divisionModel";
 import "@/models/weightCategoryModel";
 
-// ----------------------------------------------------------
-// YouTube / Video helpers (mirrors dashboard scouting route)
-// ----------------------------------------------------------
-const safeStr = (v) => (v == null ? "" : String(v)).trim();
-
-const toNonNegInt = (v) => {
-  const n = parseInt(v, 10);
-  return Number.isFinite(n) && n > 0 ? n : 0;
-};
+/* -------------------------------------------------------
+   YouTube helpers
+------------------------------------------------------- */
+const safeStr = (v) => (v == null ? "" : String(v).trim());
 
 function extractYouTubeId(raw) {
   const str = safeStr(raw);
   if (!str) return "";
 
-  // If an <iframe> was pasted, extract the src first
-  const iframe = str.match(
-    /<iframe[\s\S]*?src\s*=\s*["']([^"']+)["'][\s\S]*?>/i
-  );
+  // If <iframe> was pasted
+  const iframe = str.match(/<iframe[\s\S]*?src=["']([^"']+)["']/i);
   const urlStr = iframe ? iframe[1] : str;
 
   try {
@@ -45,9 +38,7 @@ function extractYouTubeId(raw) {
       if (path.startsWith("/embed/")) return path.split("/")[2] || "";
       if (path.startsWith("/shorts/")) return path.split("/")[2] || "";
     }
-  } catch {
-    /* ignore and try regex */
-  }
+  } catch {}
 
   const m = (urlStr || "").match(
     /(?:v=|\/embed\/|youtu\.be\/|\/shorts\/)([^&?/]+)/i
@@ -56,12 +47,10 @@ function extractYouTubeId(raw) {
 }
 
 function buildCanonicalUrl(url, videoId) {
-  // Prefer a stable canonical watch URL for YouTube
   if (videoId) return `https://www.youtube.com/watch?v=${videoId}`;
   const ustr = safeStr(url);
   if (!ustr) return "";
   try {
-    // As a fallback, use the URL without its search params
     const u = new URL(ustr);
     u.search = "";
     u.hash = "";
@@ -71,55 +60,45 @@ function buildCanonicalUrl(url, videoId) {
   }
 }
 
-/**
- * normalizeIncomingVideoForCreate
- * - raw: incoming video object from the client
- * - reportId: the TeamScoutingReport._id
- * - userId: the current user creating the report
- *
- * Returns a document ready to pass to Video.insertMany(...)
- */
-function normalizeIncomingVideoForCreate(raw, reportId, userId) {
+const toNonNegInt = (v) => {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+};
+
+/* -------------------------------------------------------
+   Normalize incoming videos for POST
+------------------------------------------------------- */
+function normalizeIncomingVideoForCreate(raw, reportId, userId, encrypted) {
   if (!raw || typeof raw !== "object") return null;
 
   const url = safeStr(raw.url ?? raw.videoURL);
   const id = extractYouTubeId(url);
+  const urlCanonical = buildCanonicalUrl(url, id);
   const startSeconds = toNonNegInt(raw.startSeconds);
-  const videoId = id || new Types.ObjectId().toString(); // ensure required
-  const urlCanonical = buildCanonicalUrl(url, id) || url || ""; // ensure required
 
   return {
     title: safeStr(raw.title ?? raw.videoTitle),
-    notes: safeStr(raw.notes ?? raw.videoNotes),
+    notes: encrypted ? "" : safeStr(raw.notes ?? raw.videoNotes),
     url,
     urlCanonical,
+    videoId: id || new Types.ObjectId().toString(),
     startSeconds,
-    videoId,
-    // Link back to this team scouting report and creator
     report: reportId,
     createdBy: userId,
   };
 }
 
-// ============================================================
-// POST: Create a Scouting Report (plaintext or encrypted)
-// ============================================================
+/* ============================================================
+   POST — Create a Scouting Report (supports encryption)
+============================================================ */
 export async function POST(req, context) {
   try {
     await connectDB();
 
-    const { params } = context;
-    const { slug } = await params;
-    if (!slug) {
-      return NextResponse.json(
-        { message: "Missing team slug" },
-        { status: 400 }
-      );
-    }
-
+    const { slug } = await context.params;
     const body = await req.json();
 
-    // Handle slug normalization (_ vs -)
+    // ----- Team lookup -----
     const team =
       (await Team.findOne({ teamSlug: slug })) ||
       (await Team.findOne({ teamSlug: slug.replace(/[-_]/g, "") })) ||
@@ -129,53 +108,66 @@ export async function POST(req, context) {
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
     }
 
+    // ----- Auth -----
     const currentUser = await getCurrentUserFromCookies();
-    if (!currentUser || !currentUser._id) {
+    if (!currentUser) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    // Deduplicate reportFor
+    // ----- Dedupe reportFor -----
     const seen = new Set();
-    const dedupedReportFor = (body.reportFor || []).filter((entry) => {
-      const key = `${entry.athleteId}-${entry.athleteType}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
+    const dedupedReportFor = (body.reportFor || []).filter((e) => {
+      const k = `${e.athleteId}-${e.athleteType}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
       return true;
     });
 
-    // ✅ Normalize optional crypto block
-    const cryptoBlock =
-      body.crypto && typeof body.crypto === "object"
-        ? {
-            version: body.crypto.version || 1,
-            alg: body.crypto.alg || "TBK-AES-GCM-256",
-            ivB64: body.crypto.ivB64 || "",
-            ciphertextB64: body.crypto.ciphertextB64 || "",
-            wrappedReportKeyB64: body.crypto.wrappedReportKeyB64 || "",
-            teamKeyVersion:
-              body.crypto.teamKeyVersion != null
-                ? body.crypto.teamKeyVersion
-                : 1,
-          }
-        : null;
+    // ----- Sensitive body (always encrypted if TBK present) -----
+    const sensitive = {
+      athleteFirstName: safeStr(body.athleteFirstName),
+      athleteLastName: safeStr(body.athleteLastName),
+      athleteNationalRank: safeStr(body.athleteNationalRank),
+      athleteWorldRank: safeStr(body.athleteWorldRank),
+      athleteClub: safeStr(body.athleteClub),
+      athleteCountry: safeStr(body.athleteCountry),
+      athleteGrip: safeStr(body.athleteGrip),
+      athleteAttacks: Array.isArray(body.athleteAttacks)
+        ? body.athleteAttacks
+        : [],
+      athleteAttackNotes: safeStr(body.athleteAttackNotes),
+    };
 
-    // Base doc from body (works for plaintext teams)
-    const createdByName = `${currentUser.firstName || ""} ${
-      currentUser.lastName || ""
-    }`.trim();
+    // ----- Encrypt if crypto exists -----
+    const encrypted = !!(body.crypto && body.crypto.ciphertextB64);
 
     const doc = {
-      ...body,
+      matchType: body.matchType || "",
+      division: body.division || null,
+      weightCategory: body.weightCategory || null,
+      weightLabel: body.weightLabel || "",
+      weightUnit: body.weightUnit || "",
       reportFor: dedupedReportFor,
       teamId: team._id,
       createdById: currentUser._id,
-      createdByName,
+      createdByName: `${currentUser.firstName || ""} ${
+        currentUser.lastName || ""
+      }`.trim(),
       videos: [],
     };
 
-    // If crypto is present, enforce that sensitive fields are blank on the server.
-    if (cryptoBlock) {
-      doc.crypto = cryptoBlock;
+    if (encrypted) {
+      doc.crypto = {
+        version: body.crypto.version || 1,
+        alg: body.crypto.alg || "TBK-AES-GCM-256",
+        ivB64: body.crypto.ivB64 || "",
+        ciphertextB64: body.crypto.ciphertextB64 || "",
+        wrappedReportKeyB64: body.crypto.wrappedReportKeyB64 || "",
+        teamKeyVersion:
+          body.crypto.teamKeyVersion != null ? body.crypto.teamKeyVersion : 1,
+      };
+
+      // Blank ALL sensitive fields
       doc.athleteFirstName = "";
       doc.athleteLastName = "";
       doc.athleteNationalRank = "";
@@ -185,54 +177,48 @@ export async function POST(req, context) {
       doc.athleteGrip = "";
       doc.athleteAttacks = [];
       doc.athleteAttackNotes = "";
+    } else {
+      // plaintext fallback
+      Object.assign(doc, sensitive);
     }
 
-    // Create the report without videos first
+    // ----- Create report -----
     const newReport = await TeamScoutingReport.create(doc);
 
-    // Save unknown techniques (plaintext flow will still work;
-    // encrypted flow may have empty athleteAttacks here, which is OK)
-    await saveUnknownTechniques(
-      Array.isArray(body.athleteAttacks) ? body.athleteAttacks : []
-    );
+    // Save unknown techniques
+    await saveUnknownTechniques(sensitive.athleteAttacks);
 
-    // -------------------------------
-    // Save new videos and link to report
-    // -------------------------------
-    const incomingVideosRaw =
+    // ----- Handle videos -----
+    const incomingVideos =
       (Array.isArray(body.newVideos) && body.newVideos) ||
       (Array.isArray(body.videos) && body.videos) ||
       [];
 
-    if (incomingVideosRaw.length) {
-      const normalizedDocs = [];
-      for (const raw of incomingVideosRaw) {
-        if (!raw || (!raw.url && !raw.videoURL)) continue;
-        const videoDoc = normalizeIncomingVideoForCreate(
-          raw,
-          newReport._id,
-          currentUser._id
-        );
-        if (!videoDoc || !videoDoc.url) continue;
-        normalizedDocs.push(videoDoc);
-      }
+    if (incomingVideos.length) {
+      const normalized = incomingVideos
+        .map((v) =>
+          normalizeIncomingVideoForCreate(
+            v,
+            newReport._id,
+            currentUser._id,
+            encrypted
+          )
+        )
+        .filter(Boolean);
 
-      if (normalizedDocs.length) {
-        const videoDocs = await Video.insertMany(normalizedDocs);
-        newReport.videos = videoDocs.map((v) => v._id);
+      if (normalized.length) {
+        const docs = await Video.insertMany(normalized);
+        newReport.videos = docs.map((v) => v._id);
         await newReport.save();
       }
     }
-
-    // In-app notifications + emails per assignment (unchanged)
-    // ... your existing notification/email logic lives here ...
 
     return NextResponse.json(
       { message: "Scouting report created", report: newReport },
       { status: 201 }
     );
   } catch (err) {
-    console.error("Scouting Report POST error:", err);
+    console.error("POST scouting report error:", err);
     return NextResponse.json(
       { message: "Server error: " + err.message },
       { status: 500 }
@@ -240,14 +226,14 @@ export async function POST(req, context) {
   }
 }
 
-// ============================================================
-// GET: List all Scouting Reports for a Team
-// ============================================================
-export async function GET(_request, context) {
+/* ============================================================
+   GET — List all scouting reports for a team
+============================================================ */
+export async function GET(_req, context) {
   try {
-    const { params } = context;
-    const { slug } = await params;
     await connectDB();
+
+    const { slug } = await context.params;
 
     const team =
       (await Team.findOne({ teamSlug: slug })) ||
@@ -264,26 +250,20 @@ export async function GET(_request, context) {
       .sort({ createdAt: -1 })
       .lean();
 
-    // Shape each report with a friendly divisionLabel
-    const scoutingReports = rawReports.map((r) => {
-      if (r.divisionLabel) return r;
-
+    const reports = rawReports.map((r) => {
       let divisionLabel = "";
-
       if (r.division && typeof r.division === "object") {
-        const name = String(r.division.label || r.division.name || "").trim();
-        const gender = String(r.division.gender || "").toLowerCase();
-
-        let genderPretty = "";
-        if (gender === "male") genderPretty = "Men";
-        else if (gender === "female") genderPretty = "Women";
-        else if (gender === "coed" || gender === "open") genderPretty = "Coed";
-
-        divisionLabel = name
-          ? genderPretty
-            ? `${name} - ${genderPretty}`
-            : name
-          : "";
+        const name = safeStr(r.division.label || r.division.name);
+        const gender = safeStr(r.division.gender).toLowerCase();
+        const g =
+          gender === "male"
+            ? "Men"
+            : gender === "female"
+            ? "Women"
+            : gender === "coed" || gender === "open"
+            ? "Coed"
+            : "";
+        divisionLabel = name ? (g ? `${name} - ${g}` : name) : "";
       }
 
       return {
@@ -292,10 +272,9 @@ export async function GET(_request, context) {
       };
     });
 
-    // ✅ Include crypto metadata in results but never decrypt server-side
-    return NextResponse.json({ scoutingReports }, { status: 200 });
+    return NextResponse.json({ scoutingReports: reports }, { status: 200 });
   } catch (err) {
-    console.error("GET team scoutingReports error:", err);
+    console.error("GET scouting reports error:", err);
     return NextResponse.json(
       { message: "Failed to fetch scouting reports", error: err.message },
       { status: 500 }

@@ -3,45 +3,81 @@ import mongoose from "mongoose";
 
 const videoSchema = new mongoose.Schema(
   {
-    // ---- Canonical video metadata (new) ----
+    /* ------------------------------------------------------
+       VIDEO PROVIDER
+       ------------------------------------------------------ */
     provider: {
       type: String,
-      enum: ["youtube"],
+      enum: ["youtube", "upload"],
       default: "youtube",
     },
-    // e.g., "v8p0Phhmbx4"
+
+    /* ------------------------------------------------------
+       YOUTUBE FIELDS (unchanged)
+       ------------------------------------------------------ */
     videoId: {
       type: String,
-      required: true,
       trim: true,
     },
-    // Canonical watch URL we build from videoId (e.g., https://www.youtube.com/watch?v=...)
+
     urlCanonical: {
       type: String,
-      required: true,
       trim: true,
     },
-    // Single, canonical timestamp for where to start playback
+
     startSeconds: {
       type: Number,
       default: 0,
       min: 0,
     },
 
-    // ---- User-entered fields (kept from your model) ----
-    title: { type: String, default: "" },
+    /* ------------------------------------------------------
+       UPLOADED VIDEO FIELDS (used when provider = "upload")
+       ------------------------------------------------------ */
+    // Example: "teams/<teamId>/videos/<id>.mp4"
+    path: {
+      type: String,
+      default: "",
+    },
+
+    // e.g., "spaces", "s3" — right now we will default to Spaces
+    storage: {
+      type: String,
+      default: "spaces",
+    },
+
+    // All uploaded videos are private — access via signed URL only
+    isPrivate: {
+      type: Boolean,
+      default: true,
+    },
+
+    /* ------------------------------------------------------
+       NOTES (encrypted if team has password)
+       ------------------------------------------------------ */
     notes: { type: String, default: "" },
 
-    // Legacy/raw user input (optional; useful if they paste an <iframe> or shortlink)
-    // We'll still accept/save `url` for backward-compat, but don't rely on it at render time.
+    // If encrypted under TBK:
+    crypto: {
+      ciphertextB64: String,
+      ivB64: String,
+      tagB64: String,
+    },
+
+    /* ------------------------------------------------------
+       Legacy fields (kept for backward compatibility)
+       ------------------------------------------------------ */
     url: { type: String, default: "" },
     originalUrlRaw: { type: String, default: "" },
 
-    // ---- Relations (kept from your model) ----
+    /* ------------------------------------------------------
+       RELATIONS
+       ------------------------------------------------------ */
     report: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "ScoutingReport",
     },
+
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -50,21 +86,36 @@ const videoSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Helpful indexes (not unique; adjust if you want to dedupe)
+/* ------------------------------------------------------
+   INDEXES
+------------------------------------------------------ */
 videoSchema.index({ provider: 1, videoId: 1 });
-videoSchema.index({ createdBy: 1, videoId: 1 });
+videoSchema.index({ createdBy: 1 });
 
-// Convenience virtuals (optional)
+/* ------------------------------------------------------
+   VIRTUALS (unchanged for YouTube)
+------------------------------------------------------ */
 videoSchema.virtual("watchUrl").get(function () {
-  return (
-    this.urlCanonical ||
-    (this.videoId ? `https://www.youtube.com/watch?v=${this.videoId}` : "")
-  );
+  if (this.provider === "youtube") {
+    return (
+      this.urlCanonical ||
+      (this.videoId ? `https://www.youtube.com/watch?v=${this.videoId}` : "")
+    );
+  }
+
+  // For uploaded videos: the signed URL will be fetched on demand
+  return null;
 });
+
 videoSchema.virtual("embedUrl").get(function () {
-  if (!this.videoId) return "";
-  const start = Math.max(0, this.startSeconds || 0);
-  return `https://www.youtube-nocookie.com/embed/${this.videoId}?start=${start}`;
+  if (this.provider === "youtube") {
+    if (!this.videoId) return "";
+    const start = Math.max(0, this.startSeconds || 0);
+    return `https://www.youtube-nocookie.com/embed/${this.videoId}?start=${start}`;
+  }
+
+  // Uploaded videos don't use static embed URLs
+  return null;
 });
 
 const Video = mongoose.models.Video || mongoose.model("Video", videoSchema);

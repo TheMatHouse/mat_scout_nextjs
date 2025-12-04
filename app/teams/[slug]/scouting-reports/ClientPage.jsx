@@ -1,4 +1,3 @@
-// app/teams/[slug]/scouting-reports/ClientPage.jsx
 "use client";
 export const dynamic = "force-dynamic";
 
@@ -133,7 +132,7 @@ const buildPreviewPayload = (r) => {
           v && typeof v === "object"
             ? {
                 title: toSafeStr(v.title || v.videoTitle),
-                notes: toSafeStr(v.notes || v.videoNotes),
+                notes: toSafeStr(v.notes || ""),
                 url: toSafeStr(v.url || v.videoURL || v.urlCanonical),
                 startSeconds: toNonNegInt(v.startSeconds),
               }
@@ -203,6 +202,7 @@ async function normalizeReportsForDisplay(teamForCrypto, reports) {
 
     try {
       const decrypted = await decryptScoutingBody(teamForCrypto, r);
+
       merged = {
         ...r,
         ...decrypted,
@@ -214,6 +214,19 @@ async function normalizeReportsForDisplay(teamForCrypto, reports) {
     } catch (err) {
       decryptErrors++;
       console.warn("[SCOUTING] decrypt failed", r?._id, err);
+    }
+
+    /* -------------------------------------------------------
+       🔒 VIDEO NOTES ENFORCEMENT
+       If reports are encrypted, ALL video.notes must be blank.
+       They are encrypted-only and never stored in plaintext.
+    ------------------------------------------------------- */
+    if (merged?.crypto?.ciphertextB64 && Array.isArray(merged.videos)) {
+      merged.videos = merged.videos.map((v) =>
+        typeof v === "object"
+          ? { ...v, notes: "" } // always blank — cannot trust DB plaintext
+          : v
+      );
     }
 
     out.push(merged);
@@ -239,7 +252,7 @@ function TeamScoutingReportsPage() {
   const router = useRouter();
 
   const [team, setTeam] = useState(null);
-  const [teamMembers, setTeamMembers] = useState([]); // FIXED
+  const [teamMembers, setTeamMembers] = useState([]);
   const [reports, setReports] = useState([]);
   const [user, setUser] = useState(null);
 
@@ -308,11 +321,12 @@ function TeamScoutingReportsPage() {
   }, []);
 
   /* ------------------------------------------------------------------ */
-  /* TEAM MEMBERS — FIXED VERSION */
+  /* TEAM MEMBERS */
   /* ------------------------------------------------------------------ */
 
   useEffect(() => {
     if (!slug) return;
+
     (async () => {
       try {
         const res = await fetch(`/api/teams/${slug}/members?ts=${Date.now()}`, {
@@ -322,7 +336,7 @@ function TeamScoutingReportsPage() {
         const json = await res.json().catch(() => ({}));
         const list = Array.isArray(json.members) ? json.members : [];
 
-        setTeamMembers(list); // <-- MOST IMPORTANT FIX
+        setTeamMembers(list);
 
         const map = new Map();
         list.forEach((m) => {
@@ -481,7 +495,7 @@ function TeamScoutingReportsPage() {
   };
 
   /* ------------------------------------------------------------------ */
-  /* TABLE COLUMNS — RESTORED (THIS FIXES YOUR CRASH) */
+  /* TABLE COLUMNS */
   /* ------------------------------------------------------------------ */
 
   const columns = [
@@ -622,7 +636,7 @@ function TeamScoutingReportsPage() {
   ];
 
   /* ------------------------------------------------------------------ */
-  /* LOADING STATE (AFTER UNLOCK) */
+  /* LOADING STATE */
   /* ------------------------------------------------------------------ */
 
   if (loading && isUnlocked) {
@@ -664,7 +678,6 @@ function TeamScoutingReportsPage() {
             </p>
           </div>
 
-          {/* BUTTONS */}
           <div className="flex flex-wrap gap-3 sm:justify-end">
             {team && user && canCreate(team, teamMembers, user) && (
               <button

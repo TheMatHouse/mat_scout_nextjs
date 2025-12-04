@@ -12,10 +12,13 @@ import FormField from "@/components/shared/FormField";
 import FormSelect from "@/components/shared/FormSelect";
 import FormMultiSelect from "@/components/shared/FormMultiSelect";
 import CountrySelect from "@/components/shared/CountrySelect";
+
 import {
   encryptScoutingBody,
   decryptScoutingBody,
-} from "@/lib/crypto/teamLock";
+  encryptVideoNotes,
+  decryptVideoNotes,
+} from "@/lib/crypto/teamLock"; // <— NEW: includes per-video encryption helpers
 
 const sortByLabel = (arr) =>
   [...arr].sort((a, b) =>
@@ -56,7 +59,7 @@ function divisionLabel(d) {
   return g ? `${d.name} - ${g}` : d.name;
 }
 
-/* -------- timestamp helpers (copied from dashboard pattern) -------- */
+/* -------- timestamp helpers -------- */
 function hmsToSeconds({ h = 0, m = 0, s = 0 }) {
   const H = Math.max(0, parseInt(h || 0, 10));
   const M = Math.max(0, parseInt(m || 0, 10));
@@ -104,7 +107,7 @@ const InfoBox = ({ children }) => (
   </div>
 );
 
-/* ----------------- TimestampInputs (copied pattern) ----------------- */
+/* ----------------- TimestampInputs ----------------- */
 function TimestampInputs({ valueSeconds = 0, onChange }) {
   const [hh, setHh] = useState("");
   const [mm, setMm] = useState("");
@@ -140,6 +143,7 @@ function TimestampInputs({ valueSeconds = 0, onChange }) {
       </p>
 
       <div className="grid grid-cols-3 gap-3">
+        {/* H */}
         <div className="flex flex-col">
           <label className="mb-1 text-sm font-medium">Hours</label>
           <input
@@ -157,6 +161,7 @@ function TimestampInputs({ valueSeconds = 0, onChange }) {
           />
         </div>
 
+        {/* M */}
         <div className="flex flex-col">
           <label className="mb-1 text-sm font-medium">Minutes</label>
           <input
@@ -174,6 +179,7 @@ function TimestampInputs({ valueSeconds = 0, onChange }) {
           />
         </div>
 
+        {/* S */}
         <div className="flex flex-col">
           <label className="mb-1 text-sm font-medium">Seconds</label>
           <input
@@ -232,6 +238,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
       ? report.athleteAttacks.map((t, i) => ({ value: i, label: t }))
       : []
   );
+
   const [videos, setVideos] = useState(
     Array.isArray(report?.videos)
       ? report.videos.map((v) =>
@@ -245,6 +252,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
         )
       : []
   );
+
   const [newVideos, setNewVideos] = useState([]);
   const [reportFor, setReportFor] = useState(
     Array.isArray(report?.reportFor)
@@ -289,7 +297,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
   /* --------------------- populate / reset on report change ---------------------- */
   useEffect(() => {
     if (report) {
-      // Base: use whatever is in the document
+      // Base: copy stored fields
       setMatchType(report.matchType || "");
       setAthleteFirstName(report.athleteFirstName || "");
       setAthleteLastName(report.athleteLastName || "");
@@ -318,6 +326,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
             )
           : []
       );
+
       setNewVideos([]);
       newVideosRef.current = [];
       deletedVideoIdsRef.current = [];
@@ -341,44 +350,66 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
       appliedInitialDivisionRef.current = false;
       appliedInitialWeightRef.current = false;
 
-      // Now layer in decrypt for TBK-encrypted reports (if present)
+      // DECRYPT MAIN REPORT + VIDEO NOTES
       (async () => {
         try {
+          let decrypted = null;
+
+          // Main report crypto (attacks, notes, athlete info)
           if (report.crypto && report.crypto.ciphertextB64) {
-            const decrypted = await decryptScoutingBody(team, report);
-            if (decrypted) {
-              setAthleteFirstName(decrypted.athleteFirstName || "");
-              setAthleteLastName(decrypted.athleteLastName || "");
-              setAthleteNationalRank(decrypted.athleteNationalRank || "");
-              setAthleteWorldRank(decrypted.athleteWorldRank || "");
-              setAthleteClub(decrypted.athleteClub || "");
-              setAthleteCountry(decrypted.athleteCountry || "");
-              setAthleteGrip(decrypted.athleteGrip || "");
-              setAthleteSelected(
-                Array.isArray(decrypted.athleteAttacks)
-                  ? decrypted.athleteAttacks.map((t, i) => ({
-                      value: i,
-                      label: t,
-                    }))
-                  : []
-              );
-              setAthleteAttackNotes(decrypted.athleteAttackNotes || "");
-              return;
-            }
+            decrypted = await decryptScoutingBody(team, report);
           }
 
-          // No crypto or decrypt failed → fall back to stored notes
-          setAthleteAttackNotes(report.athleteAttackNotes || "");
+          if (decrypted) {
+            setAthleteFirstName(decrypted.athleteFirstName || "");
+            setAthleteLastName(decrypted.athleteLastName || "");
+            setAthleteNationalRank(decrypted.athleteNationalRank || "");
+            setAthleteWorldRank(decrypted.athleteWorldRank || "");
+            setAthleteClub(decrypted.athleteClub || "");
+            setAthleteCountry(decrypted.athleteCountry || "");
+            setAthleteGrip(decrypted.athleteGrip || "");
+            setAthleteSelected(
+              Array.isArray(decrypted.athleteAttacks)
+                ? decrypted.athleteAttacks.map((t, i) => ({
+                    value: i,
+                    label: t,
+                  }))
+                : []
+            );
+            setAthleteAttackNotes(decrypted.athleteAttackNotes || "");
+          } else {
+            setAthleteAttackNotes(report.athleteAttackNotes || "");
+          }
+
+          // ---- DECRYPT VIDEO NOTES
+          if (Array.isArray(report?.videos)) {
+            const updatedVideos = [];
+
+            for (const v of report.videos) {
+              if (v.crypto?.ciphertextB64) {
+                try {
+                  const decryptedVid = await decryptVideoNotes(team, v);
+                  updatedVideos.push({
+                    ...v,
+                    notes: decryptedVid.notes || "",
+                  });
+                } catch {
+                  updatedVideos.push({ ...v, notes: v.notes || "" });
+                }
+              } else {
+                updatedVideos.push(v);
+              }
+            }
+
+            setVideos(updatedVideos);
+          }
         } catch (err) {
-          console.warn(
-            "[ScoutingReportForm] decrypt failed; falling back to stored report body",
-            err
-          );
+          console.warn("[ScoutingReportForm] Decrypt failed", err);
           setAthleteAttackNotes(report.athleteAttackNotes || "");
         }
       })();
     } else {
-      // New report: clear everything
+      // NEW REPORT: wipe everything
       setMatchType("");
       setAthleteFirstName("");
       setAthleteLastName("");
@@ -388,17 +419,20 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
       setAthleteCountry("");
       setAthleteGrip("");
       setAthleteAttackNotes("");
+
       setAthleteSelected([]);
       setVideos([]);
       setNewVideos([]);
       newVideosRef.current = [];
       deletedVideoIdsRef.current = [];
+
       setReportFor([]);
 
       setDivisionId("");
       setWeightCategoryId("");
       setWeightLabel("");
       setWeightUnit("");
+
       appliedInitialDivisionRef.current = false;
       appliedInitialWeightRef.current = false;
     }
@@ -787,13 +821,12 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
     let crypto = null;
     let protectedBody = sensitiveBody;
 
-    // Try to encrypt for teams that have a lock (and TBK)
+    // Try encrypting with TBK (team lock)
     try {
       const result = await encryptScoutingBody(team, sensitiveBody);
       crypto = result.crypto;
       protectedBody = result.body;
     } catch {
-      // If anything fails, fall back to plaintext
       protectedBody = sensitiveBody;
       crypto = null;
     }
@@ -807,7 +840,6 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
       weightLabel: weightLabel || undefined,
       weightUnit: weightUnit || undefined,
 
-      // sensitive fields (possibly blanked if encrypted)
       ...protectedBody,
 
       reportFor,
@@ -879,7 +911,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
         required
       />
 
-      {/* Division & Weight (new, like dashboard) */}
+      {/* Division & Weight (team version) */}
       {divisionsLoading ? (
         <InfoBox>Loading divisions…</InfoBox>
       ) : (
@@ -1052,6 +1084,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
                     handleExistingVideoChange(idx, "title", e.target.value)
                   }
                 />
+
                 <FormField
                   label="Video URL"
                   value={url}
@@ -1074,6 +1107,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
                     });
                   }}
                 />
+
                 <Editor
                   name={`video_notes_${idx}`}
                   label="Video Notes"
@@ -1143,6 +1177,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
                     handleNewVideoChange(idx, "title", e.target.value)
                   }
                 />
+
                 <FormField
                   label="Video URL"
                   value={url}
@@ -1164,6 +1199,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
                     handleNewVideoChange(idx, "startSeconds", safe);
                   }}
                 />
+
                 <Editor
                   name={`new_video_notes_${idx}`}
                   label="Video Notes"
@@ -1208,6 +1244,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
           ➕ Add {newVideos.length ? "Another" : "a"} Video
         </Button>
       </div>
+
       {/* ---------- END VIDEOS SECTION ---------- */}
 
       <Button

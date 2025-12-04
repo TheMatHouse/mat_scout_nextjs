@@ -8,29 +8,23 @@ import TeamMember from "@/models/teamMemberModel";
 import TeamScoutingReport from "@/models/teamScoutingReportModel";
 import { getCurrentUser } from "@/lib/auth-server";
 
-export async function GET(_request, context) {
+export async function GET() {
+  console.log("📌 HIT TEAMS ROUTE");
   try {
-    const { params } = context;
-    const { userId } = await params;
-
     await connectDB();
 
     const viewer = await getCurrentUser();
     if (!viewer) {
-      // encryption-branch behavior
       return NextResponse.json([], { status: 401 });
     }
 
-    if (String(viewer._id) !== String(userId)) {
-      // encryption-branch behavior
-      return NextResponse.json([], { status: 403 });
-    }
+    const viewerId = String(viewer._id);
 
     /* ---------------------------------------------------------------
-       Teams where user is a member
+       Teams where viewer is a member
     ---------------------------------------------------------------- */
     const memberLinks = await TeamMember.find({
-      $or: [{ userId: userId }, { familyMemberId: userId }],
+      $or: [{ userId: viewerId }, { familyMemberId: viewerId }],
     }).lean();
 
     const memberTeamIds = memberLinks.map((m) => m.teamId).filter(Boolean);
@@ -43,9 +37,9 @@ export async function GET(_request, context) {
         : [];
 
     /* ---------------------------------------------------------------
-       Teams where user is the owner
+       Teams where viewer is the owner
     ---------------------------------------------------------------- */
-    const ownerTeams = await Team.find({ user: userId })
+    const ownerTeams = await Team.find({ user: viewerId })
       .select("teamName teamSlug logoURL security")
       .lean();
 
@@ -55,10 +49,9 @@ export async function GET(_request, context) {
     const map = new Map();
 
     for (const t of memberTeams) map.set(String(t._id), t);
-
     for (const t of ownerTeams) {
-      const id = String(t._id);
-      if (!map.has(id)) map.set(id, t);
+      const tid = String(t._id);
+      if (!map.has(tid)) map.set(tid, t);
     }
 
     const teamsArray = Array.from(map.values());
@@ -75,12 +68,9 @@ export async function GET(_request, context) {
       })
     );
 
-    // encryption-branch behavior: return array ONLY
     return NextResponse.json(enriched, { status: 200 });
   } catch (err) {
     console.error("Error in GET /api/dashboard/[userId]/teams:", err);
-
-    // encryption-branch behavior
     return NextResponse.json([], { status: 500 });
   }
 }

@@ -1,4 +1,3 @@
-// app/teams/[slug]/coach-notes/[eventId]/page.jsx
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
@@ -46,7 +45,6 @@ const toStr = (v) => (v == null ? "" : String(v));
 const serializeNote = (n = {}) => {
   const encrypted = n?.crypto?.ciphertextB64 ? true : false;
 
-  // If encrypted → DO NOT ATTEMPT TO READ PLAINTEXT FIELDS
   if (encrypted) {
     return {
       _id: toStr(n?._id),
@@ -56,8 +54,6 @@ const serializeNote = (n = {}) => {
       video: n.video || n.videoRaw || {},
       createdAt: n?.createdAt ? new Date(n.createdAt).toISOString() : "",
       updatedAt: n?.updatedAt ? new Date(n.updatedAt).toISOString() : "",
-
-      // blank placeholders - client will replace after decrypt
       result: "",
       score: "",
       whatWentWell: "",
@@ -68,29 +64,28 @@ const serializeNote = (n = {}) => {
     };
   }
 
-  // Legacy plaintext note
   const opp = n?.opponent || {};
   const tech = n?.techniques || {};
   return {
     _id: toStr(n?._id),
     encrypted: false,
     opponent: {
-      firstName: toStr(opp?.firstName),
-      lastName: toStr(opp?.lastName),
-      name: toStr(opp?.name),
-      rank: toStr(opp?.rank),
-      club: toStr(opp?.club),
-      country: toStr(opp?.country),
+      firstName: toStr(opp.firstName),
+      lastName: toStr(opp.lastName),
+      name: toStr(opp.name),
+      rank: toStr(opp.rank),
+      club: toStr(opp.club),
+      country: toStr(opp.country),
     },
-    result: toStr(n?.result),
-    score: toStr(n?.score),
-    whatWentWell: toStr(n?.whatWentWell),
-    reinforce: toStr(n?.reinforce),
-    needsFix: toStr(n?.needsFix),
-    notes: toStr(n?.notes),
+    result: toStr(n.result),
+    score: toStr(n.score),
+    whatWentWell: toStr(n.whatWentWell),
+    reinforce: toStr(n.reinforce),
+    needsFix: toStr(n.needsFix),
+    notes: toStr(n.notes),
     techniques: {
-      ours: Array.isArray(tech?.ours) ? tech.ours.map(toStr) : [],
-      theirs: Array.isArray(tech?.theirs) ? tech.theirs.map(toStr) : [],
+      ours: Array.isArray(tech.ours) ? tech.ours.map(toStr) : [],
+      theirs: Array.isArray(tech.theirs) ? tech.theirs.map(toStr) : [],
     },
     createdAt: n?.createdAt ? new Date(n.createdAt).toISOString() : "",
     updatedAt: n?.updatedAt ? new Date(n.updatedAt).toISOString() : "",
@@ -122,7 +117,6 @@ const getUserRoleAndFamily = async (slug) => {
 
   let role = membership?.role ? membership.role.toLowerCase() : "none";
 
-  // load user's kids
   const familyMembers = await FamilyMember.find({ userId: user._id })
     .select("_id")
     .lean();
@@ -186,7 +180,11 @@ const getEventMeta = async (slug, eventId) => {
   }
 };
 
-const getMatches = async (slug, eventId, entryId) => {
+const getMatches = async (slug, eventId, entryId, canView) => {
+  if (!canView) {
+    return { notes: [], _error: null };
+  }
+
   try {
     const base = await getBaseUrl();
     const cookie = await getCookieHeader();
@@ -194,6 +192,7 @@ const getMatches = async (slug, eventId, entryId) => {
       `${base}/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches`,
       { cache: "no-store", headers: { cookie } }
     );
+
     if (!res.ok) return { notes: [], _error: `matches ${res.status}` };
     const data = await safeJson(res);
     return data || { notes: [] };
@@ -203,16 +202,15 @@ const getMatches = async (slug, eventId, entryId) => {
 };
 
 /* ---------------- subcomponents (server) ---------------- */
-const MatchList = async ({ slug, eventId, entry, team }) => {
-  const { notes, _error } = await getMatches(slug, eventId, entry._id);
-
-  const sorted = Array.isArray(notes)
-    ? [...notes].sort((a, b) => {
-        const da = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const db = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return da - db;
-      })
-    : [];
+const MatchList = async ({
+  slug,
+  eventId,
+  entry,
+  team,
+  canManage,
+  canView,
+}) => {
+  const { notes, _error } = await getMatches(slug, eventId, entry._id, canView);
 
   if (_error) {
     return (
@@ -222,13 +220,19 @@ const MatchList = async ({ slug, eventId, entry, team }) => {
     );
   }
 
-  if (!sorted.length) {
+  if (!notes.length) {
     return (
       <div className="text-sm text-gray-900 dark:text-gray-100 opacity-80">
         No notes yet.
       </div>
     );
   }
+
+  const sorted = [...notes].sort((a, b) => {
+    const da = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const db = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return da - db;
+  });
 
   return (
     <div className="divide-y rounded-xl border">
@@ -271,6 +275,7 @@ const MatchList = async ({ slug, eventId, entry, team }) => {
                     : "Athlete"
                 }
                 team={team}
+                role={canManage ? "manager" : "member"} // ⭐ FIX
               />
             </div>
           </div>
@@ -280,7 +285,14 @@ const MatchList = async ({ slug, eventId, entry, team }) => {
   );
 };
 
-const AthleteCard = async ({ slug, eventId, entry, team }) => {
+const AthleteCard = async ({
+  slug,
+  eventId,
+  entry,
+  team,
+  canManage,
+  canView,
+}) => {
   return (
     <section
       id={`entry-${entry._id}`}
@@ -296,18 +308,20 @@ const AthleteCard = async ({ slug, eventId, entry, team }) => {
           </div>
         </div>
 
-        <div className="shrink-0 flex items-center gap-2">
-          <AddCoachMatchModalButton
-            slug={slug}
-            eventId={eventId}
-            entryId={entry._id}
-          />
-          <RemoveEntryButton
-            slug={slug}
-            eventId={eventId}
-            entryId={entry._id}
-          />
-        </div>
+        {canManage && (
+          <div className="shrink-0 flex items-center gap-2">
+            <AddCoachMatchModalButton
+              slug={slug}
+              eventId={eventId}
+              entryId={entry._id}
+            />
+            <RemoveEntryButton
+              slug={slug}
+              eventId={eventId}
+              entryId={entry._id}
+            />
+          </div>
+        )}
       </div>
 
       <MatchList
@@ -315,6 +329,8 @@ const AthleteCard = async ({ slug, eventId, entry, team }) => {
         eventId={eventId}
         entry={entry}
         team={team}
+        canManage={canManage}
+        canView={canView}
       />
     </section>
   );
@@ -371,19 +387,30 @@ const EventDetailPage = async ({ params }) => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <AddCoachAthleteModalButton
-              slug={slug}
-              eventId={eventId}
-            />
+          {isManagerOrCoach && (
+            <div className="flex items-center gap-2">
+              <AddCoachAthleteModalButton
+                slug={slug}
+                eventId={eventId}
+              />
 
+              <Link
+                href={`/teams/${slug}/coach-notes`}
+                className="text-sm underline text-gray-900 dark:text-gray-100"
+              >
+                Back to events
+              </Link>
+            </div>
+          )}
+
+          {!isManagerOrCoach && (
             <Link
               href={`/teams/${slug}/coach-notes`}
               className="text-sm underline text-gray-900 dark:text-gray-100"
             >
               Back to events
             </Link>
-          </div>
+          )}
         </div>
 
         {loadErr ? (
@@ -399,15 +426,25 @@ const EventDetailPage = async ({ params }) => {
 
           {visibleEntries.length ? (
             <div className="grid gap-4">
-              {visibleEntries.map((e) => (
-                <AthleteCard
-                  key={String(e?._id)}
-                  slug={slug}
-                  eventId={eventId}
-                  entry={e}
-                  team={team}
-                />
-              ))}
+              {visibleEntries.map((e) => {
+                const a = e.athlete || {};
+                const isSelf = user && String(a.user) === String(user._id);
+                const isChild =
+                  a.familyMember && familyIds.includes(String(a.familyMember));
+                const canView = isManagerOrCoach || isSelf || isChild;
+
+                return (
+                  <AthleteCard
+                    key={String(e._id)}
+                    slug={slug}
+                    eventId={eventId}
+                    entry={e}
+                    team={team}
+                    canManage={isManagerOrCoach}
+                    canView={canView}
+                  />
+                );
+              })}
             </div>
           ) : (
             <div className="text-sm text-gray-900 dark:text-gray-100/80">

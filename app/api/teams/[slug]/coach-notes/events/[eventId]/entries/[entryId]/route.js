@@ -3,60 +3,48 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/mongo";
+
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import { requireTeamRole } from "@/lib/authz/teamRoles";
-import CoachEntry from "@/models/coachEntryModel";
 
+import CoachEntry from "@/models/coachEntryModel";
+import CoachMatchNote from "@/models/coachMatchNoteModel";
+
+/**
+ * DELETE — Remove a Coach Entry (athlete) from an event
+ * Optional: ?cascade=notes → also soft-delete all match notes for this athlete.
+ */
 export async function DELETE(req, { params }) {
   try {
     await connectDB();
-    const { slug, entryId } = await params;
-
-    // helpful log (remove after you confirm)
-    console.log(
-      "[DELETE coach-entry]",
-      JSON.stringify({
-        slug,
-        entryId,
-        db: mongoose.connection?.name,
-        uriHost: mongoose.connection?.host,
-      })
-    );
+    const { slug, eventId, entryId } = await params;
 
     const user = await getCurrentUserFromCookies().catch(() => null);
+
     const gate = await requireTeamRole(user?._id, slug, ["manager", "coach"]);
     if (!gate.ok) {
       return NextResponse.json({ error: gate.reason }, { status: gate.status });
     }
 
-    const url = new URL(req.url);
-    const cascade = (url.searchParams.get("cascade") || "none").toLowerCase(); // "none" | "notes"
-
-    // 1) Fetch by id so we can return precise errors
-    const found = await CoachEntry.findById(entryId).lean();
-
-    if (!found) {
+    // Confirm entry exists
+    const entry = await CoachEntry.findById(entryId).lean();
+    if (!entry) {
       return NextResponse.json(
         {
-          error: "Entry not found for this id.",
-          hint: "Likely DB mismatch. Verify you're connected to the DB that contains this _id.",
-          debug: {
-            entryId,
-            db: mongoose.connection?.name,
-            slug,
-          },
+          error: "Entry not found.",
+          debug: { entryId, db: mongoose.connection?.name },
         },
         { status: 404 }
       );
     }
 
-    // 2) Ensure the entry is for this team (derived from slug)
-    if (String(found.team) !== String(gate.teamId)) {
+    // Ensure entry belongs to this team
+    if (String(entry.team) !== String(gate.teamId)) {
       return NextResponse.json(
         {
           error: "Entry belongs to a different team.",
           debug: {
-            entryTeamId: String(found.team),
+            entryTeamId: String(entry.team),
             slugTeamId: String(gate.teamId),
           },
         },
@@ -64,25 +52,29 @@ export async function DELETE(req, { params }) {
       );
     }
 
-    // 3) Idempotent: already removed?
-    if (found.deletedAt) {
+    // Already deleted?
+    if (entry.deletedAt) {
       return NextResponse.json({
         ok: true,
         alreadyRemoved: true,
-        message: "Athlete was already removed.",
+        message: "Athlete already removed.",
       });
     }
 
-    // 4) Soft-delete entry
+    // Soft delete entry
     await CoachEntry.updateOne(
       { _id: entryId },
       { $set: { deletedAt: new Date() } }
     );
 
-    // 5) Optional cascade to notes
+    // Cascade delete notes?
+    const cascade = (
+      new URL(req.url).searchParams.get("cascade") || "none"
+    ).toLowerCase();
+
     if (cascade === "notes") {
-      await CoachMatch.updateMany(
-        { entry: entryId, deletedAt: null },
+      await CoachMatchNote.updateMany(
+        { entry: entryId, team: gate.teamId, deletedAt: null },
         { $set: { deletedAt: new Date() } }
       );
     }
@@ -91,11 +83,13 @@ export async function DELETE(req, { params }) {
       ok: true,
       cascade: cascade === "notes",
       message:
-        cascade === "notes" ? "Athlete and notes removed." : "Athlete removed.",
+        cascade === "notes"
+          ? "Athlete and all notes removed."
+          : "Athlete removed.",
     });
   } catch (err) {
     console.error(
-      "DELETE /teams/[slug]/coach-notes/entries/[entryId] failed:",
+      "DELETE /coach-notes/events/[eventId]/entries/[entryId] failed:",
       err
     );
     return NextResponse.json({ error: "Server error" }, { status: 500 });

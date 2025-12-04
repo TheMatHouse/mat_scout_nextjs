@@ -13,23 +13,28 @@ import CoachEntry from "@/models/coachEntryModel";
 export async function GET(req, { params }) {
   await connectDB();
 
-  const { slug } = await params;
+  const { slug } = params;
+
   const viewer = await getCurrentUserFromCookies().catch(() => null);
   const gate = await requireTeamRole(viewer?._id, slug, ["manager", "coach"]);
-  if (!gate.ok)
+
+  if (!gate.ok) {
     return NextResponse.json({ error: gate.reason }, { status: gate.status });
+  }
 
   const url = new URL(req.url);
   const excludeEvent = url.searchParams.get("excludeEvent") || null;
 
   const team = await Team.findOne({ teamSlug: slug }).lean();
-  if (!team)
+  if (!team) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
+  }
 
-  // Build already-added sets (string-normalized)
+  // Build sets of already-added users for exclusion
   let alreadyUsers = new Set();
   let alreadyFamilies = new Set();
-  let alreadyNames = new Set(); // fallback if older docs missing familyMember
+  let alreadyNames = new Set();
+
   if (excludeEvent) {
     const existing = await CoachEntry.find({
       event: excludeEvent,
@@ -71,12 +76,14 @@ export async function GET(req, { params }) {
     "manager",
     "owner",
   ]);
+
   const rows = [];
 
   for (const m of memberships) {
     const role = (m.role || "").toLowerCase();
     if (!includeRoles.has(role)) continue;
 
+    // Family member athlete
     if (m.familyMemberId) {
       const fm = await FamilyMember.findById(m.familyMemberId).lean();
       if (!fm) continue;
@@ -89,7 +96,6 @@ export async function GET(req, { params }) {
 
       if (excludeEvent) {
         if (alreadyFamilies.has(famId)) continue;
-        // fallback by name if older entries missing familyMember
         if (nameKey && alreadyNames.has(nameKey)) continue;
       }
 
@@ -107,9 +113,11 @@ export async function GET(req, { params }) {
         username: fm.username || null,
         avatarUrl: fm.avatar || null,
       });
+
       continue;
     }
 
+    // User athlete
     if (m.userId) {
       const u = await User.findById(m.userId).lean();
       if (!u) continue;
@@ -148,11 +156,14 @@ export async function GET(req, { params }) {
     }
   }
 
-  // Ensure owner row present unless excluded
+  // Ensure owner appears unless excluded
   const ownerId = String(team.user);
   const ownerPresent = rows.some((r) => r.userId === ownerId);
+
   const ownerExcluded =
-    excludeEvent && (alreadyUsers.has(ownerId) || alreadyNames.has(ownerId));
+    excludeEvent &&
+    (alreadyUsers.has(ownerId) || alreadyNames.has(ownerId.toLowerCase()));
+
   if (!ownerPresent && !ownerExcluded) {
     const owner = await User.findById(ownerId).lean();
     if (owner) {

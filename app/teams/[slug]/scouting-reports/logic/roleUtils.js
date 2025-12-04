@@ -1,141 +1,165 @@
-"use client";
+// app/teams/[slug]/scouting-reports/logic/roleUtils.js
 
-/**
- * FINAL ACCESS-CONTROL LOGIC FOR TEAM SCOUTING REPORTS
- *
- * Correct Rules:
- * --------------------------------------------------------
- *  • Team Owner  → team.user field → ALWAYS "manager"
- *  • TeamMember.role → "manager" | "coach" | "member"
- *  • Privileged Roles → manager + coach
- *  • Members → see ONLY:
- *        - reports where reportFor[].athleteId == user._id
- *        - OR reportFor matches any familyMemberId
- * --------------------------------------------------------
- */
+/*
+  Role utils for Scouting Reports (team-based)
+  ------------------------------------------------------
+  This file determines:
+   • who can VIEW a report
+   • who can EDIT a report
+   • who can DELETE a report
+   • which reports are visible to which members
 
-/* ---------------------------------------------------------
-   Resolve the user's role within the team
---------------------------------------------------------- */
-export function getUserRole(team, teamMembers, user) {
-  if (!team || !user) return "none";
+  It must support:
+    - encrypted reports
+    - TeamScoutingReport model
+    - "reportFor" assignments (users/family)
+*/
 
-  const userId = String(user._id);
+//
+// SAFE HELPERS
+//
+const isSameId = (a, b) => String(a || "") === String(b || "");
 
-  // TEAM OWNER (team.user is always the owner)
-  if (String(team.user) === userId) {
-    return "manager";
-  }
-
-  // TEAM MEMBERS COLLECTION
-  if (Array.isArray(teamMembers)) {
-    for (const m of teamMembers) {
-      const id = String(m.userId || m.familyMemberId || "");
-      if (id === userId) {
-        return m.role || "member";
-      }
+/*
+  TeamMember structure (from /members endpoint):
+    {
+      userId,               // for normal user
+      familyMemberId,       // for family
+      role,                 // owner | manager | coach | athlete | family
+      name                  // display
     }
-  }
+*/
 
-  return "none";
+const ROLE = {
+  OWNER: "owner",
+  MANAGER: "manager",
+  COACH: "coach",
+  ATHLETE: "athlete",
+  FAMILY: "family",
+};
+
+//
+// Determine if user is a team owner/manager/coach
+//
+export function isStaff(team, user, teamMembers) {
+  if (!team || !user) return false;
+
+  const tm = teamMembers.find(
+    (m) => isSameId(m.userId, user._id) || isSameId(m.familyMemberId, user._id)
+  );
+  if (!tm) return false;
+
+  return (
+    tm.role === ROLE.OWNER || tm.role === ROLE.MANAGER || tm.role === ROLE.COACH
+  );
 }
 
-/* ---------------------------------------------------------
-   Role helpers
---------------------------------------------------------- */
-export function isManager(team, teamMembers, user) {
-  return getUserRole(team, teamMembers, user) === "manager";
-}
+//
+// Determine if the user is assigned to a report via reportFor[]
+//
+function isAssignedToReport(report, user, teamMembers) {
+  if (!report?.reportFor || !user) return false;
 
-export function isCoach(team, teamMembers, user) {
-  const role = getUserRole(team, teamMembers, user);
-  return role === "coach" || role === "manager";
-}
-
-export function isPrivileged(team, teamMembers, user) {
-  const r = getUserRole(team, teamMembers, user);
-  return r === "manager" || r === "coach";
-}
-
-/* ---------------------------------------------------------
-   MEMBER REPORT VISIBILITY
---------------------------------------------------------- */
-/**
- * A member can only see reports where:
- *   - report.reportFor[].athleteId matches their userId
- *   - OR matches ANY of their familyMemberIds
- */
-export function filterReportsForMember(reports, user) {
-  if (!Array.isArray(reports) || !user) return [];
-
-  const userId = String(user._id);
-  const familyIds = Array.isArray(user.familyMembers)
-    ? user.familyMembers.map((f) => String(f._id))
-    : [];
-
-  const allowedSet = new Set([userId, ...familyIds]);
-
-  return reports.filter((r) => {
-    if (!Array.isArray(r?.reportFor)) return false;
-
-    return r.reportFor.some((rf) => allowedSet.has(String(rf.athleteId || rf)));
+  return report.reportFor.some((rf) => {
+    const id = String(rf.athleteId || "");
+    return isSameId(id, user._id);
   });
 }
 
-/* ---------------------------------------------------------
-   Determine which reports the user is allowed to see
---------------------------------------------------------- */
+//
+// Visible Reports
+//
 export function getVisibleReports(team, teamMembers, user, reports) {
-  if (!team || !user || !Array.isArray(reports)) return [];
+  if (!team || !Array.isArray(reports) || !user) return [];
 
-  // Managers & Coaches get ALL reports
-  if (isPrivileged(team, teamMembers, user)) {
+  const tm = teamMembers.find(
+    (m) => isSameId(m.userId, user._id) || isSameId(m.familyMemberId, user._id)
+  );
+
+  if (!tm) return []; // not on the team → nothing
+
+  // Staff sees all
+  if (
+    tm.role === ROLE.OWNER ||
+    tm.role === ROLE.MANAGER ||
+    tm.role === ROLE.COACH
+  ) {
     return reports;
   }
 
-  // Members get filtered reports only
-  return filterReportsForMember(reports, user);
+  // Athletes & Family see only if assigned
+  return reports.filter((r) => isAssignedToReport(r, user, teamMembers));
 }
 
-/* ---------------------------------------------------------
-   UI Permissions
---------------------------------------------------------- */
-export function canCreate(team, teamMembers, user) {
-  return isPrivileged(team, teamMembers, user);
-}
-
-export function canEdit(report, team, teamMembers, user) {
-  return isPrivileged(team, teamMembers, user);
-}
-
-export function canDelete(report, team, teamMembers, user) {
-  return isPrivileged(team, teamMembers, user);
-}
-
+//
+// Can View
+//
 export function canView(report, team, teamMembers, user) {
   if (!report || !team || !user) return false;
-  const visible = getVisibleReports(team, teamMembers, user, [report]);
-  return visible.length > 0;
+
+  const tm = teamMembers.find(
+    (m) => isSameId(m.userId, user._id) || isSameId(m.familyMemberId, user._id)
+  );
+  if (!tm) return false;
+
+  // staff can always view
+  if (
+    tm.role === ROLE.OWNER ||
+    tm.role === ROLE.MANAGER ||
+    tm.role === ROLE.COACH
+  ) {
+    return true;
+  }
+
+  // athlete or family → must be assigned
+  return isAssignedToReport(report, user, teamMembers);
 }
 
-/* ---------------------------------------------------------
-   Build a map of userId → display name
-   Useful for "Report For" column in tables
---------------------------------------------------------- */
-export function buildMembersMap(teamMembers) {
-  const map = new Map();
-  (teamMembers || []).forEach((m) => {
-    const id = String(m.userId || m.familyMemberId || "");
-    if (!id) return;
+//
+// Can Edit
+// Only owner/manager/coach
+//
+export function canEdit(report, team, teamMembers, user) {
+  if (!report || !team || !user) return false;
 
-    const name =
-      m.name ||
-      m.username ||
-      `${m.firstName || ""} ${m.lastName || ""}`.trim() ||
-      "Unknown";
+  const tm = teamMembers.find(
+    (m) => isSameId(m.userId, user._id) || isSameId(m.familyMemberId, user._id)
+  );
+  if (!tm) return false;
 
-    map.set(id, name);
-  });
+  return (
+    tm.role === ROLE.OWNER || tm.role === ROLE.MANAGER || tm.role === ROLE.COACH
+  );
+}
 
-  return map;
+//
+// Can Delete
+// Only owner & manager
+//
+export function canDelete(report, team, teamMembers, user) {
+  if (!report || !team || !user) return false;
+
+  const tm = teamMembers.find(
+    (m) => isSameId(m.userId, user._id) || isSameId(m.familyMemberId, user._id)
+  );
+  if (!tm) return false;
+
+  return tm.role === ROLE.OWNER || tm.role === ROLE.MANAGER;
+}
+
+//
+// Can Create reports
+// Owner / Manager / Coach
+//
+export function canCreate(team, teamMembers, user) {
+  if (!team || !user) return false;
+
+  const tm = teamMembers.find(
+    (m) => isSameId(m.userId, user._id) || isSameId(m.familyMemberId, user._id)
+  );
+  if (!tm) return false;
+
+  return (
+    tm.role === ROLE.OWNER || tm.role === ROLE.MANAGER || tm.role === ROLE.COACH
+  );
 }

@@ -1,9 +1,12 @@
 // app/api/teams/[slug]/coach-notes/events/[eventId]/entries/[entryId]/matches/[matchId]/route.js
+export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
+
 import CoachMatchNote from "@/models/coachMatchNoteModel";
 import Team from "@/models/teamModel";
+
 import { getCurrentUser } from "@/lib/auth-server";
 import { requireTeamRole, canDelete } from "@/lib/authz/teamRoles";
 
@@ -16,6 +19,7 @@ const NEEDS_PLUS_VIDEO = true;
 
 /* =====================================================================================
    GET — supports decrypt=1
+   Returns the match, optionally decrypted
 ===================================================================================== */
 export async function GET(req, ctx) {
   await connectDB();
@@ -41,7 +45,7 @@ export async function GET(req, ctx) {
   const url = new URL(req.url);
   const shouldDecrypt = url.searchParams.get("decrypt") === "1";
 
-  if (shouldDecrypt) {
+  if (shouldDecrypt && match?.crypto?.ciphertextB64) {
     const teamDoc = await Team.findById(gate.teamId).lean();
     if (!teamDoc)
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
@@ -62,7 +66,7 @@ export async function GET(req, ctx) {
 }
 
 /* =====================================================================================
-   PATCH — TBK encrypt → update note
+   PATCH — TBK encrypt → update match note
 ===================================================================================== */
 export async function PATCH(req, ctx) {
   await connectDB();
@@ -79,6 +83,7 @@ export async function PATCH(req, ctx) {
 
   const body = await req.json();
 
+  // Sensitive fields
   const sensitive = {
     whatWentWell: body?.whatWentWell || "",
     reinforce: body?.reinforce || "",
@@ -92,8 +97,10 @@ export async function PATCH(req, ctx) {
     score: body?.score || "",
   };
 
+  // Encrypt sensitive fields with TBK
   const { body: encBody, crypto } = await encryptCoachNoteBody(team, sensitive);
 
+  // Build update payload
   const $set = {
     "opponent.name": body?.opponent?.name ?? undefined,
     "opponent.rank": body?.opponent?.rank ?? undefined,
@@ -111,10 +118,14 @@ export async function PATCH(req, ctx) {
     crypto,
   };
 
+  // Remove undefined keys (so Mongo doesn't overwrite fields with "undefined")
   Object.keys($set).forEach((k) => $set[k] === undefined && delete $set[k]);
 
   const update = { $set };
 
+  // -------------------------------
+  // Handle optional video updates
+  // -------------------------------
   if (Object.prototype.hasOwnProperty.call(body, "video")) {
     if (body.video === null) {
       update.$unset = { ...(update.$unset || {}), video: "" };
@@ -141,7 +152,7 @@ export async function PATCH(req, ctx) {
 }
 
 /* =====================================================================================
-   DELETE — soft delete a match
+   DELETE — soft delete match note
 ===================================================================================== */
 export async function DELETE(req, ctx) {
   await connectDB();

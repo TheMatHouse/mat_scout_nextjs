@@ -1,3 +1,4 @@
+// app/api/teams/[slug]/coach-notes/event/[eventId]/entries/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
@@ -121,8 +122,7 @@ export async function POST(req, { params }) {
       createdBy: user._id,
     };
   } else if (athleteFamilyMemberId) {
-
-  /* ------------------------------------------------------------
+    /* ------------------------------------------------------------
      FAMILY MEMBER athlete
      ------------------------------------------------------------ */
     const fm = await FamilyMember.findById(athleteFamilyMemberId).lean();
@@ -151,8 +151,7 @@ export async function POST(req, { params }) {
       createdBy: user._id,
     };
   } else if (athlete?.name) {
-
-  /* ------------------------------------------------------------
+    /* ------------------------------------------------------------
      GUEST athlete
      ------------------------------------------------------------ */
     payload = {
@@ -168,8 +167,7 @@ export async function POST(req, { params }) {
       createdBy: user._id,
     };
   } else {
-
-  /* ------------------------------------------------------------
+    /* ------------------------------------------------------------
      Missing athlete data
      ------------------------------------------------------------ */
     return NextResponse.json(

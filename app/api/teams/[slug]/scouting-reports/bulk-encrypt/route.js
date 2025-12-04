@@ -1,11 +1,14 @@
-// app/api/teams/[slug]/scouting-reports/bulk-encrypt/route.js
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
+
 import Team from "@/models/teamModel";
 import TeamScoutingReport from "@/models/teamScoutingReportModel";
+import Video from "@/models/videoModel";
 import { getCurrentUser } from "@/lib/auth-server";
+import { encryptReportPayload } from "@/lib/crypto/reportEncryption"; // helper we'll create
+import { encryptVideoNotes } from "@/lib/crypto/videoEncryption"; // helper we'll create
 
 export async function POST(req, context) {
   try {
@@ -21,6 +24,7 @@ export async function POST(req, context) {
 
     const { params } = context;
     const { slug } = await params;
+
     if (!slug) {
       return NextResponse.json(
         { ok: false, message: "Missing team slug" },
@@ -40,7 +44,6 @@ export async function POST(req, context) {
       );
     }
 
-    // Only owner can bulk-encrypt
     if (String(team.user) !== String(user._id)) {
       return NextResponse.json(
         { ok: false, message: "Forbidden" },
@@ -48,17 +51,19 @@ export async function POST(req, context) {
       );
     }
 
-    // 🔐 Extra safety: do not allow bulk-encrypt if no password is configured
     const sec = team.security || {};
     const hasPassword =
-      !!sec.kdf?.saltB64 && !!sec.kdf?.iterations && !!sec.verifierB64;
+      !!sec?.kdf?.saltB64 &&
+      !!sec?.kdf?.iterations &&
+      !!sec?.verifierB64 &&
+      sec.lockEnabled;
 
     if (!hasPassword) {
       return NextResponse.json(
         {
           ok: false,
           message:
-            "This team does not have a password configured. Set a team password before bulk-encrypting scouting reports.",
+            "Team has no password configured. Set a password before bulk-encrypting.",
         },
         { status: 400 }
       );
@@ -69,7 +74,7 @@ export async function POST(req, context) {
 
     if (!reports.length) {
       return NextResponse.json(
-        { ok: false, message: "No reports supplied for bulk encrypt" },
+        { ok: false, message: "No reports provided." },
         { status: 400 }
       );
     }
@@ -77,62 +82,63 @@ export async function POST(req, context) {
     let updatedCount = 0;
 
     for (const r of reports) {
-      const idRaw = r._id || r.id;
-      const crypto = r.crypto || null;
+      const id = String(r._id || r.id);
+      if (!id) continue;
 
-      if (!idRaw || !crypto) {
-        continue;
-      }
+      const decrypted = r.decrypted || {};
+      const report = await TeamScoutingReport.findById(id).lean();
+      if (!report) continue;
 
-      const id = String(idRaw);
+      // Skip if already encrypted
+      if (report.crypto?.ciphertextB64) continue;
 
-      try {
-        const result = await TeamScoutingReport.updateOne(
-          {
-            _id: id,
-            teamId: team._id,
+      // Encrypt the report fields
+      const enc = await encryptReportPayload(team, decrypted);
+
+      await TeamScoutingReport.updateOne(
+        { _id: id },
+        {
+          $set: {
+            crypto: enc.crypto,
+            athleteFirstName: "",
+            athleteLastName: "",
+            athleteNationalRank: "",
+            athleteWorldRank: "",
+            athleteClub: "",
+            athleteCountry: "",
+            athleteGrip: "",
+            athleteAttacks: [],
+            athleteAttackNotes: "",
           },
+        }
+      );
+
+      // ----- Encrypt video notes -----
+      const videos = await Video.find({ report: id }).lean();
+      for (const v of videos) {
+        if (!v.notes) continue;
+
+        const encVid = await encryptVideoNotes(team, v.notes);
+
+        await Video.updateOne(
+          { _id: v._id },
           {
             $set: {
-              crypto,
-              // blank out sensitive fields; they now only exist inside `crypto`
-              athleteFirstName: "",
-              athleteLastName: "",
-              athleteNationalRank: "",
-              athleteWorldRank: "",
-              athleteClub: "",
-              athleteCountry: "",
-              athleteGrip: "",
-              athleteAttacks: [],
-              athleteAttackNotes: "",
+              crypto: encVid.crypto,
+              notes: "",
             },
           }
         );
-
-        if (result.modifiedCount > 0 || result.matchedCount > 0) {
-          updatedCount += 1;
-        }
-      } catch (err) {
-        console.warn(
-          "[BULK-ENCRYPT] Skipping report due to update error for _id:",
-          idRaw,
-          err
-        );
       }
-    }
 
-    console.log(
-      "[BULK-ENCRYPT] Updated reports:",
-      updatedCount,
-      "of",
-      reports.length
-    );
+      updatedCount++;
+    }
 
     if (!updatedCount) {
       return NextResponse.json(
         {
           ok: false,
-          message: "No reports could be updated during bulk encrypt.",
+          message: "No reports were encrypted.",
         },
         { status: 400 }
       );
@@ -147,12 +153,9 @@ export async function POST(req, context) {
       { status: 200 }
     );
   } catch (err) {
-    console.error("bulk-encrypt POST error:", err);
+    console.error("bulk-encrypt error:", err);
     return NextResponse.json(
-      {
-        ok: false,
-        message: "Bulk encrypt failed.",
-      },
+      { ok: false, message: "Bulk encrypt failed." },
       { status: 500 }
     );
   }

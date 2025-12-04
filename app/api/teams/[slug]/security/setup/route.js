@@ -5,7 +5,11 @@ import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUser } from "@/lib/auth-server";
-import Team from "@/models/teamModel"; // keep for initial lookup
+
+import Team from "@/models/teamModel";
+import CoachMatchNote from "@/models/coachMatchNoteModel";
+
+import { encryptCoachNoteBody, teamHasLock } from "@/lib/crypto/teamLock"; // SAME helper used by new-note creation
 
 export async function POST(req, { params }) {
   try {
@@ -34,24 +38,21 @@ export async function POST(req, { params }) {
       );
     }
 
-    // Locate the team via Mongoose (to get _id and verify it exists)
+    // Load team
     const teamDoc = await Team.findOne({ teamSlug: slug })
-      .select("_id user teamSlug")
+      .select("_id user teamSlug security")
       .lean();
+
     if (!teamDoc) {
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
     }
 
-    // Optional strict owner gate:
-    // if (String(teamDoc.user) !== String(actor._id)) {
-    //   return NextResponse.json({ message: "Forbidden" }, { status: 403 });
-    // }
-
-    // === Native driver write (bypass Mongoose subdoc quirks) ===
+    // ================
+    // UPDATE SECURITY
+    // ================
     const db = mongoose.connection.db;
     const col = db.collection("teams");
 
-    // Force set with dot-paths
     const update = {
       $set: {
         "security.lockEnabled": true,
@@ -64,13 +65,86 @@ export async function POST(req, { params }) {
 
     const writeResult = await col.updateOne({ _id: teamDoc._id }, update);
 
-    // Read back raw doc exactly as stored
+    // Now reload fresh doc (raw)
     const fresh = await col.findOne(
       { _id: teamDoc._id },
       { projection: { _id: 1, teamSlug: 1, security: 1 } }
     );
 
-    // Build some debug info to prove which DB we're hitting
+    // If security isn't present → fail
+    if (!fresh?.security?.lockEnabled) {
+      return NextResponse.json(
+        {
+          message: "Team lock initialized, but security block missing.",
+          writeStats: writeResult,
+          team: fresh,
+        },
+        { status: 500 }
+      );
+    }
+
+    // ======================================================
+    // 🔥 AUTO-ENCRYPT ALL EXISTING COACH MATCH NOTES HERE
+    // ======================================================
+    const teamId = String(teamDoc._id);
+
+    const existingNotes = await CoachMatchNote.find({
+      team: teamId,
+      crypto: { $exists: false }, // plaintext only
+      deletedAt: null,
+    }).lean();
+
+    let encryptedCount = 0;
+
+    if (existingNotes.length > 0) {
+      // Load updated team with full security block for encryption
+      const fullTeam = {
+        _id: teamId,
+        security: fresh.security,
+      };
+
+      for (const n of existingNotes) {
+        try {
+          const payload = {
+            whatWentWell: n.whatWentWell || "",
+            reinforce: n.reinforce || "",
+            needsFix: n.needsFix || "",
+            notes: n.notes || "",
+            techniques: n.techniques || { ours: [], theirs: [] },
+            result: n.result || "",
+            score: n.score || "",
+          };
+
+          const enc = await encryptCoachNoteBody(fullTeam, payload);
+
+          await CoachMatchNote.updateOne(
+            { _id: n._id },
+            {
+              $set: {
+                crypto: enc.crypto,
+
+                // blank plaintext fields
+                whatWentWell: "",
+                reinforce: "",
+                needsFix: "",
+                notes: "",
+                techniques: { ours: [], theirs: [] },
+                result: "",
+                score: "",
+              },
+            }
+          );
+
+          encryptedCount++;
+        } catch (err) {
+          console.error("[AUTO-ENCRYPT] Failed coach note:", n?._id, err);
+        }
+      }
+    }
+
+    // ==========================
+    // API RESPONSE
+    // ==========================
     const connInfo = {
       dbName: mongoose.connection.name || null,
       host:
@@ -83,26 +157,21 @@ export async function POST(req, { params }) {
         null,
     };
 
-    const payload = {
-      message: "Team lock initialized",
-      connection: connInfo,
-      query: { _id: String(teamDoc._id), teamSlug: teamDoc.teamSlug },
-      writeStats: {
-        acknowledged: writeResult.acknowledged,
-        matchedCount: writeResult.matchedCount,
-        modifiedCount: writeResult.modifiedCount,
-        upsertedId: writeResult.upsertedId ?? null,
+    return NextResponse.json(
+      {
+        message: "Team lock initialized; existing Coach Notes encrypted.",
+        encryptedCoachNotes: encryptedCount,
+        totalExistingNotes: existingNotes.length,
+        connection: connInfo,
+        writeStats: writeResult,
+        team: {
+          _id: String(fresh?._id),
+          teamSlug: fresh?.teamSlug,
+          security: fresh?.security,
+        },
       },
-      team: {
-        _id: String(fresh?._id || teamDoc._id),
-        teamSlug: fresh?.teamSlug || teamDoc.teamSlug,
-        security: fresh?.security ?? null,
-      },
-    };
-
-    // If security still isn't there, surface as 500 with the proof attached
-    const ok = !!fresh?.security && fresh.security.lockEnabled === true;
-    return NextResponse.json(payload, { status: ok ? 200 : 500 });
+      { status: 200 }
+    );
   } catch (err) {
     console.error("security/setup POST error:", err);
     return NextResponse.json(

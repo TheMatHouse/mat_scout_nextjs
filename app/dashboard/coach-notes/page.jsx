@@ -23,7 +23,10 @@ const Page = async () => {
         </header>
 
         {/* FIXED — pass full user object AND userId */}
-        <DashboardCoachNotes userId={userId} />
+        <DashboardCoachNotes
+          userId={userId}
+          user={user}
+        />
       </div>
     </main>
   );
