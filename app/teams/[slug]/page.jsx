@@ -1,4 +1,6 @@
 // app/teams/[slug]/page.jsx
+export const dynamic = "force-dynamic";
+
 import { connectDB } from "@/lib/mongo";
 import Team from "@/models/teamModel";
 import TeamPageClient from "@/components/teams/TeamPageClient";
