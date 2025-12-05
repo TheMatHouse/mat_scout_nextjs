@@ -12,7 +12,7 @@ import { getCurrentUser } from "@/lib/auth-server";
 import {
   encryptScoutingReportBody,
   encryptCoachNoteBody,
-} from "@/lib/teamLock";
+} from "@/lib/crypto/teamLock";
 
 export async function POST(req, context) {
   try {
