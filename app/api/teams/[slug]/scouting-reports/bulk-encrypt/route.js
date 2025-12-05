@@ -8,9 +8,9 @@ import TeamScoutingReport from "@/models/teamScoutingReportModel";
 import Video from "@/models/videoModel";
 import { getCurrentUser } from "@/lib/auth-server";
 
-// ✅ Use your REAL encryption helper
+// ✅ Correct helper names from teamLock.js
 import {
-  encryptScoutingReportBody,
+  encryptScoutingBody,
   encryptCoachNoteBody,
 } from "@/lib/crypto/teamLock";
 
@@ -97,8 +97,8 @@ export async function POST(req, context) {
       // Skip if already encrypted
       if (report.crypto?.ciphertextB64) continue;
 
-      // ✅ Encrypt the report payload using your real helper
-      const enc = await encryptScoutingReportBody(team, decrypted);
+      // ✅ Encrypt scouting report using correct helper name
+      const enc = await encryptScoutingBody(team, decrypted);
 
       await TeamScoutingReport.updateOne(
         { _id: id },
@@ -125,7 +125,7 @@ export async function POST(req, context) {
       for (const v of videos) {
         if (!v.notes) continue;
 
-        // ✅ Just reuse coach-note encryption
+        // Reuse coach-note encryption
         const encVid = await encryptCoachNoteBody(team, v.notes);
 
         await Video.updateOne(
