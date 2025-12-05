@@ -8,7 +8,7 @@ import TeamScoutingReport from "@/models/teamScoutingReportModel";
 import Video from "@/models/videoModel";
 import { getCurrentUser } from "@/lib/auth-server";
 
-// ✅ Use your REAL encryption helpers
+// ✅ Use your REAL encryption helper
 import {
   encryptScoutingReportBody,
   encryptCoachNoteBody,
