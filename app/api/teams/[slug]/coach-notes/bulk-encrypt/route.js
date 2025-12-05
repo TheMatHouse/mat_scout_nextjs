@@ -5,9 +5,8 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 
 import Team from "@/models/teamModel";
-import CoachMatchNote from "@/models/coachMatchNoteModel";
+import CoachMatchNote from "@/models/coachMatchNoteModel"; // adjust if your model name differs
 import { getCurrentUser } from "@/lib/auth-server";
-import { encryptCoachNoteBody, teamHasLock } from "@/lib/crypto/teamLock";
 
 export async function POST(req, context) {
   try {
@@ -21,7 +20,9 @@ export async function POST(req, context) {
       );
     }
 
-    const { slug } = await context.params;
+    const { params } = context;
+    const { slug } = await params;
+
     if (!slug) {
       return NextResponse.json(
         { ok: false, message: "Missing team slug" },
@@ -29,7 +30,6 @@ export async function POST(req, context) {
       );
     }
 
-    // Normalized lookup
     const team =
       (await Team.findOne({ teamSlug: slug })) ||
       (await Team.findOne({ teamSlug: slug.replace(/[-_]/g, "") })) ||
@@ -42,7 +42,7 @@ export async function POST(req, context) {
       );
     }
 
-    // Only owner is allowed
+    // Only team owner may bulk-encrypt coach notes
     if (String(team.user) !== String(user._id)) {
       return NextResponse.json(
         { ok: false, message: "Forbidden" },
@@ -50,94 +50,71 @@ export async function POST(req, context) {
       );
     }
 
-    // Ensure password + TBK are configured
-    if (!teamHasLock(team)) {
+    const sec = team.security || {};
+    const hasPassword =
+      !!sec?.kdf?.saltB64 &&
+      !!sec?.kdf?.iterations &&
+      !!sec?.verifierB64 &&
+      sec.lockEnabled;
+
+    if (!hasPassword) {
       return NextResponse.json(
         {
           ok: false,
           message:
-            "Team password not configured. Set a password before bulk-encrypting notes.",
+            "Team has no password configured. Set a password before bulk-encrypting.",
         },
         { status: 400 }
       );
     }
 
-    // Parse input
     const body = await req.json().catch(() => null);
-    const notes = Array.isArray(body?.notes) ? body.notes : [];
+    const notesPayload = Array.isArray(body?.notes) ? body.notes : [];
 
-    if (!notes.length) {
+    if (!notesPayload.length) {
       return NextResponse.json(
-        { ok: false, message: "No notes supplied for bulk encrypt." },
+        { ok: false, message: "No notes provided." },
         { status: 400 }
       );
     }
 
-    let updatedCount = 0;
+    let updated = 0;
 
-    for (const raw of notes) {
-      const idRaw = raw?._id || raw?.id;
-      if (!idRaw) continue;
-      const id = String(idRaw);
+    for (const item of notesPayload) {
+      const id = String(item._id || item.id);
+      if (!id) continue;
 
-      const decrypted = raw?.decrypted || {};
+      const note = await CoachMatchNote.findById(id).lean();
+      if (!note) continue;
 
-      // Fetch the existing note
-      const existing = await CoachMatchNote.findById(id).lean();
-      if (!existing) continue;
+      // Already encrypted?
+      if (note.crypto?.ciphertextB64) continue;
 
-      // Skip if already encrypted
-      if (existing.crypto?.ciphertextB64) continue;
+      // Client-side must provide a valid encrypted body
+      if (!item.crypto || !item.crypto.ciphertextB64) {
+        console.warn("[COACH BULK] Missing crypto for", id);
+        continue;
+      }
 
-      // Build the sensitive payload
-      const sensitivePayload = {
-        whatWentWell: decrypted.whatWentWell || "",
-        reinforce: decrypted.reinforce || "",
-        needsFix: decrypted.needsFix || "",
-        notes: decrypted.notes || "",
-        result: decrypted.result || "",
-        score: decrypted.score || "",
-        techniques: {
-          ours: Array.isArray(decrypted?.techniques?.ours)
-            ? decrypted.techniques.ours
-            : [],
-          theirs: Array.isArray(decrypted?.techniques?.theirs)
-            ? decrypted.techniques.theirs
-            : [],
-        },
-      };
-
-      // Encrypt
-      const enc = await encryptCoachNoteBody(team, sensitivePayload);
-
-      // Update DB
-      const updateResult = await CoachMatchNote.updateOne(
-        { _id: id, team: team._id },
+      // Update DB with ciphertext and wipe plaintext
+      await CoachMatchNote.updateOne(
+        { _id: id },
         {
           $set: {
-            crypto: enc.crypto,
-            whatWentWell: "",
-            reinforce: "",
-            needsFix: "",
-            notes: "",
-            techniques: { ours: [], theirs: [] },
-            result: "",
-            score: "",
+            crypto: item.crypto,
+
+            // wipe plaintext fields
+            body: "",
           },
         }
       );
 
-      if (updateResult.modifiedCount > 0) {
-        updatedCount++;
-      }
+      updated++;
     }
 
-    if (!updatedCount) {
+    if (!updated) {
       return NextResponse.json(
-        {
-          ok: false,
-          message: "No notes were encrypted.",
-        },
+        { ok: false, message: "No coach notes were encrypted." },
         { status: 400 }
       );
     }
@@ -145,15 +122,15 @@ export async function POST(req, context) {
     return NextResponse.json(
       {
         ok: true,
-        count: updatedCount,
-        message: `Encrypted ${updatedCount} coach note(s).`,
+        count: updated,
+        message: `Encrypted ${updated} coach note(s).`,
       },
       { status: 200 }
     );
   } catch (err) {
-    console.error("bulk-encrypt coach-notes POST error:", err);
+    console.error("coach-notes bulk-encrypt error:", err);
     return NextResponse.json(
-      { ok: false, message: "Bulk encrypt failed." },
+      { ok: false, message: "Coach notes bulk encrypt failed." },
       { status: 500 }
     );
   }

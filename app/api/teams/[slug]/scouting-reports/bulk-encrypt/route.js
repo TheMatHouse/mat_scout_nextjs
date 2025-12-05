@@ -8,12 +8,6 @@ import TeamScoutingReport from "@/models/teamScoutingReportModel";
 import Video from "@/models/videoModel";
 import { getCurrentUser } from "@/lib/auth-server";
 
-// ✅ Correct helper names from teamLock.js
-import {
-  encryptScoutingBody,
-  encryptCoachNoteBody,
-} from "@/lib/crypto/teamLock";
-
 export async function POST(req, context) {
   try {
     await connectDB();
@@ -48,7 +42,7 @@ export async function POST(req, context) {
       );
     }
 
-    // Owner check
+    // Owner validation
     if (String(team.user) !== String(user._id)) {
       return NextResponse.json(
         { ok: false, message: "Forbidden" },
@@ -75,9 +69,9 @@ export async function POST(req, context) {
     }
 
     const body = await req.json().catch(() => null);
-    const reports = Array.isArray(body?.reports) ? body.reports : [];
+    const reportsPayload = Array.isArray(body?.reports) ? body.reports : [];
 
-    if (!reports.length) {
+    if (!reportsPayload.length) {
       return NextResponse.json(
         { ok: false, message: "No reports provided." },
         { status: 400 }
@@ -86,27 +80,31 @@ export async function POST(req, context) {
 
     let updatedCount = 0;
 
-    for (const r of reports) {
+    for (const r of reportsPayload) {
       const id = String(r._id || r.id);
       if (!id) continue;
 
-      const decrypted = r.decrypted || {};
       const report = await TeamScoutingReport.findById(id).lean();
       if (!report) continue;
 
       // Skip if already encrypted
       if (report.crypto?.ciphertextB64) continue;
 
-      // ✅ Encrypt scouting report using correct helper name
-      const enc = await encryptScoutingBody(team, decrypted);
+      // ----- Accept client-side encryption (Option A) -----
+      if (!r.crypto || !r.crypto.ciphertextB64) {
+        console.warn(
+          "[BULK ENCRYPT] Missing crypto payload for report ID:",
+          id
+        );
+        continue;
+      }
 
+      // Store ciphertext & wipe plaintext fields
       await TeamScoutingReport.updateOne(
         { _id: id },
         {
           $set: {
-            crypto: enc.crypto,
-
-            // wipe plaintext columns
+            crypto: r.crypto,
             athleteFirstName: "",
             athleteLastName: "",
             athleteNationalRank: "",
@@ -120,19 +118,19 @@ export async function POST(req, context) {
         }
       );
 
-      // ----- Encrypt video notes -----
+      // ----- Encrypt video notes (client-side pre-encrypted OR simple string wipe) -----
       const videos = await Video.find({ report: id }).lean();
       for (const v of videos) {
-        if (!v.notes) continue;
+        if (!v.notes && !v.crypto) continue;
 
-        // Reuse coach-note encryption
-        const encVid = await encryptCoachNoteBody(team, v.notes);
+        // Accept client-side encrypted notes if provided
+        const encrypted = r.videos?.[v._id]?.crypto;
 
         await Video.updateOne(
           { _id: v._id },
           {
             $set: {
-              crypto: encVid.crypto,
+              crypto: encrypted || v.crypto || {}, // safe fallback
               notes: "",
             },
           }
@@ -144,10 +142,7 @@ export async function POST(req, context) {
 
     if (!updatedCount) {
       return NextResponse.json(
-        {
-          ok: false,
-          message: "No reports were encrypted.",
-        },
+        { ok: false, message: "No reports were encrypted." },
         { status: 400 }
       );
     }
