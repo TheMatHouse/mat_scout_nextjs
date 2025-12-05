@@ -7,8 +7,12 @@ import Team from "@/models/teamModel";
 import TeamScoutingReport from "@/models/teamScoutingReportModel";
 import Video from "@/models/videoModel";
 import { getCurrentUser } from "@/lib/auth-server";
-import { encryptReportPayload } from "@/lib/crypto/reportEncryption"; // helper we'll create
-import { encryptVideoNotes } from "@/lib/crypto/videoEncryption"; // helper we'll create
+
+// ✅ Use your REAL encryption helpers
+import {
+  encryptScoutingReportBody,
+  encryptCoachNoteBody,
+} from "@/lib/teamLock";
 
 export async function POST(req, context) {
   try {
@@ -44,6 +48,7 @@ export async function POST(req, context) {
       );
     }
 
+    // Owner check
     if (String(team.user) !== String(user._id)) {
       return NextResponse.json(
         { ok: false, message: "Forbidden" },
@@ -92,14 +97,16 @@ export async function POST(req, context) {
       // Skip if already encrypted
       if (report.crypto?.ciphertextB64) continue;
 
-      // Encrypt the report fields
-      const enc = await encryptReportPayload(team, decrypted);
+      // ✅ Encrypt the report payload using your real helper
+      const enc = await encryptScoutingReportBody(team, decrypted);
 
       await TeamScoutingReport.updateOne(
         { _id: id },
         {
           $set: {
             crypto: enc.crypto,
+
+            // wipe plaintext columns
             athleteFirstName: "",
             athleteLastName: "",
             athleteNationalRank: "",
@@ -118,7 +125,8 @@ export async function POST(req, context) {
       for (const v of videos) {
         if (!v.notes) continue;
 
-        const encVid = await encryptVideoNotes(team, v.notes);
+        // ✅ Just reuse coach-note encryption
+        const encVid = await encryptCoachNoteBody(team, v.notes);
 
         await Video.updateOne(
           { _id: v._id },
