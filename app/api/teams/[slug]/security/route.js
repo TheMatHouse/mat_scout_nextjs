@@ -9,6 +9,7 @@ import Team from "@/models/teamModel";
 /**
  * Returns the full security block for a team.
  * Includes:
+ *   - team._id   <-- REQUIRED BY TeamUnlockGate
  *   - lockEnabled
  *   - kdf { saltB64, iterations }
  *   - verifierB64
@@ -26,7 +27,7 @@ export async function GET(req, { params }) {
     const slug = decodeURIComponent(String((await params).slug || ""));
 
     const team = await Team.findOne({ teamSlug: slug })
-      .select("security")
+      .select("_id security")
       .lean();
 
     if (!team) {
@@ -35,10 +36,13 @@ export async function GET(req, { params }) {
 
     const sec = team.security || {};
 
-    // If lock is disabled → return minimal shape
+    // -----------------------------
+    // If lock is disabled
+    // -----------------------------
     if (!sec.lockEnabled) {
       return NextResponse.json({
         team: {
+          _id: String(team._id), // 🔥 REQUIRED
           security: {
             lockEnabled: false,
             encVersion: sec.encVersion || "v1",
@@ -47,16 +51,20 @@ export async function GET(req, { params }) {
       });
     }
 
-    // VALIDATE KDF STRUCTURE
+    // -----------------------------
+    // Extract fields for lock
+    // -----------------------------
     const saltB64 = sec.kdf?.saltB64 || "";
     const iterations = sec.kdf?.iterations || 250000;
     const verifierB64 = sec.verifierB64 || "";
-
-    // AES-GCM wrapped TBK (required for unlock)
     const wrappedTBK = sec.wrappedTBK || null;
 
+    // -----------------------------
+    // Return full block including team._id
+    // -----------------------------
     return NextResponse.json({
       team: {
+        _id: String(team._id), // 🔥 FIX: EXISTS NOW
         security: {
           lockEnabled: true,
           encVersion: sec.encVersion || "v1",
@@ -65,7 +73,7 @@ export async function GET(req, { params }) {
             iterations,
           },
           verifierB64,
-          wrappedTBK, // 🔥 REQUIRED FOR REAL UNLOCK
+          wrappedTBK,
         },
       },
     });
