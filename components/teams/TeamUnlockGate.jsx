@@ -8,7 +8,7 @@ import { Eye, EyeOff } from "lucide-react";
 
 import { verifyPasswordLocally, getCachedTBK } from "@/lib/crypto/locker";
 
-const STORAGE_KEY = (teamId) => `ms:team_pw:${teamId}`;
+const PW_KEY = (teamId) => `ms:team_pw:${teamId}`;
 const TBK_KEY = (teamId) => `ms:team_tbk:${teamId}`;
 
 const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
@@ -64,23 +64,24 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
         setHasLock(true);
 
         // ------------------------------------------------------
-        // 🔥 UPDATED AUTO-UNLOCK LOGIC
-        // Ensures other pages stay unlocked if user already entered password
+        // AUTO-UNLOCK for this team if we already have creds
         // ------------------------------------------------------
-        const cachedPw = sessionStorage.getItem(STORAGE_KEY(t._id));
-        const cachedTbk = sessionStorage.getItem(TBK_KEY(t._id));
-        const globalTbk = sessionStorage.getItem("ms:team_tbk");
+        const teamId = t._id;
+        if (!teamId) return;
+
+        const cachedPw = sessionStorage.getItem(PW_KEY(teamId));
+        const cachedTbk = sessionStorage.getItem(TBK_KEY(teamId));
 
         if (cachedPw && sec.kdf?.saltB64 && sec.verifierB64) {
-          const ok = await verifyPasswordLocally(cachedPw, sec);
+          const ok = await verifyPasswordLocally(cachedPw, sec, teamId);
 
           if (ok) {
-            const tbk = cachedTbk || globalTbk || getCachedTBK();
+            // Prefer per-team TBK; if missing, try to read from locker
+            let tbk = cachedTbk || getCachedTBK(teamId);
 
             if (tbk) {
               try {
-                sessionStorage.setItem(TBK_KEY(t._id), tbk);
-                sessionStorage.setItem("ms:team_tbk", tbk);
+                sessionStorage.setItem(TBK_KEY(teamId), tbk);
                 window.__MS_TEAM_TBK__ = tbk;
               } catch {}
 
@@ -103,11 +104,18 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
   -------------------------------------------------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!team || !team._id) {
+      setError("Unable to identify team.");
+      return;
+    }
+
+    const teamId = team._id;
+
     setSubmitting(true);
     setError("");
 
     try {
-      const ok = await verifyPasswordLocally(password, security);
+      const ok = await verifyPasswordLocally(password, security, teamId);
 
       if (!ok) {
         setError("Incorrect team password.");
@@ -115,7 +123,7 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
         return;
       }
 
-      const tbk = getCachedTBK();
+      const tbk = getCachedTBK(teamId);
       if (!tbk) {
         setError("Unable to load Team Box Key.");
         setSubmitting(false);
@@ -123,18 +131,14 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
       }
 
       // ------------------------------------------------------
-      // 🔥 Unified unlock cache
+      // Unified unlock cache for this team
       // ------------------------------------------------------
       try {
-        sessionStorage.setItem(STORAGE_KEY(team._id), password);
+        sessionStorage.setItem(PW_KEY(teamId), password);
       } catch {}
 
       try {
-        sessionStorage.setItem(TBK_KEY(team._id), tbk);
-      } catch {}
-
-      try {
-        sessionStorage.setItem("ms:team_tbk", tbk);
+        sessionStorage.setItem(TBK_KEY(teamId), tbk);
       } catch {}
 
       window.__MS_TEAM_TBK__ = tbk;
