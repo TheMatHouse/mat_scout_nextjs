@@ -9,9 +9,14 @@ import { Eye, EyeOff } from "lucide-react";
 import { verifyPasswordLocally, getCachedTBK } from "@/lib/crypto/locker";
 
 const PW_KEY = (teamId) => `ms:team_pw:${teamId}`;
-const TBK_KEY = (teamId) => `ms:teamlock:${teamId}`; // 🔥 unified – same as locker.js
+const TBK_KEY = (teamId) => `ms:team_tbk:${teamId}`;
 
-const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
+export default function TeamUnlockGate({
+  slug,
+  onTeamResolved,
+  onUnlocked,
+  children,
+}) {
   const [team, setTeam] = useState(null);
   const [security, setSecurity] = useState(null);
 
@@ -21,12 +26,12 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
 
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  /* --------------------------------------------------------
-     Load security block + auto-unlock
-  -------------------------------------------------------- */
+  /* ------------------------------------------------------------------
+     LOAD SECURITY BLOCK FOR TEAM
+  ------------------------------------------------------------------ */
   useEffect(() => {
     if (!slug) return;
 
@@ -44,68 +49,75 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
           return;
         }
 
-        const json = await res.json();
+        const json = await res.json().catch(() => ({}));
         const t = json.team || {};
         const sec = t.security || {};
 
         setTeam(t);
         setSecurity(sec);
-        onTeamResolved?.(t);
+
+        if (onTeamResolved) onTeamResolved(t);
 
         if (!sec.lockEnabled) {
           setHasLock(false);
           setUnlocked(true);
-          onUnlocked?.();
+          if (onUnlocked) onUnlocked();
           return;
         }
 
         setHasLock(true);
 
         const teamId = t._id;
-        if (!teamId) return;
+        if (!teamId) {
+          setChecking(false);
+          return;
+        }
 
+        /* ----------------------------------------------------------
+           AUTO UNLOCK (if password/TBK exist)
+        ---------------------------------------------------------- */
         const cachedPw = sessionStorage.getItem(PW_KEY(teamId));
+        const cachedTbk = sessionStorage.getItem(TBK_KEY(teamId));
 
         if (cachedPw) {
           const ok = await verifyPasswordLocally(cachedPw, sec, teamId);
 
           if (ok) {
-            const tbk = getCachedTBK(teamId);
-
+            const tbk = cachedTbk || getCachedTBK(teamId);
             if (tbk) {
+              try {
+                sessionStorage.setItem(TBK_KEY(teamId), tbk);
+              } catch {}
               window.__MS_TEAM_TBK__ = tbk;
+
               setUnlocked(true);
-              onUnlocked?.();
+              if (onUnlocked) onUnlocked();
               return;
             }
           }
         }
       } catch (err) {
-        console.error(err);
+        console.error("UnlockGate error:", err);
       } finally {
         setChecking(false);
       }
     })();
-  }, [slug, onTeamResolved, onUnlocked]);
+  }, [slug]);
 
-  /* --------------------------------------------------------
-     Manual unlock
-  -------------------------------------------------------- */
+  /* ------------------------------------------------------------------
+     HANDLE MANUAL PASSWORD SUBMIT
+  ------------------------------------------------------------------ */
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!team?._id) {
-      setError("Invalid team.");
-      return;
-    }
+    if (!team || !team._id) return;
 
     const teamId = team._id;
+
     setSubmitting(true);
     setError("");
 
     try {
       const ok = await verifyPasswordLocally(password, security, teamId);
-
       if (!ok) {
         setError("Incorrect team password.");
         setSubmitting(false);
@@ -119,15 +131,21 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
         return;
       }
 
-      // 🔥 Save password + TBK consistently
-      sessionStorage.setItem(PW_KEY(teamId), password);
-      sessionStorage.setItem(TBK_KEY(teamId), tbk);
+      /* ----------------------------------------------------------
+         SAVE to session cache
+      ---------------------------------------------------------- */
+      try {
+        sessionStorage.setItem(PW_KEY(teamId), password);
+      } catch {}
+      try {
+        sessionStorage.setItem(TBK_KEY(teamId), tbk);
+      } catch {}
 
       window.__MS_TEAM_TBK__ = tbk;
 
       setUnlocked(true);
       setPassword("");
-      onUnlocked?.();
+      if (onUnlocked) onUnlocked();
     } catch (err) {
       console.error(err);
       setError("Error verifying password.");
@@ -136,9 +154,9 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
     }
   };
 
-  /* --------------------------------------------------------
-     UI States
-  -------------------------------------------------------- */
+  /* ------------------------------------------------------------------
+     UI STATES
+  ------------------------------------------------------------------ */
   if (checking) {
     return (
       <div className="flex flex-col justify-center items-center h-[60vh]">
@@ -154,10 +172,15 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
     return <>{children}</>;
   }
 
+  /* ------------------------------------------------------------------
+     LOCKED UI
+  ------------------------------------------------------------------ */
   return (
     <div className="flex flex-col justify-center items-center h-[60vh]">
       <div className="w-full max-w-sm rounded-2xl border bg-[var(--color-card)] p-6 space-y-4">
-        <h2 className="text-xl font-semibold">Team Password Required</h2>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+          Team Password Required
+        </h2>
 
         <form
           onSubmit={handleSubmit}
@@ -167,34 +190,47 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
             <input
               type={showPassword ? "text" : "password"}
               value={password}
-              required
               onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full rounded-xl border bg-white dark:bg-neutral-900 
+                text-gray-900 dark:text-gray-100 px-4 py-3 pr-12"
               placeholder="Enter team password"
-              className="w-full rounded-xl border px-4 py-3 pr-12"
             />
+
             <button
               type="button"
               onClick={() => setShowPassword((v) => !v)}
-              className="absolute inset-y-0 right-3 flex items-center"
+              className="absolute inset-y-0 right-3 flex items-center text-gray-500"
             >
-              {showPassword ? <EyeOff /> : <Eye />}
+              {showPassword ? (
+                <EyeOff className="w-5 h-5" />
+              ) : (
+                <Eye className="w-5 h-5" />
+              )}
             </button>
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && (
+            <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+              {error}
+            </p>
+          )}
 
           <div className="flex justify-end">
             <Button
               type="submit"
               disabled={submitting || !password}
+              className="bg-ms-blue-gray hover:bg-ms-blue text-white"
             >
               {submitting ? "Unlocking…" : "Unlock"}
             </Button>
           </div>
         </form>
+
+        <p className="text-xs text-gray-600 dark:text-gray-400">
+          The password never leaves your device.
+        </p>
       </div>
     </div>
   );
-};
-
-export default TeamUnlockGate;
+}
