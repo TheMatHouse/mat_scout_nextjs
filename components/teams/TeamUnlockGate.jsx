@@ -2,35 +2,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { toast } from "react-toastify";
-import { verifyPasswordLocally } from "@/lib/crypto/locker";
 import Spinner from "@/components/shared/Spinner";
 import { Button } from "@/components/ui/button";
 import { Eye, EyeOff } from "lucide-react";
 
-const STORAGE_KEY = (teamId) => `ms:teamlock:${teamId}`;
+import { verifyPasswordLocally, getCachedTBK } from "@/lib/crypto/locker";
 
-const TeamUnlockGate = ({
-  slug,
-  team: _initialTeam, // IGNORE this version completely
-  onTeamResolved,
-  onUnlocked,
-  children,
-}) => {
+const STORAGE_KEY = (teamId) => `ms:team_pw:${teamId}`;
+const TBK_KEY = (teamId) => `ms:team_tbk:${teamId}`;
+
+const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
+  const [team, setTeam] = useState(null);
+  const [security, setSecurity] = useState(null);
+
   const [checking, setChecking] = useState(true);
   const [unlocked, setUnlocked] = useState(false);
   const [hasLock, setHasLock] = useState(false);
 
-  // 🔥 Always overwrite with the full-security version from /security
-  const [team, setTeam] = useState(null);
-
-  const [security, setSecurity] = useState(null);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [securityError, setSecurityError] = useState(false);
 
+  /* --------------------------------------------------------
+     Load authoritative security block
+  -------------------------------------------------------- */
   useEffect(() => {
     if (!slug) return;
 
@@ -38,16 +34,14 @@ const TeamUnlockGate = ({
       try {
         setChecking(true);
         setError("");
-        setSecurityError(false);
 
-        // Always load the authoritative security block
         const res = await fetch(`/api/teams/${slug}/security`, {
           credentials: "include",
           headers: { accept: "application/json" },
         });
 
         if (!res.ok) {
-          setSecurityError(true);
+          setChecking(false);
           return;
         }
 
@@ -55,8 +49,8 @@ const TeamUnlockGate = ({
         const t = json.team || {};
         const sec = t.security || {};
 
-        // 🔥 Overwrite — always trust `/security`
         setTeam(t);
+        setSecurity(sec);
         if (onTeamResolved) onTeamResolved(t);
 
         if (!sec.lockEnabled) {
@@ -67,35 +61,37 @@ const TeamUnlockGate = ({
         }
 
         setHasLock(true);
-        setSecurity(sec);
 
-        const teamId = t._id;
-        const cached = sessionStorage.getItem(STORAGE_KEY(teamId)) || "";
+        const cachedPw = sessionStorage.getItem(STORAGE_KEY(t._id));
+        const cachedTbk = sessionStorage.getItem(TBK_KEY(t._id));
 
-        if (cached && sec.kdf?.saltB64 && sec.verifierB64) {
-          const ok = await verifyPasswordLocally(cached, sec);
+        if (cachedPw && sec.kdf?.saltB64 && sec.verifierB64) {
+          const ok = await verifyPasswordLocally(cachedPw, sec);
+
           if (ok) {
-            setUnlocked(true);
-            if (onUnlocked) onUnlocked();
-            return;
+            const tbk = cachedTbk || getCachedTBK();
+
+            if (tbk) {
+              window.__MS_TEAM_TBK__ = tbk;
+              setUnlocked(true);
+              if (onUnlocked) onUnlocked();
+              return;
+            }
           }
         }
       } catch (err) {
-        console.error("TeamUnlockGate error:", err);
-        setSecurityError(true);
+        console.error("UnlockGate error:", err);
       } finally {
         setChecking(false);
       }
     })();
-  }, [slug]);
+  }, [slug, onTeamResolved, onUnlocked]);
 
+  /* --------------------------------------------------------
+     Manual unlock submit
+  -------------------------------------------------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!security) {
-      toast.error("Missing security configuration.");
-      return;
-    }
-
     setSubmitting(true);
     setError("");
 
@@ -104,27 +100,38 @@ const TeamUnlockGate = ({
 
       if (!ok) {
         setError("Incorrect team password.");
+        setSubmitting(false);
         return;
       }
 
-      try {
-        sessionStorage.setItem(STORAGE_KEY(team._id), password);
-      } catch {}
+      const tbk = getCachedTBK();
+      if (!tbk) {
+        setError("Unable to load Team Box Key.");
+        setSubmitting(false);
+        return;
+      }
+
+      sessionStorage.setItem(STORAGE_KEY(team._id), password);
+      sessionStorage.setItem(TBK_KEY(team._id), tbk);
+
+      window.__MS_TEAM_TBK__ = tbk;
 
       setUnlocked(true);
       setPassword("");
       if (onUnlocked) onUnlocked();
     } catch (err) {
-      toast.error(err?.message || "Error verifying password.");
+      setError("Error verifying password.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  // -------------------- UI STATES --------------------
+  /* --------------------------------------------------------
+     UI States
+  -------------------------------------------------------- */
   if (checking) {
     return (
-      <div className="flex flex-col justify-center items-center h-[60vh] bg-background">
+      <div className="flex flex-col justify-center items-center h-[60vh]">
         <Spinner size={64} />
         <p className="text-gray-400 dark:text-gray-300 mt-2 text-lg">
           Checking team lock…
@@ -133,27 +140,15 @@ const TeamUnlockGate = ({
     );
   }
 
-  if (securityError) {
-    return (
-      <div className="flex flex-col justify-center items-center h-[60vh] bg-background">
-        <div className="w-full max-w-sm rounded-2xl border bg-[var(--color-card)] p-6 space-y-3">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-            Unable to verify team lock
-          </h2>
-          <p className="text-sm text-gray-700 dark:text-gray-200">
-            Please try again later.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   if (!hasLock || unlocked) {
     return <>{children}</>;
   }
 
+  /* --------------------------------------------------------
+     Locked UI
+  -------------------------------------------------------- */
   return (
-    <div className="flex flex-col justify-center items-center h-[60vh] bg-background">
+    <div className="flex flex-col justify-center items-center h-[60vh]">
       <div className="w-full max-w-sm rounded-2xl border bg-[var(--color-card)] p-6 space-y-4">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
           Team Password Required
@@ -163,41 +158,35 @@ const TeamUnlockGate = ({
           onSubmit={handleSubmit}
           className="space-y-3"
         >
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Team Password
-            </label>
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full rounded-xl border bg-white dark:bg-neutral-900 
+                         text-gray-900 dark:text-gray-100 px-4 py-3 pr-12"
+              placeholder="Enter team password"
+            />
 
-            <div className="relative w-full">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-xl border bg-white dark:bg-neutral-900
-                           text-gray-900 dark:text-gray-100 px-4 py-3 pr-12"
-                required
-              />
-
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute inset-y-0 right-3 flex items-center text-gray-500
-                           hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              >
-                {showPassword ? (
-                  <EyeOff className="w-5 h-5" />
-                ) : (
-                  <Eye className="w-5 h-5" />
-                )}
-              </button>
-            </div>
-
-            {error && (
-              <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                {error}
-              </p>
-            )}
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute inset-y-0 right-3 flex items-center text-gray-500"
+            >
+              {showPassword ? (
+                <EyeOff className="w-5 h-5" />
+              ) : (
+                <Eye className="w-5 h-5" />
+              )}
+            </button>
           </div>
+
+          {error && (
+            <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+              {error}
+            </p>
+          )}
 
           <div className="flex justify-end">
             <Button
@@ -211,7 +200,7 @@ const TeamUnlockGate = ({
         </form>
 
         <p className="text-xs text-gray-600 dark:text-gray-400">
-          The password is never stored on the server.
+          The password never leaves your device.
         </p>
       </div>
     </div>

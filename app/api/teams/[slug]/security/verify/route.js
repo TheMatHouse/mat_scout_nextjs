@@ -1,54 +1,38 @@
-// app/api/teams/[slug]/security/verify/route.js
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import mongoose from "mongoose";
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUser } from "@/lib/auth-server";
 import Team from "@/models/teamModel";
 import crypto from "crypto";
 
-/* -------------------------------------------------------
-   BASE64 HELPERS
-------------------------------------------------------- */
-function b64d(str) {
-  return Buffer.from(str, "base64");
-}
-function b64e(buf) {
-  return Buffer.from(buf).toString("base64");
-}
+/* ---------------------- Helpers ---------------------- */
+const b64d = (s) => Buffer.from(s, "base64");
+const b64e = (b) => Buffer.from(b).toString("base64");
 
-/* -------------------------------------------------------
-   AES-GCM unwrap wrapperKey -> TBK
-------------------------------------------------------- */
-function unwrapTBK_AESGCM(derivedKey, wrapper) {
-  const iv = b64d(wrapper.ivB64);
-  const tag = b64d(wrapper.tagB64);
-  const ciphertext = b64d(wrapper.ciphertextB64);
+/**
+ * AES-GCM unwrap TBK
+ * wrappedTBK = { ciphertextB64, ivB64, tagB64 }
+ */
+function unwrapTBK_AESGCM(derivedKey, wrapped) {
+  const iv = b64d(wrapped.ivB64);
+  const tag = b64d(wrapped.tagB64);
+  const ciphertext = b64d(wrapped.ciphertextB64);
 
+  // AES-GCM in Node expects ciphertext, then setAuthTag(tag)
   const decipher = crypto.createDecipheriv("aes-256-gcm", derivedKey, iv);
   decipher.setAuthTag(tag);
 
-  const tbkRaw = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-  return tbkRaw; // raw 32-byte Team Box Key
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 }
 
-/* -------------------------------------------------------
-   PBKDF2 derive
-------------------------------------------------------- */
-function derivePasswordKey(password, saltB64, iterations) {
-  return crypto.pbkdf2Sync(password, b64d(saltB64), iterations, 32, "sha256");
-}
-
-/* -------------------------------------------------------
-   MAIN VERIFY ROUTE
-------------------------------------------------------- */
+/* ---------------------- Route ------------------------ */
 export async function POST(req, { params }) {
   try {
     await connectDB();
 
-    const user = await getCurrentUser();
-    if (!user) {
+    const actor = await getCurrentUser();
+    if (!actor) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
@@ -63,7 +47,6 @@ export async function POST(req, { params }) {
       );
     }
 
-    // Load security block
     const team = await Team.findOne({ teamSlug: slug })
       .select("security")
       .lean();
@@ -76,42 +59,45 @@ export async function POST(req, { params }) {
     }
 
     const sec = team.security;
-    const { saltB64, iterations } = sec.kdf || {};
-    const verifier = sec.verifierB64;
-    const wrapped = sec.wrappedTBK;
 
-    if (!saltB64 || !iterations || !verifier || !wrapped) {
+    if (
+      !sec.kdf?.saltB64 ||
+      !sec.kdf?.iterations ||
+      !sec.verifierB64 ||
+      !sec.wrappedTBK
+    ) {
       return NextResponse.json(
         { message: "Security block incomplete" },
         { status: 500 }
       );
     }
 
-    /* ---------------------------------------------------
-       1) Derive PBKDF2 key from provided password
-    --------------------------------------------------- */
-    const derivedKey = derivePasswordKey(password, saltB64, iterations);
+    /* ------------------ Derive PBKDF2 key ------------------ */
+    const derivedKey = crypto.pbkdf2Sync(
+      password,
+      b64d(sec.kdf.saltB64),
+      sec.kdf.iterations,
+      32,
+      "sha256"
+    );
+
+    /* ------------------ Verify password ------------------ */
     const computedVerifier = crypto
       .createHash("sha256")
       .update(derivedKey)
       .digest("base64");
 
-    /* ---------------------------------------------------
-       2) Check password verifier
-    --------------------------------------------------- */
-    if (computedVerifier !== verifier) {
+    if (computedVerifier !== sec.verifierB64) {
       return NextResponse.json(
         { ok: false, message: "Invalid password" },
         { status: 401 }
       );
     }
 
-    /* ---------------------------------------------------
-       3) Unwrap TBK using AES-GCM
-    --------------------------------------------------- */
+    /* ------------------ Unwrap TBK ------------------ */
     let tbkRaw;
     try {
-      tbkRaw = unwrapTBK_AESGCM(derivedKey, wrapped);
+      tbkRaw = unwrapTBK_AESGCM(derivedKey, sec.wrappedTBK);
     } catch (err) {
       console.error("TBK unwrap failed:", err);
       return NextResponse.json(
@@ -120,9 +106,7 @@ export async function POST(req, { params }) {
       );
     }
 
-    /* ---------------------------------------------------
-       4) Return TBK to client (base64)
-    --------------------------------------------------- */
+    /* ------------------ Return TBK ------------------ */
     return NextResponse.json(
       {
         ok: true,
