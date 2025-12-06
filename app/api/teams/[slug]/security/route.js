@@ -1,4 +1,3 @@
-// app/api/teams/[slug]/security/route.js
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
@@ -6,15 +5,6 @@ import { connectDB } from "@/lib/mongo";
 import { getCurrentUser } from "@/lib/auth-server";
 import Team from "@/models/teamModel";
 
-/**
- * Returns the full security block for a team.
- * Includes:
- *   - team._id   <-- REQUIRED BY TeamUnlockGate
- *   - lockEnabled
- *   - kdf { saltB64, iterations }
- *   - verifierB64
- *   - wrappedTBK { ciphertextB64, ivB64, tagB64 }
- */
 export async function GET(req, { params }) {
   try {
     await connectDB();
@@ -36,13 +26,11 @@ export async function GET(req, { params }) {
 
     const sec = team.security || {};
 
-    // -----------------------------
-    // If lock is disabled
-    // -----------------------------
+    // UNLOCK DISABLED → RETURN CORRECT SHAPE
     if (!sec.lockEnabled) {
       return NextResponse.json({
         team: {
-          _id: String(team._id), // 🔥 REQUIRED
+          _id: team._id,
           security: {
             lockEnabled: false,
             encVersion: sec.encVersion || "v1",
@@ -51,29 +39,19 @@ export async function GET(req, { params }) {
       });
     }
 
-    // -----------------------------
-    // Extract fields for lock
-    // -----------------------------
-    const saltB64 = sec.kdf?.saltB64 || "";
-    const iterations = sec.kdf?.iterations || 250000;
-    const verifierB64 = sec.verifierB64 || "";
-    const wrappedTBK = sec.wrappedTBK || null;
-
-    // -----------------------------
-    // Return full block including team._id
-    // -----------------------------
+    // LOCK ENABLED → RETURN FULL SECURITY BLOCK
     return NextResponse.json({
       team: {
-        _id: String(team._id), // 🔥 FIX: EXISTS NOW
+        _id: team._id,
         security: {
           lockEnabled: true,
           encVersion: sec.encVersion || "v1",
           kdf: {
-            saltB64,
-            iterations,
+            saltB64: sec.kdf?.saltB64 || "",
+            iterations: sec.kdf?.iterations || 250000,
           },
-          verifierB64,
-          wrappedTBK,
+          verifierB64: sec.verifierB64 || "",
+          wrappedTBK: sec.wrappedTBK || null,
         },
       },
     });
