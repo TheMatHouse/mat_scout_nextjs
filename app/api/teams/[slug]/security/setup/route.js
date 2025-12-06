@@ -9,7 +9,43 @@ import { getCurrentUser } from "@/lib/auth-server";
 import Team from "@/models/teamModel";
 import CoachMatchNote from "@/models/coachMatchNoteModel";
 
-import { encryptCoachNoteBody, teamHasLock } from "@/lib/crypto/teamLock"; // SAME helper used by new-note creation
+import { encryptCoachNoteBody } from "@/lib/crypto/teamLock";
+
+// -----------------------------------------------------
+// 🔐 Helpers to generate & wrap the Team Box Key (TBK)
+// -----------------------------------------------------
+async function deriveKeyFromPasswordBytes(
+  passwordBytes,
+  saltBytes,
+  iterations
+) {
+  return crypto.subtle
+    .importKey("raw", passwordBytes, { name: "PBKDF2" }, false, ["deriveKey"])
+    .then((keyMaterial) =>
+      crypto.subtle.deriveKey(
+        {
+          name: "PBKDF2",
+          hash: "SHA-256",
+          salt: saltBytes,
+          iterations,
+        },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+      )
+    );
+}
+
+function b64ToBytes(b64) {
+  const bin = Buffer.from(b64, "base64");
+  return new Uint8Array(bin);
+}
+
+function bytesToB64(bytes) {
+  return Buffer.from(bytes).toString("base64");
+}
+// -----------------------------------------------------
 
 export async function POST(req, { params }) {
   try {
@@ -47,12 +83,43 @@ export async function POST(req, { params }) {
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
     }
 
-    // ================
-    // UPDATE SECURITY
-    // ================
     const db = mongoose.connection.db;
     const col = db.collection("teams");
 
+    // ========================================================
+    // 🔐 STEP 1: CREATE & WRAP TEAM BOX KEY (TBK)
+    // ========================================================
+    const tbk = crypto.getRandomValues(new Uint8Array(32)); // raw 256-bit key
+    const saltBytes = b64ToBytes(saltB64);
+
+    // For wrapping, derive AES-GCM key from password-derived bytes:
+    // The client POST already ran PBKDF2 -> verifier, but not the raw bytes.
+    // We instead use the salt + iterations and hash the verifier into bytes
+    // as the "password" input for the wrapping derivation.
+    const verifierBytes = b64ToBytes(verifierB64);
+
+    const wrappingKey = await deriveKeyFromPasswordBytes(
+      verifierBytes,
+      saltBytes,
+      iterations
+    );
+
+    // Wrap TBK using AES-GCM
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const wrapped = new Uint8Array(
+      await crypto.subtle.encrypt({ name: "AES-GCM", iv }, wrappingKey, tbk)
+    );
+
+    const wrappedTeamKeyB64 = bytesToB64(wrapped);
+    const wrappedTeamKeyIVB64 = bytesToB64(iv);
+
+    // No separate tag in WebCrypto AES-GCM — tag is included at end of ciphertext.
+    // Store as wrappedTeamKeyB64 (ciphertext+tag).
+    // ========================================================
+
+    // ================
+    // UPDATE SECURITY
+    // ================
     const update = {
       $set: {
         "security.lockEnabled": true,
@@ -60,18 +127,21 @@ export async function POST(req, { params }) {
         "security.kdf.saltB64": saltB64,
         "security.kdf.iterations": iterations,
         "security.verifierB64": verifierB64,
+
+        // 🔐 Store wrapped TBK
+        "security.wrappedTeamKeyB64": wrappedTeamKeyB64,
+        "security.wrappedTeamKeyIVB64": wrappedTeamKeyIVB64,
       },
     };
 
     const writeResult = await col.updateOne({ _id: teamDoc._id }, update);
 
-    // Now reload fresh doc (raw)
+    // Now reload fresh doc
     const fresh = await col.findOne(
       { _id: teamDoc._id },
       { projection: { _id: 1, teamSlug: 1, security: 1 } }
     );
 
-    // If security isn't present → fail
     if (!fresh?.security?.lockEnabled) {
       return NextResponse.json(
         {
@@ -84,20 +154,19 @@ export async function POST(req, { params }) {
     }
 
     // ======================================================
-    // 🔥 AUTO-ENCRYPT ALL EXISTING COACH MATCH NOTES HERE
+    // 🔥 AUTO-ENCRYPT ALL EXISTING COACH MATCH NOTES
     // ======================================================
     const teamId = String(teamDoc._id);
 
     const existingNotes = await CoachMatchNote.find({
       team: teamId,
-      crypto: { $exists: false }, // plaintext only
+      crypto: { $exists: false },
       deletedAt: null,
     }).lean();
 
     let encryptedCount = 0;
 
     if (existingNotes.length > 0) {
-      // Load updated team with full security block for encryption
       const fullTeam = {
         _id: teamId,
         security: fresh.security,
@@ -122,8 +191,6 @@ export async function POST(req, { params }) {
             {
               $set: {
                 crypto: enc.crypto,
-
-                // blank plaintext fields
                 whatWentWell: "",
                 reinforce: "",
                 needsFix: "",
