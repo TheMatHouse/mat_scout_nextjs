@@ -2,154 +2,115 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connectDB } from "@/lib/mongo";
-import Team from "@/models/teamModel";
 import { getCurrentUser } from "@/lib/auth-server";
-import { pbkdf2Sync, createHash, timingSafeEqual } from "crypto";
 
-// Reuse slug-tolerant lookup
-async function findTeamBySlug(rawSlug) {
-  const slug = decodeURIComponent(String(rawSlug || "")).toLowerCase();
+import Team from "@/models/teamModel";
+import crypto from "crypto";
 
-  return (
-    (await Team.findOne({ teamSlug: slug }).select(
-      "_id teamSlug security user"
-    )) ||
-    (await Team.findOne({ teamSlug: slug.replace(/[-_]/g, "") }).select(
-      "_id teamSlug security user"
-    )) ||
-    (await Team.findOne({ teamSlug: slug.replace(/_/g, "-") }).select(
-      "_id teamSlug security user"
-    ))
-  );
+/* -------------------------------------------------------
+   PBKDF2 + VERIFY
+------------------------------------------------------- */
+function derivePasswordKey(password, saltB64, iterations) {
+  const salt = Buffer.from(saltB64, "base64");
+  return crypto.pbkdf2Sync(password, salt, iterations, 32, "sha256");
 }
 
-function b64ToBytes(b64) {
-  try {
-    return Buffer.from(b64, "base64");
-  } catch {
-    return null;
-  }
+function sha256(bytes) {
+  return crypto.createHash("sha256").update(bytes).digest();
 }
 
-// Must mirror the client-side derivePasswordVerifier:
-// 1) PBKDF2(password, salt, iterations, 32, 'sha256')
-// 2) SHA-256 of that derived key
-function deriveVerifier(password, saltBytes, iterations) {
-  const dk = pbkdf2Sync(
-    Buffer.from(password, "utf8"),
-    saltBytes,
-    iterations,
-    32,
-    "sha256"
-  );
-  const hash = createHash("sha256").update(dk).digest();
-  return hash;
+function xorBuffers(a, b) {
+  const out = Buffer.alloc(a.length);
+  for (let i = 0; i < a.length; i++) out[i] = a[i] ^ b[i];
+  return out;
 }
 
-/**
- * POST /api/teams/[slug]/security/verify
- * Body: { password: string }
- *
- * Returns 200 with:
- *   { ok: true,  valid: true }  -> password correct
- *   { ok: true,  valid: false } -> password incorrect
- *   { ok: false, ... }          -> other errors
- */
+/* -------------------------------------------------------
+   MAIN VERIFY ROUTE
+------------------------------------------------------- */
 export async function POST(req, { params }) {
   try {
     await connectDB();
 
     const actor = await getCurrentUser();
     if (!actor) {
-      return NextResponse.json(
-        { ok: false, valid: false, message: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const slug = (await params)?.slug || "";
-    if (!slug) {
-      return NextResponse.json(
-        { ok: false, valid: false, message: "Missing team slug" },
-        { status: 400 }
-      );
-    }
-
-    const team = await findTeamBySlug(slug);
-    if (!team) {
-      return NextResponse.json(
-        { ok: false, valid: false, message: "Team not found" },
-        { status: 404 }
-      );
-    }
-
+    const slug = decodeURIComponent(String((await params).slug || ""));
     const body = await req.json().catch(() => ({}));
-    const password = String(body?.password || "").trim();
+    const password = body?.password;
 
     if (!password) {
       return NextResponse.json(
-        { ok: false, valid: false, message: "Password is required" },
+        { message: "Missing password." },
         { status: 400 }
       );
     }
 
-    const sec = team.security || {};
-    const kdf = sec.kdf || {};
-    const saltB64 = kdf.saltB64 || "";
-    const iterations = Number(kdf.iterations || 0);
-    const verifierB64 = sec.verifierB64 || "";
+    // Load team
+    const team = await Team.findOne({ teamSlug: slug })
+      .select("security")
+      .lean();
 
-    if (!saltB64 || !iterations || !verifierB64) {
+    if (!team?.security?.lockEnabled) {
       return NextResponse.json(
-        {
-          ok: false,
-          valid: false,
-          message: "No team password is configured for this team.",
-        },
+        { message: "Team does not have a password enabled." },
         { status: 400 }
       );
     }
 
-    const saltBytes = b64ToBytes(saltB64);
-    const storedVerifierBytes = b64ToBytes(verifierB64);
+    const sec = team.security;
+    const { saltB64, iterations } = sec.kdf || {};
+    const storedVerifier = sec.verifierB64;
+    const wrappedTBK = sec.wrappedTBK;
 
-    if (!saltBytes || !storedVerifierBytes) {
+    if (!saltB64 || !iterations || !storedVerifier || !wrappedTBK) {
       return NextResponse.json(
-        {
-          ok: false,
-          valid: false,
-          message: "Team security configuration is invalid.",
-        },
+        { message: "Security block incomplete." },
         { status: 500 }
       );
     }
 
-    const derivedVerifier = deriveVerifier(password, saltBytes, iterations);
+    /* ---------------------------------------------------
+       STEP 1 — Derive key from provided password
+    --------------------------------------------------- */
+    const derived = derivePasswordKey(password, saltB64, iterations);
 
-    let matches = false;
-    try {
-      matches =
-        storedVerifierBytes.length === derivedVerifier.length &&
-        timingSafeEqual(storedVerifierBytes, derivedVerifier);
-    } catch {
-      matches = false;
-    }
+    /* ---------------------------------------------------
+       STEP 2 — Verify password using verifierB64
+    --------------------------------------------------- */
+    const computedVerifier = sha256(derived).toString("base64");
 
-    if (!matches) {
-      // Password wrong, but request is otherwise valid
+    if (computedVerifier !== storedVerifier) {
       return NextResponse.json(
-        { ok: true, valid: false, message: "Invalid team password." },
-        { status: 200 }
+        { ok: false, message: "Invalid password." },
+        { status: 401 }
       );
     }
 
-    // Correct password
-    return NextResponse.json({ ok: true, valid: true }, { status: 200 });
-  } catch (err) {
-    console.error("security/verify POST error:", err);
+    /* ---------------------------------------------------
+       STEP 3 — Unwrap TBK
+    --------------------------------------------------- */
+    const wrappedBytes = Buffer.from(wrappedTBK, "base64");
+    const tbkBytes = xorBuffers(wrappedBytes, derived);
+
+    /* ---------------------------------------------------
+       STEP 4 — Return TBK (base64) to client
+    --------------------------------------------------- */
     return NextResponse.json(
-      { ok: false, valid: false, message: "Server error: " + err.message },
+      {
+        ok: true,
+        tbkB64: tbkBytes.toString("base64"),
+      },
+      { status: 200 }
+    );
+  } catch (err) {
+    console.error("VERIFY ERROR:", err);
+    return NextResponse.json(
+      { message: "Server error: " + err.message },
       { status: 500 }
     );
   }

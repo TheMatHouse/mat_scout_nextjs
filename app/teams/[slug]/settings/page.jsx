@@ -102,6 +102,17 @@ async function deriveKdfAndVerifier(password) {
   };
 }
 
+/**
+ * 🔐 Derive the *session* team key from password + stored KDF params.
+ * This is what we attach to team._teamKey so encryptScoutingBody /
+ * encryptCoachNoteBody actually have a key to use.
+ */
+async function deriveTeamSessionKey(password, kdf) {
+  if (!password || !kdf?.saltB64 || !kdf?.iterations) return null;
+  const saltBytes = b64decode(kdf.saltB64);
+  return pbkdf2DeriveKeyBytes(password, saltBytes, kdf.iterations, 32);
+}
+
 /* ---------------- Page ---------------- */
 const TeamSettingsPage = () => {
   const router = useRouter();
@@ -124,7 +135,7 @@ const TeamSettingsPage = () => {
 
   const lockEnabled = !!team?.security?.lockEnabled;
   const [pw, setPw] = useState("");
-  const [pw2, setPw2] = useState("");
+  const [pw2, setPw2] = useState(false);
   const [pwVisible1, setPwVisible1] = useState(false);
   const [pwVisible2, setPwVisible2] = useState(false);
   const [savingSecurity, setSavingSecurity] = useState(false);
@@ -189,7 +200,7 @@ const TeamSettingsPage = () => {
     refetchTeam();
   }, [teamSlug]);
 
-  /* ------------ Bulk Encrypt: Scouting Reports (existing function) ------------ */
+  /* ------------ Bulk Encrypt: Scouting Reports ------------ */
   const bulkEncryptExistingReports = async (teamForCrypto) => {
     if (!isOwner) return;
 
@@ -213,7 +224,12 @@ const TeamSettingsPage = () => {
       let data = null;
       try {
         data = JSON.parse(text);
-      } catch {}
+      } catch {
+        console.warn(
+          "[BULK ENCRYPT] scouting reports JSON parse failed:",
+          text
+        );
+      }
 
       const allReports = Array.isArray(data?.scoutingReports)
         ? data.scoutingReports
@@ -227,24 +243,46 @@ const TeamSettingsPage = () => {
         (r) => !r?.crypto || !r.crypto.ciphertextB64
       );
 
+      if (!unencrypted.length) {
+        console.log("[BULK ENCRYPT] no scouting reports to encrypt");
+        return;
+      }
+
       const reportsPayload = [];
 
       for (const r of unencrypted) {
         try {
           const { body, crypto } = await encryptScoutingBody(effectiveTeam, r);
-          if (!crypto) continue;
+          if (!crypto) {
+            console.warn(
+              "[BULK ENCRYPT] encryptScoutingBody returned no crypto for",
+              r._id
+            );
+            continue;
+          }
 
           reportsPayload.push({
             _id: String(r._id || r.id),
             body,
             crypto,
           });
-        } catch {}
+        } catch (err) {
+          console.warn(
+            "[BULK ENCRYPT] failed to encrypt scouting report",
+            r._id,
+            err
+          );
+        }
       }
 
-      if (!reportsPayload.length) return;
+      if (!reportsPayload.length) {
+        console.warn(
+          "[BULK ENCRYPT] reportsPayload empty after encryption attempts"
+        );
+        return;
+      }
 
-      await fetch(
+      const bulkRes = await fetch(
         `/api/teams/${encodeURIComponent(
           teamSlug
         )}/scouting-reports/bulk-encrypt`,
@@ -258,12 +296,23 @@ const TeamSettingsPage = () => {
           body: JSON.stringify({ reports: reportsPayload }),
         }
       );
+
+      if (!bulkRes.ok) {
+        const bulkText = await bulkRes.text();
+        console.error(
+          "[BULK ENCRYPT] scouting bulk-encrypt failed:",
+          bulkRes.status,
+          bulkText
+        );
+      }
     } catch (e) {
-      console.error(e);
+      console.error("[BULK ENCRYPT] scouting unexpected error:", e);
+    } finally {
+      setEncrypting(false);
     }
   };
 
-  /* ------------ NEW: Bulk Encrypt Existing Coach Notes ------------ */
+  /* ------------ Bulk Encrypt Existing Coach Notes ------------ */
   const bulkEncryptExistingCoachNotes = async (teamForCrypto) => {
     if (!isOwner) return;
 
@@ -281,11 +330,23 @@ const TeamSettingsPage = () => {
         }
       );
 
+      if (!res.ok) {
+        const text = await res.text();
+        console.warn(
+          "[BULK ENCRYPT] coach-notes list failed:",
+          res.status,
+          text
+        );
+        return;
+      }
+
       const text = await res.text();
       let data = null;
       try {
         data = JSON.parse(text);
-      } catch {}
+      } catch {
+        console.warn("[BULK ENCRYPT] coach-notes JSON parse failed:", text);
+      }
 
       const allNotes = Array.isArray(data?.notes)
         ? data.notes
@@ -297,28 +358,50 @@ const TeamSettingsPage = () => {
         (n) => !n?.crypto || !n.crypto.ciphertextB64
       );
 
+      if (!unencrypted.length) {
+        console.log("[BULK ENCRYPT] no coach notes to encrypt");
+        return;
+      }
+
       const notesPayload = [];
 
       for (const note of unencrypted) {
         try {
-          const { body, crypto } = await encryptCoachNoteBody(
+          const { clear, crypto } = await encryptCoachNoteBody(
             effectiveTeam,
             note
           );
 
-          if (!crypto) continue;
+          if (!crypto) {
+            console.warn(
+              "[BULK ENCRYPT] encryptCoachNoteBody returned no crypto for",
+              note._id
+            );
+            continue;
+          }
 
           notesPayload.push({
             _id: String(note._id || note.id),
-            body,
+            body: clear,
             crypto,
           });
-        } catch {}
+        } catch (err) {
+          console.warn(
+            "[BULK ENCRYPT] failed to encrypt coach note",
+            note._id,
+            err
+          );
+        }
       }
 
-      if (!notesPayload.length) return;
+      if (!notesPayload.length) {
+        console.warn(
+          "[BULK ENCRYPT] notesPayload empty after coach-note attempts"
+        );
+        return;
+      }
 
-      await fetch(
+      const bulkRes = await fetch(
         `/api/teams/${encodeURIComponent(teamSlug)}/coach-notes/bulk-encrypt`,
         {
           method: "POST",
@@ -330,8 +413,17 @@ const TeamSettingsPage = () => {
           body: JSON.stringify({ notes: notesPayload }),
         }
       );
+
+      if (!bulkRes.ok) {
+        const bulkText = await bulkRes.text();
+        console.error(
+          "[BULK ENCRYPT] coach-notes bulk-encrypt failed:",
+          bulkRes.status,
+          bulkText
+        );
+      }
     } catch (e) {
-      console.error(e);
+      console.error("[BULK ENCRYPT] coach-notes unexpected error:", e);
     }
   };
 
@@ -446,8 +538,28 @@ const TeamSettingsPage = () => {
         !!team?.security?.kdf?.saltB64 && !!team?.security?.verifierB64;
 
       if (!hasKdf) {
+        // Initial setup: send KDF/verifier to server
         await callSetupPOST(pw);
         const freshTeam = await refetchTeam();
+
+        // 🔑 Derive a session team key from the *same* KDF params
+        if (freshTeam?.security?.kdf) {
+          try {
+            const sessionKey = await deriveTeamSessionKey(
+              pw,
+              freshTeam.security.kdf
+            );
+            if (sessionKey) {
+              // Attach as ephemeral key used by teamLock.js
+              freshTeam._teamKey = sessionKey;
+            }
+          } catch (err) {
+            console.error(
+              "[TEAM SETTINGS] failed to derive session team key:",
+              err
+            );
+          }
+        }
 
         // 🔐 Encrypt ALL existing data (scouting + coach notes)
         await bulkEncryptExistingReports(freshTeam);
@@ -457,6 +569,7 @@ const TeamSettingsPage = () => {
           "Team password set. Existing and new reports are locked."
         );
       } else {
+        // Password change: use existing flow
         await changeTeamPassword(team, pw);
         await refetchTeam();
         toast.success("Team password updated.");

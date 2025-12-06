@@ -9,59 +9,65 @@ import { getCurrentUser } from "@/lib/auth-server";
 import Team from "@/models/teamModel";
 import CoachMatchNote from "@/models/coachMatchNoteModel";
 
-import { encryptCoachNoteBody } from "@/lib/crypto/teamLock";
+import crypto from "crypto";
 
-// -----------------------------------------------------
-// 🔐 Helpers to generate & wrap the Team Box Key (TBK)
-// -----------------------------------------------------
-async function deriveKeyFromPasswordBytes(
-  passwordBytes,
-  saltBytes,
-  iterations
-) {
-  return crypto.subtle
-    .importKey("raw", passwordBytes, { name: "PBKDF2" }, false, ["deriveKey"])
-    .then((keyMaterial) =>
-      crypto.subtle.deriveKey(
-        {
-          name: "PBKDF2",
-          hash: "SHA-256",
-          salt: saltBytes,
-          iterations,
-        },
-        keyMaterial,
-        { name: "AES-GCM", length: 256 },
-        false,
-        ["encrypt", "decrypt"]
-      )
-    );
+/* ================================================
+   Basic helpers
+================================================ */
+
+function b64e(buf) {
+  return Buffer.from(buf).toString("base64");
 }
 
-function b64ToBytes(b64) {
-  const bin = Buffer.from(b64, "base64");
-  return new Uint8Array(bin);
+function b64d(str) {
+  return Buffer.from(str, "base64");
 }
 
-function bytesToB64(bytes) {
-  return Buffer.from(bytes).toString("base64");
+/** Derive 32-byte key using PBKDF2 */
+function deriveWrapperKey(passwordDerivedKey, saltB64, iterations) {
+  return crypto.pbkdf2Sync(
+    passwordDerivedKey,
+    b64d(saltB64),
+    iterations,
+    32,
+    "sha256"
+  );
 }
-// -----------------------------------------------------
+
+/** AES-GCM wrap a TBK */
+function wrapTBK(wrapperKey, tbkRaw) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", wrapperKey, iv);
+
+  const ciphertext = Buffer.concat([cipher.update(tbkRaw), cipher.final()]);
+  const tag = cipher.getAuthTag();
+
+  return {
+    ciphertextB64: b64e(ciphertext),
+    ivB64: b64e(iv),
+    tagB64: b64e(tag),
+  };
+}
+
+/** hash(derivedKey) */
+function makeVerifier(derivedKey) {
+  return b64e(crypto.createHash("sha256").update(derivedKey).digest());
+}
+
+/* ======================================================
+   ROUTE: Initialize team lock + create/store TBK
+====================================================== */
 
 export async function POST(req, { params }) {
   try {
     await connectDB();
 
     const actor = await getCurrentUser();
-    if (!actor) {
+    if (!actor)
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
 
-    // Normalize slug
-    const slug = decodeURIComponent(
-      String((await params).slug || "")
-    ).toLowerCase();
+    const slug = decodeURIComponent(String((await params).slug || ""));
 
-    // Parse body
     const body = await req.json().catch(() => ({}));
     const saltB64 = body?.kdf?.saltB64?.trim();
     const iterations = Number(body?.kdf?.iterations ?? 0);
@@ -69,178 +75,154 @@ export async function POST(req, { params }) {
 
     if (!saltB64 || !iterations || !verifierB64) {
       return NextResponse.json(
-        { message: "Missing { kdf: { saltB64, iterations }, verifierB64 }." },
+        {
+          message:
+            "Missing required fields { kdf: { saltB64, iterations }, verifierB64 }",
+        },
         { status: 400 }
       );
     }
 
-    // Load team
-    const teamDoc = await Team.findOne({ teamSlug: slug })
+    /* ===============================================
+       Locate team
+    =============================================== */
+
+    const team = await Team.findOne({ teamSlug: slug })
       .select("_id user teamSlug security")
       .lean();
 
-    if (!teamDoc) {
+    if (!team)
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
+
+    if (String(team.user) !== String(actor._id)) {
+      return NextResponse.json(
+        { message: "Forbidden: Only the owner may set password" },
+        { status: 403 }
+      );
     }
+
+    /* ===============================================
+       Generate new TBK (32 bytes)
+    =============================================== */
+
+    const tbkRaw = crypto.randomBytes(32);
+
+    /* ===============================================
+       Derive wrapper key from password-derived key
+       NOTE: Client already derived a 32-byte key
+             → They sent verifierB64 for that key
+       Server derives matching key using PBKDF2
+    =============================================== */
+
+    const derivedWrapperKey = deriveWrapperKey(
+      Buffer.from(verifierB64, "base64"), // IMPORTANT: matches client verifier key source
+      saltB64,
+      iterations
+    );
+
+    /* ===============================================
+       Wrap the TBK using AES-GCM
+    =============================================== */
+
+    const wrappedTBK = wrapTBK(derivedWrapperKey, tbkRaw);
+
+    /* ===============================================
+       Persist security block
+    =============================================== */
 
     const db = mongoose.connection.db;
     const col = db.collection("teams");
 
-    // ========================================================
-    // 🔐 STEP 1: CREATE & WRAP TEAM BOX KEY (TBK)
-    // ========================================================
-    const tbk = crypto.getRandomValues(new Uint8Array(32)); // raw 256-bit key
-    const saltBytes = b64ToBytes(saltB64);
-
-    // For wrapping, derive AES-GCM key from password-derived bytes:
-    // The client POST already ran PBKDF2 -> verifier, but not the raw bytes.
-    // We instead use the salt + iterations and hash the verifier into bytes
-    // as the "password" input for the wrapping derivation.
-    const verifierBytes = b64ToBytes(verifierB64);
-
-    const wrappingKey = await deriveKeyFromPasswordBytes(
-      verifierBytes,
-      saltBytes,
-      iterations
-    );
-
-    // Wrap TBK using AES-GCM
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const wrapped = new Uint8Array(
-      await crypto.subtle.encrypt({ name: "AES-GCM", iv }, wrappingKey, tbk)
-    );
-
-    const wrappedTeamKeyB64 = bytesToB64(wrapped);
-    const wrappedTeamKeyIVB64 = bytesToB64(iv);
-
-    // No separate tag in WebCrypto AES-GCM — tag is included at end of ciphertext.
-    // Store as wrappedTeamKeyB64 (ciphertext+tag).
-    // ========================================================
-
-    // ================
-    // UPDATE SECURITY
-    // ================
-    const update = {
-      $set: {
-        "security.lockEnabled": true,
-        "security.encVersion": "v1",
-        "security.kdf.saltB64": saltB64,
-        "security.kdf.iterations": iterations,
-        "security.verifierB64": verifierB64,
-
-        // 🔐 Store wrapped TBK
-        "security.wrappedTeamKeyB64": wrappedTeamKeyB64,
-        "security.wrappedTeamKeyIVB64": wrappedTeamKeyIVB64,
-      },
-    };
-
-    const writeResult = await col.updateOne({ _id: teamDoc._id }, update);
-
-    // Now reload fresh doc
-    const fresh = await col.findOne(
-      { _id: teamDoc._id },
-      { projection: { _id: 1, teamSlug: 1, security: 1 } }
-    );
-
-    if (!fresh?.security?.lockEnabled) {
-      return NextResponse.json(
-        {
-          message: "Team lock initialized, but security block missing.",
-          writeStats: writeResult,
-          team: fresh,
+    await col.updateOne(
+      { _id: team._id },
+      {
+        $set: {
+          "security.lockEnabled": true,
+          "security.encVersion": "v1",
+          "security.kdf": { saltB64, iterations },
+          "security.verifierB64": verifierB64,
+          "security.wrappedTBK": wrappedTBK,
         },
-        { status: 500 }
-      );
-    }
+      }
+    );
 
-    // ======================================================
-    // 🔥 AUTO-ENCRYPT ALL EXISTING COACH MATCH NOTES
-    // ======================================================
-    const teamId = String(teamDoc._id);
+    /* ===============================================
+       AUTO-ENCRYPT EXISTING COACH NOTES (server side)
+    =============================================== */
 
     const existingNotes = await CoachMatchNote.find({
-      team: teamId,
-      crypto: { $exists: false },
+      team: String(team._id),
       deletedAt: null,
     }).lean();
 
     let encryptedCount = 0;
 
-    if (existingNotes.length > 0) {
-      const fullTeam = {
-        _id: teamId,
-        security: fresh.security,
+    for (const n of existingNotes) {
+      if (n.crypto && n.crypto.ciphertextB64) continue;
+
+      const payload = {
+        whatWentWell: n.whatWentWell || "",
+        reinforce: n.reinforce || "",
+        needsFix: n.needsFix || "",
+        notes: n.notes || "",
       };
 
-      for (const n of existingNotes) {
-        try {
-          const payload = {
-            whatWentWell: n.whatWentWell || "",
-            reinforce: n.reinforce || "",
-            needsFix: n.needsFix || "",
-            notes: n.notes || "",
-            techniques: n.techniques || { ours: [], theirs: [] },
-            result: n.result || "",
-            score: n.score || "",
-          };
+      // Encrypt using TBK directly server-side
+      const iv = crypto.randomBytes(12);
+      const cipher = crypto.createCipheriv("aes-256-gcm", tbkRaw, iv);
 
-          const enc = await encryptCoachNoteBody(fullTeam, payload);
+      const plaintext = Buffer.from(JSON.stringify(payload));
+      const ciphertext = Buffer.concat([
+        cipher.update(plaintext),
+        cipher.final(),
+      ]);
+      const tag = cipher.getAuthTag();
 
-          await CoachMatchNote.updateOne(
-            { _id: n._id },
-            {
-              $set: {
-                crypto: enc.crypto,
-                whatWentWell: "",
-                reinforce: "",
-                needsFix: "",
-                notes: "",
-                techniques: { ours: [], theirs: [] },
-                result: "",
-                score: "",
-              },
-            }
-          );
-
-          encryptedCount++;
-        } catch (err) {
-          console.error("[AUTO-ENCRYPT] Failed coach note:", n?._id, err);
+      await CoachMatchNote.updateOne(
+        { _id: n._id },
+        {
+          $set: {
+            crypto: {
+              ciphertextB64: b64e(ciphertext),
+              ivB64: b64e(iv),
+              tagB64: b64e(tag),
+            },
+            whatWentWell: "",
+            reinforce: "",
+            needsFix: "",
+            notes: "",
+          },
         }
-      }
+      );
+
+      encryptedCount++;
     }
 
-    // ==========================
-    // API RESPONSE
-    // ==========================
-    const connInfo = {
-      dbName: mongoose.connection.name || null,
-      host:
-        (mongoose.connection.hosts && mongoose.connection.hosts[0]?.host) ||
-        mongoose.connection.host ||
-        null,
-      port:
-        (mongoose.connection.hosts && mongoose.connection.hosts[0]?.port) ||
-        mongoose.connection.port ||
-        null,
-    };
+    /* ===============================================
+       Final Response
+    =============================================== */
 
     return NextResponse.json(
       {
-        message: "Team lock initialized; existing Coach Notes encrypted.",
+        ok: true,
+        message: "Team lock initialized. TBK created and stored.",
         encryptedCoachNotes: encryptedCount,
-        totalExistingNotes: existingNotes.length,
-        connection: connInfo,
-        writeStats: writeResult,
         team: {
-          _id: String(fresh?._id),
-          teamSlug: fresh?.teamSlug,
-          security: fresh?.security,
+          _id: String(team._id),
+          teamSlug: slug,
+          security: {
+            lockEnabled: true,
+            encVersion: "v1",
+            kdf: { saltB64, iterations },
+            verifierB64,
+            // wrappedTBK intentionally NOT returned
+          },
         },
       },
       { status: 200 }
     );
   } catch (err) {
-    console.error("security/setup POST error:", err);
+    console.error("security/setup ERROR:", err);
     return NextResponse.json(
       { message: "Server error: " + err.message },
       { status: 500 }
