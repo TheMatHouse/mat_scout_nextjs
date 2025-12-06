@@ -1,4 +1,3 @@
-// components/teams/TeamUnlockGate.jsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -6,101 +5,11 @@ import Spinner from "@/components/shared/Spinner";
 import { Button } from "@/components/ui/button";
 import { Eye, EyeOff } from "lucide-react";
 
-/* -----------------------------------------------------------
-   Base64 Helpers
------------------------------------------------------------ */
-function b64ToBytes(b64) {
-  return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-}
-function bytesToB64(bytes) {
-  return btoa(String.fromCharCode(...bytes));
-}
+import { verifyPasswordLocally, getCachedTBK } from "@/lib/crypto/locker";
 
-/* -----------------------------------------------------------
-   PBKDF2
------------------------------------------------------------ */
-async function deriveKey(password, saltB64, iterations) {
-  const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(password),
-    "PBKDF2",
-    false,
-    ["deriveKey", "deriveBits"]
-  );
-
-  const saltBytes = b64ToBytes(saltB64);
-
-  // Raw PBKDF2 32 bytes
-  const bits = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      hash: "SHA-256",
-      salt: saltBytes,
-      iterations,
-    },
-    keyMaterial,
-    32 * 8
-  );
-
-  return new Uint8Array(bits);
-}
-
-/* -----------------------------------------------------------
-   Verify SHA-256
------------------------------------------------------------ */
-async function sha256(bytes) {
-  const buf = await crypto.subtle.digest("SHA-256", bytes);
-  return new Uint8Array(buf);
-}
-
-/* -----------------------------------------------------------
-   AES-GCM unwrap TBK
------------------------------------------------------------ */
-async function unwrapTBKClient(derivedKeyBytes, wrapped) {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    derivedKeyBytes,
-    "AES-GCM",
-    false,
-    ["decrypt"]
-  );
-
-  const iv = b64ToBytes(wrapped.ivB64);
-  const tag = b64ToBytes(wrapped.tagB64);
-  const ciphertext = b64ToBytes(wrapped.ciphertextB64);
-
-  const data = await crypto.subtle.decrypt(
-    {
-      name: "AES-GCM",
-      iv,
-      additionalData: undefined,
-      tagLength: 128,
-    },
-    key,
-    concatBuffers(ciphertext, tag)
-  );
-
-  return new Uint8Array(data);
-}
-
-// GCM requires ciphertext || tag in one buffer
-function concatBuffers(ct, tag) {
-  const out = new Uint8Array(ct.length + tag.length);
-  out.set(ct, 0);
-  out.set(tag, ct.length);
-  return out;
-}
-
-/* -----------------------------------------------------------
-   Session Keys
------------------------------------------------------------ */
 const PW_KEY = (teamId) => `ms:team_pw:${teamId}`;
 const TBK_KEY = (teamId) => `ms:team_tbk:${teamId}`;
 
-/* ======================================================================
-   COMPONENT
-====================================================================== */
 const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
   const [team, setTeam] = useState(null);
   const [security, setSecurity] = useState(null);
@@ -140,7 +49,8 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
 
         setTeam(t);
         setSecurity(sec);
-        if (onTeamResolved) onTeamResolved(t);
+
+        onTeamResolved && onTeamResolved(t);
 
         if (!sec.lockEnabled) {
           setHasLock(false);
@@ -151,9 +61,10 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
 
         setHasLock(true);
 
+        // Auto-unlock using cached password
         const cachedPw = sessionStorage.getItem(PW_KEY(t._id));
         if (cachedPw) {
-          const ok = await attemptUnlock(t, sec, cachedPw);
+          const ok = await verifyPasswordLocally(cachedPw, sec, t._id);
           if (ok) {
             setUnlocked(true);
             onUnlocked && onUnlocked();
@@ -169,37 +80,6 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
   }, [slug]);
 
   /* -----------------------------------------------------------
-     Try unlocking with a given password
-  ----------------------------------------------------------- */
-  const attemptUnlock = async (team, sec, pw) => {
-    try {
-      const { kdf, verifierB64, wrappedTBK } = sec;
-
-      // 1. derive key
-      const derived = await deriveKey(pw, kdf.saltB64, kdf.iterations);
-
-      // 2. verify
-      const hash = await sha256(derived);
-      if (bytesToB64(hash) !== verifierB64) return false;
-
-      // 3. unwrap TBK
-      const tbk = await unwrapTBKClient(derived, wrappedTBK);
-      const tbkB64 = bytesToB64(tbk);
-
-      // 4. store session
-      sessionStorage.setItem(PW_KEY(team._id), pw);
-      sessionStorage.setItem(TBK_KEY(team._id), tbkB64);
-
-      // provide globally for decrypt functions
-      window.__MS_TEAM_TBK__ = tbkB64;
-      return true;
-    } catch (err) {
-      console.error("unlock error:", err);
-      return false;
-    }
-  };
-
-  /* -----------------------------------------------------------
      Manual submit
   ----------------------------------------------------------- */
   const handleSubmit = async (e) => {
@@ -209,7 +89,7 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
     setSubmitting(true);
     setError("");
 
-    const ok = await attemptUnlock(team, security, password);
+    const ok = await verifyPasswordLocally(password, security, team._id);
 
     if (!ok) {
       setError("Incorrect team password.");
@@ -217,13 +97,17 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
       return;
     }
 
+    sessionStorage.setItem(PW_KEY(team._id), password);
+
     setUnlocked(true);
     setPassword("");
     onUnlocked && onUnlocked();
     setSubmitting(false);
   };
 
-  /* UI States */
+  /* -----------------------------------------------------------
+     UI
+  ----------------------------------------------------------- */
   if (checking) {
     return (
       <div className="flex flex-col justify-center items-center h-[60vh]">
@@ -239,7 +123,6 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
     return <>{children}</>;
   }
 
-  /* Locked UI */
   return (
     <div className="flex flex-col justify-center items-center h-[60vh]">
       <div className="w-full max-w-sm rounded-2xl border bg-[var(--color-card)] p-6 space-y-4">
