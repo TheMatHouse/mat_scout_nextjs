@@ -11,15 +11,14 @@ import { getCurrentUser } from "@/lib/auth-server";
 import Team from "@/models/teamModel";
 import TeamScoutingReport from "@/models/teamScoutingReportModel";
 import CoachMatchNote from "@/models/coachMatchNoteModel";
-
 import {
   encryptScoutingBody,
   encryptCoachNoteBody,
 } from "@/lib/crypto/teamLock";
 
-// ------------------------------------------------------------
+// -------------------------------------------------------------
 // Base64 helpers
-// ------------------------------------------------------------
+// -------------------------------------------------------------
 function b64e(buf) {
   return Buffer.from(buf).toString("base64");
 }
@@ -27,16 +26,16 @@ function b64d(b64) {
   return Buffer.from(b64, "base64");
 }
 
-// ------------------------------------------------------------
-// Derive PBKDF2 key
-// ------------------------------------------------------------
+// -------------------------------------------------------------
+// Derive AES key from client-provided KDF fields
+// -------------------------------------------------------------
 function deriveKdfKey(password, saltB64, iterations) {
   return crypto.pbkdf2Sync(password, b64d(saltB64), iterations, 32, "sha256");
 }
 
-// ------------------------------------------------------------
-// AES-GCM wrap TBK
-// ------------------------------------------------------------
+// -------------------------------------------------------------
+// Wrap TBK using AES-GCM
+// -------------------------------------------------------------
 function wrapTBK(derivedKey, rawTBK) {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv("aes-256-gcm", derivedKey, iv);
@@ -51,16 +50,9 @@ function wrapTBK(derivedKey, rawTBK) {
   };
 }
 
-// ------------------------------------------------------------
-// SHA-256 verifier: hash(derivedKey)
-// ------------------------------------------------------------
-function makeVerifier(derivedKey) {
-  return crypto.createHash("sha256").update(derivedKey).digest("base64");
-}
-
-// ------------------------------------------------------------
-// MAIN ROUTE
-// ------------------------------------------------------------
+// -------------------------------------------------------------
+// POST — initial team password + TBK setup
+// -------------------------------------------------------------
 export async function POST(req, { params }) {
   try {
     await connectDB();
@@ -71,51 +63,55 @@ export async function POST(req, { params }) {
     }
 
     const slug = decodeURIComponent(String((await params).slug || ""));
-    const { password } = await req.json();
 
-    if (!password?.trim()) {
+    const body = await req.json().catch(() => ({}));
+
+    // Client-sent KDF + verifier
+    const saltB64 = body?.kdf?.saltB64;
+    const iterations = body?.kdf?.iterations;
+    const verifierB64 = body?.verifierB64;
+
+    const password = body?.password?.trim(); // may be needed ONLY locally to re-derive TBK
+    if (!saltB64 || !iterations || !verifierB64 || !password) {
       return NextResponse.json(
-        { message: "Password required." },
+        {
+          message:
+            "Missing required fields (need password, kdf.saltB64, kdf.iterations, verifierB64)",
+        },
         { status: 400 }
       );
     }
 
-    // Load team
     const team = await Team.findOne({ teamSlug: slug }).lean();
     if (!team) {
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
     }
 
-    // Owner check
     if (String(team.user) !== String(actor._id)) {
       return NextResponse.json(
-        { message: "Forbidden: only owner can set password" },
+        { message: "Forbidden: only owner may set team password" },
         { status: 403 }
       );
     }
 
-    // --------------------------------------------------------
-    // 1) Generate TBK
-    // --------------------------------------------------------
+    // -------------------------------------------------------------
+    // 1) Generate raw 32-byte TBK
+    // -------------------------------------------------------------
     const tbkRaw = crypto.randomBytes(32);
 
-    // --------------------------------------------------------
-    // 2) Create KDF params + derive key
-    // --------------------------------------------------------
-    const salt = crypto.randomBytes(16);
-    const iterations = 250000;
+    // -------------------------------------------------------------
+    // 2) Derive AES key using client KDF values (PBKDF2-SHA256)
+    // -------------------------------------------------------------
+    const derivedKey = deriveKdfKey(password, saltB64, iterations);
 
-    const derivedKey = deriveKdfKey(password, b64e(salt), iterations);
-    const verifierB64 = makeVerifier(derivedKey);
-
-    // --------------------------------------------------------
-    // 3) Wrap TBK with AES-GCM
-    // --------------------------------------------------------
+    // -------------------------------------------------------------
+    // 3) Wrap TBK using AES-GCM
+    // -------------------------------------------------------------
     const wrappedTBK = wrapTBK(derivedKey, tbkRaw);
 
-    // --------------------------------------------------------
-    // 4) Save security block into team
-    // --------------------------------------------------------
+    // -------------------------------------------------------------
+    // 4) Save security block
+    // -------------------------------------------------------------
     const db = mongoose.connection.db;
     const col = db.collection("teams");
 
@@ -126,7 +122,7 @@ export async function POST(req, { params }) {
           security: {
             lockEnabled: true,
             encVersion: "v1",
-            kdf: { saltB64: b64e(salt), iterations },
+            kdf: { saltB64, iterations },
             verifierB64,
             wrappedTBK,
           },
@@ -134,26 +130,24 @@ export async function POST(req, { params }) {
       }
     );
 
-    // Reload fresh
     const fresh = await col.findOne(
       { _id: team._id },
-      { projection: { _id: 1, teamSlug: 1, security: 1 } }
+      { projection: { _id: 1, security: 1 } }
     );
 
-    // --------------------------------------------------------
-    // 5) Auto-encrypt all existing documents
-    // --------------------------------------------------------
+    // -------------------------------------------------------------
+    // 5) Encrypt all existing reports + coach notes using tbkRaw
+    // -------------------------------------------------------------
     let encryptedScouting = 0;
     let encryptedCoach = 0;
 
-    // Prepare team object for encryption calls
     const encTeam = {
       _id: team._id,
       _teamKey: tbkRaw,
       security: fresh.security,
     };
 
-    // ---- Encrypt existing scouting reports
+    // ---- Encrypt unencrypted scouting reports
     const reports = await TeamScoutingReport.find({
       teamId: team._id,
       crypto: { $exists: false },
@@ -181,7 +175,7 @@ export async function POST(req, { params }) {
       encryptedScouting++;
     }
 
-    // ---- Encrypt existing coach notes
+    // ---- Encrypt unencrypted coach notes
     const notes = await CoachMatchNote.find({
       team: String(team._id),
       crypto: { $exists: false },
@@ -189,14 +183,14 @@ export async function POST(req, { params }) {
     });
 
     for (const n of notes) {
-      const payload = {
+      const clear = {
         whatWentWell: n.whatWentWell || "",
         reinforce: n.reinforce || "",
         needsFix: n.needsFix || "",
         notes: n.notes || "",
       };
 
-      const enc = await encryptCoachNoteBody(encTeam, payload, tbkRaw);
+      const enc = await encryptCoachNoteBody(encTeam, clear, tbkRaw);
 
       await CoachMatchNote.updateOne(
         { _id: n._id },
@@ -214,13 +208,13 @@ export async function POST(req, { params }) {
       encryptedCoach++;
     }
 
-    // --------------------------------------------------------
-    // 6) Final response
-    // --------------------------------------------------------
+    // -------------------------------------------------------------
+    // 6) Response
+    // -------------------------------------------------------------
     return NextResponse.json(
       {
         ok: true,
-        message: "Team password set + existing data encrypted",
+        message: "Team password created + existing data encrypted",
         encryptedScouting,
         encryptedCoach,
         security: fresh.security,
