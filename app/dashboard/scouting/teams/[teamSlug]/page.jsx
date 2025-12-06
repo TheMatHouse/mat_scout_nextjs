@@ -10,7 +10,7 @@ import { Eye, ArrowUpDown } from "lucide-react";
 import Spinner from "@/components/shared/Spinner";
 import PreviewReportModal from "@/components/shared/PreviewReportModal";
 import { ReportDataTable } from "@/components/shared/report-data-table";
-import { decryptScoutingBody, maybeDecryptNotes } from "@/lib/crypto/teamLock";
+import { decryptScoutingBody } from "@/lib/crypto/teamLock";
 import { verifyPasswordLocally } from "@/lib/crypto/locker";
 
 /* ---------------- safe display helpers --------------- */
@@ -24,7 +24,7 @@ const genderLabel = (g) => {
 
 const computeDivisionDisplay = (division) => {
   if (!division) return "—";
-  if (typeof division === "string") return division; // legacy id/label
+  if (typeof division === "string") return division;
   if (typeof division === "object") {
     const name = division?.name || "";
     const glab = genderLabel(division?.gender);
@@ -50,43 +50,7 @@ function getDivisionId(div) {
   return "";
 }
 
-// Fetch weights for a division via the canonical route
-async function fetchDivisionWeights(divisionId) {
-  const id = encodeURIComponent(String(divisionId));
-  const url = `/api/divisions/${id}/weights`;
-  try {
-    const res = await fetch(url, {
-      cache: "no-store",
-      credentials: "same-origin",
-      headers: { accept: "application/json" },
-    });
-    if (!res.ok) return null;
-    const data = await res.json().catch(() => ({}));
-    const wc =
-      data?.weightCategory ||
-      data?.weights ||
-      data?.weight ||
-      data?.data ||
-      data?.category ||
-      data;
-    if (!wc) return null;
-
-    const unit = wc.unit || wc.weightUnit || "";
-    const items = Array.isArray(wc.items) ? wc.items : [];
-    const normItems = items
-      .map((it) => ({
-        _id: String(it._id ?? it.id ?? it.value ?? it.label ?? "").trim(),
-        label: String(it.label ?? it.value ?? "").trim(),
-      }))
-      .filter((x) => x._id && x.label);
-    if (!normItems.length) return null;
-    return { unit, items: normItems };
-  } catch {
-    return null;
-  }
-}
-
-/* ---------- Preview payload helpers (mirror ClientPage) ---------- */
+/* ---------- Preview payload helpers ---------- */
 const toSafeStr = (v) => (v == null ? "" : String(v));
 const toNonNegInt = (v) => {
   const n = parseInt(v, 10);
@@ -95,37 +59,22 @@ const toNonNegInt = (v) => {
 
 const buildPreviewPayload = (r) => {
   const divisionDisplay = computeDivisionDisplay(r?.division);
-
   const weightLabel = toSafeStr(r?.weightLabel).trim();
   const weightUnit = toSafeStr(r?.weightUnit).trim();
-  const rawCategoryLabel =
-    (typeof r?.weightCategory === "object"
-      ? toSafeStr(r?.weightCategory?.label || r?.weightCategory?.name)
-      : toSafeStr(r?.weightCategory)) || "";
 
-  let weightDisplay = weightLabel || rawCategoryLabel || "";
+  let weightDisplay = weightLabel || r?.weightCategory || "—";
   if (weightDisplay && weightUnit && !/\b(kg|lb)s?\b/i.test(weightDisplay)) {
     weightDisplay = `${weightDisplay} ${weightUnit}`;
   }
 
   const videos = Array.isArray(r?.videos)
-    ? r.videos
-        .map((v) =>
-          v && typeof v === "object"
-            ? {
-                title: toSafeStr(v.title || v.videoTitle),
-                notes: toSafeStr(v.notes || v.videoNotes),
-                url: toSafeStr(v.url || v.videoURL || v.urlCanonical),
-                startSeconds: toNonNegInt(v.startSeconds),
-              }
-            : null
-        )
-        .filter(Boolean)
+    ? r.videos.map((v) => ({
+        title: toSafeStr(v.title || v.videoTitle),
+        notes: toSafeStr(v.notes || v.videoNotes),
+        url: toSafeStr(v.url || v.videoURL),
+        startSeconds: toNonNegInt(v.startSeconds),
+      }))
     : [];
-
-  const legacyVideoURL = toSafeStr(r?.video?.videoURL || r?.videoURL);
-  const legacyVideoTitle = toSafeStr(r?.video?.videoTitle || r?.videoTitle);
-  const legacyVideoNotes = toSafeStr(r?.video?.videoNotes || r?.videoNotes);
 
   return {
     _id: toSafeStr(r?._id),
@@ -146,11 +95,7 @@ const buildPreviewPayload = (r) => {
     athleteGrip: toSafeStr(r?.athleteGrip),
 
     divisionDisplay,
-    division: divisionDisplay,
-
-    weightDisplay: weightDisplay || "—",
-    weightLabel,
-    weightUnit,
+    weightDisplay,
 
     opponentAttacks: Array.isArray(r?.opponentAttacks)
       ? r.opponentAttacks.map(toSafeStr)
@@ -169,14 +114,10 @@ const buildPreviewPayload = (r) => {
     myRank: toSafeStr(r?.myRank),
 
     videos,
-    videoURL: legacyVideoURL,
-    videoTitle: legacyVideoTitle,
-    videoNotes: legacyVideoNotes,
   };
 };
 
 /* ---------- local version of the TeamUnlockGate logic ---------- */
-
 const STORAGE_KEY = (teamId) => `ms:teamlock:${teamId}`;
 
 function DashboardTeamScoutingReportsPage() {
@@ -204,7 +145,6 @@ function DashboardTeamScoutingReportsPage() {
   const [divisionMap, setDivisionMap] = useState({});
   const [weightsMap, setWeightsMap] = useState({});
 
-  // If somehow slug is missing, avoid infinite spinner
   if (!slug) {
     return (
       <div className="flex flex-col justify-center items-center h-[60vh] bg-background">
@@ -215,7 +155,7 @@ function DashboardTeamScoutingReportsPage() {
     );
   }
 
-  // ---- INITIAL SECURITY CHECK (copied from TeamUnlockGate) ----
+  // ---- INITIAL SECURITY CHECK (TeamUnlockGate logic) ----
   useEffect(() => {
     let cancelled = false;
 
@@ -234,10 +174,7 @@ function DashboardTeamScoutingReportsPage() {
         );
 
         if (!res.ok) {
-          console.error("Dashboard team /security error:", res.status);
-          if (!cancelled) {
-            setSecurityError(true);
-          }
+          if (!cancelled) setSecurityError(true);
           return;
         }
 
@@ -248,11 +185,8 @@ function DashboardTeamScoutingReportsPage() {
 
         if (cancelled) return;
 
-        if (t?._id) {
-          setTeam(t);
-        }
+        if (t?._id) setTeam(t);
 
-        // No lock => just render reports
         if (!lockEnabled) {
           setHasLock(false);
           setUnlocked(true);
@@ -274,38 +208,25 @@ function DashboardTeamScoutingReportsPage() {
 
         const teamId = t?._id;
         if (!teamId) {
-          toast.error("Unable to verify team lock.");
           setSecurityError(true);
           return;
         }
 
-        // Try cached password first (same as TeamUnlockGate)
+        // Try cached password
         const cached = sessionStorage.getItem(STORAGE_KEY(teamId)) || "";
         if (cached && normalizedSec.kdf.saltB64 && normalizedSec.verifierB64) {
           const ok = await verifyPasswordLocally(cached, normalizedSec).catch(
-            (err) => {
-              console.warn(
-                "Dashboard verifyPasswordLocally (cached) failed:",
-                err
-              );
-              return false;
-            }
+            () => false
           );
           if (ok) {
             setUnlocked(true);
             return;
           }
         }
-      } catch (err) {
-        console.error("Dashboard team lock error:", err);
-        toast.error("Error checking team lock.");
-        if (!cancelled) {
-          setSecurityError(true);
-        }
+      } catch {
+        setSecurityError(true);
       } finally {
-        if (!cancelled) {
-          setChecking(false);
-        }
+        if (!cancelled) setChecking(false);
       }
     })();
 
@@ -314,7 +235,7 @@ function DashboardTeamScoutingReportsPage() {
     };
   }, [slug]);
 
-  // ---- HANDLE PASSWORD SUBMIT (copied from TeamUnlockGate) ----
+  // ---- HANDLE PASSWORD SUBMIT ----
   const handleUnlockSubmit = async (e) => {
     e.preventDefault();
     if (!security) {
@@ -327,10 +248,7 @@ function DashboardTeamScoutingReportsPage() {
 
     try {
       const ok = await verifyPasswordLocally(password, security).catch(
-        (err) => {
-          console.warn("Dashboard verifyPasswordLocally failed:", err);
-          return false;
-        }
+        () => false
       );
 
       if (!ok) {
@@ -342,19 +260,11 @@ function DashboardTeamScoutingReportsPage() {
       if (teamId) {
         try {
           sessionStorage.setItem(STORAGE_KEY(teamId), password);
-        } catch (storageErr) {
-          console.warn(
-            "Unable to cache team password in sessionStorage:",
-            storageErr
-          );
-        }
+        } catch {}
       }
 
       setUnlocked(true);
       setPassword("");
-    } catch (err) {
-      console.error("Unlock error:", err);
-      toast.error(err?.message || "Error verifying password.");
     } finally {
       setSubmittingPassword(false);
     }
@@ -380,7 +290,9 @@ function DashboardTeamScoutingReportsPage() {
           .filter(Boolean)
       )
     );
+
     const fetched = {};
+
     await Promise.all(
       styles.map(async (styleName) => {
         try {
@@ -416,15 +328,18 @@ function DashboardTeamScoutingReportsPage() {
           .filter(Boolean)
       )
     );
+
     if (!divIds.length) return;
 
     const entries = {};
+
     await Promise.all(
       divIds.map(async (id) => {
         const weights = await fetchDivisionWeights(id);
         if (weights) entries[id] = weights;
       })
     );
+
     if (Object.keys(entries).length) {
       setWeightsMap((prev) => ({ ...prev, ...entries }));
     }
@@ -438,9 +353,11 @@ function DashboardTeamScoutingReportsPage() {
       const res = await fetch(
         `/api/teams/${encodeURIComponent(
           slug
-        )}/scouting-reports?ts=${Date.now()}`
+        )}/scouting-reports?ts=${Date.now()}`,
+        { credentials: "include" }
       );
       if (!res.ok) throw new Error("Failed to load scouting reports");
+
       const data = await res.json().catch(() => ({}));
       const list = Array.isArray(data.scoutingReports)
         ? data.scoutingReports
@@ -448,6 +365,7 @@ function DashboardTeamScoutingReportsPage() {
 
       let finalList = list;
 
+      // decrypt ALL encrypted reports
       if (list.length && team) {
         const decryptedList = [];
 
@@ -455,17 +373,10 @@ function DashboardTeamScoutingReportsPage() {
           let next = r;
 
           try {
-            // Full-body encryption
+            // Full-body encrypted report
             if (r.crypto && r.crypto.ciphertextB64) {
               const decrypted = await decryptScoutingBody(team, r).catch(
-                (err) => {
-                  console.warn(
-                    "Dashboard decryptScoutingBody failed for report",
-                    r._id,
-                    err
-                  );
-                  return null;
-                }
+                () => null
               );
 
               if (decrypted) {
@@ -478,33 +389,19 @@ function DashboardTeamScoutingReportsPage() {
                   athleteAttackNotes: decrypted.athleteAttackNotes || "",
                 };
               }
-            } else if (r.athleteAttackNotes) {
-              // Legacy: notes-only encryption
-              const result = await maybeDecryptNotes(
-                team,
-                r.athleteAttackNotes
-              ).catch((err) => {
-                console.warn(
-                  "Dashboard maybeDecryptNotes failed for report",
-                  r._id,
-                  err
-                );
-                return { plaintext: null };
-              });
-
-              const plaintext = result?.plaintext ?? null;
-
-              next = {
-                ...r,
-                athleteAttackNotes: plaintext || r.athleteAttackNotes,
-              };
             }
-          } catch (err) {
-            console.warn(
-              "Dashboard decrypt error (ignored) for report",
-              r._id,
-              err
-            );
+            // else notes-only encryption
+            else if (r.athleteAttackNotes) {
+              const result = await decryptScoutingBody(team, r).catch(
+                () => null
+              );
+
+              if (result) {
+                next = result;
+              }
+            }
+          } catch {
+            // ignore per-report decrypt errors
           }
 
           decryptedList.push(next);
@@ -520,7 +417,7 @@ function DashboardTeamScoutingReportsPage() {
         hydrateWeightsMap(finalList),
       ]);
     } catch (err) {
-      console.error("Error loading scouting reports in dashboard:", err);
+      console.error("Error loading scouting reports:", err);
       toast.error("Error loading scouting reports");
     } finally {
       setLoading(false);
@@ -530,35 +427,35 @@ function DashboardTeamScoutingReportsPage() {
   useEffect(() => {
     if (!slug || !unlocked || !team) return;
     fetchReports();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, unlocked, team]);
 
   // ---- members map ----
   useEffect(() => {
     if (!slug) return;
+
     (async () => {
       try {
         const res = await fetch(
           `/api/teams/${encodeURIComponent(slug)}/members?ts=${Date.now()}`,
-          {
-            cache: "no-store",
-          }
+          { cache: "no-store" }
         );
         const json = await res.json().catch(() => ({}));
         const list = Array.isArray(json.members) ? json.members : [];
+
         const map = new Map();
         list.forEach((m) => {
           const id = String(m.familyMemberId || m.userId || "");
           if (id) map.set(id, m.name || m.username || "Unknown");
         });
+
         setMembersMap(map);
-      } catch (e) {
-        console.error(e);
+      } catch {
         setMembersMap(new Map());
       }
     })();
   }, [slug]);
 
+  // Build table rows
   const tableRows = useMemo(() => {
     const namesArrFor = (r) =>
       Array.isArray(r?.reportFor) && r.reportFor.length
@@ -577,6 +474,7 @@ function DashboardTeamScoutingReportsPage() {
         computeDivisionDisplay(r?.division);
 
       let weightDisplay = "—";
+
       if (r?.weightLabel && String(r.weightLabel).trim()) {
         weightDisplay = ensureWeightDisplay(
           String(r.weightLabel).trim(),
@@ -588,6 +486,7 @@ function DashboardTeamScoutingReportsPage() {
         if (w && Array.isArray(w.items)) {
           const weightId =
             r?.weightCategory || r?.weightItemId || r?.weightClassId || "";
+
           if (weightId) {
             const item = w.items.find(
               (it) =>
@@ -711,6 +610,7 @@ function DashboardTeamScoutingReportsPage() {
       enableSorting: false,
       cell: ({ row }) => {
         const report = row.original;
+
         return (
           <div className="flex justify-center">
             <button
@@ -718,18 +618,12 @@ function DashboardTeamScoutingReportsPage() {
                 let effective = report;
 
                 try {
+                  // full-body encrypted
                   if (report.crypto && report.crypto.ciphertextB64 && team) {
                     const decrypted = await decryptScoutingBody(
                       team,
                       report
-                    ).catch((err) => {
-                      console.warn(
-                        "Dashboard preview decryptScoutingBody failed for report",
-                        report._id,
-                        err
-                      );
-                      return null;
-                    });
+                    ).catch(() => null);
 
                     if (decrypted) {
                       effective = {
@@ -742,32 +636,15 @@ function DashboardTeamScoutingReportsPage() {
                       };
                     }
                   } else if (report.athleteAttackNotes && team) {
-                    const res = await maybeDecryptNotes(
-                      team,
-                      report.athleteAttackNotes
-                    ).catch((err) => {
-                      console.warn(
-                        "Dashboard preview maybeDecryptNotes failed for report",
-                        report._id,
-                        err
-                      );
-                      return { plaintext: null };
-                    });
+                    // legacy notes-only
+                    const res = await decryptScoutingBody(team, report).catch(
+                      () => null
+                    );
 
-                    const plaintext = res?.plaintext ?? null;
-
-                    effective = {
-                      ...report,
-                      athleteAttackNotes:
-                        plaintext || report.athleteAttackNotes,
-                    };
+                    if (res) effective = res;
                   }
-                } catch (err) {
-                  console.warn(
-                    "Dashboard preview decrypt error (ignored) for report",
-                    report._id,
-                    err
-                  );
+                } catch {
+                  // ignore preview decrypt failures
                   effective = report;
                 }
 
@@ -813,8 +690,8 @@ function DashboardTeamScoutingReportsPage() {
     );
   }
 
+  // Locked UI (same UX as TeamUnlockGate)
   if (hasLock && !unlocked) {
-    // Locked UI (same UX as TeamUnlockGate, but inside the dashboard page)
     return (
       <div className="flex flex-col justify-center items-center h-[60vh] bg-background">
         <div className="w-full max-w-sm rounded-2xl border bg-[var(--color-card)] p-6 space-y-4">
@@ -822,8 +699,7 @@ function DashboardTeamScoutingReportsPage() {
             Team Password Required
           </h2>
           <p className="text-sm text-gray-900 dark:text-gray-100">
-            This team has a lock enabled. Enter the team password to view
-            scouting reports.
+            Enter the team password to view scouting reports.
           </p>
 
           <form
@@ -834,15 +710,16 @@ function DashboardTeamScoutingReportsPage() {
               <label className="block text-sm font-medium mb-1 text-gray-900 dark:text-gray-100">
                 Team Password
               </label>
+
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-xl border bg-white dark:bg-neutral-900 text-gray-900 dark:text-gray-100 px-4 py-3"
                 placeholder="Enter team password"
-                autoComplete="off"
                 required
               />
+
               {error && (
                 <p className="mt-2 text-sm text-red-600 dark:text-red-400">
                   {error}
@@ -863,14 +740,14 @@ function DashboardTeamScoutingReportsPage() {
 
           <p className="text-xs text-gray-900 dark:text-gray-100">
             The password is never stored on the server. A key is derived locally
-            and verified against the team&apos;s lock settings.
+            and verified against the team’s lock settings.
           </p>
         </div>
       </div>
     );
   }
 
-  // Unlocked (or no lock) → show reports table
+  // ---------- Unlocked (or no lock) ----------
   return (
     <div>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -879,8 +756,7 @@ function DashboardTeamScoutingReportsPage() {
             Team Scouting Reports
           </h1>
           <p className="text-sm text-gray-900 dark:text-gray-100 mt-1">
-            These are scouting reports created for athletes on this team in your
-            dashboard.
+            These are scouting reports created for athletes on this team.
           </p>
         </div>
       </div>

@@ -1,4 +1,3 @@
-// components/teams/coach-notes/forms/AddCoachMatchModalButton.jsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -11,12 +10,57 @@ import Editor from "@/components/shared/Editor";
 import TechniqueTagInput from "@/components/shared/TechniqueTagInput";
 import ClubAutosuggest from "@/components/shared/ClubAutosuggest";
 
-/*** 🔐 TEAM LOCK HELPERS ***/
-import {
-  teamHasLock,
-  ensureTeamPass,
-  encryptCoachNoteBody,
-} from "@/lib/crypto/teamLock";
+/*** 🔐 UPDATED TEAM LOCK HELPERS ***/
+import { teamHasLock, encryptCoachNoteBody } from "@/lib/crypto/teamLock";
+import { verifyPasswordLocally } from "@/lib/crypto/locker";
+
+/*** mirror TeamUnlockGate storage key ***/
+const STORAGE_KEY = (teamId) => `ms:teamlock:${teamId}`;
+
+/*** helper to get team password (replaces ensureTeamPass) ***/
+async function requireTeamPassword(team) {
+  if (!teamHasLock(team)) return "";
+
+  const sec = team.security;
+  const teamId = team._id;
+
+  if (!teamId || !sec?.kdf?.saltB64 || !sec?.verifierB64) {
+    throw new Error("Team lock configuration invalid.");
+  }
+
+  // try cached password first
+  const cached = sessionStorage.getItem(STORAGE_KEY(teamId)) || "";
+  if (cached) {
+    const ok = await verifyPasswordLocally(cached, {
+      lockEnabled: true,
+      encVersion: sec.encVersion || "v1",
+      kdf: sec.kdf,
+      verifierB64: sec.verifierB64,
+    }).catch(() => false);
+
+    if (ok) return cached;
+  }
+
+  // no cached password → prompt
+  const pwd = prompt("Enter team password to encrypt this coach note:");
+  if (!pwd) throw new Error("Password required.");
+
+  const ok = await verifyPasswordLocally(pwd, {
+    lockEnabled: true,
+    encVersion: sec.encVersion || "v1",
+    kdf: sec.kdf,
+    verifierB64: sec.verifierB64,
+  }).catch(() => false);
+
+  if (!ok) throw new Error("Incorrect team password.");
+
+  // cache password for this session
+  try {
+    sessionStorage.setItem(STORAGE_KEY(teamId), pwd);
+  } catch {}
+
+  return pwd;
+}
 
 /* ---------------- small inputs ---------------- */
 const TextInput = ({ label, value, onChange, placeholder }) => (
@@ -368,8 +412,11 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
     try {
       let pass = "";
       const locked = team && teamHasLock(team);
+
       if (locked) {
-        pass = await ensureTeamPass(team);
+        pass = await requireTeamPassword(team);
+        // unlock TBK on client (locker.js handles it)
+        // ensures team._teamKey is populated
       }
 
       const payload = [];
