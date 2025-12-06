@@ -1,22 +1,107 @@
 // components/teams/TeamUnlockGate.jsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import Spinner from "@/components/shared/Spinner";
 import { Button } from "@/components/ui/button";
 import { Eye, EyeOff } from "lucide-react";
 
-import { verifyPasswordLocally, getCachedTBK } from "@/lib/crypto/locker";
+/* -----------------------------------------------------------
+   Base64 Helpers
+----------------------------------------------------------- */
+function b64ToBytes(b64) {
+  return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+}
+function bytesToB64(bytes) {
+  return btoa(String.fromCharCode(...bytes));
+}
 
+/* -----------------------------------------------------------
+   PBKDF2
+----------------------------------------------------------- */
+async function deriveKey(password, saltB64, iterations) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveKey", "deriveBits"]
+  );
+
+  const saltBytes = b64ToBytes(saltB64);
+
+  // Raw PBKDF2 32 bytes
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: saltBytes,
+      iterations,
+    },
+    keyMaterial,
+    32 * 8
+  );
+
+  return new Uint8Array(bits);
+}
+
+/* -----------------------------------------------------------
+   Verify SHA-256
+----------------------------------------------------------- */
+async function sha256(bytes) {
+  const buf = await crypto.subtle.digest("SHA-256", bytes);
+  return new Uint8Array(buf);
+}
+
+/* -----------------------------------------------------------
+   AES-GCM unwrap TBK
+----------------------------------------------------------- */
+async function unwrapTBKClient(derivedKeyBytes, wrapped) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    derivedKeyBytes,
+    "AES-GCM",
+    false,
+    ["decrypt"]
+  );
+
+  const iv = b64ToBytes(wrapped.ivB64);
+  const tag = b64ToBytes(wrapped.tagB64);
+  const ciphertext = b64ToBytes(wrapped.ciphertextB64);
+
+  const data = await crypto.subtle.decrypt(
+    {
+      name: "AES-GCM",
+      iv,
+      additionalData: undefined,
+      tagLength: 128,
+    },
+    key,
+    concatBuffers(ciphertext, tag)
+  );
+
+  return new Uint8Array(data);
+}
+
+// GCM requires ciphertext || tag in one buffer
+function concatBuffers(ct, tag) {
+  const out = new Uint8Array(ct.length + tag.length);
+  out.set(ct, 0);
+  out.set(tag, ct.length);
+  return out;
+}
+
+/* -----------------------------------------------------------
+   Session Keys
+----------------------------------------------------------- */
 const PW_KEY = (teamId) => `ms:team_pw:${teamId}`;
 const TBK_KEY = (teamId) => `ms:team_tbk:${teamId}`;
 
-export default function TeamUnlockGate({
-  slug,
-  onTeamResolved,
-  onUnlocked,
-  children,
-}) {
+/* ======================================================================
+   COMPONENT
+====================================================================== */
+const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
   const [team, setTeam] = useState(null);
   const [security, setSecurity] = useState(null);
 
@@ -29,9 +114,9 @@ export default function TeamUnlockGate({
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  /* ------------------------------------------------------------------
-     LOAD SECURITY BLOCK FOR TEAM
-  ------------------------------------------------------------------ */
+  /* -----------------------------------------------------------
+     Load security block
+  ----------------------------------------------------------- */
   useEffect(() => {
     if (!slug) return;
 
@@ -49,114 +134,96 @@ export default function TeamUnlockGate({
           return;
         }
 
-        const json = await res.json().catch(() => ({}));
+        const json = await res.json();
         const t = json.team || {};
         const sec = t.security || {};
 
         setTeam(t);
         setSecurity(sec);
-
         if (onTeamResolved) onTeamResolved(t);
 
         if (!sec.lockEnabled) {
           setHasLock(false);
           setUnlocked(true);
-          if (onUnlocked) onUnlocked();
+          onUnlocked && onUnlocked();
           return;
         }
 
         setHasLock(true);
 
-        const teamId = t._id;
-        if (!teamId) {
-          setChecking(false);
-          return;
-        }
-
-        /* ----------------------------------------------------------
-           AUTO UNLOCK (if password/TBK exist)
-        ---------------------------------------------------------- */
-        const cachedPw = sessionStorage.getItem(PW_KEY(teamId));
-        const cachedTbk = sessionStorage.getItem(TBK_KEY(teamId));
-
+        const cachedPw = sessionStorage.getItem(PW_KEY(t._id));
         if (cachedPw) {
-          const ok = await verifyPasswordLocally(cachedPw, sec, teamId);
-
+          const ok = await attemptUnlock(t, sec, cachedPw);
           if (ok) {
-            const tbk = cachedTbk || getCachedTBK(teamId);
-            if (tbk) {
-              try {
-                sessionStorage.setItem(TBK_KEY(teamId), tbk);
-              } catch {}
-              window.__MS_TEAM_TBK__ = tbk;
-
-              setUnlocked(true);
-              if (onUnlocked) onUnlocked();
-              return;
-            }
+            setUnlocked(true);
+            onUnlocked && onUnlocked();
+            return;
           }
         }
       } catch (err) {
-        console.error("UnlockGate error:", err);
+        console.error("Unlock load error:", err);
       } finally {
         setChecking(false);
       }
     })();
   }, [slug]);
 
-  /* ------------------------------------------------------------------
-     HANDLE MANUAL PASSWORD SUBMIT
-  ------------------------------------------------------------------ */
+  /* -----------------------------------------------------------
+     Try unlocking with a given password
+  ----------------------------------------------------------- */
+  const attemptUnlock = async (team, sec, pw) => {
+    try {
+      const { kdf, verifierB64, wrappedTBK } = sec;
+
+      // 1. derive key
+      const derived = await deriveKey(pw, kdf.saltB64, kdf.iterations);
+
+      // 2. verify
+      const hash = await sha256(derived);
+      if (bytesToB64(hash) !== verifierB64) return false;
+
+      // 3. unwrap TBK
+      const tbk = await unwrapTBKClient(derived, wrappedTBK);
+      const tbkB64 = bytesToB64(tbk);
+
+      // 4. store session
+      sessionStorage.setItem(PW_KEY(team._id), pw);
+      sessionStorage.setItem(TBK_KEY(team._id), tbkB64);
+
+      // provide globally for decrypt functions
+      window.__MS_TEAM_TBK__ = tbkB64;
+      return true;
+    } catch (err) {
+      console.error("unlock error:", err);
+      return false;
+    }
+  };
+
+  /* -----------------------------------------------------------
+     Manual submit
+  ----------------------------------------------------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!team || !team._id) return;
-
-    const teamId = team._id;
+    if (!team?._id) return;
 
     setSubmitting(true);
     setError("");
 
-    try {
-      const ok = await verifyPasswordLocally(password, security, teamId);
-      if (!ok) {
-        setError("Incorrect team password.");
-        setSubmitting(false);
-        return;
-      }
+    const ok = await attemptUnlock(team, security, password);
 
-      const tbk = getCachedTBK(teamId);
-      if (!tbk) {
-        setError("Unable to load Team Box Key.");
-        setSubmitting(false);
-        return;
-      }
-
-      /* ----------------------------------------------------------
-         SAVE to session cache
-      ---------------------------------------------------------- */
-      try {
-        sessionStorage.setItem(PW_KEY(teamId), password);
-      } catch {}
-      try {
-        sessionStorage.setItem(TBK_KEY(teamId), tbk);
-      } catch {}
-
-      window.__MS_TEAM_TBK__ = tbk;
-
-      setUnlocked(true);
-      setPassword("");
-      if (onUnlocked) onUnlocked();
-    } catch (err) {
-      console.error(err);
-      setError("Error verifying password.");
-    } finally {
+    if (!ok) {
+      setError("Incorrect team password.");
       setSubmitting(false);
+      return;
     }
+
+    setUnlocked(true);
+    setPassword("");
+    onUnlocked && onUnlocked();
+    setSubmitting(false);
   };
 
-  /* ------------------------------------------------------------------
-     UI STATES
-  ------------------------------------------------------------------ */
+  /* UI States */
   if (checking) {
     return (
       <div className="flex flex-col justify-center items-center h-[60vh]">
@@ -172,9 +239,7 @@ export default function TeamUnlockGate({
     return <>{children}</>;
   }
 
-  /* ------------------------------------------------------------------
-     LOCKED UI
-  ------------------------------------------------------------------ */
+  /* Locked UI */
   return (
     <div className="flex flex-col justify-center items-center h-[60vh]">
       <div className="w-full max-w-sm rounded-2xl border bg-[var(--color-card)] p-6 space-y-4">
@@ -210,11 +275,7 @@ export default function TeamUnlockGate({
             </button>
           </div>
 
-          {error && (
-            <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-              {error}
-            </p>
-          )}
+          {error && <p className="text-sm text-red-500">{error}</p>}
 
           <div className="flex justify-end">
             <Button
@@ -233,4 +294,6 @@ export default function TeamUnlockGate({
       </div>
     </div>
   );
-}
+};
+
+export default TeamUnlockGate;
