@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { headers, cookies } from "next/headers";
 
 import TeamUnlockGate from "@/components/teams/TeamUnlockGate";
-import CoachEventClient from "@/components/teams/coach-notes/CoachEventClient";
+import CoachNotesClient from "@/components/teams/coach-notes/CoachNotesClient";
 
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import { requireTeamRole } from "@/lib/authz/teamRoles";
@@ -82,11 +82,10 @@ const CoachEventPage = async ({ params }) => {
 
   return (
     <TeamUnlockGate slug={slug}>
-      <CoachEventClient
+      <CoachNotesClient
         slug={slug}
-        eventId={eventId}
-        event={eventData.event}
-        role={role}
+        events={[eventData.event]} // single event passed as list
+        isManagerOrCoach={role === "manager" || role === "coach"}
       />
     </TeamUnlockGate>
   );
