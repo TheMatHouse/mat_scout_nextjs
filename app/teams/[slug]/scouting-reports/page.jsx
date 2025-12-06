@@ -1,6 +1,7 @@
 // app/teams/[slug]/scouting-reports/page.jsx
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth-server";
+import TeamUnlockGate from "@/components/teams/TeamUnlockGate";
 import ClientPage from "./ClientPage";
 
 export default async function ScoutingReportsPageWrapper({ params }) {
@@ -12,6 +13,13 @@ export default async function ScoutingReportsPageWrapper({ params }) {
     redirect(`/teams/${slug}`); // back to info tab
   }
 
-  // If logged in, render your client component
-  return <ClientPage />;
+  // ----------------------------------------------------------
+  // ✅ Wrap entire content with TeamUnlockGate so the team
+  //    password entered on dashboard page is reused here.
+  // ----------------------------------------------------------
+  return (
+    <TeamUnlockGate slug={slug}>
+      <ClientPage />
+    </TeamUnlockGate>
+  );
 }

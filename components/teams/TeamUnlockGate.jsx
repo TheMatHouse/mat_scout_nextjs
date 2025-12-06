@@ -53,6 +53,7 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
         setSecurity(sec);
         if (onTeamResolved) onTeamResolved(t);
 
+        // Team has no password
         if (!sec.lockEnabled) {
           setHasLock(false);
           setUnlocked(true);
@@ -62,17 +63,27 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
 
         setHasLock(true);
 
+        // ------------------------------------------------------
+        // 🔥 UPDATED AUTO-UNLOCK LOGIC
+        // Ensures other pages stay unlocked if user already entered password
+        // ------------------------------------------------------
         const cachedPw = sessionStorage.getItem(STORAGE_KEY(t._id));
         const cachedTbk = sessionStorage.getItem(TBK_KEY(t._id));
+        const globalTbk = sessionStorage.getItem("ms:team_tbk");
 
         if (cachedPw && sec.kdf?.saltB64 && sec.verifierB64) {
           const ok = await verifyPasswordLocally(cachedPw, sec);
 
           if (ok) {
-            const tbk = cachedTbk || getCachedTBK();
+            const tbk = cachedTbk || globalTbk || getCachedTBK();
 
             if (tbk) {
-              window.__MS_TEAM_TBK__ = tbk;
+              try {
+                sessionStorage.setItem(TBK_KEY(t._id), tbk);
+                sessionStorage.setItem("ms:team_tbk", tbk);
+                window.__MS_TEAM_TBK__ = tbk;
+              } catch {}
+
               setUnlocked(true);
               if (onUnlocked) onUnlocked();
               return;
@@ -111,8 +122,20 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
         return;
       }
 
-      sessionStorage.setItem(STORAGE_KEY(team._id), password);
-      sessionStorage.setItem(TBK_KEY(team._id), tbk);
+      // ------------------------------------------------------
+      // 🔥 Unified unlock cache
+      // ------------------------------------------------------
+      try {
+        sessionStorage.setItem(STORAGE_KEY(team._id), password);
+      } catch {}
+
+      try {
+        sessionStorage.setItem(TBK_KEY(team._id), tbk);
+      } catch {}
+
+      try {
+        sessionStorage.setItem("ms:team_tbk", tbk);
+      } catch {}
 
       window.__MS_TEAM_TBK__ = tbk;
 
@@ -120,6 +143,7 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
       setPassword("");
       if (onUnlocked) onUnlocked();
     } catch (err) {
+      console.error(err);
       setError("Error verifying password.");
     } finally {
       setSubmitting(false);

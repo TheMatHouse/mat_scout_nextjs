@@ -665,8 +665,14 @@ function TeamScoutingReportsPage() {
     <TeamUnlockGate
       slug={slug}
       team={team}
-      onTeamResolved={(resolved) => setTeam((prev) => prev || resolved)}
-      onUnlocked={() => setIsUnlocked(true)}
+      onTeamResolved={(resolved) => {
+        // Always set the team immediately — no waiting, no conditional
+        setTeam(resolved);
+      }}
+      onUnlocked={() => {
+        // Mark page unlocked BEFORE any fetch or decrypt occurs
+        setIsUnlocked(true);
+      }}
     >
       <div>
         {/* HEADER */}

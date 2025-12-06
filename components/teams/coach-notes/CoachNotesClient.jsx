@@ -1,217 +1,151 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { CalendarDays, MapPin, ChevronRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import Spinner from "@/components/shared/Spinner";
+import TeamUnlockGate from "@/components/teams/TeamUnlockGate";
+import { decryptCoachNoteBody } from "@/lib/crypto/teamLock";
+import { toast } from "react-toastify";
 
-import RemoveCoachEventButton from "@/components/teams/coach-notes/RemoveCoachEventButton";
+import CoachEventCard from "./CoachEventCard";
+import AddCoachEventModalButton from "./forms/AddCoachEventModalButton";
 
-const STORAGE_KEY = (teamId) => `ms:teamlock:${teamId}`;
+/* -------------------------------------------------------------
+   STORAGE KEYS — unified with scouting reports
+------------------------------------------------------------- */
+const STORAGE_KEY = (teamId) => `ms:team_pw:${teamId}`;
+const TBK_KEY = (teamId) => `ms:team_tbk:${teamId}`;
 
-function startOfToday() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-function norm(s) {
-  return (s ?? "").toString().toLowerCase();
-}
+/* -------------------------------------------------------------
+   MAIN CLIENT COMPONENT
+------------------------------------------------------------- */
+const CoachNotesClient = ({ slug, events, isManagerOrCoach }) => {
+  const [team, setTeam] = useState(null);
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [decryptedEvents, setDecryptedEvents] = useState([]);
 
-function CoachNotesClient({ slug, events, teamId }) {
-  const [scope, setScope] = useState("upcoming"); // "upcoming" | "past" | "all"
-  const [q, setQ] = useState("");
-  const [teamPassword, setTeamPassword] = useState("");
-
-  const today = startOfToday();
-
-  // -----------------------------
-  // Load decrypted team password
-  // -----------------------------
+  /* -------------------------------------------------------------
+     FETCH EVENTS AFTER TEAM IS UNLOCKED
+  ------------------------------------------------------------- */
   useEffect(() => {
-    if (!teamId) return;
-    try {
-      const pwd = sessionStorage.getItem(STORAGE_KEY(teamId)) || "";
-      if (pwd) setTeamPassword(pwd);
-    } catch {}
-  }, [teamId]);
+    if (!slug || !isUnlocked || !team) return;
 
-  // -----------------------------
-  // Counts (upcoming / past / all)
-  // -----------------------------
-  const counts = useMemo(() => {
-    return events.reduce(
-      (acc, e) => {
-        const dt = e?.startDate ? new Date(e.startDate) : null;
-        const isPast = dt ? dt < today : false;
-        acc.all += 1;
-        if (isPast) acc.past += 1;
-        else acc.upcoming += 1;
-        return acc;
-      },
-      { upcoming: 0, past: 0, all: 0 }
+    const run = async () => {
+      setLoading(true);
+
+      try {
+        const res = await fetch(
+          `/api/teams/${slug}/coach-notes/events?ts=${Date.now()}`,
+          { cache: "no-store" }
+        );
+
+        if (!res.ok) throw new Error("Failed to load events");
+
+        const json = await res.json().catch(() => ({ events: [] }));
+        const list = Array.isArray(json.events) ? json.events : [];
+
+        const out = [];
+        let decryptErrors = 0;
+
+        for (const ev of list) {
+          // ---- No crypto? Keep plaintext event ----
+          if (!ev?.notes || !ev.notes.crypto?.ciphertextB64) {
+            out.push(ev);
+            continue;
+          }
+
+          try {
+            const decrypted = await decryptCoachNoteBody(team, ev.notes);
+
+            out.push({
+              ...ev,
+              notes: decrypted,
+            });
+          } catch (err) {
+            decryptErrors++;
+            out.push({
+              ...ev,
+              notes: { body: "[unable to decrypt]" },
+            });
+          }
+        }
+
+        if (decryptErrors > 0) {
+          toast.error(
+            `Unable to decrypt ${decryptErrors} event note${
+              decryptErrors === 1 ? "" : "s"
+            }.`
+          );
+        }
+
+        setDecryptedEvents(out);
+      } catch (err) {
+        console.error("COACH NOTES FETCH ERROR:", err);
+        toast.error("Failed to load coach notes.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    run();
+  }, [slug, isUnlocked, team]);
+
+  /* -------------------------------------------------------------
+     LOADING STATE (after unlock)
+  ------------------------------------------------------------- */
+  if (loading && isUnlocked) {
+    return (
+      <TeamUnlockGate
+        slug={slug}
+        onTeamResolved={(resolved) => setTeam((prev) => prev || resolved)}
+        onUnlocked={() => setIsUnlocked(true)}
+      >
+        <div className="flex flex-col justify-center items-center h-[60vh]">
+          <Spinner size={64} />
+          <p className="text-gray-300 mt-3 text-lg">Loading coach notes…</p>
+        </div>
+      </TeamUnlockGate>
     );
-  }, [events, today]);
+  }
 
-  // -----------------------------
-  // Filter & sort
-  // -----------------------------
-  const filtered = useMemo(() => {
-    let list = events.filter((e) => {
-      const dt = e?.startDate ? new Date(e.startDate) : null;
-      const isPast = dt ? dt < today : false;
-
-      if (scope === "upcoming" && isPast) return false;
-      if (scope === "past" && !isPast) return false;
-
-      if (!q) return true;
-      const bag = `${norm(e?.name)} ${norm(e?.location)}`;
-      return bag.includes(norm(q));
-    });
-
-    list.sort((a, b) => {
-      const da = a?.startDate ? new Date(a.startDate).getTime() : 0;
-      const db = b?.startDate ? new Date(b.startDate).getTime() : 0;
-      if (scope === "past") return db - da;
-      return da - db;
-    });
-
-    return list;
-  }, [events, scope, q, today]);
-
+  /* -------------------------------------------------------------
+     MAIN RENDER
+  ------------------------------------------------------------- */
   return (
-    <section className="space-y-4">
-      {/* Tabs + Search */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        {/* Tabs */}
-        <div className="inline-flex overflow-hidden rounded-xl border border-gray-300 dark:border-gray-700">
-          {[
-            { key: "upcoming", label: "Upcoming", count: counts.upcoming },
-            { key: "past", label: "Past", count: counts.past },
-            { key: "all", label: "All", count: counts.all },
-          ].map((t, i) => {
-            const active = scope === t.key;
-            return (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => setScope(t.key)}
-                className={[
-                  "px-3 sm:px-4 py-2 text-sm font-medium transition-colors",
-                  active
-                    ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900"
-                    : "bg-white text-gray-900 hover:bg-gray-100 dark:bg-neutral-900 dark:text-gray-100 dark:hover:bg-white/10",
-                  i !== 2
-                    ? "border-r border-gray-300 dark:border-gray-700"
-                    : "",
-                ].join(" ")}
-              >
-                <span>{t.label}</span>
-                <span className="ml-2 inline-block rounded-full px-2 py-0.5 text-[11px] bg-gray-200/70 dark:bg-white/10">
-                  {t.count}
-                </span>
-              </button>
-            );
-          })}
+    <TeamUnlockGate
+      slug={slug}
+      onTeamResolved={(resolved) => setTeam((prev) => prev || resolved)}
+      onUnlocked={() => setIsUnlocked(true)}
+    >
+      <div className="space-y-8">
+        {/* HEADER */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+            Events
+          </h2>
+
+          {isManagerOrCoach ? <AddCoachEventModalButton slug={slug} /> : null}
         </div>
 
-        {/* Search */}
-        <div className="flex items-stretch gap-2">
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search by name or location…"
-            className="w-full sm:w-80 px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent text-gray-900 dark:text-gray-100 placeholder:text-gray-900/60 dark:placeholder:text-gray-100/60"
-          />
-          <button
-            type="button"
-            onClick={() => setQ("")}
-            className="px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 text-sm text-gray-900 dark:text-gray-100 hover:bg-black/5 dark:hover:bg-white/10"
-          >
-            Clear
-          </button>
-        </div>
+        {/* EVENTS LIST */}
+        {decryptedEvents.length === 0 ? (
+          <div className="text-gray-700 dark:text-gray-200">
+            No events created yet.
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {decryptedEvents.map((ev) => (
+              <CoachEventCard
+                key={ev._id}
+                event={ev}
+                slug={slug}
+              />
+            ))}
+          </div>
+        )}
       </div>
-
-      {/* Events */}
-      {filtered.length ? (
-        <ul className="grid gap-4">
-          {filtered.map((evt) => {
-            const dateLabel = evt.startDate
-              ? new Date(evt.startDate).toLocaleDateString()
-              : "";
-            const locationLabel = evt.location || "";
-
-            return (
-              <li key={evt._id}>
-                <div className="group relative rounded-2xl border border-gray-300/60 dark:border-gray-700/70 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow">
-                  <div className="p-4 sm:p-5 flex items-center justify-between gap-4">
-                    {/* Left */}
-                    <div className="min-w-0">
-                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
-                        {evt.name}
-                      </h3>
-
-                      <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
-                        {dateLabel ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-300/70 dark:border-gray-700/70 px-2.5 py-1 text-gray-900 dark:text-gray-100">
-                            <CalendarDays className="h-4 w-4" />
-                            {dateLabel}
-                          </span>
-                        ) : null}
-
-                        {locationLabel ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-300/70 dark:border-gray-700/70 px-2.5 py-1 text-gray-900 dark:text-gray-100">
-                            <MapPin className="h-4 w-4" />
-                            {locationLabel}
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    {/* Right Actions */}
-                    <div className="shrink-0 flex items-center gap-2">
-                      <Link
-                        href={`/teams/${slug}/coach-notes/${evt._id}${
-                          teamPassword
-                            ? `?pwd=${encodeURIComponent(teamPassword)}`
-                            : ""
-                        }`}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm font-medium text-gray-900 dark:text-gray-100 hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 dark:focus:ring-gray-600"
-                      >
-                        Open
-                        <ChevronRight className="h-4 w-4" />
-                      </Link>
-
-                      <RemoveCoachEventButton
-                        slug={slug}
-                        eventId={evt._id}
-                        cascadeChoice="ask"
-                        className="rounded-xl"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="pointer-events-none absolute inset-0 rounded-2xl ring-0 ring-gray-400/0 group-hover:ring-2 group-hover:ring-gray-300/60 dark:group-hover:ring-white/10 transition" />
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      ) : (
-        <div className="rounded-2xl border border-dashed border-gray-300/70 dark:border-gray-700/70 p-8 text-center">
-          <p className="text-sm text-gray-900 dark:text-gray-100/80">
-            {q
-              ? "No events match your search."
-              : scope === "past"
-              ? "No past events."
-              : scope === "upcoming"
-              ? "No upcoming events."
-              : "No events yet. Click “Add Event” to create your first."}
-          </p>
-        </div>
-      )}
-    </section>
+    </TeamUnlockGate>
   );
-}
+};
 
 export default CoachNotesClient;

@@ -59,10 +59,10 @@ const getEvents = async (slug) => {
 /* -------------------- page (server) -------------------- */
 
 const CoachNotesPage = async ({ params }) => {
-  const { slug } = await params; // Next.js 15 awaited-params pattern
+  const { slug } = await params;
   if (!slug) return notFound();
 
-  // ----- figure out role so we can hide/show Add button -----
+  // ----- determine user role -----
   const user = await getCurrentUserFromCookies().catch(() => null);
 
   let isManagerOrCoach = false;
@@ -82,7 +82,11 @@ const CoachNotesPage = async ({ params }) => {
   const { events } = await getEvents(slug);
 
   return (
-    <TeamUnlockGate slug={slug}>
+    <TeamUnlockGate
+      slug={slug}
+      onTeamResolved={() => {}}
+      onUnlocked={() => {}}
+    >
       <div className="mx-auto max-w-6xl px-4 py-8 space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between gap-3">
