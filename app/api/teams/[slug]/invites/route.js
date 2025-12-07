@@ -23,6 +23,7 @@ function escapeHtml(s = "") {
     .replace(/'/g, "&#39;");
 }
 
+<<<<<<< fix/team-invites
 function sanitizeNoteHtml(input = "") {
   if (!input) return "";
   const looksLikeHtml = /<[^>]+>/.test(input);
@@ -31,10 +32,59 @@ function sanitizeNoteHtml(input = "") {
       allowedTags: ["b", "strong", "i", "em", "u", "br", "p", "ul", "ol", "li"],
       allowedAttributes: {},
     }).trim();
+=======
+// GET: list invites (defaults to pending only)
+export async function GET(req, { params }) {
+  try {
+    await connectDB();
+    const actor = await getCurrentUser();
+    if (!actor)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { slug } = await params;
+    const team = await Team.findOne({ teamSlug: slug }).select(
+      "_id user userId teamName"
+    );
+    if (!team)
+      return NextResponse.json({ error: "Team not found" }, { status: 404 });
+
+    // staff check
+    const ownerId = String(team.user || team.userId || "");
+    const isOwner = ownerId && ownerId === String(actor._id);
+    const link = await TeamMember.findOne({
+      teamId: team._id,
+      userId: actor._id,
+    })
+      .select("role")
+      .lean();
+    if (!(isOwner || isStaffRole(link?.role))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const status = (searchParams.get("status") || "pending").toLowerCase();
+    const allowed = ["pending", "accepted", "revoked", "expired"];
+    const query = {
+      teamId: team._id, // ✅ FIXED
+      ...(allowed.includes(status) ? { status } : { status: "pending" }),
+    };
+
+    const invites = await TeamInvitation.find(query)
+      .sort({ createdAt: -1 })
+      .select(
+        "_id email status createdAt acceptedAt expiresAt invitedBy acceptedMember"
+      );
+
+    return NextResponse.json({ invites });
+  } catch (err) {
+    console.error("GET /invites error:", err);
+    return NextResponse.json({ invites: [] }, { status: 200 });
+>>>>>>> local
   }
   return escapeHtml(input).replace(/\r?\n/g, "<br/>");
 }
 
+<<<<<<< fix/team-invites
 const canManage = (team, membership, meId) =>
   String(team.user) === String(meId) ||
   membership?.role === "manager" ||
@@ -69,6 +119,87 @@ export async function POST(req, { params }) {
   // invitee names (child names if minor, optional for adults)
   const firstName = norm(body.firstName ?? body.inviteeFirstName ?? "");
   const lastName = norm(body.lastName ?? body.inviteeLastName ?? "");
+=======
+/**
+ * POST: create (or re-create) an invite
+ */
+export async function POST(req, { params }) {
+  try {
+    await connectDB();
+    const actor = await getCurrentUser();
+    if (!actor)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { slug } = await params;
+    const { email, expiresInDays = 14 } = await req.json();
+
+    if (!email || typeof email !== "string") {
+      return NextResponse.json({ error: "Email is required" }, { status: 400 });
+    }
+    const normEmail = email.trim().toLowerCase();
+
+    const team = await Team.findOne({ teamSlug: slug }).select(
+      "_id user userId teamName"
+    );
+    if (!team)
+      return NextResponse.json({ error: "Team not found" }, { status: 404 });
+
+    // staff check
+    const ownerId = String(team.user || team.userId || "");
+    const isOwner = ownerId && ownerId === String(actor._id);
+    const link = await TeamMember.findOne({
+      teamId: team._id,
+      userId: actor._id,
+    })
+      .select("role")
+      .lean();
+    if (!(isOwner || isStaffRole(link?.role))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // If already a member, reject re-invite.
+    const existingMember = await TeamMember.findOne({
+      teamId: team._id,
+      role: { $ne: "pending" },
+    })
+      .populate({ path: "userId", select: "email" })
+      .lean();
+
+    if (existingMember?.userId?.email?.toLowerCase() === normEmail) {
+      return NextResponse.json(
+        { error: "User is already a team member" },
+        { status: 409 }
+      );
+    }
+
+    const now = new Date();
+    const pending = await TeamInvitation.findOne({
+      teamId: team._id, // ✅ FIXED
+      email: normEmail,
+      status: "pending",
+      $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gt: now } }],
+    });
+
+    if (pending) {
+      return NextResponse.json(
+        { invite: pending, reused: true },
+        { status: 200 }
+      );
+    }
+
+    const expiresAt = new Date(
+      now.getTime() + expiresInDays * 24 * 60 * 60 * 1000
+    );
+
+    const newInvite = await TeamInvitation.create({
+      teamId: team._id, // ✅ FIXED — REQUIRED BY SCHEMA
+      email: normEmail,
+      status: "pending",
+      invitedBy: actor._id,
+      createdAt: now,
+      expiresAt,
+    });
+>>>>>>> local
 
   // email (for minors this is the parent/guardian email)
   const email = lower(body.email ?? body.parentEmail ?? "");
