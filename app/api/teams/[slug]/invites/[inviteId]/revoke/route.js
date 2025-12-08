@@ -17,25 +17,39 @@ export async function POST(req, { params }) {
 
     const { slug, inviteId } = await params;
 
-    const team = await Team.findOne({ slug }).select("_id");
+    // ✅ FIX: correct lookup field is teamSlug, not slug
+    const team = await Team.findOne({ teamSlug: slug }).select("_id user");
     if (!team)
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
 
-    // Ensure staff
+    // ---------------------------------------------
+    // Staff check (owner / manager / coach)
+    // ---------------------------------------------
     const membership = await TeamMember.findOne({
-      team: team._id,
-      user: actor._id,
+      teamId: team._id, // ✅ FIXED
+      userId: actor._id, // ✅ FIXED
     }).select("role");
-    const isStaff = ["owner", "manager", "coach"].includes(
-      (membership?.role || "").toLowerCase()
-    );
+
+    const isOwner = String(team.user) === String(actor._id);
+    const isStaff =
+      isOwner ||
+      ["manager", "coach"].includes((membership?.role || "").toLowerCase());
+
     if (!isStaff)
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
 
+    // ---------------------------------------------
+    // Find the invite using BOTH possible fields:
+    //  teamId (new) OR team (old)
+    // ---------------------------------------------
     const invite = await TeamInvitation.findOne({
       _id: inviteId,
-      team: team._id,
+      $or: [
+        { teamId: team._id }, // NEW correct field
+        { team: team._id }, // OLD legacy field
+      ],
     });
+
     if (!invite)
       return NextResponse.json(
         { message: "Invite not found" },
@@ -53,6 +67,9 @@ export async function POST(req, { params }) {
       return NextResponse.json({ message: "Invitation already revoked." });
     }
 
+    // ---------------------------------------------
+    // Revoke the invite
+    // ---------------------------------------------
     invite.status = "revoked";
     invite.revokedAt = new Date();
     invite.revokedBy = actor._id;
