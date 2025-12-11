@@ -18,23 +18,28 @@ function isStaffRole(role) {
 export async function GET(req, { params }) {
   try {
     await connectDB();
+
     const actor = await getCurrentUser();
     if (!actor)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { slug } = await params;
+
+    // ✅ FIX: Correct team lookup using teamSlug
     const team = await Team.findOne({ teamSlug: slug }).select(
       "_id user userId teamName"
     );
-    if (!team)
+    if (!team) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
+    }
 
     // staff / owner check
     const ownerId = String(team.user || team.userId || "");
     const isOwner = ownerId === String(actor._id);
+
     const membership = await TeamMember.findOne({
-      teamId: team._id,
-      userId: actor._id,
+      teamId: team._id, // ✅ FIXED field
+      userId: actor._id, // ✅ FIXED field
     })
       .select("role")
       .lean();
@@ -43,13 +48,13 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // filter by ?status=
     const { searchParams } = new URL(req.url);
     const status = (searchParams.get("status") || "pending").toLowerCase();
     const allowed = ["pending", "accepted", "revoked", "expired"];
 
+    // ALWAYS use teamId (correct field)
     const query = {
-      teamId: team._id, // ✅ CORRECT FIELD
+      teamId: team._id,
       ...(allowed.includes(status) ? { status } : { status: "pending" }),
     };
 
@@ -72,6 +77,7 @@ export async function GET(req, { params }) {
 export async function POST(req, { params }) {
   try {
     await connectDB();
+
     const actor = await getCurrentUser();
     if (!actor)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -85,6 +91,7 @@ export async function POST(req, { params }) {
 
     const normEmail = email.trim().toLowerCase();
 
+    // ✅ FIX: Correct lookup
     const team = await Team.findOne({ teamSlug: slug }).select(
       "_id user userId teamName"
     );
@@ -94,9 +101,10 @@ export async function POST(req, { params }) {
     // staff / owner check
     const ownerId = String(team.user || team.userId || "");
     const isOwner = ownerId === String(actor._id);
+
     const membership = await TeamMember.findOne({
-      teamId: team._id,
-      userId: actor._id,
+      teamId: team._id, // FIXED
+      userId: actor._id, // FIXED
     })
       .select("role")
       .lean();
@@ -105,7 +113,7 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Reject if already a confirmed team member
+    // Check for existing member
     const existingMember = await TeamMember.findOne({
       teamId: team._id,
       role: { $ne: "pending" },
@@ -120,8 +128,9 @@ export async function POST(req, { params }) {
       );
     }
 
-    // Idempotent handling — reuse unexpired invite
     const now = new Date();
+
+    // Reuse pending invite if still valid
     const pending = await TeamInvitation.findOne({
       teamId: team._id,
       email: normEmail,
@@ -136,13 +145,12 @@ export async function POST(req, { params }) {
       );
     }
 
-    // Create new invite
     const expiresAt = new Date(
       now.getTime() + expiresInDays * 24 * 60 * 60 * 1000
     );
 
     const newInvite = await TeamInvitation.create({
-      teamId: team._id,
+      teamId: team._id, // FIXED
       email: normEmail,
       status: "pending",
       invitedBy: actor._id,

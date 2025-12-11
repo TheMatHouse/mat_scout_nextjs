@@ -23,8 +23,6 @@ function escapeHtml(s = "") {
     .replace(/'/g, "&#39;");
 }
 
-// If the note contains HTML, sanitize with a tight whitelist.
-// If it's plain text, escape and convert newlines to <br/>.
 function sanitizeNoteHtml(input = "") {
   if (!input) return "";
   const looksLikeHtml = /<[^>]+>/.test(input);
@@ -50,7 +48,6 @@ function sanitizeNoteHtml(input = "") {
   return escapeHtml(input).replace(/\r?\n/g, "<br/>");
 }
 
-// Format a nice, client-friendly date (e.g., August 15, 2025)
 function formatDate(d) {
   try {
     return new Date(d).toLocaleDateString("en-US", {
@@ -81,10 +78,10 @@ export async function POST(_req, { params }) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    // Include team.user so we can recognize the owner
     const team = await Team.findOne({ teamSlug: slug }).select(
       "_id teamName teamSlug user"
     );
+
     if (!team) {
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
     }
@@ -94,7 +91,6 @@ export async function POST(_req, { params }) {
       userId: me._id,
     }).select("role");
 
-    // ✅ Permission: owner OR manager OR coach
     const isOwner = String(team.user) === String(me._id);
     const canManage =
       isOwner || ["manager", "coach"].includes(myMembership?.role);
@@ -103,10 +99,15 @@ export async function POST(_req, { params }) {
       return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
-    // Active, unrevoked, unaccepted, unexpired invite
+    // ---------------------------------------------
+    // FIX: Look for `teamId` OR old `team` field
+    // ---------------------------------------------
     const invite = await TeamInvitation.findOne({
       _id: inviteId,
-      teamId: team._id,
+      $or: [
+        { teamId: team._id }, // NEW correct field
+        { team: team._id }, // OLD field (backward compatibility)
+      ],
       revokedAt: { $exists: false },
       acceptedAt: { $exists: false },
       expiresAt: { $gt: new Date() },
@@ -123,7 +124,6 @@ export async function POST(_req, { params }) {
       process.env.NEXT_PUBLIC_DOMAIN
     }/accept-invite?token=${encodeURIComponent(invite.token)}`;
 
-    // Resolve inviter's display name
     let inviterName = "A team manager";
     if (invite.invitedBy && isValidObjectId(invite.invitedBy)) {
       const inviter = await User.findById(invite.invitedBy)
@@ -140,14 +140,9 @@ export async function POST(_req, { params }) {
       }
     }
 
-    // HTML-safe pieces
     const teamName = escapeHtml(team.teamName);
-    const inviteeFirst = escapeHtml(
-      invite.inviteeFirstName || invite.firstName || ""
-    );
-    const inviteeLast = escapeHtml(
-      invite.inviteeLastName || invite.lastName || ""
-    );
+    const inviteeFirst = escapeHtml(invite.inviteeFirstName || "");
+    const inviteeLast = escapeHtml(inviteeLastName || "");
     const parentSafe = escapeHtml(invite.parentName || "");
     const targetEmail =
       (invite.isMinor ? invite.parentEmail : invite.email) || "";
@@ -160,68 +155,45 @@ export async function POST(_req, { params }) {
          </blockquote>`
       : "";
 
-    // CTA + fallback
     const ctaBtn = `
       <a href="${acceptUrl}"
          style="display:inline-block;padding:12px 18px;background:#1a73e8;color:#ffffff;
                 border-radius:8px;text-decoration:none;font-weight:700">
         Join Team
       </a>`;
+
     const ctaFallback = `
       <p style="margin-top:10px;font-size:12px;color:#6b7280">
         Or paste this link into your browser:<br/>
         <span style="word-break:break-all">${acceptUrl}</span>
       </p>`;
 
-    // Body (adult vs parent/guardian)
     const body = invite.isMinor
       ? `
         <p>Hi ${parentSafe || "there"},</p>
         <p><strong>${inviterName}</strong> just invited your athlete
-           <strong>${inviteeFirst} ${inviteeLast}</strong> to join their team on <strong>MatScout</strong>,
-           a platform built for grapplers to share scouting reports, track performance, and stay
-           connected with coaches and teammates.</p>
+           <strong>${inviteeFirst} ${inviteeLast}</strong> to join their team on <strong>MatScout</strong>.</p>
 
-        <p>As part of <strong>${teamName}</strong>, they’ll be able to:</p>
-        <ul>
-          <li>View and contribute to scouting reports</li>
-          <li>Receive team updates and messages</li>
-          <li>Track performance and match insights</li>
-          <li>Stay in sync with their coach and teammates</li>
-        </ul>
-
-        <p>Click below to join the team and set up their profile:</p>
+        <p>Click below to join the team:</p>
         <p>${ctaBtn}</p>
         ${ctaFallback}
         ${coachNote}
 
         <p style="margin-top:14px;font-size:12px;color:#6b7280">
           This invitation link expires on <strong>${expiresOn}</strong>.
-        </p>
-      `
+        </p>`
       : `
         <p>Hi ${inviteeFirst || "there"},</p>
-        <p><strong>${inviterName}</strong> just invited you to join their team on <strong>MatScout</strong>,
-           a platform built for grapplers to share scouting reports, track performance, and stay
-           connected with coaches and teammates.</p>
+        <p><strong>${inviterName}</strong> invited you to join their team on <strong>MatScout</strong>.</p>
 
-        <p>As part of <strong>${teamName}</strong>, you’ll be able to:</p>
-        <ul>
-          <li>View and contribute to scouting reports</li>
-          <li>Receive team updates and messages</li>
-          <li>Track your progress and match insights</li>
-          <li>Stay in sync with your coach and teammates</li>
-        </ul>
-
-        <p>Click below to join the team and set up your profile:</p>
+        <p>Click below to join the team:</p>
         <p>${ctaBtn}</p>
         ${ctaFallback}
         ${coachNote}
 
         <p style="margin-top:14px;font-size:12px;color:#6b7280">
           This invitation link expires on <strong>${expiresOn}</strong>.
-        </p>
-      `;
+        </p>`;
 
     const html = baseEmailTemplate({
       title: `Invitation to join ${teamName}`,
