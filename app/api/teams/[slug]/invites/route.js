@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUser } from "@/lib/auth-server";
+
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
 import TeamInvitation from "@/models/teamInvitationModel";
@@ -11,43 +12,52 @@ function isStaffRole(role) {
   return ["owner", "manager", "coach"].includes((role || "").toLowerCase());
 }
 
-// GET: list invites (defaults to pending only)
+/* ============================================================
+   GET — list invites (pending by default)
+============================================================ */
 export async function GET(req, { params }) {
   try {
     await connectDB();
+
     const actor = await getCurrentUser();
     if (!actor)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { slug } = await params;
+
+    // ✅ FIX: Correct team lookup using teamSlug
     const team = await Team.findOne({ teamSlug: slug }).select(
       "_id user userId teamName"
     );
-    if (!team)
+    if (!team) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
+    }
 
-    // staff check
+    // staff / owner check
     const ownerId = String(team.user || team.userId || "");
-    const isOwner = ownerId && ownerId === String(actor._id);
-    const link = await TeamMember.findOne({
-      teamId: team._id,
-      userId: actor._id,
+    const isOwner = ownerId === String(actor._id);
+
+    const membership = await TeamMember.findOne({
+      teamId: team._id, // ✅ FIXED field
+      userId: actor._id, // ✅ FIXED field
     })
       .select("role")
       .lean();
-    if (!(isOwner || isStaffRole(link?.role))) {
+
+    if (!(isOwner || isStaffRole(membership?.role))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);
     const status = (searchParams.get("status") || "pending").toLowerCase();
     const allowed = ["pending", "accepted", "revoked", "expired"];
+
+    // ALWAYS use teamId (correct field)
     const query = {
-      team: team._id,
+      teamId: team._id,
       ...(allowed.includes(status) ? { status } : { status: "pending" }),
     };
 
-    // IMPORTANT: no hidden date cutoffs
     const invites = await TeamInvitation.find(query)
       .sort({ createdAt: -1 })
       .select(
@@ -61,16 +71,13 @@ export async function GET(req, { params }) {
   }
 }
 
-/**
- * POST: create (or re-create) an invite
- * Behavior:
- * - If the user is already an active member ⇒ 409 (don’t invite).
- * - If an existing PENDING invite exists for same email & not expired ⇒ return it (idempotent).
- * - If the invite is EXPIRED or REVOKED ⇒ create a NEW pending invite with a new expiry.
- */
+/* ============================================================
+   POST — create (or reuse) an invite
+============================================================ */
 export async function POST(req, { params }) {
   try {
     await connectDB();
+
     const actor = await getCurrentUser();
     if (!actor)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -81,28 +88,32 @@ export async function POST(req, { params }) {
     if (!email || typeof email !== "string") {
       return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
+
     const normEmail = email.trim().toLowerCase();
 
+    // ✅ FIX: Correct lookup
     const team = await Team.findOne({ teamSlug: slug }).select(
       "_id user userId teamName"
     );
     if (!team)
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
 
-    // staff check
+    // staff / owner check
     const ownerId = String(team.user || team.userId || "");
-    const isOwner = ownerId && ownerId === String(actor._id);
-    const link = await TeamMember.findOne({
-      teamId: team._id,
-      userId: actor._id,
+    const isOwner = ownerId === String(actor._id);
+
+    const membership = await TeamMember.findOne({
+      teamId: team._id, // FIXED
+      userId: actor._id, // FIXED
     })
       .select("role")
       .lean();
-    if (!(isOwner || isStaffRole(link?.role))) {
+
+    if (!(isOwner || isStaffRole(membership?.role))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // If already a member (non-pending), don’t allow a new invite.
+    // Check for existing member
     const existingMember = await TeamMember.findOne({
       teamId: team._id,
       role: { $ne: "pending" },
@@ -117,29 +128,29 @@ export async function POST(req, { params }) {
       );
     }
 
-    // Check for an existing pending invite (not expired)
     const now = new Date();
+
+    // Reuse pending invite if still valid
     const pending = await TeamInvitation.findOne({
-      team: team._id,
+      teamId: team._id,
       email: normEmail,
       status: "pending",
       $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gt: now } }],
     });
 
     if (pending) {
-      // Idempotent: return existing pending invite instead of creating duplicates
       return NextResponse.json(
         { invite: pending, reused: true },
         { status: 200 }
       );
     }
 
-    // Create new pending invite. (Old expired/revoked invites remain as history.)
     const expiresAt = new Date(
       now.getTime() + expiresInDays * 24 * 60 * 60 * 1000
     );
+
     const newInvite = await TeamInvitation.create({
-      team: team._id,
+      teamId: team._id, // FIXED
       email: normEmail,
       status: "pending",
       invitedBy: actor._id,
