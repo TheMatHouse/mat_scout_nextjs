@@ -5,26 +5,27 @@ import Spinner from "@/components/shared/Spinner";
 import { Button } from "@/components/ui/button";
 import { Eye, EyeOff } from "lucide-react";
 
-import { verifyPasswordLocally, getCachedTBK } from "@/lib/crypto/locker";
+/**
+ * Option A–compatible TeamUnlockGate
+ *
+ * - NO local password verification
+ * - Uses slug-based session key
+ * - Dashboard + team pages share unlock state
+ */
 
-const PW_KEY = (teamId) => `ms:team_pw:${teamId}`;
-const TBK_KEY = (teamId) => `ms:team_tbk:${teamId}`;
+const PW_KEY = (slug) => `ms:teamlock:${slug}`;
 
-const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
-  const [team, setTeam] = useState(null);
-  const [security, setSecurity] = useState(null);
-
+const TeamUnlockGate = ({ slug, children }) => {
   const [checking, setChecking] = useState(true);
-  const [unlocked, setUnlocked] = useState(false);
   const [hasLock, setHasLock] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
 
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   /* -----------------------------------------------------------
-     Load security block
+     Load team security & auto-unlock if session password exists
   ----------------------------------------------------------- */
   useEffect(() => {
     if (!slug) return;
@@ -44,35 +45,24 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
         }
 
         const json = await res.json();
-        const t = json.team || {};
-        const sec = t.security || {};
-
-        setTeam(t);
-        setSecurity(sec);
-
-        onTeamResolved && onTeamResolved(t);
+        const sec = json?.team?.security || {};
 
         if (!sec.lockEnabled) {
           setHasLock(false);
           setUnlocked(true);
-          onUnlocked && onUnlocked();
           return;
         }
 
         setHasLock(true);
 
-        // Auto-unlock using cached password
-        const cachedPw = sessionStorage.getItem(PW_KEY(t._id));
+        // Option A: trust session password if present
+        const cachedPw = sessionStorage.getItem(PW_KEY(slug));
         if (cachedPw) {
-          const ok = await verifyPasswordLocally(cachedPw, sec, t._id);
-          if (ok) {
-            setUnlocked(true);
-            onUnlocked && onUnlocked();
-            return;
-          }
+          setUnlocked(true);
+          return;
         }
       } catch (err) {
-        console.error("Unlock load error:", err);
+        console.error("TeamUnlockGate error:", err);
       } finally {
         setChecking(false);
       }
@@ -80,29 +70,22 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
   }, [slug]);
 
   /* -----------------------------------------------------------
-     Manual submit
+     Manual submit (store password only)
   ----------------------------------------------------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!team?._id) return;
+    if (!password) return;
 
     setSubmitting(true);
-    setError("");
 
-    const ok = await verifyPasswordLocally(password, security, team._id);
-
-    if (!ok) {
-      setError("Incorrect team password.");
+    try {
+      // Option A: do NOT verify locally
+      sessionStorage.setItem(PW_KEY(slug), password);
+      setUnlocked(true);
+      setPassword("");
+    } finally {
       setSubmitting(false);
-      return;
     }
-
-    sessionStorage.setItem(PW_KEY(team._id), password);
-
-    setUnlocked(true);
-    setPassword("");
-    onUnlocked && onUnlocked();
-    setSubmitting(false);
   };
 
   /* -----------------------------------------------------------
@@ -157,8 +140,6 @@ const TeamUnlockGate = ({ slug, onTeamResolved, onUnlocked, children }) => {
               )}
             </button>
           </div>
-
-          {error && <p className="text-sm text-red-500">{error}</p>}
 
           <div className="flex justify-end">
             <Button
