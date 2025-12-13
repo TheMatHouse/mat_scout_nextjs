@@ -1,4 +1,3 @@
-// components/dashboard/scouting/TeamScoutingReportsTab.jsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -6,13 +5,10 @@ import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 
 import { Shield, Lock, LockOpen } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import Spinner from "@/components/shared/Spinner";
 
-import { verifyPasswordLocally } from "@/lib/crypto/locker";
-
-const STORAGE_KEY = (teamId) => `ms:teamlock:${teamId}`;
+const STORAGE_KEY = (slug) => `ms:teamlock:${slug}`;
 
 const TeamScoutingReportsTab = ({ user }) => {
   const router = useRouter();
@@ -26,11 +22,12 @@ const TeamScoutingReportsTab = ({ user }) => {
   const [submittingPassword, setSubmittingPassword] = useState(false);
   const [unlockedTeams, setUnlockedTeams] = useState({});
 
-  // ------------------------------------------------------------------
-  // Load **ALL teams the user belongs to** (owner / manager / coach / member)
-  // ------------------------------------------------------------------
+  // --------------------------------------------------------------
   useEffect(() => {
-    if (!user?._id) return;
+    if (!user?._id) {
+      setLoadingTeams(false);
+      return;
+    }
 
     (async () => {
       setLoadingTeams(true);
@@ -42,13 +39,7 @@ const TeamScoutingReportsTab = ({ user }) => {
           headers: { accept: "application/json" },
         });
 
-        const text = await res.text();
-        let payload = null;
-        try {
-          payload = JSON.parse(text);
-        } catch {
-          payload = null;
-        }
+        const payload = await res.json().catch(() => null);
 
         const list = Array.isArray(payload)
           ? payload
@@ -58,7 +49,7 @@ const TeamScoutingReportsTab = ({ user }) => {
 
         setTeams(list);
       } catch (err) {
-        console.error("Error loading dashboard teams:", err);
+        console.error(err);
         toast.error("Failed to load your teams.");
       } finally {
         setLoadingTeams(false);
@@ -66,17 +57,13 @@ const TeamScoutingReportsTab = ({ user }) => {
     })();
   }, [user?._id]);
 
-  useEffect(() => {
-    console.log("TeamScoutingReportsTab user =", user);
-    console.log("TeamScoutingReportsTab user._id =", user?._id);
-  }, [user]);
-  // ------------------------------------------------------------------
+  // --------------------------------------------------------------
   const goToTeamReports = (slug) => {
     if (!slug) return;
     router.push(`/teams/${encodeURIComponent(slug)}/scouting-reports`);
   };
 
-  // ------------------------------------------------------------------
+  // --------------------------------------------------------------
   const handleTeamClick = async (team) => {
     const slug = team.teamSlug || team.slug || "";
     if (!slug) return;
@@ -91,7 +78,6 @@ const TeamScoutingReportsTab = ({ user }) => {
       );
 
       if (!res.ok) {
-        console.error("/security error:", res.status);
         toast.error("Unable to load team security info.");
         return;
       }
@@ -99,14 +85,8 @@ const TeamScoutingReportsTab = ({ user }) => {
       const json = await res.json().catch(() => ({}));
       const fullTeam = json?.team || {};
       const sec = fullTeam.security || {};
-      const lockEnabled = !!sec.lockEnabled;
 
-      if (!lockEnabled) {
-        goToTeamReports(slug);
-        return;
-      }
-
-      if (unlockedTeams[slug]) {
+      if (!sec.lockEnabled || unlockedTeams[slug]) {
         goToTeamReports(slug);
         return;
       }
@@ -115,91 +95,49 @@ const TeamScoutingReportsTab = ({ user }) => {
         _id: fullTeam._id,
         slug,
         teamName: fullTeam.teamName || team.teamName || "Team",
-        security: sec,
       });
+
       setPassword("");
       setPasswordModalOpen(true);
     } catch (err) {
-      console.error("Error loading team security:", err);
+      console.error(err);
       toast.error("Failed to load team security details.");
     }
   };
 
-  // ------------------------------------------------------------------
+  // --------------------------------------------------------------
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     if (!activeTeam?.slug) return;
 
-    const slug = activeTeam.slug;
-    const passwordTrimmed = password.trim();
-    if (!passwordTrimmed) {
+    const pwd = password.trim();
+    if (!pwd) {
       toast.error("Please enter the team password.");
       return;
     }
 
     setSubmittingPassword(true);
+
     try {
-      const res = await fetch(
-        `/api/teams/${encodeURIComponent(slug)}/security`,
-        {
-          credentials: "include",
-          headers: { accept: "application/json" },
-        }
-      );
-
-      if (!res.ok) {
-        toast.error("Unable to verify team password.");
-        return;
-      }
-
-      const json = await res.json().catch(() => ({}));
-      const t = json?.team || {};
-      const sec = t.security || {};
-      const lockEnabled = !!sec.lockEnabled;
-
-      if (!lockEnabled) {
-        setUnlockedTeams((prev) => ({ ...prev, [slug]: true }));
-        setPassword("");
-        setPasswordModalOpen(false);
-        goToTeamReports(slug);
-        return;
-      }
-
-      const normalizedSec = {
-        lockEnabled: true,
-        encVersion: sec.encVersion || "v1",
-        kdf: {
-          saltB64: sec.kdf?.saltB64 || "",
-          iterations: sec.kdf?.iterations || 250000,
-        },
-        verifierB64: sec.verifierB64 || "",
-      };
-
-      const ok = await verifyPasswordLocally(passwordTrimmed, normalizedSec);
-      if (!ok) {
-        toast.error("Incorrect team password.");
-        return;
-      }
-
+      // Option A: dashboards do NOT verify locally
       try {
-        sessionStorage.setItem(STORAGE_KEY(t._id), passwordTrimmed);
+        sessionStorage.setItem(STORAGE_KEY(activeTeam.slug), pwd);
       } catch {}
 
-      setUnlockedTeams((prev) => ({ ...prev, [slug]: true }));
+      setUnlockedTeams((prev) => ({
+        ...prev,
+        [activeTeam.slug]: true,
+      }));
+
       setPassword("");
       setPasswordModalOpen(false);
-      goToTeamReports(slug);
-    } catch (err) {
-      toast.error("Unable to verify team password.");
+      goToTeamReports(activeTeam.slug);
     } finally {
       setSubmittingPassword(false);
     }
   };
 
-  // ------------------------------------------------------------------
-  // RENDER
-  // ------------------------------------------------------------------
-
+  // --------------------------------------------------------------
   if (loadingTeams) {
     return (
       <div className="flex flex-col justify-center items-center h-[40vh]">
@@ -217,8 +155,7 @@ const TeamScoutingReportsTab = ({ user }) => {
         <div className="flex items-center gap-2">
           <Shield className="w-5 h-5 text-ms-blue" />
           <p className="text-sm text-gray-900 dark:text-gray-100">
-            These are the teams you're a member of. Selecting a team will take
-            you to that team's scouting reports.
+            These are the teams you're a member of.
           </p>
         </div>
 
@@ -230,9 +167,7 @@ const TeamScoutingReportsTab = ({ user }) => {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {teams.map((team) => {
               const slug = team.teamSlug || team.slug || "";
-              const lockEnabled = team?.security
-                ? !!team.security.lockEnabled
-                : false;
+              const lockEnabled = !!team?.security?.lockEnabled;
               const isUnlocked = !!unlockedTeams[slug];
 
               return (
@@ -288,41 +223,24 @@ const TeamScoutingReportsTab = ({ user }) => {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Enter team password
             </h2>
-            <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">
-              To view scouting reports for{" "}
-              <span className="font-medium">
-                {activeTeam.teamName || "this team"}
-              </span>
-              , please enter the password.
-            </p>
 
             <form
               onSubmit={handlePasswordSubmit}
               className="mt-4 space-y-4"
             >
-              <div>
-                <label
-                  htmlFor="team-password"
-                  className="block text-sm font-medium text-gray-900 dark:text-gray-100"
-                >
-                  Team password
-                </label>
-                <input
-                  id="team-password"
-                  type="password"
-                  autoFocus
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-950 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-ms-blue focus:border-ms-blue"
-                  placeholder="Enter team password"
-                />
-              </div>
+              <input
+                type="password"
+                autoFocus
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-md border px-3 py-2"
+                placeholder="Team password"
+              />
 
               <div className="flex justify-end gap-2">
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={submittingPassword}
                   onClick={() => {
                     setPasswordModalOpen(false);
                     setActiveTeam(null);
@@ -331,9 +249,10 @@ const TeamScoutingReportsTab = ({ user }) => {
                 >
                   Cancel
                 </Button>
+
                 <Button
                   type="submit"
-                  disabled={submittingPassword || !password.trim()}
+                  disabled={submittingPassword}
                   className="bg-ms-blue-gray hover:bg-ms-blue text-white"
                 >
                   {submittingPassword ? "Verifying…" : "Unlock Team"}

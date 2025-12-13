@@ -134,8 +134,11 @@ const TeamSettingsPage = () => {
   const isOwner = !!team && !!user && String(team.user) === String(user._id);
 
   const lockEnabled = !!team?.security?.lockEnabled;
+  const isUnlocked = !!team?._teamKey;
+  const requiresCurrentPassword = lockEnabled && !isUnlocked;
   const [pw, setPw] = useState("");
-  const [pw2, setPw2] = useState(false);
+  const [pw2, setPw2] = useState("");
+  const [currentPw, setCurrentPw] = useState("");
   const [pwVisible1, setPwVisible1] = useState(false);
   const [pwVisible2, setPwVisible2] = useState(false);
   const [savingSecurity, setSavingSecurity] = useState(false);
@@ -522,64 +525,83 @@ const TeamSettingsPage = () => {
 
   const handleEnableOrUpdatePassword = async () => {
     if (!isOwner) return;
+
     if (!pw || !pw2) {
       toast.error("Please enter and confirm the team password.");
       return;
     }
+
     if (pw !== pw2) {
       toast.error("Passwords do not match.");
+      return;
+    }
+
+    if (requiresCurrentPassword && !currentPw) {
+      toast.error("Please enter your current team password.");
       return;
     }
 
     setSavingSecurity(true);
 
     try {
-      const hasKdf =
-        !!team?.security?.kdf?.saltB64 && !!team?.security?.verifierB64;
+      const hasSecurity =
+        !!team?.security?.kdf?.saltB64 &&
+        !!team?.security?.verifierB64 &&
+        !!team?.security?.wrappedTBK;
 
-      if (!hasKdf) {
-        // Initial setup: send KDF/verifier to server
+      // -------------------------------
+      // INITIAL SETUP (no lock yet)
+      // -------------------------------
+      if (!lockEnabled || !hasSecurity) {
         await callSetupPOST(pw);
         const freshTeam = await refetchTeam();
 
-        // 🔑 Derive a session team key from the *same* KDF params
         if (freshTeam?.security?.kdf) {
-          try {
-            const sessionKey = await deriveTeamSessionKey(
-              pw,
-              freshTeam.security.kdf
-            );
-            if (sessionKey) {
-              // Attach as ephemeral key used by teamLock.js
-              freshTeam._teamKey = sessionKey;
-            }
-          } catch (err) {
-            console.error(
-              "[TEAM SETTINGS] failed to derive session team key:",
-              err
-            );
+          const sessionKey = await deriveTeamSessionKey(
+            pw,
+            freshTeam.security.kdf
+          );
+          if (sessionKey) {
+            freshTeam._teamKey = sessionKey;
           }
         }
 
-        // 🔐 Encrypt ALL existing data (scouting + coach notes)
         await bulkEncryptExistingReports(freshTeam);
         await bulkEncryptExistingCoachNotes(freshTeam);
 
-        toast.success(
-          "Team password set. Existing and new reports are locked."
+        toast.success("Team password set.");
+      }
+
+      // -------------------------------
+      // PASSWORD ROTATION (Option A)
+      // -------------------------------
+      else {
+        const effectiveTeam = team._teamKey
+          ? team
+          : {
+              ...team,
+              _teamKey: await deriveTeamSessionKey(
+                currentPw || pw,
+                team.security.kdf
+              ),
+            };
+
+        await changeTeamPassword(
+          effectiveTeam,
+          requiresCurrentPassword ? currentPw : null,
+          pw
         );
-      } else {
-        // Password change: use existing flow
-        await changeTeamPassword(team, pw);
+
         await refetchTeam();
         toast.success("Team password updated.");
       }
 
       setPw("");
       setPw2("");
+      setCurrentPw("");
     } catch (e) {
       console.error(e);
-      toast.error(e.message || "Failed to set team password.");
+      toast.error(e.message || "Failed to update team password.");
     } finally {
       setSavingSecurity(false);
     }
@@ -827,63 +849,47 @@ const TeamSettingsPage = () => {
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Password + eye toggle */}
-                <div className="relative">
+                {requiresCurrentPassword && (
                   <FormField
-                    type={pwVisible1 ? "text" : "password"}
-                    label="Team Password"
-                    name="teamPassword"
-                    value={pw}
-                    onChange={(e) => setPw(e.target.value)}
-                    placeholder={
-                      lockEnabled
-                        ? "Enter new team password"
-                        : "Enter team password"
-                    }
+                    type="password"
+                    label="Current Password"
+                    name="currentPassword"
+                    value={currentPw}
+                    onChange={(e) => setCurrentPw(e.target.value)}
+                    placeholder="Enter current team password"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setPwVisible1((v) => !v)}
-                    className="absolute right-3 top-8 text-gray-500 hover:text-gray-700"
-                    aria-label="Toggle password visibility"
-                  >
-                    {pwVisible1 ? (
-                      <EyeOff className="w-5 h-5" />
-                    ) : (
-                      <Eye className="w-5 h-5" />
-                    )}
-                  </button>
-                </div>
+                )}
 
-                <div className="relative">
-                  <FormField
-                    type={pwVisible2 ? "text" : "password"}
-                    label="Confirm Password"
-                    name="teamPassword2"
-                    value={pw2}
-                    onChange={(e) => setPw2(e.target.value)}
-                    placeholder="Re-enter password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setPwVisible2((v) => !v)}
-                    className="absolute right-3 top-8 text-gray-500 hover:text-gray-700"
-                    aria-label="Toggle password visibility"
-                  >
-                    {pwVisible2 ? (
-                      <EyeOff className="w-5 h-5" />
-                    ) : (
-                      <Eye className="w-5 h-5" />
-                    )}
-                  </button>
-                </div>
+                <FormField
+                  type={pwVisible1 ? "text" : "password"}
+                  label="New Team Password"
+                  name="teamPassword"
+                  value={pw}
+                  onChange={(e) => setPw(e.target.value)}
+                  placeholder="Enter new team password"
+                />
+
+                <FormField
+                  type={pwVisible2 ? "text" : "password"}
+                  label="Confirm Password"
+                  name="teamPassword2"
+                  value={pw2}
+                  onChange={(e) => setPw2(e.target.value)}
+                  placeholder="Re-enter new password"
+                />
               </div>
             </div>
 
             <div className="flex flex-wrap gap-3">
               <Button
                 onClick={handleEnableOrUpdatePassword}
-                disabled={savingSecurity || encrypting || !pw || !pw2}
+                disabled={
+                  savingSecurity ||
+                  encrypting ||
+                  !pw ||
+                  !pw2 ||
+                  (requiresCurrentPassword && !currentPw)
+                }
                 className="inline-flex items-center gap-2 bg-ms-blue-gray hover:bg-ms-blue text-white"
               >
                 <KeyRound className="w-4 h-4" />

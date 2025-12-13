@@ -82,11 +82,7 @@ const CoachNotesPage = async ({ params }) => {
   const { events } = await getEvents(slug);
 
   return (
-    <TeamUnlockGate
-      slug={slug}
-      onTeamResolved={() => {}}
-      onUnlocked={() => {}}
-    >
+    <TeamUnlockGate slug={slug}>
       <div className="mx-auto max-w-6xl px-4 py-8 space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between gap-3">
