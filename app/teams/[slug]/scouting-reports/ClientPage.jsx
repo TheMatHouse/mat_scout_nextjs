@@ -437,6 +437,27 @@ function TeamScoutingReportsPage() {
     });
   }, [reports, membersMap, divisionMap, weightsMap, team, user, teamMembers]);
 
+  useEffect(() => {
+    if (!slug) return;
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/teams/${slug}`, {
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: { accept: "application/json" },
+        });
+
+        if (!res.ok) return;
+
+        const json = await res.json().catch(() => ({}));
+        setTeam(json.team || json);
+      } catch (err) {
+        console.error("Failed to load team", err);
+      }
+    })();
+  }, [slug]);
+
   /* ------------------------------------------------------------------ */
   /* EXPORT EXCEL */
   /* ------------------------------------------------------------------ */
@@ -634,28 +655,6 @@ function TeamScoutingReportsPage() {
       },
     },
   ];
-
-  /* ------------------------------------------------------------------ */
-  /* LOADING STATE */
-  /* ------------------------------------------------------------------ */
-
-  if (loading && isUnlocked) {
-    return (
-      <TeamUnlockGate
-        slug={slug}
-        team={team}
-        onTeamResolved={(resolved) => setTeam((prev) => prev || resolved)}
-        onUnlocked={() => setIsUnlocked(true)}
-      >
-        <div className="flex flex-col justify-center items-center h-[70vh]">
-          <Spinner size={64} />
-          <p className="text-gray-300 mt-3 text-lg">
-            Loading scouting reports…
-          </p>
-        </div>
-      </TeamUnlockGate>
-    );
-  }
 
   /* ------------------------------------------------------------------ */
   /* MAIN RENDER */
