@@ -1,4 +1,3 @@
-// components/dashboard/NotificationSettings.jsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -14,6 +13,7 @@ export default function NotificationSettings() {
   // Keep this shape in sync with the API defaults
   const [settings, setSettings] = useState({
     joinRequests: { inApp: true, email: true },
+    teamInvites: { inApp: true, email: true }, // ✅ NEW
     teamUpdates: { inApp: true, email: false },
     scoutingReports: { inApp: true, email: true },
     followed: {
@@ -31,6 +31,10 @@ export default function NotificationSettings() {
     joinRequests: {
       inApp: s?.joinRequests?.inApp ?? true,
       email: s?.joinRequests?.email ?? true,
+    },
+    teamInvites: {
+      inApp: s?.teamInvites?.inApp ?? true,
+      email: s?.teamInvites?.email ?? true,
     },
     teamUpdates: {
       inApp: s?.teamUpdates?.inApp ?? false,
@@ -149,6 +153,7 @@ export default function NotificationSettings() {
         {/* Top-level categories */}
         {[
           { key: "joinRequests", label: "Join Requests" },
+          { key: "teamInvites", label: "Team Invitations" }, // ✅ NEW
           { key: "teamUpdates", label: "Team Updates" },
           { key: "scoutingReports", label: "Scouting Reports" },
         ].map(({ key, label }) => (
@@ -270,7 +275,6 @@ export default function NotificationSettings() {
         </div>
       </div>
 
-      {/* Save */}
       <div className="mt-8 text-right">
         <Button
           onClick={handleSave}

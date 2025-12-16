@@ -7,13 +7,18 @@ import { getCurrentUser } from "@/lib/auth-server";
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
 import TeamInvitation from "@/models/teamInvitationModel";
+import User from "@/models/userModel";
+
+import { createNotification } from "@/lib/createNotification";
+import Mail from "@/lib/email/mailer";
+import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
 function isStaffRole(role) {
   return ["owner", "manager", "coach"].includes((role || "").toLowerCase());
 }
 
 /* ============================================================
-   GET — list invites (pending by default)
+   GET — list invites
 ============================================================ */
 export async function GET(req, { params }) {
   try {
@@ -25,7 +30,6 @@ export async function GET(req, { params }) {
 
     const { slug } = await params;
 
-    // ✅ FIX: Correct team lookup using teamSlug
     const team = await Team.findOne({ teamSlug: slug }).select(
       "_id user userId teamName"
     );
@@ -33,13 +37,12 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
     }
 
-    // staff / owner check
     const ownerId = String(team.user || team.userId || "");
     const isOwner = ownerId === String(actor._id);
 
     const membership = await TeamMember.findOne({
-      teamId: team._id, // ✅ FIXED field
-      userId: actor._id, // ✅ FIXED field
+      teamId: team._id,
+      userId: actor._id,
     })
       .select("role")
       .lean();
@@ -50,19 +53,11 @@ export async function GET(req, { params }) {
 
     const { searchParams } = new URL(req.url);
     const status = (searchParams.get("status") || "pending").toLowerCase();
-    const allowed = ["pending", "accepted", "revoked", "expired"];
 
-    // ALWAYS use teamId (correct field)
-    const query = {
+    const invites = await TeamInvitation.find({
       teamId: team._id,
-      ...(allowed.includes(status) ? { status } : { status: "pending" }),
-    };
-
-    const invites = await TeamInvitation.find(query)
-      .sort({ createdAt: -1 })
-      .select(
-        "_id email status createdAt acceptedAt expiresAt invitedBy acceptedMember"
-      );
+      status,
+    }).sort({ createdAt: -1 });
 
     return NextResponse.json({ invites });
   } catch (err) {
@@ -72,7 +67,7 @@ export async function GET(req, { params }) {
 }
 
 /* ============================================================
-   POST — create (or reuse) an invite
+   POST — create invite + notify
 ============================================================ */
 export async function POST(req, { params }) {
   try {
@@ -91,20 +86,18 @@ export async function POST(req, { params }) {
 
     const normEmail = email.trim().toLowerCase();
 
-    // ✅ FIX: Correct lookup
     const team = await Team.findOne({ teamSlug: slug }).select(
-      "_id user userId teamName"
+      "_id teamName user userId"
     );
     if (!team)
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
 
-    // staff / owner check
     const ownerId = String(team.user || team.userId || "");
     const isOwner = ownerId === String(actor._id);
 
     const membership = await TeamMember.findOne({
-      teamId: team._id, // FIXED
-      userId: actor._id, // FIXED
+      teamId: team._id,
+      userId: actor._id,
     })
       .select("role")
       .lean();
@@ -113,7 +106,7 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Check for existing member
+    // Prevent inviting existing members
     const existingMember = await TeamMember.findOne({
       teamId: team._id,
       role: { $ne: "pending" },
@@ -130,7 +123,7 @@ export async function POST(req, { params }) {
 
     const now = new Date();
 
-    // Reuse pending invite if still valid
+    // Reuse pending invite
     const pending = await TeamInvitation.findOne({
       teamId: team._id,
       email: normEmail,
@@ -149,8 +142,8 @@ export async function POST(req, { params }) {
       now.getTime() + expiresInDays * 24 * 60 * 60 * 1000
     );
 
-    const newInvite = await TeamInvitation.create({
-      teamId: team._id, // FIXED
+    const invite = await TeamInvitation.create({
+      teamId: team._id,
       email: normEmail,
       status: "pending",
       invitedBy: actor._id,
@@ -158,10 +151,63 @@ export async function POST(req, { params }) {
       expiresAt,
     });
 
-    return NextResponse.json(
-      { invite: newInvite, reused: false },
-      { status: 201 }
-    );
+    /* --------------------------------------------------------
+       In-app notification (only if user already exists)
+    -------------------------------------------------------- */
+    try {
+      const invitedUser = await User.findOne({ email: normEmail }).select(
+        "_id"
+      );
+
+      if (invitedUser) {
+        await createNotification({
+          userId: invitedUser._id,
+          type: "Team Invitation",
+          body: `You were invited to join ${team.teamName}`,
+          link: `/invites`,
+        });
+      }
+    } catch (notifErr) {
+      console.error("Invite in-app notification failed:", notifErr);
+    }
+
+    /* --------------------------------------------------------
+       Email notification (respects teamInvites.email)
+    -------------------------------------------------------- */
+    try {
+      const inviteUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/invites/${invite._id}`;
+
+      const html = baseEmailTemplate({
+        title: "You’ve been invited to a team",
+        message: `
+          <p>You’ve been invited to join <strong>${
+            team.teamName
+          }</strong> on MatScout.</p>
+          <p>
+            <a href="${inviteUrl}"
+               style="display:inline-block;background-color:#1a73e8;color:white;
+                      padding:10px 16px;border-radius:4px;text-decoration:none;
+                      font-weight:bold;">
+              Accept Invitation
+            </a>
+          </p>
+          <p>This invitation expires on ${expiresAt.toLocaleDateString()}.</p>
+        `,
+      });
+
+      await Mail.sendEmail({
+        type: Mail.kinds.TEAM_INVITE,
+        toEmail: normEmail,
+        subject: `You’ve been invited to join ${team.teamName} on MatScout`,
+        html,
+        relatedUserId: actor._id,
+        teamId: String(team._id),
+      });
+    } catch (emailErr) {
+      console.error("Invite email failed:", emailErr);
+    }
+
+    return NextResponse.json({ invite, reused: false }, { status: 201 });
   } catch (err) {
     console.error("POST /invites error:", err);
     return NextResponse.json(

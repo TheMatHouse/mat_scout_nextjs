@@ -28,7 +28,6 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      // required: true,
     },
     city: { type: String },
     state: { type: String },
@@ -68,7 +67,7 @@ const userSchema = new mongoose.Schema(
         "https://res.cloudinary.com/matscout/image/upload/v1747956346/default_user_rval6s.jpg",
     },
     avatarId: {
-      type: String, // Optional — for deleting uploaded avatars
+      type: String,
     },
     googleAvatar: {
       type: String,
@@ -102,6 +101,7 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
     lastLogin: { type: Date, default: Date.now },
+
     userStyles: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -120,35 +120,40 @@ const userSchema = new mongoose.Schema(
         ref: "ScoutingReport",
       },
     ],
+
+    /* ======================================================
+       Notification Preferences
+    ====================================================== */
     notificationSettings: {
       joinRequests: {
         inApp: { type: Boolean, default: true },
         email: { type: Boolean, default: true },
       },
+
+      teamInvites: {
+        inApp: { type: Boolean, default: true },
+        email: { type: Boolean, default: true },
+      },
+
       teamUpdates: {
         inApp: { type: Boolean, default: true },
         email: { type: Boolean, default: false },
       },
+
       scoutingReports: {
         inApp: { type: Boolean, default: true },
         email: { type: Boolean, default: true },
       },
-      teamUpdates: {
-        email: { type: Boolean, default: true },
-        inApp: { type: Boolean, default: true },
-      },
+
       followed: {
-        // “someone I follow posted a match report”
         matchReports: {
           push: { type: Boolean, default: true },
           email: { type: Boolean, default: false },
         },
-        // “someone I follow updated profile fields”
         profileUpdates: {
           push: { type: Boolean, default: true },
           email: { type: Boolean, default: false },
         },
-        // “someone I follow changed avatar”
         avatarChanges: {
           push: { type: Boolean, default: true },
           email: { type: Boolean, default: false },
