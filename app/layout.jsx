@@ -2,7 +2,7 @@
 import "@/app/globals.css";
 import "react-toastify/dist/ReactToastify.css";
 
-import AnalyticsBeacon from "@/components/analytics/AnalyticsBeacon";
+import dynamic from "next/dynamic";
 import ChromeGate from "@/components/layout/ChromeGate";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +24,12 @@ const absUrl = (path = "/") => {
 };
 
 const DEFAULT_OG = absUrl("/default-og.png");
+
+/** Analytics (CLIENT ONLY, NON-FATAL) */
+const AnalyticsBeacon = dynamic(
+  () => import("@/components/analytics/AnalyticsBeacon"),
+  { ssr: false }
+);
 
 /** Metadata */
 export async function generateMetadata() {
@@ -70,28 +76,23 @@ const RootLayout = ({ children }) => {
       <head>
         {FB_APP_ID ? (
           <meta
-            key="fb-app-id"
             property="fb:app_id"
             content={FB_APP_ID}
           />
         ) : null}
 
-        {/* ✅ Google reCAPTCHA v3 script */}
+        {/* Google reCAPTCHA v3 */}
         <script
           src={`https://www.google.com/recaptcha/api.js?render=${process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY}`}
           async
           defer
-        ></script>
+        />
       </head>
 
-      <body
-        className="font-sans flex flex-col min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] w-full overflow-x-hidden"
-        data-scroll-behavior="smooth"
-      >
-        {/* Analytics beacon stays global */}
+      <body className="font-sans flex flex-col min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] w-full overflow-x-hidden">
+        {/* ✅ Analytics is now client-only and cannot crash renders */}
         <AnalyticsBeacon />
 
-        {/* ChromeGate wraps ThemeProvider, Header, Footer, etc. */}
         <main className="flex-1 flex flex-col">
           <ChromeGate>{children}</ChromeGate>
         </main>

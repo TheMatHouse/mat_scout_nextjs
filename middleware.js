@@ -4,9 +4,9 @@ import { NextResponse } from "next/server";
 /** Cookie that lets admins bypass the maintenance gate */
 const BYPASS_COOKIE = "ms_maintenance_bypass";
 
-/** Paths we never block (assets, public APIs, maintenance page, etc.) */
+/** Paths we never block */
 const ALWAYS_ALLOW_PREFIXES = [
-  "/api/public/", // allow all public APIs
+  "/api/public/",
   "/_next/",
   "/assets/",
   "/favicon.ico",
@@ -19,7 +19,7 @@ const ALWAYS_ALLOW_PREFIXES = [
   "/maintenance",
 ];
 
-/** Public pages that remain accessible when not in maintenance */
+/** Public pages */
 const PUBLIC_PAGES = new Set([
   "/",
   "/teams",
@@ -28,7 +28,7 @@ const PUBLIC_PAGES = new Set([
   "/forgot-password",
 ]);
 
-/** App areas that require a session when NOT in maintenance mode */
+/** Protected app areas */
 const PROTECTED_PREFIXES = [
   "/dashboard",
   "/admin",
@@ -43,115 +43,67 @@ function startsWithAny(pathname, prefixes) {
   return false;
 }
 
-export async function middleware(req) {
+export function middleware(req) {
   const url = req.nextUrl;
   const { pathname, searchParams } = url;
 
-  // --- 0) Always-allow list (short-circuit) ---
+  // --- 0) Always-allow ---
   if (startsWithAny(pathname, ALWAYS_ALLOW_PREFIXES)) {
     return NextResponse.next();
   }
 
-  // --- 0.1) Admin surfaces SKIP the MAINTENANCE GATE (but still go through auth) ---
-  // This lets an admin turn maintenance OFF after turning it ON.
-  if (pathname.startsWith("/api/admin/") || pathname.startsWith("/admin")) {
-    return handleAuth(req);
-  }
-
-  // Treat these as public (when not in maintenance). Subroutes like /teams/[slug] flow through maintenance check.
-  if (PUBLIC_PAGES.has(pathname) || pathname.startsWith("/teams/")) {
-    // fall through to maintenance check
-  }
-
-  // --- 1) Admin bypass via ?bypass_maintenance=1 sets a cookie ---
+  // --- 1) Admin bypass flag ---
   if (searchParams.get("bypass_maintenance") === "1") {
     const redirect = NextResponse.redirect(new URL(pathname, req.url));
     redirect.cookies.set(BYPASS_COOKIE, "1", { path: "/" });
     return redirect;
   }
 
-  // If bypass cookie present, skip maintenance gate entirely
-  if (req.cookies.get(BYPASS_COOKIE)?.value === "1") {
-    return handleAuth(req);
-  }
+  // --- 2) Maintenance bypass cookie ---
+  const bypass = req.cookies.get(BYPASS_COOKIE)?.value === "1";
 
-  // --- 2) Maintenance mode check (safe JSON parse; fail open) ---
-  try {
-    const statusUrl = new URL("/api/public/maintenance", req.url);
-    const r = await fetch(statusUrl, { cache: "no-store" });
-
-    const ct = r.headers.get("content-type") || "";
-    if (!r.ok || !ct.includes("application/json")) {
-      // Fail open: do NOT block or parse non-JSON
-      return handleAuth(req);
-    }
-
-    const data = await r.json().catch(() => null);
-    if (!data) return handleAuth(req);
-
-    const mode = String(data?.maintenanceMode || "off");
-    if (mode !== "off") {
-      if (pathname !== "/maintenance") {
-        const reason = mode === "updating" ? "updating" : "maintenance";
-        const to = new URL("/maintenance", req.url);
-        to.searchParams.set("reason", reason);
-        return NextResponse.redirect(to);
-      }
-      // already on /maintenance → render it
-      return NextResponse.next();
-    }
-  } catch {
-    // Any error reading status → fail open
-    return handleAuth(req);
-  }
-
-  // --- 3) Normal auth gating (only when not in maintenance) ---
-  return handleAuth(req);
+  // --- 3) Auth gating only (NO NETWORK CALLS) ---
+  return handleAuth(req, { bypass });
 }
 
-/** Auth logic; admin still enforced, non-admin APIs never redirected to HTML */
-function handleAuth(req) {
+/**
+ * Auth logic — MUST NEVER THROW
+ */
+function handleAuth(req, { bypass }) {
   const url = req.nextUrl;
   const { pathname, search } = url;
 
-  // Let non-admin API routes handle auth themselves (return JSON 401/403, not HTML redirects)
+  // APIs handle auth themselves
   if (pathname.startsWith("/api/") && !pathname.startsWith("/api/admin/")) {
     return NextResponse.next();
   }
 
-  // Public pages & public APIs
+  // Public routes
   if (
-    pathname === "/" ||
-    pathname === "/teams" ||
+    PUBLIC_PAGES.has(pathname) ||
     pathname.startsWith("/teams/") ||
-    pathname === "/login" ||
-    pathname === "/register" ||
-    pathname === "/forgot-password" ||
-    pathname === "/rt-analytics.html" ||
-    pathname === "/robots.txt" ||
-    pathname === "/sitemap.xml" ||
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/assets/") ||
     pathname === "/favicon.ico" ||
-    pathname.startsWith("/api/public/")
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml"
   ) {
     return NextResponse.next();
   }
 
-  // Metrics & OG APIs
+  // Metrics & OG
   if (
     pathname === "/api/metrics/collect" ||
-    pathname.startsWith("/api/metrics/rollup")
+    pathname.startsWith("/api/metrics/rollup") ||
+    pathname.startsWith("/api/og")
   ) {
     return NextResponse.next();
   }
-  if (pathname.startsWith("/api/og")) {
-    return NextResponse.next();
-  }
 
-  // Protected areas require a session
+  // Protected areas require session
   const requiresAuth = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
-  if (requiresAuth) {
+
+  if (requiresAuth && !bypass) {
     const hasSession =
       req.cookies.get("session")?.value ||
       req.cookies.get("token")?.value ||
@@ -172,7 +124,6 @@ function handleAuth(req) {
   return NextResponse.next();
 }
 
-// Run on most paths but skip common static assets
 export const config = {
   matcher: [
     "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)",
