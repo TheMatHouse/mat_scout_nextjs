@@ -2,8 +2,8 @@
 import "@/app/globals.css";
 import "react-toastify/dist/ReactToastify.css";
 
-import dynamic from "next/dynamic";
 import ChromeGate from "@/components/layout/ChromeGate";
+import AnalyticsClient from "@/components/analytics/AnalyticsClient";
 
 export const dynamic = "force-dynamic";
 
@@ -24,12 +24,6 @@ const absUrl = (path = "/") => {
 };
 
 const DEFAULT_OG = absUrl("/default-og.png");
-
-/** Analytics (CLIENT ONLY, NON-FATAL) */
-const AnalyticsBeacon = dynamic(
-  () => import("@/components/analytics/AnalyticsBeacon"),
-  { ssr: false }
-);
 
 /** Metadata */
 export async function generateMetadata() {
@@ -90,8 +84,8 @@ const RootLayout = ({ children }) => {
       </head>
 
       <body className="font-sans flex flex-col min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] w-full overflow-x-hidden">
-        {/* ✅ Analytics is now client-only and cannot crash renders */}
-        <AnalyticsBeacon />
+        {/* ✅ Client-only analytics (safe) */}
+        <AnalyticsClient />
 
         <main className="flex-1 flex flex-col">
           <ChromeGate>{children}</ChromeGate>
