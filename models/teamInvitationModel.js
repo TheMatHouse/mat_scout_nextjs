@@ -1,4 +1,3 @@
-// models/teamInvitationModel.js
 import mongoose from "mongoose";
 
 const TeamInvitationSchema = new mongoose.Schema(
@@ -38,11 +37,19 @@ const TeamInvitationSchema = new mongoose.Schema(
 
     // optional notes/payload (token, role, message, etc.)
     payload: mongoose.Schema.Types.Mixed,
+
+    // New role field — default to "member" unless specified
+    role: {
+      type: String,
+      enum: ["manager", "coach", "member"],
+      default: "member",
+    },
   },
   { timestamps: true }
 );
 
 // ---------- Normalization ----------
+
 function normalizeEmail(e) {
   return (e || "").trim().toLowerCase();
 }
