@@ -47,6 +47,17 @@ export function middleware(req) {
   const url = req.nextUrl;
   const { pathname, searchParams } = url;
 
+  // 🚨 HARD STOP for auth & maintenance pages
+  // This PREVENTS infinite redirect loops
+  if (
+    pathname === "/login" ||
+    pathname === "/register" ||
+    pathname === "/forgot-password" ||
+    pathname === "/maintenance"
+  ) {
+    return NextResponse.next();
+  }
+
   // --- 0) Always-allow ---
   if (startsWithAny(pathname, ALWAYS_ALLOW_PREFIXES)) {
     return NextResponse.next();
