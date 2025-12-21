@@ -44,11 +44,15 @@ function startsWithAny(pathname, prefixes) {
 }
 
 export function middleware(req) {
+  // ✅ REQUIRED: allow CORS preflight requests
+  if (req.method === "OPTIONS") {
+    return NextResponse.next();
+  }
+
   const url = req.nextUrl;
   const { pathname, searchParams } = url;
 
   // 🚨 HARD STOP for auth & maintenance pages
-  // This PREVENTS infinite redirect loops
   if (
     pathname === "/login" ||
     pathname === "/register" ||
@@ -98,15 +102,6 @@ function handleAuth(req, { bypass }) {
     pathname === "/favicon.ico" ||
     pathname === "/robots.txt" ||
     pathname === "/sitemap.xml"
-  ) {
-    return NextResponse.next();
-  }
-
-  // Metrics & OG
-  if (
-    pathname === "/api/metrics/collect" ||
-    pathname.startsWith("/api/metrics/rollup") ||
-    pathname.startsWith("/api/og")
   ) {
     return NextResponse.next();
   }
