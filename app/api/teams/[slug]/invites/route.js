@@ -13,6 +13,10 @@ import { createNotification } from "@/lib/createNotification";
 import Mail from "@/lib/email/mailer";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
+/* ============================================================
+   Helpers
+============================================================ */
+
 function isStaffRole(role) {
   return ["owner", "manager", "coach"].includes((role || "").toLowerCase());
 }
@@ -30,8 +34,9 @@ export async function GET(req, { params }) {
     await connectDB();
 
     const actor = await getCurrentUser();
-    if (!actor)
+    if (!actor) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const { slug } = await params;
 
@@ -72,15 +77,16 @@ export async function GET(req, { params }) {
 }
 
 /* ============================================================
-   POST — create invite + notify
+   POST — create OR re-activate invite
 ============================================================ */
 export async function POST(req, { params }) {
   try {
     await connectDB();
 
     const actor = await getCurrentUser();
-    if (!actor)
+    if (!actor) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const { slug } = await params;
     const { email, role = "member", expiresInDays = 14 } = await req.json();
@@ -90,13 +96,14 @@ export async function POST(req, { params }) {
     }
 
     const normEmail = email.trim().toLowerCase();
-    const inviteRole = normalizeInviteRole(role);
+    const safeRole = normalizeInviteRole(role);
 
     const team = await Team.findOne({ teamSlug: slug }).select(
       "_id teamName user userId"
     );
-    if (!team)
+    if (!team) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
+    }
 
     const ownerId = String(team.user || team.userId || "");
     const isOwner = ownerId === String(actor._id);
@@ -112,15 +119,20 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Prevent inviting existing members
+    /* ----------------------------------------------------------
+       Block if user is already a team member (by email)
+    ---------------------------------------------------------- */
     const existingMember = await TeamMember.findOne({
       teamId: team._id,
-      role: { $ne: "pending" },
     })
-      .populate({ path: "userId", select: "email" })
+      .populate({
+        path: "userId",
+        match: { email: normEmail },
+        select: "email",
+      })
       .lean();
 
-    if (existingMember?.userId?.email?.toLowerCase() === normEmail) {
+    if (existingMember?.userId) {
       return NextResponse.json(
         { error: "User is already a team member" },
         { status: 409 }
@@ -128,98 +140,98 @@ export async function POST(req, { params }) {
     }
 
     const now = new Date();
-
-    // Reuse pending invite
-    const pending = await TeamInvitation.findOne({
-      teamId: team._id,
-      email: normEmail,
-      status: "pending",
-      $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gt: now } }],
-    });
-
-    if (pending) {
-      return NextResponse.json(
-        { invite: pending, reused: true },
-        { status: 200 }
-      );
-    }
-
     const expiresAt = new Date(
       now.getTime() + expiresInDays * 24 * 60 * 60 * 1000
     );
 
-    const invite = await TeamInvitation.create({
+    /* ----------------------------------------------------------
+       Find existing invite (any status)
+    ---------------------------------------------------------- */
+    let reused = false;
+
+    let invite = await TeamInvitation.findOne({
       teamId: team._id,
       email: normEmail,
-      role: inviteRole,
-      status: "pending",
-      invitedByUserId: actor._id,
-      createdAt: now,
-      expiresAt,
     });
 
-    /* --------------------------------------------------------
-       In-app notification (only if user already exists)
-    -------------------------------------------------------- */
-    try {
-      const invitedUser = await User.findOne({ email: normEmail }).select(
-        "_id"
+    // Accepted is terminal
+    if (invite?.status === "accepted") {
+      return NextResponse.json(
+        { error: "Invitation already accepted" },
+        { status: 409 }
       );
-
-      if (invitedUser) {
-        await createNotification({
-          userId: invitedUser._id,
-          type: "Team Invitation",
-          body: `You were invited to join ${team.teamName} as ${inviteRole}`,
-          link: `/invites/${invite._id}`,
-        });
-      }
-    } catch (notifErr) {
-      console.error("Invite in-app notification failed:", notifErr);
     }
 
-    /* --------------------------------------------------------
-       Email notification
-    -------------------------------------------------------- */
-    try {
-      const inviteUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/invites/${invite._id}`;
-
-      const html = baseEmailTemplate({
-        title: "You’ve been invited to a team",
-        message: `
-          <p>You’ve been invited to join <strong>${
-            team.teamName
-          }</strong> on MatScout.</p>
-          <p><strong>Role:</strong> ${inviteRole}</p>
-          <p>
-            <a href="${inviteUrl}"
-               style="display:inline-block;background-color:#1a73e8;color:white;
-                      padding:10px 16px;border-radius:4px;text-decoration:none;
-                      font-weight:bold;">
-              Accept Invitation
-            </a>
-          </p>
-          <p>This invitation expires on ${expiresAt.toLocaleDateString()}.</p>
-        `,
+    if (invite) {
+      // 🔁 Re-activate invite
+      reused = true;
+      invite.status = "pending";
+      invite.expiresAt = expiresAt;
+      invite.invitedByUserId = actor._id;
+      invite.payload = {
+        ...(invite.payload || {}),
+        role: safeRole,
+      };
+      await invite.save();
+    } else {
+      // 🆕 Create new invite
+      invite = await TeamInvitation.create({
+        teamId: team._id,
+        email: normEmail,
+        status: "pending",
+        expiresAt,
+        invitedByUserId: actor._id,
+        payload: { role: safeRole },
       });
-
-      await Mail.sendEmail({
-        type: Mail.kinds.TEAM_INVITE,
-        toEmail: normEmail,
-        subject: `You’ve been invited to join ${team.teamName} on MatScout`,
-        html,
-        relatedUserId: actor._id,
-        teamId: String(team._id),
-      });
-    } catch (emailErr) {
-      console.error("Invite email failed:", emailErr);
     }
 
-    return NextResponse.json({ invite, reused: false }, { status: 201 });
+    /* ----------------------------------------------------------
+       In-app notification (only if user exists)
+    ---------------------------------------------------------- */
+    const invitedUser = await User.findOne({ email: normEmail }).select("_id");
+    if (invitedUser) {
+      await createNotification({
+        userId: invitedUser._id,
+        type: "Team Invitation",
+        body: `You were invited to join ${team.teamName}`,
+        link: `/invites/${invite._id}`,
+      });
+    }
+
+    /* ----------------------------------------------------------
+       Email
+    ---------------------------------------------------------- */
+    const inviteUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/invites/${invite._id}`;
+
+    const html = baseEmailTemplate({
+      title: "You’ve been invited to a team",
+      message: `
+        <p>You’ve been invited to join <strong>${team.teamName}</strong>.</p>
+        <p>
+          <a href="${inviteUrl}"
+             style="display:inline-block;background:#1a73e8;color:#fff;
+                    padding:10px 16px;border-radius:4px;text-decoration:none;">
+            Accept Invitation
+          </a>
+        </p>
+        <p>This invitation expires on ${expiresAt.toLocaleDateString()}.</p>
+      `,
+    });
+
+    await Mail.sendEmail({
+      type: Mail.kinds.TEAM_INVITE,
+      toEmail: normEmail,
+      subject: `Invitation to join ${team.teamName}`,
+      html,
+      relatedUserId: actor._id,
+      teamId: String(team._id),
+    });
+
+    return NextResponse.json({ invite, reused }, { status: 201 });
   } catch (err) {
     console.error("POST /invites error:", err);
     return NextResponse.json(
-      { error: "Failed to create invite" },
+      { error: "Failed to send invitation" },
       { status: 500 }
     );
   }
