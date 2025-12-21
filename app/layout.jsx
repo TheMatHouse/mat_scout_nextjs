@@ -2,8 +2,8 @@
 import "@/app/globals.css";
 import "react-toastify/dist/ReactToastify.css";
 
-import AnalyticsBeacon from "@/components/analytics/AnalyticsBeacon";
 import ChromeGate from "@/components/layout/ChromeGate";
+import AnalyticsClient from "@/components/analytics/AnalyticsClient";
 
 export const dynamic = "force-dynamic";
 
@@ -70,28 +70,23 @@ const RootLayout = ({ children }) => {
       <head>
         {FB_APP_ID ? (
           <meta
-            key="fb-app-id"
             property="fb:app_id"
             content={FB_APP_ID}
           />
         ) : null}
 
-        {/* ✅ Google reCAPTCHA v3 script */}
+        {/* Google reCAPTCHA v3 */}
         <script
           src={`https://www.google.com/recaptcha/api.js?render=${process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY}`}
           async
           defer
-        ></script>
+        />
       </head>
 
-      <body
-        className="font-sans flex flex-col min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] w-full overflow-x-hidden"
-        data-scroll-behavior="smooth"
-      >
-        {/* Analytics beacon stays global */}
-        <AnalyticsBeacon />
+      <body className="font-sans flex flex-col min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] w-full overflow-x-hidden">
+        {/* ✅ Client-only analytics (safe) */}
+        <AnalyticsClient />
 
-        {/* ChromeGate wraps ThemeProvider, Header, Footer, etc. */}
         <main className="flex-1 flex flex-col">
           <ChromeGate>{children}</ChromeGate>
         </main>
