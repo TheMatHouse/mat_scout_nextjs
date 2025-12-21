@@ -17,6 +17,11 @@ function isStaffRole(role) {
   return ["owner", "manager", "coach"].includes((role || "").toLowerCase());
 }
 
+function normalizeInviteRole(role) {
+  const r = (role || "member").toLowerCase();
+  return ["manager", "coach", "member"].includes(r) ? r : "member";
+}
+
 /* ============================================================
    GET — list invites
 ============================================================ */
@@ -78,13 +83,14 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { slug } = await params;
-    const { email, expiresInDays = 14 } = await req.json();
+    const { email, role = "member", expiresInDays = 14 } = await req.json();
 
     if (!email || typeof email !== "string") {
       return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
 
     const normEmail = email.trim().toLowerCase();
+    const inviteRole = normalizeInviteRole(role);
 
     const team = await Team.findOne({ teamSlug: slug }).select(
       "_id teamName user userId"
@@ -145,8 +151,9 @@ export async function POST(req, { params }) {
     const invite = await TeamInvitation.create({
       teamId: team._id,
       email: normEmail,
+      role: inviteRole,
       status: "pending",
-      invitedBy: actor._id,
+      invitedByUserId: actor._id,
       createdAt: now,
       expiresAt,
     });
@@ -163,8 +170,8 @@ export async function POST(req, { params }) {
         await createNotification({
           userId: invitedUser._id,
           type: "Team Invitation",
-          body: `You were invited to join ${team.teamName}`,
-          link: `/invites`,
+          body: `You were invited to join ${team.teamName} as ${inviteRole}`,
+          link: `/invites/${invite._id}`,
         });
       }
     } catch (notifErr) {
@@ -172,7 +179,7 @@ export async function POST(req, { params }) {
     }
 
     /* --------------------------------------------------------
-       Email notification (respects teamInvites.email)
+       Email notification
     -------------------------------------------------------- */
     try {
       const inviteUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/invites/${invite._id}`;
@@ -183,6 +190,7 @@ export async function POST(req, { params }) {
           <p>You’ve been invited to join <strong>${
             team.teamName
           }</strong> on MatScout.</p>
+          <p><strong>Role:</strong> ${inviteRole}</p>
           <p>
             <a href="${inviteUrl}"
                style="display:inline-block;background-color:#1a73e8;color:white;
