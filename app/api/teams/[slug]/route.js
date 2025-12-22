@@ -40,7 +40,17 @@ export async function GET(req, ctx) {
       logoURL: team.logoURL,
       logoType: team.logoType,
       user: String(team.user),
-      // add other public fields you rely on…
+
+      // 🔹 fields edited in Settings
+      info: team.info || "",
+      email: team.email || "",
+      phone: team.phone || "",
+      address: team.address || "",
+      address2: team.address2 || "",
+      city: team.city || "",
+      state: team.state || "",
+      postalCode: team.postalCode || "",
+      country: team.country || "US",
     };
 
     if (isOwner && wantFullSecurity) {
