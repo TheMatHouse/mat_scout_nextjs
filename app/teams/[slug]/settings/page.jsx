@@ -371,11 +371,6 @@ const TeamSettingsPage = () => {
         }
       }
 
-      console.log(
-        "[BULK ENCRYPT] prepared payload length:",
-        reportsPayload.length
-      );
-
       if (reportsPayload.length === 0) {
         toast.error("No reports could be encrypted.");
         return;
