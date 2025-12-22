@@ -12,7 +12,9 @@ import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
 export const dynamic = "force-dynamic";
 
-// ✅ GET: Fetch team details
+// --------------------------------------------------
+// GET: Fetch team details
+// --------------------------------------------------
 export async function GET(req, ctx) {
   try {
     await connectDB();
@@ -23,8 +25,9 @@ export async function GET(req, ctx) {
 
     const actor = await getCurrentUser();
     const team = await Team.findOne({ teamSlug: slug });
-    if (!team)
+    if (!team) {
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
+    }
 
     const isOwner = actor && String(team.user) === String(actor._id);
 
@@ -41,7 +44,7 @@ export async function GET(req, ctx) {
       logoType: team.logoType,
       user: String(team.user),
 
-      // 🔹 fields edited in Settings
+      // Settings-editable fields
       info: team.info || "",
       email: team.email || "",
       phone: team.phone || "",
@@ -84,7 +87,9 @@ export async function GET(req, ctx) {
   }
 }
 
-// ✅ PATCH: Update team (owner only). Return the FULL updated document.
+// --------------------------------------------------
+// PATCH: Update team (owner only)
+// --------------------------------------------------
 export async function PATCH(req, { params }) {
   try {
     await connectDB();
@@ -97,41 +102,84 @@ export async function PATCH(req, { params }) {
     const { slug } = params;
     const body = await req.json().catch(() => ({}));
 
-    // Disable lock
-    if (body?.lockEnabled === false) {
-      const res = await Team.updateOne(
-        { teamSlug: slug },
-        {
-          $set: {
-            "security.lockEnabled": false,
-          },
-        }
-      );
+    const team = await Team.findOne({ teamSlug: slug });
+    if (!team) {
+      return NextResponse.json({ message: "Team not found" }, { status: 404 });
+    }
 
-      if (res.matchedCount === 0) {
+    if (String(team.user) !== String(actor._id)) {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    }
+
+    // --------------------------------------------------
+    // 1️⃣ GENERAL TEAM INFO UPDATE (Settings form)
+    // --------------------------------------------------
+    const isSecurityPayload =
+      body?.kdf?.saltB64 && body?.kdf?.iterations && body?.verifierB64;
+
+    if (!isSecurityPayload && body?.lockEnabled !== false) {
+      const update = {};
+
+      if (body.info !== undefined) update.info = body.info;
+      if (body.email !== undefined) update.email = body.email;
+      if (body.phone !== undefined) update.phone = body.phone;
+      if (body.address !== undefined) update.address = body.address;
+      if (body.address2 !== undefined) update.address2 = body.address2;
+      if (body.city !== undefined) update.city = body.city;
+      if (body.state !== undefined) update.state = body.state;
+      if (body.postalCode !== undefined) update.postalCode = body.postalCode;
+      if (body.country !== undefined) update.country = body.country;
+
+      if (Object.keys(update).length === 0) {
         return NextResponse.json(
-          { message: "Team not found" },
-          { status: 404 }
+          { message: "No fields to update" },
+          { status: 400 }
         );
       }
+
+      await Team.updateOne({ teamSlug: slug }, { $set: update });
 
       const fresh = await Team.findOne({ teamSlug: slug }).lean();
       return NextResponse.json(
         {
-          message: "Team lock disabled",
-          matchedCount: res.matchedCount,
-          modifiedCount: res.modifiedCount,
+          message: "Team updated",
           team: {
-            _id: String(fresh?._id || ""),
-            teamSlug: fresh?.teamSlug || slug,
-            security: fresh?.security || null,
+            _id: String(fresh._id),
+            teamSlug: fresh.teamSlug,
+            ...update,
+            security: fresh.security,
           },
         },
         { status: 200 }
       );
     }
 
-    // Enable/update lock
+    // --------------------------------------------------
+    // 2️⃣ DISABLE LOCK
+    // --------------------------------------------------
+    if (body?.lockEnabled === false) {
+      await Team.updateOne(
+        { teamSlug: slug },
+        { $set: { "security.lockEnabled": false } }
+      );
+
+      const fresh = await Team.findOne({ teamSlug: slug }).lean();
+      return NextResponse.json(
+        {
+          message: "Team lock disabled",
+          team: {
+            _id: String(fresh._id),
+            teamSlug: fresh.teamSlug,
+            security: fresh.security,
+          },
+        },
+        { status: 200 }
+      );
+    }
+
+    // --------------------------------------------------
+    // 3️⃣ ENABLE / UPDATE TEAM PASSWORD
+    // --------------------------------------------------
     const saltB64 = body?.kdf?.saltB64?.trim();
     const iterations = Number(body?.kdf?.iterations ?? 0);
     const verifierB64 = body?.verifierB64?.trim();
@@ -146,7 +194,7 @@ export async function PATCH(req, { params }) {
       );
     }
 
-    const res = await Team.updateOne(
+    await Team.updateOne(
       { teamSlug: slug },
       {
         $set: {
@@ -160,26 +208,20 @@ export async function PATCH(req, { params }) {
       }
     );
 
-    if (res.matchedCount === 0) {
-      return NextResponse.json({ message: "Team not found" }, { status: 404 });
-    }
-
     const fresh = await Team.findOne({ teamSlug: slug }).lean();
     return NextResponse.json(
       {
         message: "Team password updated",
-        matchedCount: res.matchedCount,
-        modifiedCount: res.modifiedCount,
         team: {
-          _id: String(fresh?._id || ""),
-          teamSlug: fresh?.teamSlug || slug,
-          security: fresh?.security || null,
+          _id: String(fresh._id),
+          teamSlug: fresh.teamSlug,
+          security: fresh.security,
         },
       },
       { status: 200 }
     );
   } catch (err) {
-    console.error("security PATCH error:", err);
+    console.error("PATCH team error:", err);
     return NextResponse.json(
       { message: "Server error: " + err.message },
       { status: 500 }
@@ -187,7 +229,9 @@ export async function PATCH(req, { params }) {
   }
 }
 
-// ✅ DELETE: Delete team (owner only)
+// --------------------------------------------------
+// DELETE: Delete team (owner only)
+// --------------------------------------------------
 export async function DELETE(req, { params }) {
   try {
     await connectDB();
@@ -203,12 +247,10 @@ export async function DELETE(req, { params }) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
     }
 
-    // Owner-only
     if (team.user.toString() !== currentUser._id.toString()) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Notify members
     const members = await TeamMember.find({ teamId: team._id });
     const memberUserIds = members
       .map((m) => m.userId?.toString())
@@ -225,36 +267,28 @@ export async function DELETE(req, { params }) {
       )
     );
 
-    // Best-effort email
     try {
       const users = await User.find({ _id: { $in: memberUserIds } });
-      const emailPromises = users.map((u) => {
-        const html = baseEmailTemplate({
-          title: "Team Deleted",
-          message: `
-            <p>Hello ${u.firstName || u.username},</p>
-            <p>The team <strong>${
-              team.teamName
-            }</strong> has been deleted by the owner.</p>
-            <p>You no longer have access to this team in MatScout.</p>
-          `,
-          logoUrl:
-            "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png",
-        });
-
-        return sendEmail({
-          to: u.email,
-          subject: `${team.teamName} has been deleted`,
-          html,
-        });
-      });
-
-      await Promise.all(emailPromises);
+      await Promise.all(
+        users.map((u) =>
+          sendEmail({
+            to: u.email,
+            subject: `${team.teamName} has been deleted`,
+            html: baseEmailTemplate({
+              title: "Team Deleted",
+              message: `<p>Hello ${
+                u.firstName || u.username
+              },</p><p>The team <strong>${
+                team.teamName
+              }</strong> has been deleted.</p>`,
+            }),
+          })
+        )
+      );
     } catch (emailErr) {
       console.error("Failed to send team deletion emails:", emailErr);
     }
 
-    // Clean up
     await TeamMember.deleteMany({ teamId: team._id });
     await ScoutingReport.deleteMany({ teamId: team._id });
     await Team.deleteOne({ _id: team._id });
