@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUser } from "@/lib/auth-server";
@@ -9,6 +9,7 @@ import { getCurrentUser } from "@/lib/auth-server";
 import TeamInvitation from "@/models/teamInvitationModel";
 import Team from "@/models/teamModel";
 import AcceptInviteButton from "./AcceptInviteButton";
+import DeclineInviteButton from "./DeclineInviteButton";
 
 /* ============================================================
    Invite Page (Server Component)
@@ -19,9 +20,7 @@ export default async function InvitePage({ params }) {
   const { inviteId } = await params;
 
   const invite = await TeamInvitation.findById(inviteId).lean();
-  if (!invite) {
-    notFound();
-  }
+  if (!invite) notFound();
 
   if (invite.status !== "pending") {
     return (
@@ -56,7 +55,7 @@ export default async function InvitePage({ params }) {
 
   const user = await getCurrentUser();
 
-  // If not logged in → prompt login/register with redirect back
+  // Not logged in
   if (!user) {
     const redirectTo = `/invites/${inviteId}`;
 
@@ -67,7 +66,7 @@ export default async function InvitePage({ params }) {
         </h1>
 
         <p className="mb-6">
-          Please sign in or create an account to accept this invitation.
+          Please sign in or create an account to respond to this invitation.
         </p>
 
         <div className="flex gap-4">
@@ -88,12 +87,12 @@ export default async function InvitePage({ params }) {
     );
   }
 
-  // Logged in — ensure email matches
+  // Wrong email
   if (invite.email !== user.email.toLowerCase()) {
     return (
       <InviteMessage
         title="Wrong Account"
-        message={`This invitation was sent to ${invite.email}. You are currently logged in as ${user.email}.`}
+        message={`This invitation was sent to ${invite.email}. You are logged in as ${user.email}.`}
       />
     );
   }
@@ -104,11 +103,14 @@ export default async function InvitePage({ params }) {
         You’ve been invited to join {team.teamName}
       </h1>
 
-      <p className="mb-4">
-        Role: <strong>{invite.role || "member"}</strong>
+      <p className="mb-6">
+        Role: <strong>{invite.payload?.role || "member"}</strong>
       </p>
 
-      <AcceptInviteButton inviteId={inviteId} />
+      <div className="flex gap-4">
+        <AcceptInviteButton inviteId={inviteId} />
+        <DeclineInviteButton inviteId={inviteId} />
+      </div>
     </InviteContainer>
   );
 }
