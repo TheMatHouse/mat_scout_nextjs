@@ -9,14 +9,17 @@ import { getCurrentUser } from "@/lib/auth-server";
 import TeamInvitation from "@/models/teamInvitationModel";
 import TeamMember from "@/models/teamMemberModel";
 import Team from "@/models/teamModel";
-import User from "@/models/userModel";
-import { createNotification } from "@/lib/createNotification";
+
+function normalizeRole(role) {
+  const r = (role || "member").toLowerCase();
+  return ["owner", "manager", "coach", "member"].includes(r) ? r : "member";
+}
 
 /* ============================================================
-   POST — accept a team invitation (TRANSACTIONAL)
+   POST — accept a team invitation
 ============================================================ */
 export async function POST(_req, { params }) {
-  const session = await mongoose.startSession();
+  let session;
 
   try {
     await connectDB();
@@ -35,101 +38,111 @@ export async function POST(_req, { params }) {
       );
     }
 
-    let teamSlug;
+    session = await mongoose.startSession();
+    session.startTransaction();
 
-    await session.withTransaction(async () => {
-      // Lock invite for this transaction
-      const invite = await TeamInvitation.findById(inviteId).session(session);
-      if (!invite) {
-        throw new Error("INVITE_NOT_FOUND");
-      }
-
-      if (invite.status !== "pending") {
-        throw new Error("INVITE_NOT_PENDING");
-      }
-
-      if (invite.expiresAt && invite.expiresAt < new Date()) {
-        throw new Error("INVITE_EXPIRED");
-      }
-
-      if (invite.email !== user.email.toLowerCase()) {
-        throw new Error("EMAIL_MISMATCH");
-      }
-
-      const team = await Team.findById(invite.teamId)
-        .select("teamSlug teamName user")
-        .session(session);
-
-      if (!team) {
-        throw new Error("TEAM_NOT_FOUND");
-      }
-
-      teamSlug = team.teamSlug;
-
-      // Prevent duplicate membership
-      const existingMember = await TeamMember.findOne({
-        teamId: invite.teamId,
-        userId: user._id,
-      }).session(session);
-
-      if (existingMember) {
-        throw new Error("ALREADY_MEMBER");
-      }
-
-      // Create team membership
-      await TeamMember.create(
-        [
-          {
-            teamId: invite.teamId,
-            userId: user._id,
-            role: invite.role || "member",
-          },
-        ],
-        { session }
+    const invite = await TeamInvitation.findById(inviteId).session(session);
+    if (!invite) {
+      await session.abortTransaction();
+      return NextResponse.json(
+        { error: "Invitation not found" },
+        { status: 404 }
       );
+    }
 
-      // Mark invite as accepted
-      invite.status = "accepted";
-      invite.acceptedAt = new Date();
-      await invite.save({ session });
+    if (invite.status !== "pending") {
+      await session.abortTransaction();
+      return NextResponse.json(
+        { error: "Invitation is no longer valid" },
+        { status: 400 }
+      );
+    }
 
-      // In-app notification to inviter or team owner
-      const notifyUserId = invite.invitedByUserId || team.user || null;
+    if (invite.expiresAt && invite.expiresAt < new Date()) {
+      await session.abortTransaction();
+      return NextResponse.json(
+        { error: "Invitation has expired" },
+        { status: 400 }
+      );
+    }
 
-      if (notifyUserId) {
-        await createNotification({
-          userId: notifyUserId,
-          type: "Team Invitation Accepted",
-          body: `${
-            user.firstName || user.username || "A user"
-          } accepted the invitation to join ${team.teamName}`,
-          link: `/teams/${team.teamSlug}/members`,
-          session,
-        });
-      }
-    });
+    if (invite.email !== user.email.toLowerCase()) {
+      await session.abortTransaction();
+      return NextResponse.json(
+        { error: "This invitation was sent to a different email" },
+        { status: 403 }
+      );
+    }
+
+    const team = await Team.findById(invite.teamId)
+      .select("teamSlug")
+      .session(session);
+
+    if (!team) {
+      await session.abortTransaction();
+      return NextResponse.json(
+        { error: "Team no longer exists" },
+        { status: 404 }
+      );
+    }
+
+    const existingMember = await TeamMember.findOne({
+      teamId: invite.teamId,
+      userId: user._id,
+    }).session(session);
+
+    if (existingMember) {
+      await session.abortTransaction();
+      return NextResponse.json(
+        { error: "You are already a member of this team" },
+        { status: 409 }
+      );
+    }
+
+    // ✅ FIX: role now lives in payload
+    const role = normalizeRole(invite.payload?.role);
+
+    await TeamMember.create(
+      [
+        {
+          teamId: invite.teamId,
+          userId: user._id,
+          role,
+        },
+      ],
+      { session }
+    );
+
+    invite.status = "accepted";
+    invite.acceptedAt = new Date();
+    await invite.save({ session });
+
+    await session.commitTransaction();
 
     return NextResponse.json({
-      success: true,
-      teamSlug,
+      ok: true,
+      teamSlug: team.teamSlug,
     });
   } catch (err) {
     console.error("Accept invite error:", err);
 
-    const messageMap = {
-      INVITE_NOT_FOUND: "Invitation not found",
-      INVITE_NOT_PENDING: "Invitation is no longer valid",
-      INVITE_EXPIRED: "Invitation has expired",
-      EMAIL_MISMATCH: "This invitation was sent to a different email address",
-      TEAM_NOT_FOUND: "Team no longer exists",
-      ALREADY_MEMBER: "You are already a member of this team",
-    };
+    if (session) {
+      try {
+        await session.abortTransaction();
+      } catch {}
+    }
 
     return NextResponse.json(
-      { error: messageMap[err.message] || "Failed to accept invitation" },
-      { status: 400 }
+      {
+        error: "Failed to accept invitation",
+        detail:
+          process.env.NODE_ENV === "development" ? err?.message : undefined,
+      },
+      { status: 500 }
     );
   } finally {
-    session.endSession();
+    if (session) {
+      session.endSession();
+    }
   }
 }
