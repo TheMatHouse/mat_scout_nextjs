@@ -1,83 +1,52 @@
-export const dynamic = "force-dynamic";
-
+// app/api/auth/google/callback/route.js
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
-
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
-import { sanitizeUsername, isUsernameFormatValid } from "@/lib/identifiers";
 import { sendWelcomeEmail } from "@/lib/email/sendWelcomeEmail";
 
 const JWT_SECRET = process.env.JWT_SECRET;
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
-/* ------------------------------------------------------------
-   Helper: generate a valid + unique username
------------------------------------------------------------- */
-async function generateUniqueUsername(base) {
-  let baseCandidate = sanitizeUsername(base);
+export const dynamic = "force-dynamic";
 
-  // Ensure minimum length
-  if (baseCandidate.length < 3) {
-    baseCandidate = "user";
-  }
-
-  let attempt = baseCandidate;
-  let suffix = 0;
-
-  while (true) {
-    // Respect RESERVED + regex rules
-    if (isUsernameFormatValid(attempt)) {
-      const exists = await User.exists({ username: attempt });
-      if (!exists) return attempt;
-    }
-
-    suffix += 1;
-    attempt = `${baseCandidate}${suffix}`.slice(0, 30);
-  }
-}
-
-/* ------------------------------------------------------------
-   Google OAuth Callback
------------------------------------------------------------- */
 export async function GET(request) {
   try {
-    if (!JWT_SECRET || !GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
-      const origin = new URL(request.url).origin;
-      return NextResponse.redirect(`${origin}/login?error=server_env`);
-    }
-
     const url = new URL(request.url);
     const code = url.searchParams.get("code");
-    const returnedState = url.searchParams.get("state");
+    const state = url.searchParams.get("state");
 
-    const origin = (
-      process.env.NEXT_PUBLIC_DOMAIN?.trim() || `${url.protocol}//${url.host}`
-    ).replace(/\/+$/, "");
-
-    const redirectUri = (
-      process.env.GOOGLE_REDIRECT_URI?.trim() ||
-      `${origin}/api/auth/google/callback`
-    ).replace(/\/+$/, "");
-
-    const cookieStore = await cookies();
-    const storedState = cookieStore.get("oauth_state_google")?.value || null;
-
-    if (!code || !returnedState || returnedState !== storedState) {
-      const bad = NextResponse.redirect(`${origin}/login?error=google_state`);
-      bad.cookies.set("oauth_state_google", "", { path: "/", maxAge: 0 });
-      return bad;
+    if (!code || !state) {
+      return NextResponse.redirect("/login?error=google_state");
     }
 
-    /* ---------------- Exchange code for tokens ---------------- */
+    // 🔐 Decode and validate state
+    let decoded;
+    try {
+      decoded = JSON.parse(Buffer.from(state, "base64url").toString("utf8"));
+    } catch {
+      return NextResponse.redirect("/login?error=google_state");
+    }
+
+    // Optional: state freshness check (5 min)
+    if (Date.now() - decoded.t > 5 * 60 * 1000) {
+      return NextResponse.redirect("/login?error=google_state_expired");
+    }
+
+    const origin =
+      process.env.NEXT_PUBLIC_DOMAIN?.replace(/\/+$/, "") ||
+      `${url.protocol}//${url.host}`;
+
+    const redirectUri =
+      process.env.GOOGLE_REDIRECT_URI?.replace(/\/+$/, "") ||
+      `${origin}/api/auth/google/callback`;
+
+    // Exchange code
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        client_id: GOOGLE_CLIENT_ID,
-        client_secret: GOOGLE_CLIENT_SECRET,
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
         code,
         grant_type: "authorization_code",
         redirect_uri: redirectUri,
@@ -85,103 +54,72 @@ export async function GET(request) {
     });
 
     if (!tokenRes.ok) {
-      return NextResponse.redirect(`${origin}/login?error=google_token`);
+      return NextResponse.redirect("/login?error=google_token");
     }
 
     const tokenData = await tokenRes.json();
-    if (!tokenData.access_token) {
-      return NextResponse.redirect(
-        `${origin}/login?error=google_no_access_token`
-      );
-    }
 
-    /* ---------------- Fetch Google profile ---------------- */
     const userRes = await fetch(
       "https://www.googleapis.com/oauth2/v3/userinfo",
       {
-        headers: { Authorization: `Bearer ${tokenData.access_token}` },
+        headers: {
+          Authorization: `Bearer ${tokenData.access_token}`,
+        },
       }
     );
 
     if (!userRes.ok) {
-      return NextResponse.redirect(`${origin}/login?error=google_userinfo`);
+      return NextResponse.redirect("/login?error=google_userinfo");
     }
 
     const profile = await userRes.json();
+    const email = profile.email?.toLowerCase();
 
-    const emailRaw = profile?.email;
-    if (!emailRaw) {
-      return NextResponse.redirect(`${origin}/login?error=google_no_email`);
+    if (!email) {
+      return NextResponse.redirect("/login?error=google_no_email");
     }
-
-    const email = emailRaw.toLowerCase().trim();
-    const name = (profile?.name || "").trim();
-    const picture = profile?.picture || "";
 
     await connectDB();
 
-    /* ---------------- Find or create user ---------------- */
     let user = await User.findOne({ email });
-
     if (!user) {
-      const [firstName = "", ...rest] = name.split(" ");
+      const [firstName = "", ...rest] = (profile.name || "").split(" ");
       const lastName = rest.join(" ");
-      const baseUsername = email.split("@")[0];
-      const username = await generateUniqueUsername(baseUsername);
 
       user = await User.create({
         firstName,
         lastName,
-        username,
+        username: email.split("@")[0],
         email,
-        googleAvatar: picture,
-        avatar: picture,
+        avatar: profile.picture,
         avatarType: "google",
         provider: "google",
-        verified: true,
+        isVerified: true,
       });
 
-      // Fire-and-forget welcome email
       try {
         await sendWelcomeEmail({ to: email });
-      } catch (e) {
-        console.warn("Welcome email failed:", e?.message || e);
-      }
+      } catch {}
     }
 
-    /* ---------------- Create session JWT ---------------- */
     const token = jwt.sign(
-      { userId: user._id, email: user.email, isAdmin: !!user.isAdmin },
+      { userId: user._id, email: user.email },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    const postRedirect = cookieStore.get("post_auth_redirect")?.value;
-    const safeRedirect =
-      postRedirect && postRedirect.startsWith("/")
-        ? postRedirect
-        : "/dashboard";
-
-    const res = NextResponse.redirect(`${origin}${safeRedirect}`);
-
-    res.cookies.set({
-      name: "token",
-      value: token,
+    const res = NextResponse.redirect(`${origin}/dashboard`);
+    res.cookies.set("token", token, {
       httpOnly: true,
+      secure: true,
+      sameSite: "lax",
       path: "/",
       maxAge: 60 * 60 * 24 * 7,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
     });
-
-    res.cookies.set("oauth_state_google", "", { path: "/", maxAge: 0 });
-    res.cookies.set("post_auth_redirect", "", { path: "/", maxAge: 0 });
 
     return res;
   } catch (err) {
-    console.error("Google OAuth callback error:", err);
-    const origin =
-      process.env.NEXT_PUBLIC_DOMAIN?.trim() || new URL(request.url).origin;
-    return NextResponse.redirect(`${origin}/login?error=google_exception`);
+    console.error("Google OAuth error:", err);
+    return NextResponse.redirect("/login?error=google_exception");
   }
 }
