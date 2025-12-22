@@ -17,7 +17,13 @@ function DeclineInviteButton({ inviteId }) {
         method: "POST",
       });
 
-      const data = await res.json();
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        // Non-JSON response (HTML error)
+      }
+
       if (!res.ok) {
         throw new Error(data?.error || "Failed to decline invitation");
       }
