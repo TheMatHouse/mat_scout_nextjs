@@ -248,8 +248,17 @@ const TeamSettingsPage = () => {
         return;
       }
       const updatedTeam = payload?.team ?? payload;
-      await refetchTeam();
+
+      // 🔁 Immediately sync TeamContext so other pages update without refresh
+      if (updatedTeam) {
+        setTeam((prev) => ({
+          ...(prev || {}),
+          ...updatedTeam,
+        }));
+      }
+
       toast.success("Team info updated successfully!");
+
       window.scrollTo({ top: 0, behavior: "smooth" });
       if (updatedTeam?.teamSlug && updatedTeam.teamSlug !== teamSlug) {
         router.replace(`/teams/${updatedTeam.teamSlug}/settings`);
