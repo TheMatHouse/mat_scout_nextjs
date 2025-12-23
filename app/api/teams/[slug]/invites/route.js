@@ -89,7 +89,14 @@ export async function POST(req, { params }) {
     }
 
     const { slug } = await params;
-    const { email, role = "member", expiresInDays = 14 } = await req.json();
+
+    const {
+      email,
+      firstName = "",
+      lastName = "",
+      role = "member",
+      expiresInDays = 14,
+    } = await req.json();
 
     if (!email || typeof email !== "string") {
       return NextResponse.json({ error: "Email is required" }, { status: 400 });
@@ -97,6 +104,9 @@ export async function POST(req, { params }) {
 
     const normEmail = email.trim().toLowerCase();
     const safeRole = normalizeInviteRole(role);
+
+    const normFirstName = String(firstName || "").trim();
+    const normLastName = String(lastName || "").trim();
 
     const team = await Team.findOne({ teamSlug: slug }).select(
       "_id teamName user userId"
@@ -168,6 +178,8 @@ export async function POST(req, { params }) {
       invite.status = "pending";
       invite.expiresAt = expiresAt;
       invite.invitedByUserId = actor._id;
+      invite.firstName = normFirstName;
+      invite.lastName = normLastName;
       invite.payload = {
         ...(invite.payload || {}),
         role: safeRole,
@@ -178,6 +190,8 @@ export async function POST(req, { params }) {
       invite = await TeamInvitation.create({
         teamId: team._id,
         email: normEmail,
+        firstName: normFirstName,
+        lastName: normLastName,
         status: "pending",
         expiresAt,
         invitedByUserId: actor._id,

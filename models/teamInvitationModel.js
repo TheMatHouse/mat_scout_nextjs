@@ -15,9 +15,11 @@ const TeamInvitationSchema = new mongoose.Schema(
     // Adult vs Minor branch
     isMinor: { type: Boolean, default: false, index: true },
 
-    // Only relevant for minors; we also store normalized copies
+    // ✅ Invitee name (now valid for BOTH adults and minors)
     firstName: { type: String },
     lastName: { type: String },
+
+    // 🔒 Used ONLY for minors to enforce uniqueness
     firstNameLower: { type: String },
     lastNameLower: { type: String },
 
@@ -61,23 +63,28 @@ function normalizeNameLower(n) {
 }
 
 TeamInvitationSchema.pre("validate", function (next) {
+  // email always normalized
   this.email = normalizeEmail(this.email);
+
+  // normalize names for BOTH adults and minors
+  this.firstName = normalizeName(this.firstName);
+  this.lastName = normalizeName(this.lastName);
+
   if (this.isMinor) {
-    this.firstName = normalizeName(this.firstName);
-    this.lastName = normalizeName(this.lastName);
+    // minors need lowercase copies for uniqueness
     this.firstNameLower = normalizeNameLower(this.firstName);
     this.lastNameLower = normalizeNameLower(this.lastName);
   } else {
-    // Clear minor fields for adults to keep the model tidy
-    this.firstName = undefined;
-    this.lastName = undefined;
+    // adults do NOT participate in name-based uniqueness
     this.firstNameLower = undefined;
     this.lastNameLower = undefined;
   }
+
   next();
 });
 
 // ---------- Indexes that encode your rules ----------
+
 // ADULT (isMinor=false): Only one per (teamId, email)
 TeamInvitationSchema.index(
   { teamId: 1, email: 1 },
