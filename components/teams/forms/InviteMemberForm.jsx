@@ -53,18 +53,17 @@ export default function InviteMemberForm({
     setSubmitting(true);
 
     try {
-      // build parent fields ONLY when minor
       const parentName = isMinor ? `${pFirst} ${pLast}`.trim() : undefined;
       const parentEmail = isMinor ? pEmail : undefined;
 
       const payload = {
         firstName,
         lastName,
-        role, // send 'role'
-        email, // adult email; ignored by server if isMinor === true
+        role,
+        email,
         isMinor,
-        parentName, // only present when minor
-        parentEmail, // only present when minor
+        parentName,
+        parentEmail,
         message,
       };
 
@@ -76,23 +75,28 @@ export default function InviteMemberForm({
 
       const data = await res.json();
 
+      // ❌ REAL server error
       if (!res.ok) {
-        throw new Error(data?.error || "Failed to send invite");
+        throw new Error(data?.error || "Failed to send invitation");
       }
 
-      const displayName = `${firstName} ${lastName}`.trim();
-      toast.success(`Invitation sent to ${displayName} as ${role}`);
+      // ⚠️ NEW: handle rate-limit / skipped email gracefully
+      if (data?.warning) {
+        toast.warning(data.warning);
+      } else {
+        const displayName = `${firstName} ${lastName}`.trim();
+        toast.success(`Invitation sent to ${displayName} as ${role}`);
+      }
 
-      // optional analytics (unchanged)
+      // analytics (unchanged)
       try {
         adminInviteSent?.({ slug, role, isMinor });
       } catch {}
 
-      // ✅ refresh lists and close modal
       await onSuccess?.();
       setOpen(false);
 
-      // optional: reset fields for next time the modal opens
+      // reset form
       setIsMinor(false);
       setFirstName("");
       setLastName("");
@@ -102,7 +106,7 @@ export default function InviteMemberForm({
       setPEmail("");
       setMessage("");
     } catch (err) {
-      toast.error(err.message || "Failed to send invite");
+      toast.error(err.message || "Failed to send invitation");
     } finally {
       setSubmitting(false);
     }
