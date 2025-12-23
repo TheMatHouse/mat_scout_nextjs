@@ -231,7 +231,7 @@ export async function POST(req, { params }) {
       `,
     });
 
-    await Mail.sendEmail({
+    const mailResult = await Mail.sendEmail({
       type: Mail.kinds.TEAM_INVITE,
       toEmail: normEmail,
       subject: `Invitation to join ${team.teamName}`,
@@ -239,6 +239,29 @@ export async function POST(req, { params }) {
       relatedUserId: actor._id,
       teamId: String(team._id),
     });
+
+    if (mailResult?.skipped) {
+      if (mailResult.reason?.startsWith("rate_limited")) {
+        return NextResponse.json(
+          {
+            invite,
+            reused,
+            warning:
+              "Invitation was already sent recently. Please wait a few minutes before resending.",
+          },
+          { status: 200 }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          invite,
+          reused,
+          warning: "Invitation was created, but email delivery was skipped.",
+        },
+        { status: 200 }
+      );
+    }
 
     return NextResponse.json({ invite, reused }, { status: 201 });
   } catch (err) {
