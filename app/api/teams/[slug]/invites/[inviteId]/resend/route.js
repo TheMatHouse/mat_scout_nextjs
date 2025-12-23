@@ -1,14 +1,14 @@
-// app/api/teams/[slug]/invites/[inviteId]/resend/route.js
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
+
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUser } from "@/lib/auth-server";
 
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
 import TeamInvitation from "@/models/teamInvitationModel";
-import User from "@/models/userModel";
 
 import Mail from "@/lib/email/mailer";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
@@ -22,26 +22,40 @@ function isStaffRole(role) {
 }
 
 /* ============================================================
-   POST — resend invite
+   POST — resend invite (pending only)
 ============================================================ */
 export async function POST(_req, { params }) {
   try {
     await connectDB();
-
-    const { slug, inviteId } = await params;
 
     const actor = await getCurrentUser();
     if (!actor) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { slug, inviteId } = await params;
+
+    if (!mongoose.Types.ObjectId.isValid(inviteId)) {
+      return NextResponse.json(
+        { error: "Invalid invitation id" },
+        { status: 400 }
+      );
+    }
+
+    // -------------------------------------------------
+    // Load team
+    // -------------------------------------------------
     const team = await Team.findOne({ teamSlug: slug }).select(
-      "_id teamName teamSlug user userId"
+      "_id teamName user userId"
     );
+
     if (!team) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
     }
 
+    // -------------------------------------------------
+    // Staff authorization
+    // -------------------------------------------------
     const ownerId = String(team.user || team.userId || "");
     const isOwner = ownerId === String(actor._id);
 
@@ -56,8 +70,15 @@ export async function POST(_req, { params }) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const invite = await TeamInvitation.findById(inviteId);
-    if (!invite || String(invite.teamId) !== String(team._id)) {
+    // -------------------------------------------------
+    // Load invite
+    // -------------------------------------------------
+    const invite = await TeamInvitation.findOne({
+      _id: inviteId,
+      teamId: team._id,
+    });
+
+    if (!invite) {
       return NextResponse.json(
         { error: "Invitation not found" },
         { status: 404 }
@@ -66,7 +87,7 @@ export async function POST(_req, { params }) {
 
     if (invite.status !== "pending") {
       return NextResponse.json(
-        { error: "Invitation is not resendable" },
+        { error: "Only pending invitations can be resent" },
         { status: 400 }
       );
     }
@@ -78,14 +99,15 @@ export async function POST(_req, { params }) {
       );
     }
 
+    // -------------------------------------------------
+    // Email
+    // -------------------------------------------------
     const inviteUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/invites/${invite._id}`;
 
     const html = baseEmailTemplate({
       title: "You’ve been invited to a team",
       message: `
-        <p>You’ve been invited to join <strong>${
-          team.teamName
-        }</strong> on MatScout.</p>
+        <p>You’ve been invited to join <strong>${team.teamName}</strong>.</p>
         <p>
           <a href="${inviteUrl}"
              style="display:inline-block;background:#1a73e8;color:#fff;
@@ -93,7 +115,11 @@ export async function POST(_req, { params }) {
             Accept Invitation
           </a>
         </p>
-        <p>This invitation expires on ${invite.expiresAt?.toLocaleDateString()}.</p>
+        ${
+          invite.expiresAt
+            ? `<p>This invitation expires on ${invite.expiresAt.toLocaleDateString()}.</p>`
+            : ""
+        }
       `,
     });
 
@@ -106,9 +132,12 @@ export async function POST(_req, { params }) {
       teamId: String(team._id),
     });
 
-    return NextResponse.json({ success: true }, { status: 200 });
+    return NextResponse.json({ success: true });
   } catch (err) {
-    console.error("POST /invites/[inviteId]/resend error:", err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    console.error("Resend invite error:", err);
+    return NextResponse.json(
+      { error: "Failed to resend invitation" },
+      { status: 500 }
+    );
   }
 }

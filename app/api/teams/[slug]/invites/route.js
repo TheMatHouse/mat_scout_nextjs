@@ -41,7 +41,7 @@ export async function GET(req, { params }) {
     const { slug } = await params;
 
     const team = await Team.findOne({ teamSlug: slug }).select(
-      "_id user userId teamName"
+      "_id user userId"
     );
     if (!team) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
@@ -89,7 +89,6 @@ export async function POST(req, { params }) {
     }
 
     const { slug } = await params;
-
     const {
       email,
       firstName = "",
@@ -104,7 +103,6 @@ export async function POST(req, { params }) {
 
     const normEmail = email.trim().toLowerCase();
     const safeRole = normalizeInviteRole(role);
-
     const normFirstName = String(firstName || "").trim();
     const normLastName = String(lastName || "").trim();
 
@@ -130,7 +128,7 @@ export async function POST(req, { params }) {
     }
 
     /* ----------------------------------------------------------
-       Block if user is already a team member (by email)
+       Block if already a member (by email)
     ---------------------------------------------------------- */
     const existingMember = await TeamMember.findOne({
       teamId: team._id,
@@ -138,7 +136,7 @@ export async function POST(req, { params }) {
       .populate({
         path: "userId",
         match: { email: normEmail },
-        select: "email",
+        select: "_id",
       })
       .lean();
 
@@ -155,7 +153,7 @@ export async function POST(req, { params }) {
     );
 
     /* ----------------------------------------------------------
-       Find existing invite (any status)
+       Find existing invite (ANY status except accepted)
     ---------------------------------------------------------- */
     let reused = false;
 
@@ -164,7 +162,6 @@ export async function POST(req, { params }) {
       email: normEmail,
     });
 
-    // Accepted is terminal
     if (invite?.status === "accepted") {
       return NextResponse.json(
         { error: "Invitation already accepted" },
@@ -173,7 +170,7 @@ export async function POST(req, { params }) {
     }
 
     if (invite) {
-      // 🔁 Re-activate invite
+      // 🔁 Re-activate declined / revoked / expired
       reused = true;
       invite.status = "pending";
       invite.expiresAt = expiresAt;
@@ -184,9 +181,11 @@ export async function POST(req, { params }) {
         ...(invite.payload || {}),
         role: safeRole,
       };
+      invite.declinedAt = undefined;
+      invite.revokedAt = undefined;
       await invite.save();
     } else {
-      // 🆕 Create new invite
+      // 🆕 New invite
       invite = await TeamInvitation.create({
         teamId: team._id,
         email: normEmail,
@@ -200,7 +199,7 @@ export async function POST(req, { params }) {
     }
 
     /* ----------------------------------------------------------
-       In-app notification (only if user exists)
+       In-app notification (existing users only)
     ---------------------------------------------------------- */
     const invitedUser = await User.findOne({ email: normEmail }).select("_id");
     if (invitedUser) {
@@ -225,7 +224,7 @@ export async function POST(req, { params }) {
           <a href="${inviteUrl}"
              style="display:inline-block;background:#1a73e8;color:#fff;
                     padding:10px 16px;border-radius:4px;text-decoration:none;">
-            Accept Invitation
+            View Invitation
           </a>
         </p>
         <p>This invitation expires on ${expiresAt.toLocaleDateString()}.</p>

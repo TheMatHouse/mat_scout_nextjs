@@ -15,7 +15,7 @@ const TeamInvitationSchema = new mongoose.Schema(
     // Adult vs Minor branch
     isMinor: { type: Boolean, default: false, index: true },
 
-    // ✅ Invitee name (now valid for BOTH adults and minors)
+    // ✅ Invitee name (valid for BOTH adults and minors)
     firstName: { type: String },
     lastName: { type: String },
 
@@ -34,13 +34,18 @@ const TeamInvitationSchema = new mongoose.Schema(
       index: true,
     },
 
-    // 🔹 add expiry so UI can render "Expires …" for ALL invites
+    // ---- Lifecycle timestamps (NEW) ----
+    acceptedAt: { type: Date },
+    declinedAt: { type: Date },
+    revokedAt: { type: Date },
+
+    // 🔹 expiry so UI can render "Expires …"
     expiresAt: { type: Date, index: true },
 
     // optional notes/payload (token, role, message, etc.)
     payload: mongoose.Schema.Types.Mixed,
 
-    // New role field — default to "member" unless specified
+    // Role to assign upon acceptance
     role: {
       type: String,
       enum: ["manager", "coach", "member"],

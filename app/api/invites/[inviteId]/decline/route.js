@@ -21,7 +21,6 @@ export async function POST(_req, { params }) {
     }
 
     const { inviteId } = await params;
-
     if (!mongoose.Types.ObjectId.isValid(inviteId)) {
       return NextResponse.json(
         { error: "Invalid invitation" },
@@ -37,14 +36,29 @@ export async function POST(_req, { params }) {
       );
     }
 
-    if (invite.status !== "pending") {
+    // 🚫 Terminal-state guards
+    if (invite.status === "accepted") {
       return NextResponse.json(
-        { error: "Invitation is no longer pending" },
+        { error: "Invitation already accepted" },
+        { status: 409 }
+      );
+    }
+
+    if (invite.status === "declined") {
+      return NextResponse.json(
+        { error: "Invitation already declined" },
+        { status: 409 }
+      );
+    }
+
+    if (invite.status === "revoked") {
+      return NextResponse.json(
+        { error: "Invitation was revoked" },
         { status: 400 }
       );
     }
 
-    // Ensure email matches logged-in user
+    // 🔐 Email ownership check
     if (invite.email !== user.email.toLowerCase()) {
       return NextResponse.json(
         { error: "This invitation was sent to a different email address" },
@@ -52,10 +66,12 @@ export async function POST(_req, { params }) {
       );
     }
 
+    // ✅ Mark declined (terminal)
     invite.status = "declined";
+    invite.declinedAt = new Date();
     await invite.save();
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("Decline invite error:", err);
     return NextResponse.json(

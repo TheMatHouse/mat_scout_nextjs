@@ -10,9 +10,12 @@ import TeamInvitation from "@/models/teamInvitationModel";
 import TeamMember from "@/models/teamMemberModel";
 import Team from "@/models/teamModel";
 
+/* ============================================================
+   Helpers
+============================================================ */
 function normalizeRole(role) {
   const r = (role || "member").toLowerCase();
-  return ["owner", "manager", "coach", "member"].includes(r) ? r : "member";
+  return ["manager", "coach", "member"].includes(r) ? r : "member";
 }
 
 /* ============================================================
@@ -30,7 +33,6 @@ export async function POST(_req, { params }) {
     }
 
     const { inviteId } = await params;
-
     if (!mongoose.Types.ObjectId.isValid(inviteId)) {
       return NextResponse.json(
         { error: "Invalid invitation" },
@@ -50,7 +52,16 @@ export async function POST(_req, { params }) {
       );
     }
 
-    if (invite.status !== "pending") {
+    // 🚫 Terminal states
+    if (invite.status === "accepted") {
+      await session.abortTransaction();
+      return NextResponse.json(
+        { error: "Invitation already accepted" },
+        { status: 409 }
+      );
+    }
+
+    if (invite.status === "declined" || invite.status === "revoked") {
       await session.abortTransaction();
       return NextResponse.json(
         { error: "Invitation is no longer valid" },
@@ -66,6 +77,7 @@ export async function POST(_req, { params }) {
       );
     }
 
+    // 🔐 Email ownership check
     if (invite.email !== user.email.toLowerCase()) {
       await session.abortTransaction();
       return NextResponse.json(
@@ -99,7 +111,7 @@ export async function POST(_req, { params }) {
       );
     }
 
-    // ✅ FIX: role now lives in payload
+    // ✅ Role is resolved ONCE from payload
     const role = normalizeRole(invite.payload?.role);
 
     await TeamMember.create(
@@ -113,6 +125,7 @@ export async function POST(_req, { params }) {
       { session }
     );
 
+    // ✅ Mark accepted (terminal)
     invite.status = "accepted";
     invite.acceptedAt = new Date();
     await invite.save({ session });

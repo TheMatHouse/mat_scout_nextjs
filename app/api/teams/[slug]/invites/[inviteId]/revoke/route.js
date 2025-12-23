@@ -1,33 +1,47 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
+
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUser } from "@/lib/auth-server";
+
 import Team from "@/models/teamModel";
 import TeamInvitation from "@/models/teamInvitationModel";
 import TeamMember from "@/models/teamMemberModel";
 
-export async function POST(req, { params }) {
+export async function POST(_req, { params }) {
   try {
     await connectDB();
 
     const actor = await getCurrentUser();
-    if (!actor)
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    if (!actor) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const { slug, inviteId } = await params;
 
-    // ✅ FIX: correct lookup field is teamSlug, not slug
-    const team = await Team.findOne({ teamSlug: slug }).select("_id user");
-    if (!team)
-      return NextResponse.json({ message: "Team not found" }, { status: 404 });
+    if (!mongoose.Types.ObjectId.isValid(inviteId)) {
+      return NextResponse.json(
+        { error: "Invalid invitation id" },
+        { status: 400 }
+      );
+    }
 
-    // ---------------------------------------------
-    // Staff check (owner / manager / coach)
-    // ---------------------------------------------
+    // -------------------------------------------------
+    // Load team (slug → _id)
+    // -------------------------------------------------
+    const team = await Team.findOne({ teamSlug: slug }).select("_id user");
+    if (!team) {
+      return NextResponse.json({ error: "Team not found" }, { status: 404 });
+    }
+
+    // -------------------------------------------------
+    // Staff authorization
+    // -------------------------------------------------
     const membership = await TeamMember.findOne({
-      teamId: team._id, // ✅ FIXED
-      userId: actor._id, // ✅ FIXED
+      teamId: team._id,
+      userId: actor._id,
     }).select("role");
 
     const isOwner = String(team.user) === String(actor._id);
@@ -35,51 +49,53 @@ export async function POST(req, { params }) {
       isOwner ||
       ["manager", "coach"].includes((membership?.role || "").toLowerCase());
 
-    if (!isStaff)
-      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+    if (!isStaff) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
-    // ---------------------------------------------
-    // Find the invite using BOTH possible fields:
-    //  teamId (new) OR team (old)
-    // ---------------------------------------------
+    // -------------------------------------------------
+    // Find invite (NEW schema only; legacy safe)
+    // -------------------------------------------------
     const invite = await TeamInvitation.findOne({
       _id: inviteId,
-      $or: [
-        { teamId: team._id }, // NEW correct field
-        { team: team._id }, // OLD legacy field
-      ],
+      teamId: team._id,
     });
 
-    if (!invite)
+    if (!invite) {
       return NextResponse.json(
-        { message: "Invite not found" },
+        { error: "Invitation not found" },
         { status: 404 }
       );
+    }
 
     if (invite.status === "accepted") {
       return NextResponse.json(
-        { message: "Invitation already accepted." },
+        { error: "Invitation already accepted" },
         { status: 409 }
       );
     }
 
     if (invite.status === "revoked") {
-      return NextResponse.json({ message: "Invitation already revoked." });
+      return NextResponse.json(
+        { message: "Invitation already revoked" },
+        { status: 200 }
+      );
     }
 
-    // ---------------------------------------------
-    // Revoke the invite
-    // ---------------------------------------------
+    // -------------------------------------------------
+    // Revoke
+    // -------------------------------------------------
     invite.status = "revoked";
     invite.revokedAt = new Date();
     invite.revokedBy = actor._id;
+
     await invite.save();
 
-    return NextResponse.json({ message: "Invitation revoked." });
+    return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Revoke invite error:", err);
     return NextResponse.json(
-      { message: "Failed to revoke invite" },
+      { error: "Failed to revoke invitation" },
       { status: 500 }
     );
   }
