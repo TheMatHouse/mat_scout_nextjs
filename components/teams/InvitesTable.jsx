@@ -43,7 +43,7 @@ export default function InvitesTable({
               .join(" ");
             const labelName = inv.isMinor
               ? nameFromFields || "(minor)"
-              : nameFromFields || targetEmail;
+              : nameFromFields || "Invited user";
 
             // role may be stored on payload or top-level depending on version
             const role = inv?.payload?.role || inv?.role || "member";
