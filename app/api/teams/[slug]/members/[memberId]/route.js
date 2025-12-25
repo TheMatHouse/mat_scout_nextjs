@@ -10,7 +10,6 @@ import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
 import User from "@/models/userModel";
 import FamilyMember from "@/models/familyMemberModel";
-import CoachMatchNote from "@/models/coachMatchNoteModel";
 
 import { reconcileScoutingReportsForRemovedAthlete } from "@/lib/teams/reconcileScoutingReportsForRemovedAthlete";
 
@@ -108,7 +107,7 @@ export async function PATCH(request, { params }) {
     }
 
     /* ----------------------------------------------------------
-       REMOVE MEMBER (soft delete + cleanup)
+       REMOVE MEMBER (soft delete + scouting report cleanup)
     ---------------------------------------------------------- */
     if (role === "declined") {
       const athleteType = tm.familyMemberId ? "family" : "user";
@@ -118,20 +117,7 @@ export async function PATCH(request, { params }) {
       tm.role = "declined";
       await tm.save({ session });
 
-      // 2️⃣ Soft-delete coach notes (single-athlete only)
-      await CoachMatchNote.updateMany(
-        {
-          team: team._id,
-          deletedAt: null,
-          ...(athleteType === "user"
-            ? { createdBy: athleteId }
-            : { athleteFamilyMemberId: athleteId }),
-        },
-        { $set: { deletedAt: new Date() } },
-        { session }
-      );
-
-      // 3️⃣ Reconcile scouting reports
+      // 2️⃣ Reconcile scouting reports
       await reconcileScoutingReportsForRemovedAthlete({
         session,
         teamId: team._id,
