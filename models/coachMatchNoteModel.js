@@ -1,4 +1,4 @@
-// /models/coachMatchNoteModel.js
+// models/coachMatchNoteModel.js
 import pkg from "mongoose";
 const { Schema, model, models } = pkg;
 
@@ -20,21 +20,15 @@ const TechniquesSchema = new Schema(
   { _id: false }
 );
 
-/** Optional single video attached to a coach note */
 const VideoSchema = new Schema(
   {
-    /** Playable URL (Cloudinary URL, YouTube/Vimeo link, or direct mp4) */
     url: { type: String, default: null, trim: true },
-    /** Cloudinary public_id if you upload to Cloudinary (optional) */
     publicId: { type: String, default: null, trim: true },
-    /** Start position in milliseconds (e.g., 90000 = 1:30) */
     startMs: { type: Number, default: 0, min: 0 },
-    /** Optional label to describe the clip (“First exchange”, etc.) */
     label: { type: String, default: "", trim: true },
-    /** Optional metadata (filled if you want) */
     width: { type: Number, default: null },
     height: { type: Number, default: null },
-    duration: { type: Number, default: null }, // seconds
+    duration: { type: Number, default: null },
   },
   { _id: false }
 );
@@ -47,35 +41,69 @@ const CoachMatchNoteSchema = new Schema(
       required: true,
       index: true,
     },
+
     entry: {
       type: Schema.Types.ObjectId,
       ref: "CoachEntry",
       required: true,
       index: true,
     },
+
     team: {
       type: Schema.Types.ObjectId,
       ref: "Team",
       required: true,
       index: true,
     },
-    athleteName: { type: String, required: true, trim: true }, // denormalized for convenience
+
+    athleteName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
     opponent: { type: OpponentSchema, default: {} },
 
     whatWentWell: { type: String, trim: true },
     reinforce: { type: String, trim: true },
     needsFix: { type: String, trim: true },
-    techniques: { type: TechniquesSchema, default: { ours: [], theirs: [] } },
 
-    result: { type: String, enum: ["win", "loss", "draw", ""], default: "" },
+    techniques: {
+      type: TechniquesSchema,
+      default: { ours: [], theirs: [] },
+    },
+
+    result: {
+      type: String,
+      enum: ["win", "loss", "draw", ""],
+      default: "",
+    },
+
     score: { type: String, trim: true },
     notes: { type: String, trim: true },
 
-    /** NEW: optional video info for this note */
     video: { type: VideoSchema, default: () => ({}) },
 
-    createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    deletedAt: { type: Date, default: null },
+    createdBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
+    /* ---------------------------------------------------------
+       Soft delete fields
+    --------------------------------------------------------- */
+    deletedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+
+    deletedByUserId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   { timestamps: true }
 );

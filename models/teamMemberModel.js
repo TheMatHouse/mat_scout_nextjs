@@ -1,3 +1,4 @@
+// models/teamMemberModel.js
 import mongoose from "mongoose";
 
 const teamMemberSchema = new mongoose.Schema(
@@ -7,19 +8,38 @@ const teamMemberSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+
     familyMemberId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "FamilyMember",
+      default: null,
     },
+
     teamId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Team",
       required: true,
     },
+
     role: {
       type: String,
       enum: ["pending", "member", "manager", "coach"],
       default: "pending",
+    },
+
+    /* ---------------------------------------------------------
+       Soft delete fields
+    --------------------------------------------------------- */
+    deletedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+
+    deletedByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
     },
   },
   { timestamps: true }

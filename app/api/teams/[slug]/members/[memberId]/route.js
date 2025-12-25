@@ -1,194 +1,163 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
+
 import { connectDB } from "@/lib/mongo";
+import { getCurrentUser } from "@/lib/auth-server";
+
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
-import { getCurrentUser } from "@/lib/auth-server";
 import User from "@/models/userModel";
 import FamilyMember from "@/models/familyMemberModel";
-import { createNotification } from "@/lib/createNotification";
+import CoachMatchNote from "@/models/coachMatchNoteModel";
 
-import { Mail } from "@/lib/email/mailer";
-import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
+import { reconcileScoutingReportsForRemovedAthlete } from "@/lib/teams/reconcileScoutingReportsForRemovedAthlete";
 
-// ✅ NEW: import the reconciler from /lib/teams
-import { reconcileTeamInvites } from "@/lib/teams/reconcileTeamInvites";
-
+/* ============================================================
+   PATCH — update role OR remove member (declined)
+============================================================ */
 export async function PATCH(request, { params }) {
+  await connectDB();
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    await connectDB();
-
     const actor = await getCurrentUser();
-    if (!actor)
+    if (!actor) {
+      await session.abortTransaction();
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    const { slug, memberId } = await params; // Next 15: await params
+    const { slug, memberId } = await params;
+    const { role } = await request.json();
 
-    const team = await Team.findOne({ teamSlug: slug });
-    if (!team)
+    const allowedRoles = ["pending", "member", "coach", "manager", "declined"];
+    if (!allowedRoles.includes(role)) {
+      await session.abortTransaction();
+      return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+    }
+
+    const team = await Team.findOne({ teamSlug: slug }).session(session);
+    if (!team) {
+      await session.abortTransaction();
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
+    }
 
-    // ✅ Support either team.user or team.userId as the owner field
     const ownerId = String(team.user || team.userId || "");
 
-    // Determine acting role (owner without TeamMember row is still staff)
-    const isOwner = ownerId && ownerId === String(actor._id);
-    const actingLink = await TeamMember.findOne({
+    const tm = await TeamMember.findById(memberId).session(session);
+    if (!tm) {
+      await session.abortTransaction();
+      return NextResponse.json({ error: "Member not found" }, { status: 404 });
+    }
+
+    /* ----------------------------------------------------------
+       Permission rules
+    ---------------------------------------------------------- */
+    const isOwner = ownerId === String(actor._id);
+
+    const actorLink = await TeamMember.findOne({
       teamId: team._id,
       userId: actor._id,
     })
       .select("role")
       .lean();
 
-    const actingRole =
-      (actingLink?.role || (isOwner ? "owner" : "")).toLowerCase() || "";
-    const canEdit = isOwner || ["manager", "coach"].includes(actingRole);
-    if (!canEdit)
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const actorRole = isOwner ? "owner" : (actorLink?.role || "").toLowerCase();
 
-    const { role } = await request.json();
-    const allowedRoles = ["pending", "member", "coach", "manager", "declined"];
-    if (!allowedRoles.includes(role)) {
-      return NextResponse.json({ error: "Invalid role" }, { status: 400 });
-    }
-
-    const tm = await TeamMember.findById(memberId);
-    if (!tm)
-      return NextResponse.json({ error: "Member not found" }, { status: 404 });
-
-    // ✅ Only block when the row truly represents the OWNER user.
-    // Family rows have familyMemberId set; those are NOT the owner row.
-    const isOwnerRow =
-      ownerId && ownerId === String(tm.userId) && !tm.familyMemberId;
+    // Cannot modify owner row
+    const isOwnerRow = !tm.familyMemberId && String(tm.userId) === ownerId;
     if (isOwnerRow) {
+      await session.abortTransaction();
       return NextResponse.json(
         { error: "Cannot modify team owner" },
         { status: 400 }
       );
     }
 
-    const prevRole = (tm.role || "").toLowerCase();
+    const targetRole = (tm.role || "").toLowerCase();
 
-    // Recipient for notifications/email (parent account owns the family row)
-    const recipientUser = tm.userId ? await User.findById(tm.userId) : null;
-    if (!recipientUser) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    const canRemove =
+      actorRole === "owner" ||
+      (actorRole === "manager" && ["member", "coach"].includes(targetRole)) ||
+      (actorRole === "coach" && targetRole === "member");
+
+    const canChangeRole =
+      actorRole === "owner" ||
+      (actorRole === "manager" && targetRole !== "manager");
+
+    if (role === "declined" && !canRemove) {
+      await session.abortTransaction();
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Notification copy
-    const isDeclined = role === "declined";
-    const isApproval =
-      prevRole === "pending" && !isDeclined && role !== "pending";
-    const isRoleChangeAfterApproval =
-      !isDeclined &&
-      prevRole !== "pending" &&
-      role !== "pending" &&
-      prevRole !== role;
-
-    const notifText = isDeclined
-      ? `Your request to join ${team.teamName} was denied`
-      : isApproval
-      ? `Your request to join ${team.teamName} was approved as ${role}`
-      : isRoleChangeAfterApproval
-      ? `Your role in ${team.teamName} was updated to ${role}`
-      : `Your status in ${team.teamName} is now ${role}`;
-
-    try {
-      await createNotification({
-        userId: recipientUser._id,
-        type: isDeclined || isApproval ? "Join Request" : "Role Update",
-        body: notifText,
-        link: `/teams/${slug}`,
-      });
-    } catch (e) {
-      console.error("Notification failed:", e);
+    if (role !== "declined" && !canChangeRole) {
+      await session.abortTransaction();
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Optional email
-    try {
-      const subject = isDeclined
-        ? `Your request to join ${team.teamName} was denied`
-        : isApproval
-        ? `You're approved to join ${team.teamName} as ${role}`
-        : isRoleChangeAfterApproval
-        ? `Your role in ${team.teamName} was updated to ${role}`
-        : `Your status in ${team.teamName} changed to ${role}`;
+    /* ----------------------------------------------------------
+       REMOVE MEMBER (soft delete + cleanup)
+    ---------------------------------------------------------- */
+    if (role === "declined") {
+      const athleteType = tm.familyMemberId ? "family" : "user";
+      const athleteId = tm.familyMemberId || tm.userId;
 
-      const html = baseEmailTemplate({
-        title: isDeclined
-          ? "Join Request Denied"
-          : isApproval
-          ? "Join Request Approved"
-          : "Team Role Update",
-        message: `<p>${notifText}</p>`,
-        logoUrl:
-          "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png",
+      // 1️⃣ Soft-delete TeamMember
+      tm.role = "declined";
+      await tm.save({ session });
+
+      // 2️⃣ Soft-delete coach notes (single-athlete only)
+      await CoachMatchNote.updateMany(
+        {
+          team: team._id,
+          deletedAt: null,
+          ...(athleteType === "user"
+            ? { createdBy: athleteId }
+            : { athleteFamilyMemberId: athleteId }),
+        },
+        { $set: { deletedAt: new Date() } },
+        { session }
+      );
+
+      // 3️⃣ Reconcile scouting reports
+      await reconcileScoutingReportsForRemovedAthlete({
+        session,
+        teamId: team._id,
+        athleteId,
+        athleteType,
+        removedByUserId: actor._id,
       });
 
-      const result = await Mail.sendEmail({
-        type:
-          isDeclined || isApproval
-            ? Mail.kinds.JOIN_REQUEST
-            : Mail.kinds.TEAM_UPDATE,
-        toUser: recipientUser,
-        subject,
-        html,
-        relatedUserId: tm.familyMemberId
-          ? String(tm.familyMemberId)
-          : String(recipientUser._id),
-        teamId: String(team._id),
-      });
+      await session.commitTransaction();
+      session.endSession();
 
-      if (!result.sent) {
-        console.warn(
-          "Member status email skipped:",
-          recipientUser.email,
-          result.reason
-        );
-      }
-    } catch (e) {
-      console.error("Email failed:", e);
-    }
-
-    if (isDeclined) {
-      await TeamMember.deleteOne({ _id: memberId });
       return NextResponse.json({ success: true }, { status: 200 });
     }
 
-    // Save the new role
-    const updated = await TeamMember.findByIdAndUpdate(
-      memberId,
-      { role },
-      { new: true }
-    );
+    /* ----------------------------------------------------------
+       ROLE CHANGE ONLY
+    ---------------------------------------------------------- */
+    tm.role = role;
+    await tm.save({ session });
 
-    // ✅ NEW: if this was an approval (pending -> active), reconcile lingering pending invites
-    if (isApproval) {
-      try {
-        await reconcileTeamInvites({
-          teamId: team._id,
-          userId: updated.userId, // TeamMember.userId
-          email: (recipientUser.email || "").toLowerCase(), // safe fallback
-          acceptedByUserId: actor._id,
-        });
-      } catch (e) {
-        // Don't fail the whole request if reconciliation hiccups
-        console.error("reconcileTeamInvites failed:", e);
-      }
-    }
+    await session.commitTransaction();
+    session.endSession();
 
     return NextResponse.json(
-      {
-        success: true,
-        member: { id: String(updated._id), role: updated.role },
-      },
+      { success: true, member: { id: tm._id, role: tm.role } },
       { status: 200 }
     );
   } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+
     console.error("PATCH /api/teams/[slug]/members/[memberId] error:", err);
+
     return NextResponse.json(
-      { error: "Server error", detail: err?.message || String(err) },
+      { error: "Server error", detail: err?.message },
       { status: 500 }
     );
   }

@@ -13,24 +13,45 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 
-export default function MemberRow({
+const MemberRow = ({
   member, // { id, name, username, avatarUrl, role, isOwner, isFamilyMember, userId, familyMemberId }
   slug,
-  isManager,
+  viewerRole, // "owner" | "manager" | "coach" | "member"
   onRoleChange,
-}) {
+}) => {
   const [role, setRole] = useState((member.role || "").toLowerCase());
   const [saving, setSaving] = useState(false);
-
-  const disabled = useMemo(() => {
-    return !isManager || member.isOwner || saving;
-  }, [isManager, member.isOwner, saving]);
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   const roleLabel = (r) => (r ? r.charAt(0).toUpperCase() + r.slice(1) : "");
 
+  /* -------------------------------------------------------------
+     Permission helpers
+  ------------------------------------------------------------- */
+  const canEditRole = useMemo(() => {
+    if (member.isOwner) return false;
+    return ["owner", "manager"].includes(viewerRole);
+  }, [viewerRole, member.isOwner]);
+
+  const canRemove = useMemo(() => {
+    if (member.isOwner) return false;
+
+    if (viewerRole === "owner") return true;
+    if (viewerRole === "manager") {
+      return ["member", "coach"].includes(role);
+    }
+    if (viewerRole === "coach") {
+      return role === "member";
+    }
+    return false;
+  }, [viewerRole, role, member.isOwner]);
+
+  /* -------------------------------------------------------------
+     Role change
+  ------------------------------------------------------------- */
   const handleChange = async (newRole) => {
-    if (disabled) return;
-    if ((newRole || "").toLowerCase() === (role || "").toLowerCase()) return;
+    if (!canEditRole) return;
+    if (newRole === role) return;
 
     try {
       setSaving(true);
@@ -41,33 +62,54 @@ export default function MemberRow({
         cache: "no-store",
       });
 
-      let detail = "";
-      try {
-        const txt = await res.text();
-        if (txt) {
-          const json = JSON.parse(txt);
-          detail = json?.error || json?.message || "";
-        }
-      } catch {}
+      const text = await res.text();
+      const json = text ? JSON.parse(text) : null;
 
       if (!res.ok) {
-        throw new Error(
-          `${res.status} ${res.statusText}${detail ? ` – ${detail}` : ""}`
-        );
+        throw new Error(json?.error || "Failed to update role");
       }
 
       setRole(newRole);
-      toast.success("Membership updated");
+      toast.success("Member updated");
       onRoleChange?.();
-    } catch (e) {
-      console.error(e);
-      toast.error(e.message || "Update failed");
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || "Update failed");
     } finally {
       setSaving(false);
     }
   };
 
-  // Build profile href when we have a username
+  /* -------------------------------------------------------------
+     Remove member (role → declined)
+  ------------------------------------------------------------- */
+  const handleRemove = async () => {
+    try {
+      setSaving(true);
+
+      const res = await fetch(`/api/teams/${slug}/members/${member.id}`, {
+        method: "DELETE",
+        cache: "no-store",
+      });
+
+      const text = await res.text();
+      const json = text ? JSON.parse(text) : null;
+
+      if (!res.ok) {
+        throw new Error(json?.error || "Failed to remove member");
+      }
+
+      toast.success("Member removed from team");
+      onRoleChange?.();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || "Removal failed");
+    } finally {
+      setSaving(false);
+      setConfirmRemove(false);
+    }
+  };
+
   const profileHref = member?.username
     ? member.isFamilyMember
       ? `/family/${member.username}`
@@ -75,85 +117,100 @@ export default function MemberRow({
     : null;
 
   return (
-    // Mobile-first stack; desktop becomes two columns with controls on the right
-    <div className="grid grid-cols-1 sm:grid-cols-12 items-start sm:items-center gap-3 py-3">
-      {/* Left: identity (avatar, name, meta) */}
-      <div className="sm:col-span-7 min-w-0 flex items-center gap-3">
-        <img
-          src={member.avatarUrl || "/default-avatar.png"}
-          alt={member.name || "Member"}
-          className="h-8 w-8 rounded-full border shrink-0"
-        />
-        <div className="min-w-0">
-          <span className="block text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-            {profileHref ? (
-              <Link
-                href={profileHref}
-                className="hover:underline focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/50 rounded"
-                title={
-                  member.username
-                    ? `View ${member.username}'s profile`
-                    : "View profile"
-                }
-              >
-                {member.name || member.username || "—"}
-              </Link>
-            ) : (
-              member.name || member.username || "—"
-            )}
-          </span>
-
-          {/* secondary line(s) */}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            {member.username && (
-              <span className="text-xs text-muted-foreground truncate">
-                @{member.username}
-              </span>
-            )}
-            {member.isOwner && (
-              <span className="text-xs text-amber-600">Team Owner</span>
-            )}
+    <>
+      <div className="grid grid-cols-1 sm:grid-cols-12 items-start sm:items-center gap-3 py-3">
+        {/* Identity */}
+        <div className="sm:col-span-7 flex items-center gap-3 min-w-0">
+          <img
+            src={member.avatarUrl || "/default-avatar.png"}
+            alt={member.name || "Member"}
+            className="h-8 w-8 rounded-full border shrink-0"
+          />
+          <div className="min-w-0">
+            <span className="block text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+              {profileHref ? (
+                <Link
+                  href={profileHref}
+                  className="hover:underline"
+                >
+                  {member.name || member.username || "—"}
+                </Link>
+              ) : (
+                member.name || member.username || "—"
+              )}
+            </span>
+            <div className="flex gap-2 text-xs text-gray-500">
+              {member.username && <span>@{member.username}</span>}
+              {member.isOwner && <span className="text-amber-600">Owner</span>}
+            </div>
           </div>
+        </div>
+
+        {/* Controls */}
+        <div className="sm:col-span-5 flex justify-end gap-2">
+          {canEditRole ? (
+            <Select
+              value={role}
+              onValueChange={handleChange}
+              disabled={saving}
+            >
+              <SelectTrigger className="w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="member">Member</SelectItem>
+                <SelectItem value="coach">Coach</SelectItem>
+                {viewerRole === "owner" && (
+                  <SelectItem value="manager">Manager</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          ) : (
+            <span className="px-2 py-1 rounded bg-muted text-sm">
+              {roleLabel(role)}
+            </span>
+          )}
+
+          {canRemove && (
+            <button
+              onClick={() => setConfirmRemove(true)}
+              className="px-3 py-1 rounded border border-red-300 text-red-600 text-sm hover:bg-red-50"
+            >
+              Remove
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Right: controls (drop below on mobile, align right on desktop) */}
-      <div className="sm:col-span-5 min-w-0 flex flex-col sm:flex-row sm:justify-end gap-2">
-        {isManager && !member.isOwner ? (
-          <Select
-            value={role}
-            onValueChange={handleChange}
-            disabled={saving}
-          >
-            <SelectTrigger
-              // compact, consistent width; won't force the row to be wide
-              className="w-44 sm:w-56 truncate shrink-0"
-              aria-label="Change member role"
-            >
-              <SelectValue placeholder="Select a role" />
-            </SelectTrigger>
-
-            {/* Match the dropdown to the trigger width and keep it inside viewport */}
-            <SelectContent
-              position="popper"
-              sideOffset={4}
-              align="start"
-              className="w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-2rem)]"
-            >
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="member">Member</SelectItem>
-              <SelectItem value="coach">Coach</SelectItem>
-              <SelectItem value="manager">Manager</SelectItem>
-              <SelectItem value="declined">Declined</SelectItem>
-            </SelectContent>
-          </Select>
-        ) : (
-          <span className="inline-flex items-center px-2 py-1 rounded bg-muted text-sm text-gray-900 dark:text-gray-100">
-            {roleLabel(role || (member.isOwner ? "manager" : "member"))}
-          </span>
-        )}
-        {/* If you ever add action buttons (Revoke/Approve), they’ll wrap nicely here */}
-      </div>
-    </div>
+      {/* Confirm modal */}
+      {confirmRemove && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold mb-3">Remove team member?</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-5">
+              This will remove the athlete from the team and permanently delete
+              any coach’s notes and scouting reports associated with them.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmRemove(false)}
+                className="btn btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRemove}
+                disabled={saving}
+                className="btn btn-destructive"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
-}
+};
+
+export default MemberRow;

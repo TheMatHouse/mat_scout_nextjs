@@ -13,18 +13,20 @@ const reportForSchema = new mongoose.Schema(
 const cryptoSchema = new mongoose.Schema(
   {
     version: { type: Number, default: 1 },
-    alg: { type: String, trim: true }, // e.g., "TEAMLOCK-NOTES-V1"
-    ivB64: { type: String, trim: true }, // reserved if we move to real AES-GCM envelope keys
-    ciphertextB64: { type: String, trim: true }, // encrypted JSON body
-    wrappedReportKeyB64: { type: String, trim: true }, // reserved for future
-    teamKeyVersion: { type: Number, default: 0 }, // copy of TeamSecurity.encryption.keyVersion at encrypt time
+    alg: { type: String, trim: true },
+    ivB64: { type: String, trim: true },
+    ciphertextB64: { type: String, trim: true },
+    wrappedReportKeyB64: { type: String, trim: true },
+    teamKeyVersion: { type: Number, default: 0 },
   },
   { _id: false }
 );
 
 const teamScoutingReportSchema = new mongoose.Schema(
   {
-    // WHO/ACCESS
+    /* ---------------------------------------------------------
+       WHO / ACCESS
+    --------------------------------------------------------- */
     reportFor: {
       type: [reportForSchema],
       validate: {
@@ -42,36 +44,48 @@ const teamScoutingReportSchema = new mongoose.Schema(
         message: "Duplicate athlete entries are not allowed in reportFor.",
       },
     },
+
     createdById: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-    createdByName: { type: String, required: true },
-    teamId: { type: mongoose.Schema.Types.ObjectId, ref: "Team" },
 
-    // CONTEXT
+    createdByName: {
+      type: String,
+      required: true,
+    },
+
+    teamId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Team",
+      required: true,
+      index: true,
+    },
+
+    /* ---------------------------------------------------------
+       CONTEXT
+    --------------------------------------------------------- */
     matchType: { type: String, required: true },
     style: { type: mongoose.Schema.Types.ObjectId, ref: "styleModel" },
 
-    // TARGET ATHLETE (conditionally required)
     athleteFirstName: {
       type: String,
       required: function () {
-        // If we DON'T have an encrypted body, require name in plaintext.
         return !this.crypto || !this.crypto.ciphertextB64;
       },
     },
+
     athleteLastName: {
       type: String,
       required: function () {
         return !this.crypto || !this.crypto.ciphertextB64;
       },
     },
+
     athleteNationalRank: String,
     athleteWorldRank: String,
 
-    // Division / weight (team version)
     division: { type: mongoose.Schema.Types.ObjectId, ref: "division" },
     weightCategory: {
       type: mongoose.Schema.Types.ObjectId,
@@ -89,13 +103,30 @@ const teamScoutingReportSchema = new mongoose.Schema(
     videos: [{ type: mongoose.Schema.Types.ObjectId, ref: "Video" }],
     accessList: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
-    // --- Encrypted payload (optional) ---
+    /* ---------------------------------------------------------
+       Encrypted payload
+    --------------------------------------------------------- */
     crypto: { type: cryptoSchema, default: null },
+
+    /* ---------------------------------------------------------
+       Soft delete fields
+    --------------------------------------------------------- */
+    deletedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+
+    deletedByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   { timestamps: true }
 );
 
-// ✅ Keep your weight sanity-check like the original scoutingReportSchema
+// Weight sanity check (unchanged)
 teamScoutingReportSchema.pre("validate", async function () {
   if (this.weightCategory && this.weightLabel) {
     const cat = await this.model("weightCategory")
@@ -106,7 +137,7 @@ teamScoutingReportSchema.pre("validate", async function () {
       if (!ok) {
         this.invalidate("weightLabel", "Weight not in selected category");
       }
-      this.weightUnit = cat.unit; // auto-sync unit
+      this.weightUnit = cat.unit;
     }
   }
 });

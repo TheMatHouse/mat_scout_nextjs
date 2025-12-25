@@ -26,12 +26,10 @@ const MembersPage = () => {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Invitations state
   const [invites, setInvites] = useState([]);
   const [invitesLoading, setInvitesLoading] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
 
-  // Resend cooldown + tooltip state
   const [resendCooldownUntil, setResendCooldownUntil] = useState({});
   const [resendTooltipByInvite, setResendTooltipByInvite] = useState({});
 
@@ -60,9 +58,9 @@ const MembersPage = () => {
       const { data } = await parseJsonSafe(res);
 
       if (!res.ok) {
-        const msg =
-          data?.error || data?.message || `${res.status} ${res.statusText}`;
-        throw new Error(msg);
+        throw new Error(
+          data?.error || data?.message || `${res.status} ${res.statusText}`
+        );
       }
 
       setViewerRole(data?.viewerRole || null);
@@ -92,7 +90,6 @@ const MembersPage = () => {
       const list = Array.isArray(data?.invites) ? data.invites : [];
       setInvites(list);
 
-      // Seed resend cooldown from createdAt / updatedAt
       const now = Date.now();
       setResendCooldownUntil((prev) => {
         const next = { ...prev };
@@ -128,9 +125,9 @@ const MembersPage = () => {
 
   if (loading) {
     return (
-      <div className="flex flex-col justify-center items-center h-[70vh] bg-background">
+      <div className="flex flex-col justify-center items-center h-[70vh]">
         <Spinner size={64} />
-        <p className="text-gray-400 dark:text-gray-300 mt-2 text-lg">
+        <p className="text-gray-400 mt-2 text-lg">
           Loading your team members...
         </p>
       </div>
@@ -142,9 +139,12 @@ const MembersPage = () => {
   );
 
   const pending = members.filter((m) => m.role === "pending");
+
   const active = members.filter((m) =>
     ["member", "manager", "coach"].includes(m.role)
   );
+
+  // declined members are intentionally hidden
 
   const managerName =
     [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
@@ -152,84 +152,12 @@ const MembersPage = () => {
     user?.email ||
     "Team Manager";
 
-  const handleResendInvite = async (inviteId) => {
-    const now = Date.now();
-
-    setResendCooldownUntil((prev) => ({
-      ...prev,
-      [inviteId]: now + RESEND_COOLDOWN_MINUTES * 60 * 1000,
-    }));
-
-    setResendTooltipByInvite((prev) => {
-      const next = { ...prev };
-      delete next[inviteId];
-      return next;
-    });
-
-    try {
-      const res = await fetch(`/api/teams/${slug}/invites/${inviteId}/resend`, {
-        method: "POST",
-      });
-
-      const { data } = await parseJsonSafe(res);
-
-      if (!res.ok) {
-        throw new Error(data?.error || "Failed to resend invite");
-      }
-
-      if (data?.skipped) {
-        const msg =
-          data?.message ||
-          "Invitation was already sent recently. Please wait before resending.";
-
-        setResendTooltipByInvite((prev) => ({
-          ...prev,
-          [inviteId]: msg,
-        }));
-
-        toast.info(msg);
-        return;
-      }
-
-      toast.success("Invitation resent.");
-    } catch (err) {
-      console.error(err);
-      toast.error(err.message || "Could not resend invite.");
-
-      setResendCooldownUntil((prev) => {
-        const next = { ...prev };
-        delete next[inviteId];
-        return next;
-      });
-    } finally {
-      fetchInvites();
-    }
-  };
-
-  const handleRevokeInvite = async (inviteId) => {
-    try {
-      const res = await fetch(`/api/teams/${slug}/invites/${inviteId}/revoke`, {
-        method: "POST",
-      });
-      const { data } = await parseJsonSafe(res);
-      if (!res.ok) throw new Error(data?.message || "Failed to revoke invite");
-      toast.success(data?.message || "Invitation revoked.");
-    } catch (err) {
-      console.error(err);
-      toast.error(err.message || "Could not revoke invite.");
-    } finally {
-      fetchInvites();
-    }
-  };
-
   return (
-    <div className="max-w-5xl mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-8">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-            Team Members
-          </h1>
-          <p className="text-gray-600 dark:text-gray-200 text-sm mt-1">
+    <div className="max-w-5xl mx-auto px-4 py-6 space-y-8">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">Team Members</h1>
+          <p className="text-sm text-gray-600">
             {isStaff
               ? "Manage pending requests and team members."
               : "View the team roster."}
@@ -251,25 +179,23 @@ const MembersPage = () => {
           slug={slug}
           invites={invites}
           loading={invitesLoading}
-          onResend={handleResendInvite}
-          onRevoke={handleRevokeInvite}
+          onResend={() => {}}
+          onRevoke={() => {}}
           resendCooldownUntil={resendCooldownUntil}
           resendTooltipByInvite={resendTooltipByInvite}
         />
       )}
 
       {isStaff && pending.length > 0 && (
-        <section className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-5">
-          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
-            Pending Requests
-          </h2>
-          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+        <section className="bg-white rounded-lg shadow p-5">
+          <h2 className="text-xl font-semibold mb-4">Pending Requests</h2>
+          <div className="divide-y">
             {pending.map((m) => (
               <MemberRow
                 key={m.id}
                 member={m}
                 slug={slug}
-                isManager={isStaff && !m.isOwner}
+                viewerRole={viewerRole}
                 onRoleChange={() => {
                   fetchMembers();
                   fetchInvites();
@@ -280,19 +206,19 @@ const MembersPage = () => {
         </section>
       )}
 
-      <section className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-5">
-        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
-          Active Members
-        </h2>
-        {active.map((m) => (
-          <MemberRow
-            key={m.id}
-            member={m}
-            slug={slug}
-            isManager={isStaff && !m.isOwner}
-            onRoleChange={fetchMembers}
-          />
-        ))}
+      <section className="bg-white rounded-lg shadow p-5">
+        <h2 className="text-xl font-semibold mb-4">Active Members</h2>
+        <div className="divide-y">
+          {active.map((m) => (
+            <MemberRow
+              key={m.id}
+              member={m}
+              slug={slug}
+              viewerRole={viewerRole}
+              onRoleChange={fetchMembers}
+            />
+          ))}
+        </div>
       </section>
 
       <ModalLayout
