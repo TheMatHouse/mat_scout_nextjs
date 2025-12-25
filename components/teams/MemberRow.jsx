@@ -76,7 +76,7 @@ export default function MemberRow({
 
   return (
     // Mobile-first stack; desktop becomes two columns with controls on the right
-    <div className="grid grid-cols-1 sm:grid-cols-12 items-start sm:items-center gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-12 items-start sm:items-center gap-3 py-3">
       {/* Left: identity (avatar, name, meta) */}
       <div className="sm:col-span-7 min-w-0 flex items-center gap-3">
         <img

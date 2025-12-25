@@ -41,6 +41,24 @@ function formatCooldownLeft(msLeft) {
   return `${minutes}m ${seconds}s`;
 }
 
+function formatRetryAfter(ms) {
+  if (ms <= 0) return "Resend available";
+
+  const minutes = Math.ceil(ms / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days >= 1) {
+    return days === 1 ? "tomorrow" : `in ${days} days`;
+  }
+
+  if (hours >= 1) {
+    return `in ~${hours} hour${hours > 1 ? "s" : ""}`;
+  }
+
+  return `in ${minutes} minute${minutes > 1 ? "s" : ""}`;
+}
+
 const InvitesTable = ({
   slug,
   invites,
@@ -159,7 +177,9 @@ const InvitesTable = ({
                           if (!onCooldown) onResend(inv._id);
                         }}
                         className="inline-flex items-center gap-1 rounded-md border px-3 py-1 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap shrink-0 disabled:opacity-60 disabled:hover:bg-transparent"
-                        title={resendTitle}
+                        title={`Resend available ${formatRetryAfter(
+                          retryAfterMs
+                        )}`}
                         type="button"
                         disabled={onCooldown}
                       >
