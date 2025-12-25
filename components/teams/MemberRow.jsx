@@ -88,7 +88,9 @@ const MemberRow = ({
       setSaving(true);
 
       const res = await fetch(`/api/teams/${slug}/members/${member.id}`, {
-        method: "DELETE",
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: "declined" }),
         cache: "no-store",
       });
 
