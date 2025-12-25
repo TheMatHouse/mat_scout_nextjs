@@ -78,7 +78,12 @@ const InvitePage = async ({ params }) => {
     );
   }
 
-  const user = await getCurrentUser();
+  let user = null;
+  try {
+    user = await getCurrentUser();
+  } catch {
+    user = null;
+  }
 
   /* ------------------------------------------------------------
      Not logged in
