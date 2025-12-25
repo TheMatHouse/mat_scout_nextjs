@@ -14,6 +14,15 @@ import CoachMatchNote from "@/models/coachMatchNoteModel";
 
 import { reconcileScoutingReportsForRemovedAthlete } from "@/lib/teams/reconcileScoutingReportsForRemovedAthlete";
 
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      Allow: "PATCH, OPTIONS",
+    },
+  });
+}
+
 /* ============================================================
    PATCH — update role OR remove member (declined)
 ============================================================ */
