@@ -187,7 +187,7 @@ const MembersPage = () => {
       )}
 
       {isStaff && pending.length > 0 && (
-        <section className="bg-white rounded-lg shadow p-5">
+        <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-5">
           <h2 className="text-xl font-semibold mb-4">Pending Requests</h2>
           <div className="divide-y">
             {pending.map((m) => (
@@ -206,7 +206,7 @@ const MembersPage = () => {
         </section>
       )}
 
-      <section className="bg-white rounded-lg shadow p-5">
+      <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-5">
         <h2 className="text-xl font-semibold mb-4">Active Members</h2>
         <div className="divide-y">
           {active.map((m) => (
