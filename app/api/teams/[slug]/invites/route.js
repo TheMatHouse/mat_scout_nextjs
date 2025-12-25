@@ -1,7 +1,6 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import crypto from "crypto";
 
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUser } from "@/lib/auth-server";
@@ -79,7 +78,7 @@ export async function GET(req, { params }) {
 }
 
 /* ============================================================
-   POST — create OR re-activate invite (EMAIL-GATED, ATOMIC)
+   POST — create OR re-activate invite
 ============================================================ */
 export async function POST(req, { params }) {
   try {
@@ -130,7 +129,7 @@ export async function POST(req, { params }) {
     }
 
     /* ----------------------------------------------------------
-       Block if already a member (by email)
+       Block if already a member
     ---------------------------------------------------------- */
     const existingMember = await TeamMember.findOne({ teamId: team._id })
       .populate({
@@ -153,39 +152,7 @@ export async function POST(req, { params }) {
     );
 
     /* ----------------------------------------------------------
-       PRE-FLIGHT EMAIL POLICY (NO DB MUTATION)
-    ---------------------------------------------------------- */
-    const mailGate = await Mail.sendEmail({
-      type: Mail.kinds.TEAM_INVITE,
-      toEmail: normEmail,
-      subject: "Invitation check",
-      html: "<p>preflight</p>",
-      relatedUserId: actor._id,
-      teamId: String(team._id),
-    });
-
-    if (mailGate?.skipped) {
-      if (mailGate.reason?.startsWith("rate_limited")) {
-        return NextResponse.json(
-          {
-            warning:
-              "An invitation was already sent recently. Please wait before resending.",
-          },
-          { status: 200 }
-        );
-      }
-
-      return NextResponse.json(
-        {
-          warning:
-            "Invitation email was blocked by delivery policy. No invite was created.",
-        },
-        { status: 200 }
-      );
-    }
-
-    /* ----------------------------------------------------------
-       EMAIL ALLOWED → CREATE / UPDATE INVITE
+       Create or reuse invite
     ---------------------------------------------------------- */
     let reused = false;
 
@@ -226,7 +193,7 @@ export async function POST(req, { params }) {
     }
 
     /* ----------------------------------------------------------
-       SEND REAL EMAIL (WITH REAL INVITE ID)
+       Send REAL invite email
     ---------------------------------------------------------- */
     const inviteUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/invites/${invite._id}`;
 
@@ -245,7 +212,7 @@ export async function POST(req, { params }) {
       `,
     });
 
-    await Mail.sendEmail({
+    const mailResult = await Mail.sendEmail({
       type: Mail.kinds.TEAM_INVITE,
       toEmail: normEmail,
       subject: `Invitation to join ${team.teamName}`,
@@ -253,6 +220,18 @@ export async function POST(req, { params }) {
       relatedUserId: actor._id,
       teamId: String(team._id),
     });
+
+    if (mailResult?.skipped) {
+      return NextResponse.json(
+        {
+          invite,
+          reused,
+          warning:
+            "Invitation was created, but email was recently sent. Resend will be available later.",
+        },
+        { status: 200 }
+      );
+    }
 
     /* ----------------------------------------------------------
        In-app notification (existing users only)
