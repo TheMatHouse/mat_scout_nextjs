@@ -8,41 +8,54 @@ import { getCurrentUser } from "@/lib/auth-server";
 
 import TeamInvitation from "@/models/teamInvitationModel";
 import Team from "@/models/teamModel";
-
 import AcceptInviteButton from "./AcceptInviteButton";
 import DeclineInviteButton from "./DeclineInviteButton";
 
 /* ============================================================
    Invite Page (Server Component)
 ============================================================ */
-
 const InvitePage = async ({ params }) => {
   await connectDB();
 
-  // ✅ Next.js 15+ requirement
   const { inviteId } = await params;
 
-  if (!inviteId) {
-    notFound();
-  }
-
   const invite = await TeamInvitation.findById(inviteId).lean();
-  if (!invite) {
-    notFound();
-  }
+  if (!invite) notFound();
 
-  // ------------------------------------------------------------
-  // Invalid / non-pending states
-  // ------------------------------------------------------------
+  // --------------------------------------------
+  // Status-based terminal states
+  // --------------------------------------------
   if (invite.status !== "pending") {
+    let title = "Invitation Unavailable";
+    let message =
+      "This invitation has already been used or is no longer valid.";
+
+    if (invite.status === "revoked") {
+      title = "Invitation Revoked";
+      message = "This invitation was revoked by the team manager.";
+    }
+
+    if (invite.status === "declined") {
+      title = "Invitation Declined";
+      message = "You have already declined this invitation.";
+    }
+
+    if (invite.status === "accepted") {
+      title = "Already Joined";
+      message = "You have already accepted this invitation.";
+    }
+
     return (
       <InviteMessage
-        title="Invitation Unavailable"
-        message="This invitation has already been used, revoked, or declined."
+        title={title}
+        message={message}
       />
     );
   }
 
+  // --------------------------------------------
+  // Expiration check
+  // --------------------------------------------
   if (invite.expiresAt && invite.expiresAt < new Date()) {
     return (
       <InviteMessage
@@ -67,9 +80,9 @@ const InvitePage = async ({ params }) => {
 
   const user = await getCurrentUser();
 
-  // ------------------------------------------------------------
+  // --------------------------------------------
   // Not logged in
-  // ------------------------------------------------------------
+  // --------------------------------------------
   if (!user) {
     const redirectTo = `/invites/${inviteId}`;
 
@@ -101,9 +114,9 @@ const InvitePage = async ({ params }) => {
     );
   }
 
-  // ------------------------------------------------------------
-  // Wrong account
-  // ------------------------------------------------------------
+  // --------------------------------------------
+  // Wrong email logged in
+  // --------------------------------------------
   if (invite.email !== user.email.toLowerCase()) {
     return (
       <InviteMessage
@@ -113,9 +126,9 @@ const InvitePage = async ({ params }) => {
     );
   }
 
-  // ------------------------------------------------------------
-  // Valid invite
-  // ------------------------------------------------------------
+  // --------------------------------------------
+  // Valid pending invite
+  // --------------------------------------------
   return (
     <InviteContainer>
       <h1 className="text-2xl font-bold mb-2">
