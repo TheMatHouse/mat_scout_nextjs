@@ -16,6 +16,7 @@ import DeclineInviteButton from "./DeclineInviteButton";
    Invite Page (Server Component)
 ============================================================ */
 const InvitePage = async ({ params }) => {
+  console.log("test");
   await connectDB();
 
   const { inviteId } = await params;
