@@ -112,7 +112,7 @@ export async function POST(_req, { params }) {
           <a href="${inviteUrl}"
              style="display:inline-block;background:#1a73e8;color:#fff;
                     padding:10px 16px;border-radius:4px;text-decoration:none;">
-            Accept Invitation
+            View Invitation
           </a>
         </p>
         ${
@@ -123,7 +123,7 @@ export async function POST(_req, { params }) {
       `,
     });
 
-    await Mail.sendEmail({
+    const mailResult = await Mail.sendEmail({
       type: Mail.kinds.TEAM_INVITE,
       toEmail: invite.email,
       subject: `Invitation to join ${team.teamName}`,
@@ -132,7 +132,36 @@ export async function POST(_req, { params }) {
       teamId: String(team._id),
     });
 
-    return NextResponse.json({ success: true });
+    // ✅ If mail policy skipped delivery, do NOT throw.
+    // Return a clean response the UI can explain.
+    if (mailResult?.skipped) {
+      if (mailResult.reason?.startsWith("rate_limited")) {
+        return NextResponse.json(
+          {
+            ok: true,
+            skipped: true,
+            code: "rate_limited",
+            message:
+              "This invitation email was sent recently. Please wait before resending.",
+            reason: mailResult.reason,
+          },
+          { status: 200 }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          ok: true,
+          skipped: true,
+          code: "skipped",
+          message: "Email delivery was skipped by policy.",
+          reason: mailResult.reason || "blocked_by_policy",
+        },
+        { status: 200 }
+      );
+    }
+
+    return NextResponse.json({ ok: true, skipped: false }, { status: 200 });
   } catch (err) {
     console.error("Resend invite error:", err);
     return NextResponse.json(

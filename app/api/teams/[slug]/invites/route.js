@@ -1,6 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import crypto from "crypto";
+
 import { connectDB } from "@/lib/mongo";
 import { getCurrentUser } from "@/lib/auth-server";
 
@@ -77,7 +79,7 @@ export async function GET(req, { params }) {
 }
 
 /* ============================================================
-   POST — create OR re-activate invite
+   POST — create OR re-activate invite (EMAIL-GATED, ATOMIC)
 ============================================================ */
 export async function POST(req, { params }) {
   try {
@@ -130,9 +132,7 @@ export async function POST(req, { params }) {
     /* ----------------------------------------------------------
        Block if already a member (by email)
     ---------------------------------------------------------- */
-    const existingMember = await TeamMember.findOne({
-      teamId: team._id,
-    })
+    const existingMember = await TeamMember.findOne({ teamId: team._id })
       .populate({
         path: "userId",
         match: { email: normEmail },
@@ -153,7 +153,39 @@ export async function POST(req, { params }) {
     );
 
     /* ----------------------------------------------------------
-       Find existing invite (ANY status except accepted)
+       PRE-FLIGHT EMAIL POLICY (NO DB MUTATION)
+    ---------------------------------------------------------- */
+    const mailGate = await Mail.sendEmail({
+      type: Mail.kinds.TEAM_INVITE,
+      toEmail: normEmail,
+      subject: "Invitation check",
+      html: "<p>preflight</p>",
+      relatedUserId: actor._id,
+      teamId: String(team._id),
+    });
+
+    if (mailGate?.skipped) {
+      if (mailGate.reason?.startsWith("rate_limited")) {
+        return NextResponse.json(
+          {
+            warning:
+              "An invitation was already sent recently. Please wait before resending.",
+          },
+          { status: 200 }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          warning:
+            "Invitation email was blocked by delivery policy. No invite was created.",
+        },
+        { status: 200 }
+      );
+    }
+
+    /* ----------------------------------------------------------
+       EMAIL ALLOWED → CREATE / UPDATE INVITE
     ---------------------------------------------------------- */
     let reused = false;
 
@@ -170,22 +202,17 @@ export async function POST(req, { params }) {
     }
 
     if (invite) {
-      // 🔁 Re-activate declined / revoked / expired
       reused = true;
       invite.status = "pending";
       invite.expiresAt = expiresAt;
       invite.invitedByUserId = actor._id;
       invite.firstName = normFirstName;
       invite.lastName = normLastName;
-      invite.payload = {
-        ...(invite.payload || {}),
-        role: safeRole,
-      };
+      invite.payload = { ...(invite.payload || {}), role: safeRole };
       invite.declinedAt = undefined;
       invite.revokedAt = undefined;
       await invite.save();
     } else {
-      // 🆕 New invite
       invite = await TeamInvitation.create({
         teamId: team._id,
         email: normEmail,
@@ -199,20 +226,7 @@ export async function POST(req, { params }) {
     }
 
     /* ----------------------------------------------------------
-       In-app notification (existing users only)
-    ---------------------------------------------------------- */
-    const invitedUser = await User.findOne({ email: normEmail }).select("_id");
-    if (invitedUser) {
-      await createNotification({
-        userId: invitedUser._id,
-        type: "Team Invitation",
-        body: `You were invited to join ${team.teamName}`,
-        link: `/invites/${invite._id}`,
-      });
-    }
-
-    /* ----------------------------------------------------------
-       Email
+       SEND REAL EMAIL (WITH REAL INVITE ID)
     ---------------------------------------------------------- */
     const inviteUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/invites/${invite._id}`;
 
@@ -231,7 +245,7 @@ export async function POST(req, { params }) {
       `,
     });
 
-    const mailResult = await Mail.sendEmail({
+    await Mail.sendEmail({
       type: Mail.kinds.TEAM_INVITE,
       toEmail: normEmail,
       subject: `Invitation to join ${team.teamName}`,
@@ -240,35 +254,22 @@ export async function POST(req, { params }) {
       teamId: String(team._id),
     });
 
-    if (mailResult?.skipped) {
-      if (mailResult.reason?.startsWith("rate_limited")) {
-        return NextResponse.json(
-          {
-            invite,
-            reused,
-            warning:
-              "Invitation was already sent recently. Please wait a few minutes before resending.",
-          },
-          { status: 200 }
-        );
-      }
-
-      return NextResponse.json(
-        {
-          invite,
-          reused,
-          warning: "Invitation was created, but email delivery was skipped.",
-        },
-        { status: 200 }
-      );
+    /* ----------------------------------------------------------
+       In-app notification (existing users only)
+    ---------------------------------------------------------- */
+    const invitedUser = await User.findOne({ email: normEmail }).select("_id");
+    if (invitedUser) {
+      await createNotification({
+        userId: invitedUser._id,
+        type: "Team Invitation",
+        body: `You were invited to join ${team.teamName}`,
+        link: `/invites/${invite._id}`,
+      });
     }
 
     return NextResponse.json({ invite, reused }, { status: 201 });
   } catch (err) {
     console.error("POST /invites error:", err);
-    return NextResponse.json(
-      { error: "Failed to send invitation" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }

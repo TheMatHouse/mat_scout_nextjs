@@ -1,4 +1,3 @@
-// app/(teams)/team/[slug]/members/page.jsx
 "use client";
 export const dynamic = "force-dynamic";
 
@@ -13,7 +12,9 @@ import InviteMemberForm from "@/components/teams/forms/InviteMemberForm";
 import InvitesTable from "@/components/teams/InvitesTable";
 import { toast } from "react-toastify";
 
-export default function MembersPage() {
+const RESEND_COOLDOWN_MINUTES = 60 * 24;
+
+const MembersPage = () => {
   const params = useParams();
   const router = useRouter();
   const slug = params.slug;
@@ -25,10 +26,14 @@ export default function MembersPage() {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Invitations state (staff only)
+  // Invitations state
   const [invites, setInvites] = useState([]);
   const [invitesLoading, setInvitesLoading] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
+
+  // Resend cooldown + tooltip state
+  const [resendCooldownUntil, setResendCooldownUntil] = useState({});
+  const [resendTooltipByInvite, setResendTooltipByInvite] = useState({});
 
   const parseJsonSafe = async (res) => {
     const txt = await res.text();
@@ -46,7 +51,6 @@ export default function MembersPage() {
         cache: "no-store",
       });
 
-      // Handle auth/forbidden early
       if (res.status === 401 || res.status === 403) {
         toast.error("You are not authorized to view team members.");
         router.replace(`/teams/${slug}`);
@@ -63,8 +67,8 @@ export default function MembersPage() {
 
       setViewerRole(data?.viewerRole || null);
       setMembers(Array.isArray(data?.members) ? data.members : []);
-    } catch (e) {
-      console.error("Error loading members:", e);
+    } catch (err) {
+      console.error("Error loading members:", err);
       toast.error("Failed to load members.");
     } finally {
       setLoading(false);
@@ -85,7 +89,31 @@ export default function MembersPage() {
         return;
       }
 
-      setInvites(Array.isArray(data?.invites) ? data.invites : []);
+      const list = Array.isArray(data?.invites) ? data.invites : [];
+      setInvites(list);
+
+      // Seed resend cooldown from createdAt / updatedAt
+      const now = Date.now();
+      setResendCooldownUntil((prev) => {
+        const next = { ...prev };
+
+        for (const inv of list) {
+          if (!inv?._id) continue;
+          if (next[inv._id] && next[inv._id] > now) continue;
+
+          const t = inv.updatedAt || inv.createdAt;
+          if (!t) continue;
+
+          const ts = new Date(t).getTime();
+          const mins = (now - ts) / (60 * 1000);
+
+          if (mins < RESEND_COOLDOWN_MINUTES) {
+            next[inv._id] = now + (RESEND_COOLDOWN_MINUTES - mins) * 60 * 1000;
+          }
+        }
+
+        return next;
+      });
     } catch {
       setInvites([]);
     } finally {
@@ -125,16 +153,54 @@ export default function MembersPage() {
     "Team Manager";
 
   const handleResendInvite = async (inviteId) => {
+    const now = Date.now();
+
+    setResendCooldownUntil((prev) => ({
+      ...prev,
+      [inviteId]: now + RESEND_COOLDOWN_MINUTES * 60 * 1000,
+    }));
+
+    setResendTooltipByInvite((prev) => {
+      const next = { ...prev };
+      delete next[inviteId];
+      return next;
+    });
+
     try {
       const res = await fetch(`/api/teams/${slug}/invites/${inviteId}/resend`, {
         method: "POST",
       });
+
       const { data } = await parseJsonSafe(res);
-      if (!res.ok) throw new Error(data?.message || "Failed to resend invite");
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to resend invite");
+      }
+
+      if (data?.skipped) {
+        const msg =
+          data?.message ||
+          "Invitation was already sent recently. Please wait before resending.";
+
+        setResendTooltipByInvite((prev) => ({
+          ...prev,
+          [inviteId]: msg,
+        }));
+
+        toast.info(msg);
+        return;
+      }
+
       toast.success("Invitation resent.");
     } catch (err) {
       console.error(err);
       toast.error(err.message || "Could not resend invite.");
+
+      setResendCooldownUntil((prev) => {
+        const next = { ...prev };
+        delete next[inviteId];
+        return next;
+      });
     } finally {
       fetchInvites();
     }
@@ -158,7 +224,6 @@ export default function MembersPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-8">
-      {/* Header that wraps cleanly on small screens */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
@@ -174,14 +239,13 @@ export default function MembersPage() {
         {isStaff && (
           <button
             onClick={() => setInviteOpen(true)}
-            className="btn btn-primary self-start sm:self-auto shrink-0"
+            className="btn btn-primary"
           >
             Invite members
           </button>
         )}
       </div>
 
-      {/* Pending Invitations (staff only) */}
       {isStaff && (
         <InvitesTable
           slug={slug}
@@ -189,88 +253,48 @@ export default function MembersPage() {
           loading={invitesLoading}
           onResend={handleResendInvite}
           onRevoke={handleRevokeInvite}
+          resendCooldownUntil={resendCooldownUntil}
+          resendTooltipByInvite={resendTooltipByInvite}
         />
       )}
 
-      {/* Pending Requests (staff only) */}
-      {isStaff && (
+      {isStaff && pending.length > 0 && (
         <section className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-5">
           <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
             Pending Requests
           </h2>
-
-          {/* Horizontal scroll safety wrapper on small screens */}
-          <div className="overflow-x-hidden">
-            <div className="px-5">
-              {pending.length > 0 ? (
-                <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {pending.map((m) => (
-                    <div
-                      key={m.id}
-                      className="py-3"
-                    >
-                      {/* Each row can be wider than viewport; allow row to layout naturally */}
-                      <div className="min-w-[640px] sm:min-w-0">
-                        <MemberRow
-                          member={m}
-                          slug={slug}
-                          isManager={isStaff && !m.isOwner}
-                          onRoleChange={() => {
-                            fetchMembers();
-                            fetchInvites();
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-600 dark:text-gray-200 text-sm">
-                  No pending requests.
-                </p>
-              )}
-            </div>
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            {pending.map((m) => (
+              <MemberRow
+                key={m.id}
+                member={m}
+                slug={slug}
+                isManager={isStaff && !m.isOwner}
+                onRoleChange={() => {
+                  fetchMembers();
+                  fetchInvites();
+                }}
+              />
+            ))}
           </div>
         </section>
       )}
 
-      {/* Active Members (everyone) */}
       <section className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-5">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           Active Members
         </h2>
-
-        {/* Horizontal scroll safety wrapper on small screens */}
-        <div className="overflow-x-hidden">
-          <div className="px-5">
-            {active.length > 0 ? (
-              <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                {active.map((m) => (
-                  <div
-                    key={m.id}
-                    className="py-3"
-                  >
-                    <div className="min-w-[640px] sm:min-w-0">
-                      <MemberRow
-                        member={m}
-                        slug={slug}
-                        isManager={isStaff && !m.isOwner /* lock owner row */}
-                        onRoleChange={fetchMembers}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-600 dark:text-gray-200 text-sm">
-                No active members yet.
-              </p>
-            )}
-          </div>
-        </div>
+        {active.map((m) => (
+          <MemberRow
+            key={m.id}
+            member={m}
+            slug={slug}
+            isManager={isStaff && !m.isOwner}
+            onRoleChange={fetchMembers}
+          />
+        ))}
       </section>
 
-      {/* Invite modal (staff only) */}
       <ModalLayout
         isOpen={isStaff && inviteOpen}
         onClose={() => setInviteOpen(false)}
@@ -291,4 +315,6 @@ export default function MembersPage() {
       </ModalLayout>
     </div>
   );
-}
+};
+
+export default MembersPage;
