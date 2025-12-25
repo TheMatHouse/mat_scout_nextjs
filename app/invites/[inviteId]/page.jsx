@@ -15,14 +15,42 @@ import DeclineInviteButton from "./DeclineInviteButton";
 /* ============================================================
    Invite Page (Server Component)
 ============================================================ */
+
 const InvitePage = async ({ params }) => {
-  console.log("test");
   await connectDB();
 
+  // ✅ Next.js 15+ requirement
   const { inviteId } = await params;
 
+  if (!inviteId) {
+    notFound();
+  }
+
   const invite = await TeamInvitation.findById(inviteId).lean();
-  if (!invite) notFound();
+  if (!invite) {
+    notFound();
+  }
+
+  // ------------------------------------------------------------
+  // Invalid / non-pending states
+  // ------------------------------------------------------------
+  if (invite.status !== "pending") {
+    return (
+      <InviteMessage
+        title="Invitation Unavailable"
+        message="This invitation has already been used, revoked, or declined."
+      />
+    );
+  }
+
+  if (invite.expiresAt && invite.expiresAt < new Date()) {
+    return (
+      <InviteMessage
+        title="Invitation Expired"
+        message="This invitation has expired."
+      />
+    );
+  }
 
   const team = await Team.findById(invite.teamId)
     .select("teamName teamSlug")
@@ -37,58 +65,11 @@ const InvitePage = async ({ params }) => {
     );
   }
 
-  const now = new Date();
+  const user = await getCurrentUser();
 
-  /* ------------------------------------------------------------
-     Revoked
-  ------------------------------------------------------------ */
-  if (invite.status === "revoked") {
-    return (
-      <InviteMessage
-        title="Invitation Revoked"
-        message="This invitation was revoked by the team manager."
-      >
-        <RequestNewInvite teamId={invite.teamId} />
-      </InviteMessage>
-    );
-  }
-
-  /* ------------------------------------------------------------
-     Expired
-  ------------------------------------------------------------ */
-  if (invite.expiresAt && invite.expiresAt < now) {
-    return (
-      <InviteMessage
-        title="Invitation Expired"
-        message="This invitation has expired."
-      >
-        <RequestNewInvite teamId={invite.teamId} />
-      </InviteMessage>
-    );
-  }
-
-  /* ------------------------------------------------------------
-     Already used
-  ------------------------------------------------------------ */
-  if (invite.status !== "pending") {
-    return (
-      <InviteMessage
-        title="Invitation Unavailable"
-        message="This invitation has already been used or is no longer valid."
-      />
-    );
-  }
-
-  let user = null;
-  try {
-    user = await getCurrentUser();
-  } catch {
-    user = null;
-  }
-
-  /* ------------------------------------------------------------
-     Not logged in
-  ------------------------------------------------------------ */
+  // ------------------------------------------------------------
+  // Not logged in
+  // ------------------------------------------------------------
   if (!user) {
     const redirectTo = `/invites/${inviteId}`;
 
@@ -120,9 +101,9 @@ const InvitePage = async ({ params }) => {
     );
   }
 
-  /* ------------------------------------------------------------
-     Wrong email
-  ------------------------------------------------------------ */
+  // ------------------------------------------------------------
+  // Wrong account
+  // ------------------------------------------------------------
   if (invite.email !== user.email.toLowerCase()) {
     return (
       <InviteMessage
@@ -132,9 +113,9 @@ const InvitePage = async ({ params }) => {
     );
   }
 
-  /* ------------------------------------------------------------
-     Valid pending invite
-  ------------------------------------------------------------ */
+  // ------------------------------------------------------------
+  // Valid invite
+  // ------------------------------------------------------------
   return (
     <InviteContainer>
       <h1 className="text-2xl font-bold mb-2">
@@ -167,37 +148,11 @@ const InviteContainer = ({ children }) => {
   );
 };
 
-const InviteMessage = ({ title, message, children }) => {
+const InviteMessage = ({ title, message }) => {
   return (
     <InviteContainer>
       <h1 className="text-xl font-bold mb-3">{title}</h1>
-      <p className="mb-4">{message}</p>
-      {children}
+      <p>{message}</p>
     </InviteContainer>
-  );
-};
-
-const RequestNewInvite = ({ teamId }) => {
-  const handleRequest = async () => {
-    try {
-      await fetch("/api/invites/request-new", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teamId }),
-      });
-
-      alert("Request sent to the team managers.");
-    } catch {
-      alert("Failed to send request. Please contact the team manager.");
-    }
-  };
-
-  return (
-    <button
-      onClick={handleRequest}
-      className="btn btn-secondary"
-    >
-      Request a new invitation
-    </button>
   );
 };
