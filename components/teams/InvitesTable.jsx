@@ -177,9 +177,11 @@ const InvitesTable = ({
                           if (!onCooldown) onResend(inv._id);
                         }}
                         className="inline-flex items-center gap-1 rounded-md border px-3 py-1 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap shrink-0 disabled:opacity-60 disabled:hover:bg-transparent"
-                        title={`Resend available ${formatRetryAfter(
-                          retryAfterMs
-                        )}`}
+                        title={
+                          onCooldown
+                            ? `Resend available ${formatRetryAfter(msLeft)}`
+                            : "Resend invite"
+                        }
                         type="button"
                         disabled={onCooldown}
                       >
