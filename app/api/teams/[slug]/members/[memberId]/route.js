@@ -8,8 +8,6 @@ import { getCurrentUser } from "@/lib/auth-server";
 
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
-import User from "@/models/userModel";
-import FamilyMember from "@/models/familyMemberModel";
 
 import { reconcileScoutingReportsForRemovedAthlete } from "@/lib/teams/reconcileScoutingReportsForRemovedAthlete";
 
@@ -71,7 +69,8 @@ export async function PATCH(request, { params }) {
       userId: actor._id,
     })
       .select("role")
-      .lean();
+      .lean()
+      .session(session); // ✅ THIS WAS MISSING
 
     const actorRole = isOwner ? "owner" : (actorLink?.role || "").toLowerCase();
 
@@ -113,11 +112,11 @@ export async function PATCH(request, { params }) {
       const athleteType = tm.familyMemberId ? "family" : "user";
       const athleteId = tm.familyMemberId || tm.userId;
 
-      // 1️⃣ Soft-delete TeamMember
+      // Soft-delete TeamMember
       tm.role = "declined";
       await tm.save({ session });
 
-      // 2️⃣ Reconcile scouting reports
+      // Reconcile scouting reports
       await reconcileScoutingReportsForRemovedAthlete({
         session,
         teamId: team._id,
