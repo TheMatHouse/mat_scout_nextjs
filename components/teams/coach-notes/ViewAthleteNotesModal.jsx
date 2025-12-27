@@ -188,7 +188,7 @@ const ViewAthleteNotesModal = ({
 
               {data.video.url.trim() ? (
                 embedUrl ? (
-                  <div className="aspect-video rounded overflow-hidden border">
+                  <div className="aspect-video rounded-xl overflow-hidden border bg-black">
                     <iframe
                       src={embedUrl}
                       className="w-full h-full"
