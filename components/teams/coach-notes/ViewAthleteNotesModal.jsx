@@ -134,20 +134,22 @@ const ViewAthleteNotesModal = ({
       size="xl"
     >
       {loading ? (
-        <div className="p-4 text-sm opacity-80">Loading…</div>
+        <div className="p-4 text-sm text-gray-900 dark:text-gray-100">
+          Loading…
+        </div>
       ) : error ? (
         <div className="p-4 text-sm text-red-600">{error}</div>
       ) : data ? (
         <div className="grid gap-6 md:grid-cols-2">
           {/* LEFT COLUMN — TEXT */}
-          <div className="space-y-5">
+          <div className="space-y-5 text-gray-900 dark:text-gray-100">
             <Section title="Opponent">
               <div className="font-medium">
                 {data.opponent.firstName || data.opponent.lastName
                   ? `${data.opponent.firstName} ${data.opponent.lastName}`.trim()
                   : data.opponent.name || "—"}
               </div>
-              <div className="text-xs opacity-70">
+              <div className="text-xs text-gray-900 dark:text-gray-100">
                 {[data.opponent.rank, data.opponent.club, data.opponent.country]
                   .filter(Boolean)
                   .join(" • ")}
@@ -181,8 +183,8 @@ const ViewAthleteNotesModal = ({
 
           {/* RIGHT COLUMN — VIDEO */}
           <div>
-            <section className="rounded-xl border p-4 space-y-3">
-              <h4 className="text-xs uppercase tracking-wide opacity-60">
+            <section className="rounded-xl border p-4 space-y-3 text-gray-900 dark:text-gray-100">
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                 Video
               </h4>
 
@@ -207,19 +209,23 @@ const ViewAthleteNotesModal = ({
                   </a>
                 )
               ) : (
-                <div className="text-sm opacity-60 italic">
+                <div className="text-sm italic text-gray-900 dark:text-gray-100">
                   No video attached
                 </div>
               )}
 
               {data.video.label && (
-                <div className="text-sm opacity-80">{data.video.label}</div>
+                <div className="text-sm text-gray-900 dark:text-gray-100">
+                  {data.video.label}
+                </div>
               )}
             </section>
           </div>
         </div>
       ) : (
-        <div className="p-4 text-sm opacity-80">No data.</div>
+        <div className="p-4 text-sm text-gray-900 dark:text-gray-100">
+          No data.
+        </div>
       )}
 
       <div className="pt-6 flex justify-end">
