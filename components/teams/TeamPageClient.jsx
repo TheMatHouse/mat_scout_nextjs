@@ -80,7 +80,9 @@ export default function TeamPageClient({ slug, initialData }) {
           const dataM = await resM.json();
           if (!cancelled) {
             setMemberships(
-              Array.isArray(dataM.memberships) ? dataM.memberships : []
+              Array.isArray(dataM.memberships)
+                ? dataM.memberships.filter((m) => !m.deletedAt)
+                : []
             );
           }
 
