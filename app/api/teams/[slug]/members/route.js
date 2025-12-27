@@ -23,32 +23,37 @@ export async function GET(_req, { params }) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
-  const isOwner = String(team.user) === String(viewer._id);
+  const ownerId = String(team.user || team.userId || "");
+  const isOwner = ownerId === String(viewer._id);
 
-  // ✅ Prefer owner over any TeamMember row (this was the bug)
   const link = await TeamMember.findOne({
     teamId: team._id,
     userId: viewer._id,
+    deletedAt: null,
   })
     .select("role")
     .lean();
 
-  const linkRole = (link?.role || "").toLowerCase();
-  const viewerRole = isOwner ? "owner" : linkRole || null;
+  const viewerRole = isOwner
+    ? "owner"
+    : (link?.role || "").toLowerCase() || null;
 
   if (!viewerRole) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Pull all membership rows
-  const raw = await TeamMember.find({ teamId: team._id }).lean();
+  // ✅ IMPORTANT FIX: exclude soft-deleted members
+  const raw = await TeamMember.find({
+    teamId: team._id,
+    deletedAt: null,
+  }).lean();
 
-  // Map to display objects
   const members = await Promise.all(
     raw.map(async (m) => {
       if (m.familyMemberId) {
         const fm = await FamilyMember.findById(m.familyMemberId).lean();
         if (!fm) return null;
+
         return {
           id: String(m._id),
           role: (m.role || "").toLowerCase(),
@@ -94,13 +99,12 @@ export async function GET(_req, { params }) {
 
   const clean = members.filter(Boolean);
 
-  // Ensure the OWNER shows up as a non-editable row
-  const ownerId = String(team.user);
-  const hasOwnerInList = clean.some(
+  // Ensure owner row exists
+  const hasOwnerRow = clean.some(
     (m) => !m.isFamilyMember && m.userId === ownerId
   );
 
-  if (!hasOwnerInList) {
+  if (!hasOwnerRow) {
     const owner = await User.findById(ownerId).lean();
     if (owner) {
       let avatarUrl = owner.avatar || null;
@@ -110,10 +114,10 @@ export async function GET(_req, { params }) {
         avatarUrl = owner.facebookAvatar || avatarUrl;
 
       clean.unshift({
-        id: `owner-${team._id}`, // synthetic id (not editable)
-        role: "manager", // shown as manager
+        id: `owner-${team._id}`,
+        role: "manager",
         isFamilyMember: false,
-        isOwner: true, // UI should lock this row
+        isOwner: true,
         familyMemberId: null,
         userId: ownerId,
         name:

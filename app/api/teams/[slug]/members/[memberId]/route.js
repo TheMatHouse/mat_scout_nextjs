@@ -8,6 +8,8 @@ import { getCurrentUser } from "@/lib/auth-server";
 
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
+import CoachMatchNote from "@/models/coachMatchNoteModel";
+import TeamScoutingReport from "@/models/teamScoutingReportModel";
 
 import { reconcileScoutingReportsForRemovedAthlete } from "@/lib/teams/reconcileScoutingReportsForRemovedAthlete";
 
@@ -21,7 +23,7 @@ export async function OPTIONS() {
 }
 
 /* ============================================================
-   PATCH — update role OR remove member (declined)
+   PATCH — update role OR remove member (soft delete)
 ============================================================ */
 export async function PATCH(request, { params }) {
   await connectDB();
@@ -39,8 +41,8 @@ export async function PATCH(request, { params }) {
     const { slug, memberId } = await params;
     const { role } = await request.json();
 
-    const allowedRoles = ["pending", "member", "coach", "manager", "declined"];
-    if (!allowedRoles.includes(role)) {
+    const allowedRoles = ["pending", "member", "coach", "manager"];
+    if (role && !allowedRoles.includes(role)) {
       await session.abortTransaction();
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
@@ -54,7 +56,7 @@ export async function PATCH(request, { params }) {
     const ownerId = String(team.user || team.userId || "");
 
     const tm = await TeamMember.findById(memberId).session(session);
-    if (!tm) {
+    if (!tm || tm.deletedAt) {
       await session.abortTransaction();
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
@@ -67,15 +69,16 @@ export async function PATCH(request, { params }) {
     const actorLink = await TeamMember.findOne({
       teamId: team._id,
       userId: actor._id,
+      deletedAt: null,
     })
       .select("role")
-      .lean()
-      .session(session); // ✅ THIS WAS MISSING
+      .lean();
 
     const actorRole = isOwner ? "owner" : (actorLink?.role || "").toLowerCase();
 
     // Cannot modify owner row
     const isOwnerRow = !tm.familyMemberId && String(tm.userId) === ownerId;
+
     if (isOwnerRow) {
       await session.abortTransaction();
       return NextResponse.json(
@@ -95,28 +98,55 @@ export async function PATCH(request, { params }) {
       actorRole === "owner" ||
       (actorRole === "manager" && targetRole !== "manager");
 
-    if (role === "declined" && !canRemove) {
-      await session.abortTransaction();
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    if (role !== "declined" && !canChangeRole) {
-      await session.abortTransaction();
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     /* ----------------------------------------------------------
-       REMOVE MEMBER (soft delete + scouting report cleanup)
+       REMOVE MEMBER (soft delete + cleanup)
     ---------------------------------------------------------- */
-    if (role === "declined") {
+    if (!role) {
+      if (!canRemove) {
+        await session.abortTransaction();
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+
       const athleteType = tm.familyMemberId ? "family" : "user";
       const athleteId = tm.familyMemberId || tm.userId;
 
-      // Soft-delete TeamMember
-      tm.role = "declined";
+      // 1️⃣ Soft-delete TeamMember
+      tm.deletedAt = new Date();
+      tm.deletedByUserId = actor._id;
       await tm.save({ session });
 
-      // Reconcile scouting reports
+      // 2️⃣ Find scouting reports involving this athlete
+      const reports = await TeamScoutingReport.find(
+        {
+          teamId: team._id,
+          reportFor: {
+            $elemMatch: {
+              athleteId,
+              athleteType,
+            },
+          },
+        },
+        { _id: 1 }
+      ).session(session);
+
+      const reportIds = reports.map((r) => r._id);
+
+      // 3️⃣ Soft-delete coach notes tied to those reports
+      if (reportIds.length > 0) {
+        await CoachMatchNote.updateMany(
+          {
+            team: team._id,
+            entry: { $in: reportIds },
+            deletedAt: null,
+          },
+          {
+            $set: { deletedAt: new Date() },
+          },
+          { session }
+        );
+      }
+
+      // 4️⃣ Reconcile scouting reports (remove athlete or delete report)
       await reconcileScoutingReportsForRemovedAthlete({
         session,
         teamId: team._id,
@@ -134,6 +164,11 @@ export async function PATCH(request, { params }) {
     /* ----------------------------------------------------------
        ROLE CHANGE ONLY
     ---------------------------------------------------------- */
+    if (!canChangeRole) {
+      await session.abortTransaction();
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     tm.role = role;
     await tm.save({ session });
 

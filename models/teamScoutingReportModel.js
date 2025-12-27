@@ -1,5 +1,6 @@
 // models/teamScoutingReportModel.js
 import mongoose from "mongoose";
+import "@/models/weightCategoryModel";
 
 const reportForSchema = new mongoose.Schema(
   {
