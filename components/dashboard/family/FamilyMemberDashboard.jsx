@@ -6,7 +6,8 @@ import FamilyMemberSettings from "./sections/FamilySettings";
 import FamilyStyles from "./sections/FamilyStyles";
 import FamilyMatches from "./sections/FamilyMatchReports";
 import FamilyScoutingReports from "./sections/FamilyScoutingReports";
-import FamilyBio from "./sections/FamilyBio"; // ⬅️ NEW
+import FamilyBio from "./sections/FamilyBio";
+import FamilyCoachNotes from "./sections/FamilyCoachNotes";
 
 const TABS = [
   { id: "settings", label: "Settings" },
@@ -14,6 +15,7 @@ const TABS = [
   { id: "styles", label: "Styles" },
   { id: "matches", label: "Match Reports" },
   { id: "scouting", label: "Scouting Reports" },
+  { id: "coach-notes", label: "Coach Notes" },
 ];
 
 export default function FamilyMemberDashboard({ member }) {
@@ -45,6 +47,8 @@ export default function FamilyMemberDashboard({ member }) {
             onSwitchToStyles={() => handleTabChange("styles")}
           />
         );
+      case "coach-notes":
+        return <FamilyCoachNotes member={member} />;
       default:
         return null;
     }
