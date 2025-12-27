@@ -1,4 +1,3 @@
-// components/teams/coach-notes/PreviewNoteModal.jsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -20,75 +19,30 @@ const resultBadge = (result) => {
   return null;
 };
 
-const prettyScore = (score) => (score ? String(score) : "");
-
-const countryFlag = (code) => {
-  if (!code) return null;
-  // lightweight fallback: just show the code; your app may already have flags
-  return (
+const countryFlag = (code) =>
+  code ? (
     <span className="ml-1 text-[10px] tracking-widest uppercase opacity-70">
       {code}
     </span>
-  );
+  ) : null;
+
+/* ---------- video helpers (CORRECT SHAPE) ---------- */
+const getVideo = (n) => n?.video || null;
+
+const extractYouTubeId = (url = "") => {
+  if (!url) return null;
+  const re =
+    /(?:youtube\.com\/.*[?&]v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/)([^&?/]+)/i;
+  const m = url.match(re);
+  return m ? m[1] : null;
 };
 
-const pickVideoUrl = (n) => {
-  // Accept several shapes to be forgiving
-  return (
-    n?.videoUrl || n?.video || n?.media?.videoUrl || n?.media?.video?.url || ""
-  );
-};
-
-const isEmbeddable = (url) => {
-  if (!url) return false;
-  try {
-    const u = new URL(url);
-    return /youtube\.com|youtu\.be|vimeo\.com/i.test(u.hostname);
-  } catch {
-    return false;
-  }
-};
-
-const toYouTubeEmbed = (url) => {
-  try {
-    const u = new URL(url);
-    if (/youtu\.be/i.test(u.hostname)) {
-      // https://youtu.be/<id>
-      const id = u.pathname.replace("/", "");
-      return `https://www.youtube.com/embed/${id}`;
-    }
-    if (/youtube\.com/i.test(u.hostname)) {
-      // https://www.youtube.com/watch?v=<id>
-      const id = u.searchParams.get("v");
-      if (id) return `https://www.youtube.com/embed/${id}`;
-      // already an embed or shorts?
-      if (u.pathname.startsWith("/embed/")) return url;
-      if (u.pathname.startsWith("/shorts/")) {
-        const id2 = u.pathname.split("/")[2];
-        if (id2) return `https://www.youtube.com/embed/${id2}`;
-      }
-    }
-  } catch {}
-  return url; // as-is
-};
-
-const toVimeoEmbed = (url) => {
-  try {
-    const u = new URL(url);
-    if (/vimeo\.com/i.test(u.hostname)) {
-      const id = u.pathname.split("/").filter(Boolean)[0];
-      if (id) return `https://player.vimeo.com/video/${id}`;
-    }
-  } catch {}
-  return url;
-};
-
-const toEmbedUrl = (url) => {
-  if (!url) return "";
-  if (/youtu/i.test(url)) return toYouTubeEmbed(url);
-  if (/vimeo/i.test(url)) return toVimeoEmbed(url);
-  return url;
-};
+const toYouTubeEmbed = (id, startSeconds = 0) =>
+  id
+    ? `https://www.youtube.com/embed/${id}${
+        startSeconds > 0 ? `?start=${startSeconds}` : ""
+      }`
+    : "";
 
 /* ---------- main ---------- */
 const PreviewNoteModal = ({
@@ -98,23 +52,19 @@ const PreviewNoteModal = ({
   eventId,
   entryId,
   noteId,
-  note, // preloaded/current note
+  note,
   athleteName = "Athlete",
 }) => {
   const [loading, setLoading] = useState(false);
   const [stateNote, setStateNote] = useState(note || null);
   const [error, setError] = useState("");
 
-  // Keep local state in sync when parent passes a new note (after edit)
   useEffect(() => {
     setStateNote(note || null);
   }, [note]);
 
-  // Only fetch if we don't already have the note passed in
   useEffect(() => {
-    if (!open) return;
-    if (note) return; // we already have fresh data from parent
-    if (!slug || !eventId || !entryId || !noteId) return;
+    if (!open || note || !slug || !eventId || !entryId || !noteId) return;
 
     let cancelled = false;
     (async () => {
@@ -123,12 +73,11 @@ const PreviewNoteModal = ({
       try {
         const res = await fetch(
           `/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches/${noteId}`,
-          { method: "GET", cache: "no-store" }
+          { cache: "no-store" }
         );
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
-        const pulled = data?.note || data;
-        if (!cancelled) setStateNote(pulled);
+        if (!cancelled) setStateNote(data.match);
       } catch (e) {
         if (!cancelled) setError(e.message || "Failed to load note");
       } finally {
@@ -141,25 +90,13 @@ const PreviewNoteModal = ({
     };
   }, [open, slug, eventId, entryId, noteId, note]);
 
-  const n = stateNote || note;
+  const n = stateNote;
+  const opp = n?.opponent || {};
+  const video = getVideo(n);
 
-  const oppName = useMemo(() => {
-    const opp = n?.opponent || {};
-    if (opp.firstName || opp.lastName) {
-      return `${opp.firstName || ""} ${opp.lastName || ""}`.trim();
-    }
-    return opp.name || "Opponent";
-  }, [n]);
-
-  const oppMeta = useMemo(() => {
-    const opp = n?.opponent || {};
-    const bits = [opp.rank, opp.club].filter(Boolean);
-    return bits.join(" • ");
-  }, [n]);
-
-  const videoUrl = pickVideoUrl(n);
-  const showEmbed = isEmbeddable(videoUrl);
-  const embedUrl = showEmbed ? toEmbedUrl(videoUrl) : "";
+  const ytId = extractYouTubeId(video?.url);
+  const startSeconds = Math.floor((video?.startMs || 0) / 1000);
+  const embedUrl = ytId ? toYouTubeEmbed(ytId, startSeconds) : "";
 
   return (
     <ModalLayout
@@ -178,90 +115,88 @@ const PreviewNoteModal = ({
       ) : (
         <div className="space-y-6">
           {/* Header */}
-          <div className="flex flex-col gap-1">
+          <div>
             <div className="text-base font-semibold">
-              {oppName}
-              {countryFlag(n?.opponent?.country)}
+              {opp.name || "Opponent"}
+              {countryFlag(opp.country)}
             </div>
-            {oppMeta ? (
-              <div className="text-sm opacity-80">{oppMeta}</div>
-            ) : null}
+            <div className="text-sm opacity-80">
+              {[opp.rank, opp.club].filter(Boolean).join(" • ")}
+            </div>
             <div className="text-xs opacity-60">
-              {n?.createdAt ? new Date(n.createdAt).toLocaleString() : ""}
+              {n.createdAt && new Date(n.createdAt).toLocaleString()}
             </div>
           </div>
 
-          {/* Badges Row */}
-          {(n?.result || n?.score) && (
-            <div className="flex flex-wrap items-center gap-2">
-              {resultBadge(n?.result)}
-              {n?.score ? (
-                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-zinc-200 text-zinc-900 dark:bg-zinc-700 dark:text-zinc-100">
-                  Score: {prettyScore(n.score)}
+          {(n.result || n.score) && (
+            <div className="flex gap-2">
+              {resultBadge(n.result)}
+              {n.score && (
+                <span className="px-2.5 py-1 rounded-full text-xs bg-zinc-200 dark:bg-zinc-700">
+                  Score: {n.score}
                 </span>
-              ) : null}
+              )}
             </div>
           )}
 
-          {/* Two-column content grid */}
+          {/* Two-column layout */}
           <div className="grid gap-6 md:grid-cols-2">
-            {/* Left column */}
+            {/* LEFT */}
             <div className="space-y-4">
-              {n?.whatWentWell ? (
+              TESTING
+              {n.whatWentWell && (
                 <section className="rounded-xl border p-4">
-                  <h4 className="text-xs uppercase tracking-wide opacity-60 mb-2">
+                  <h4 className="text-xs uppercase opacity-60 mb-2">
                     What went well
                   </h4>
-                  <div className="leading-relaxed">{n.whatWentWell}</div>
+                  {n.whatWentWell}
                 </section>
-              ) : null}
-
-              {n?.reinforce ? (
+              )}
+              {n.reinforce && (
                 <section className="rounded-xl border p-4">
-                  <h4 className="text-xs uppercase tracking-wide opacity-60 mb-2">
+                  <h4 className="text-xs uppercase opacity-60 mb-2">
                     What we should reinforce
                   </h4>
-                  <div className="leading-relaxed">{n.reinforce}</div>
+                  {n.reinforce}
                 </section>
-              ) : null}
-
-              {n?.needsFix ? (
+              )}
+              {n.needsFix && (
                 <section className="rounded-xl border p-4">
-                  <h4 className="text-xs uppercase tracking-wide opacity-60 mb-2">
+                  <h4 className="text-xs uppercase opacity-60 mb-2">
                     What we need to fix
                   </h4>
-                  <div className="leading-relaxed">{n.needsFix}</div>
+                  {n.needsFix}
                 </section>
-              ) : null}
+              )}
             </div>
 
-            {/* Right column */}
+            {/* RIGHT */}
             <div className="space-y-4">
-              {n?.techniques?.ours?.length || n?.techniques?.theirs?.length ? (
+              {(n.techniques?.ours?.length || n.techniques?.theirs?.length) && (
                 <section className="rounded-xl border p-4">
-                  <h4 className="text-xs uppercase tracking-wide opacity-60 mb-3">
+                  <h4 className="text-xs uppercase opacity-60 mb-3">
                     Techniques
                   </h4>
 
-                  {n?.techniques?.ours?.length ? (
-                    <div className="mb-3">
+                  {n.techniques.ours?.length > 0 && (
+                    <div className="mb-2">
                       <div className="text-xs uppercase opacity-60 mb-1">
                         Ours
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {n.techniques.ours.map((t, i) => (
                           <span
-                            key={`o-${i}`}
-                            className="px-2 py-1 rounded-md text-xs bg-emerald-600/10 text-emerald-800 dark:text-emerald-100"
+                            key={i}
+                            className="px-2 py-1 text-xs rounded bg-emerald-600/10"
                           >
                             {t}
                           </span>
                         ))}
                       </div>
                     </div>
-                  ) : null}
+                  )}
 
-                  {n?.techniques?.theirs?.length ? (
+                  {n.techniques.theirs?.length > 0 && (
                     <div>
                       <div className="text-xs uppercase opacity-60 mb-1">
                         Theirs
@@ -269,57 +204,50 @@ const PreviewNoteModal = ({
                       <div className="flex flex-wrap gap-1.5">
                         {n.techniques.theirs.map((t, i) => (
                           <span
-                            key={`t-${i}`}
-                            className="px-2 py-1 rounded-md text-xs bg-zinc-500/10 text-zinc-800 dark:text-zinc-100"
+                            key={i}
+                            className="px-2 py-1 text-xs rounded bg-zinc-500/10"
                           >
                             {t}
                           </span>
                         ))}
                       </div>
                     </div>
-                  ) : null}
+                  )}
                 </section>
-              ) : null}
+              )}
 
-              {n?.notes ? (
+              {n.notes && (
                 <section className="rounded-xl border p-4">
-                  <h4 className="text-xs uppercase tracking-wide opacity-60 mb-2">
+                  <h4 className="text-xs uppercase opacity-60 mb-2">
                     More notes
                   </h4>
-                  <div className="leading-relaxed whitespace-pre-wrap">
-                    {n.notes}
-                  </div>
+                  <div className="whitespace-pre-wrap">{n.notes}</div>
                 </section>
-              ) : null}
+              )}
 
-              {/* Video */}
-              {videoUrl ? (
+              {video?.url && (
                 <section className="rounded-xl border p-4">
-                  <h4 className="text-xs uppercase tracking-wide opacity-60 mb-2">
-                    Video
-                  </h4>
-                  {showEmbed ? (
-                    <div className="aspect-video w-full overflow-hidden rounded-lg border bg-black">
+                  <h4 className="text-xs uppercase opacity-60 mb-2">Video</h4>
+                  {embedUrl ? (
+                    <div className="aspect-video rounded overflow-hidden border">
                       <iframe
                         src={embedUrl}
-                        title="Match video"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        className="w-full h-full"
                         allowFullScreen
-                        className="h-full w-full"
                       />
                     </div>
                   ) : (
                     <a
-                      href={videoUrl}
+                      href={video.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center px-3 py-2 rounded-lg bg-black text-white dark:bg-white dark:text-black"
+                      className="inline-flex px-3 py-2 rounded bg-black text-white dark:bg-white dark:text-black"
                     >
                       Watch video
                     </a>
                   )}
                 </section>
-              ) : null}
+              )}
             </div>
           </div>
         </div>

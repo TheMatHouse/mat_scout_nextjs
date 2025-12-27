@@ -58,6 +58,7 @@ const extractYouTubeId = (url = "") => {
   const m = u.match(re);
   return m ? m[1] : null;
 };
+
 const toNoCookieEmbedUrl = (videoId, startSeconds = 0) => {
   const base = `https://www.youtube-nocookie.com/embed/${videoId}`;
   return startSeconds > 0 ? `${base}?start=${startSeconds}` : base;
@@ -87,24 +88,11 @@ const emptyNote = () => ({
 const NoteBlock = ({
   idx,
   value,
-  onChange,
+  onFieldChange,
   suggestions,
   onRemove,
   canRemove,
 }) => {
-  const set = (key) => (v) => onChange({ ...value, [key]: v });
-
-  const addUnique = (listKey) => (tag) => {
-    const list = value[listKey] || [];
-    if (list.some((p) => p.label.toLowerCase() === tag.label.toLowerCase()))
-      return;
-    onChange({ ...value, [listKey]: [...list, tag] });
-  };
-  const delAt = (listKey) => (i) => {
-    const list = value[listKey] || [];
-    onChange({ ...value, [listKey]: list.filter((_, idx) => idx !== i) });
-  };
-
   const h = Math.max(0, parseInt(value.videoH || "0", 10) || 0);
   const m = Math.max(0, parseInt(value.videoM || "0", 10) || 0);
   const s = Math.max(0, parseInt(value.videoS || "0", 10) || 0);
@@ -112,6 +100,28 @@ const NoteBlock = ({
 
   const vidId = extractYouTubeId(value.videoUrlRaw);
   const previewSrc = vidId ? toNoCookieEmbedUrl(vidId, startSeconds) : "";
+
+  const addUnique = (listKey) => (tag) => {
+    const list = Array.isArray(value[listKey]) ? value[listKey] : [];
+    if (
+      list.some(
+        (p) =>
+          String(p?.label || "").toLowerCase() ===
+          String(tag?.label || "").toLowerCase()
+      )
+    )
+      return;
+    onFieldChange(idx, listKey, [...list, tag]);
+  };
+
+  const delAt = (listKey) => (i) => {
+    const list = Array.isArray(value[listKey]) ? value[listKey] : [];
+    onFieldChange(
+      idx,
+      listKey,
+      list.filter((_, j) => j !== i)
+    );
+  };
 
   return (
     <div className="rounded-xl border p-4 space-y-4">
@@ -128,32 +138,32 @@ const NoteBlock = ({
         )}
       </div>
 
-      {/* Opponent fields */}
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1">
           <span className="text-sm">Opponent name</span>
           <input
             value={value.opponentName}
-            onChange={(e) => set("opponentName")(e.target.value)}
+            onChange={(e) => onFieldChange(idx, "opponentName", e.target.value)}
             placeholder="e.g., Alex Smith"
             className="px-3 py-2 h-10 rounded border bg-transparent"
           />
         </label>
+
         <label className="grid gap-1">
           <span className="text-sm">Opponent rank (optional)</span>
           <input
             value={value.opponentRank}
-            onChange={(e) => set("opponentRank")(e.target.value)}
+            onChange={(e) => onFieldChange(idx, "opponentRank", e.target.value)}
             placeholder="e.g., Brown Belt"
             className="px-3 py-2 h-10 rounded border bg-transparent"
           />
         </label>
-        {/* Club with autosuggest */}
+
         <div className="grid gap-1">
           <span className="text-sm">Opponent club (optional)</span>
           <ClubAutosuggest
             value={value.opponentClub || ""}
-            onChange={set("opponentClub")}
+            onChange={(v) => onFieldChange(idx, "opponentClub", v)}
             minChars={2}
           />
           <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -161,34 +171,35 @@ const NoteBlock = ({
             otherwise, enter it manually.
           </p>
         </div>
+
         <CountrySelect
           label="Country"
           value={value.opponentCountry}
-          onChange={set("opponentCountry")}
+          onChange={(v) => onFieldChange(idx, "opponentCountry", v)}
         />
       </div>
 
-      {/* Notes */}
       <Editor
         name={`whatWentWell_${idx}`}
         label="What went well"
         text={value.whatWentWell}
-        onChange={set("whatWentWell")}
+        onChange={(v) => onFieldChange(idx, "whatWentWell", v)}
       />
+
       <Editor
         name={`reinforce_${idx}`}
         label="What we should reinforce"
         text={value.reinforce}
-        onChange={set("reinforce")}
+        onChange={(v) => onFieldChange(idx, "reinforce", v)}
       />
+
       <Editor
         name={`needsFix_${idx}`}
         label="What we need to fix"
         text={value.needsFix}
-        onChange={set("needsFix")}
+        onChange={(v) => onFieldChange(idx, "needsFix", v)}
       />
 
-      {/* Techniques */}
       <TechniqueTagInput
         label="Techniques (ours)"
         name={`techniquesOurs_${idx}`}
@@ -197,6 +208,7 @@ const NoteBlock = ({
         onAdd={addUnique("techOurs")}
         onDelete={delAt("techOurs")}
       />
+
       <TechniqueTagInput
         label="Techniques (theirs)"
         name={`techniquesTheirs_${idx}`}
@@ -206,22 +218,22 @@ const NoteBlock = ({
         onDelete={delAt("techTheirs")}
       />
 
-      {/* Result / Score */}
       <div className="grid gap-3 sm:grid-cols-2">
         <Select
           label="Result"
           value={value.result}
-          onChange={set("result")}
+          onChange={(v) => onFieldChange(idx, "result", v)}
         >
           <option value="">Result</option>
           <option value="win">Win</option>
           <option value="loss">Loss</option>
           <option value="draw">Draw</option>
         </Select>
+
         <TextInput
           label="Score"
           value={value.score}
-          onChange={set("score")}
+          onChange={(v) => onFieldChange(idx, "score", v)}
           placeholder="e.g., Ippon, 2-1"
         />
       </div>
@@ -230,23 +242,23 @@ const NoteBlock = ({
         name={`notes_${idx}`}
         label="More notes (optional)"
         text={value.notes}
-        onChange={set("notes")}
+        onChange={(v) => onFieldChange(idx, "notes", v)}
       />
 
-      {/* Video section */}
       <div className="rounded-lg border p-4 space-y-4">
         <div className="text-sm font-semibold">Video (optional)</div>
 
         <TextInput
           label="Video Title"
           value={value.videoTitle}
-          onChange={set("videoTitle")}
+          onChange={(v) => onFieldChange(idx, "videoTitle", v)}
           placeholder="First exchange"
         />
+
         <TextInput
           label="YouTube URL"
           value={value.videoUrlRaw}
-          onChange={set("videoUrlRaw")}
+          onChange={(v) => onFieldChange(idx, "videoUrlRaw", v)}
           placeholder="Paste YouTube link"
         />
 
@@ -256,17 +268,17 @@ const NoteBlock = ({
             <NumberInput
               label="Hours"
               value={value.videoH}
-              onChange={set("videoH")}
+              onChange={(v) => onFieldChange(idx, "videoH", v)}
             />
             <NumberInput
               label="Minutes"
               value={value.videoM}
-              onChange={set("videoM")}
+              onChange={(v) => onFieldChange(idx, "videoM", v)}
             />
             <NumberInput
               label="Seconds"
               value={value.videoS}
-              onChange={set("videoS")}
+              onChange={(v) => onFieldChange(idx, "videoS", v)}
             />
           </div>
         </div>
@@ -294,8 +306,15 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
   const [notes, setNotes] = useState([emptyNote()]);
   const [loadedTechniques, setLoadedTechniques] = useState([]);
 
+  const onFieldChange = (idx, key, value) => {
+    setNotes((prev) =>
+      prev.map((n, i) => (i === idx ? { ...n, [key]: value } : n))
+    );
+  };
+
   useEffect(() => {
     let alive = true;
+
     (async () => {
       try {
         const res = await fetch("/api/techniques", { cache: "no-store" });
@@ -319,6 +338,7 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
         if (alive) setLoadedTechniques([]);
       }
     })();
+
     return () => {
       alive = false;
     };
@@ -334,49 +354,19 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (disabled) {
       toast.error("Missing team/event/entry identifiers.");
       return;
     }
 
     try {
-      const payload = notes.map((n) => {
-        const h = Math.max(0, parseInt(n.videoH || "0", 10) || 0);
-        const m = Math.max(0, parseInt(n.videoM || "0", 10) || 0);
-        const s = Math.max(0, parseInt(n.videoS || "0", 10) || 0);
-        const start = `${h}:${m}:${s}`;
-
-        return {
-          opponent: {
-            name: n.opponentName || "",
-            rank: n.opponentRank || "",
-            club: n.opponentClub || "",
-            country: n.opponentCountry || "",
-          },
-          whatWentWell: n.whatWentWell,
-          reinforce: n.reinforce,
-          needsFix: n.needsFix,
-          techniques: {
-            ours: (n.techOurs || []).map((t) => t.label),
-            theirs: (n.techTheirs || []).map((t) => t.label),
-          },
-          result: n.result,
-          score: n.score,
-          notes: n.notes,
-          videoRaw: {
-            url: n.videoUrlRaw || "",
-            start,
-            label: n.videoTitle || "",
-          },
-        };
-      });
-
       const res = await fetch(
         `/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ notes: payload }),
+          body: JSON.stringify(notes),
         }
       );
 
@@ -392,7 +382,7 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
       setOpen(false);
       router.refresh();
     } catch (err) {
-      toast.error(err.message || "Server error");
+      toast.error(err?.message || "Server error");
     }
   };
 
@@ -428,11 +418,9 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
               idx={i}
               value={n}
               suggestions={suggestions}
-              onChange={(val) =>
-                setNotes((prev) => prev.map((p, idx) => (idx === i ? val : p)))
-              }
+              onFieldChange={onFieldChange}
               onRemove={() =>
-                setNotes((prev) => prev.filter((_, idx) => idx !== i))
+                setNotes((prev) => prev.filter((_, j) => j !== i))
               }
               canRemove={notes.length > 1}
             />

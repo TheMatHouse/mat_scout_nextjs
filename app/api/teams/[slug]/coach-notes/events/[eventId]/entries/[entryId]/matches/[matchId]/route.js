@@ -1,12 +1,14 @@
 // app/api/teams/[slug]/coach-notes/events/[eventId]/entries/[entryId]/matches/[matchId]/route.js
+
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
-import CoachMatchNote from "@/models/coachMatchNoteModel"; // adjust if your file name differs
-import { getCurrentUser } from "@/lib/auth-server"; // adjust if you use a different helper
+import CoachMatchNote from "@/models/coachMatchNoteModel";
+import { getCurrentUser } from "@/lib/auth-server";
 
 // If your schema has `select: false` on video, keep this true:
 const NEEDS_PLUS_VIDEO = true;
 
+/* --------------------- GET --------------------- */
 export async function GET(_req, ctx) {
   await connectDB();
 
@@ -25,9 +27,11 @@ export async function GET(_req, ctx) {
   if (!match) {
     return NextResponse.json({ error: "Match not found" }, { status: 404 });
   }
+
   return NextResponse.json({ match });
 }
 
+/* --------------------- PATCH --------------------- */
 export async function PATCH(req, ctx) {
   await connectDB();
 
@@ -40,7 +44,6 @@ export async function PATCH(req, ctx) {
 
   const body = await req.json();
 
-  // Build $set from allowed fields
   const $set = {
     "opponent.name": body?.opponent?.name ?? undefined,
     "opponent.rank": body?.opponent?.rank ?? undefined,
@@ -59,14 +62,10 @@ export async function PATCH(req, ctx) {
     notes: body?.notes ?? undefined,
   };
 
-  // Remove undefined keys so we don’t clobber fields
   Object.keys($set).forEach((k) => $set[k] === undefined && delete $set[k]);
 
   const update = { $set };
-  // Video rules (mirror Add behavior):
-  // - If body.video === null -> explicit clear
-  // - If body.video is an object -> set/replace
-  // - If body.video is undefined -> leave unchanged
+
   if (Object.prototype.hasOwnProperty.call(body, "video")) {
     if (body.video === null) {
       update.$unset = { ...(update.$unset || {}), video: "" };
@@ -89,5 +88,32 @@ export async function PATCH(req, ctx) {
   if (!updated) {
     return NextResponse.json({ error: "Match not found" }, { status: 404 });
   }
+
   return NextResponse.json({ match: updated });
+}
+
+/* --------------------- DELETE --------------------- */
+export async function DELETE(_req, ctx) {
+  await connectDB();
+
+  // 🔧 Next.js 15+: params must be awaited
+  const { slug, eventId, entryId, matchId } = await ctx.params;
+
+  // TODO: add your gate/permission check here if you have one
+  // const me = await getCurrentUser().catch(() => null);
+  // ... gate(me?._id, slug)
+
+  const deleted = await CoachMatchNote.findByIdAndUpdate(
+    matchId,
+    {
+      deletedAt: new Date(),
+    },
+    { new: true }
+  ).lean();
+
+  if (!deleted) {
+    return NextResponse.json({ error: "Match not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ message: "Deleted", match: deleted });
 }

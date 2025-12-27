@@ -2,12 +2,14 @@
 import pkg from "mongoose";
 const { Schema, model, models } = pkg;
 
+/* --------------------- sub-schemas --------------------- */
+
 const OpponentSchema = new Schema(
   {
-    name: { type: String, trim: true },
-    rank: { type: String, trim: true },
-    club: { type: String, trim: true },
-    country: { type: String, trim: true },
+    name: { type: String, trim: true, default: "" },
+    rank: { type: String, trim: true, default: "" },
+    club: { type: String, trim: true, default: "" },
+    country: { type: String, trim: true, default: "" },
   },
   { _id: false }
 );
@@ -33,8 +35,18 @@ const VideoSchema = new Schema(
   { _id: false }
 );
 
+/* --------------------- main schema --------------------- */
+
 const CoachMatchNoteSchema = new Schema(
   {
+    /* ---- ownership ---- */
+    team: {
+      type: Schema.Types.ObjectId,
+      ref: "Team",
+      required: true,
+      index: true,
+    },
+
     event: {
       type: Schema.Types.ObjectId,
       ref: "CoachEvent",
@@ -49,9 +61,16 @@ const CoachMatchNoteSchema = new Schema(
       index: true,
     },
 
-    team: {
+    /* ---- athlete identity ---- */
+    athleteId: {
       type: Schema.Types.ObjectId,
-      ref: "Team",
+      required: true,
+      index: true,
+    },
+
+    athleteType: {
+      type: String,
+      enum: ["user", "family"],
       required: true,
       index: true,
     },
@@ -62,11 +81,20 @@ const CoachMatchNoteSchema = new Schema(
       trim: true,
     },
 
-    opponent: { type: OpponentSchema, default: {} },
+    /* ---- note content ---- */
+    opponent: {
+      type: OpponentSchema,
+      default: () => ({
+        name: "",
+        rank: "",
+        club: "",
+        country: "",
+      }),
+    },
 
-    whatWentWell: { type: String, trim: true },
-    reinforce: { type: String, trim: true },
-    needsFix: { type: String, trim: true },
+    whatWentWell: { type: String, default: "", trim: true },
+    reinforce: { type: String, default: "", trim: true },
+    needsFix: { type: String, default: "", trim: true },
 
     techniques: {
       type: TechniquesSchema,
@@ -79,20 +107,21 @@ const CoachMatchNoteSchema = new Schema(
       default: "",
     },
 
-    score: { type: String, trim: true },
-    notes: { type: String, trim: true },
+    score: { type: String, default: "", trim: true },
+    notes: { type: String, default: "", trim: true },
 
-    video: { type: VideoSchema, default: () => ({}) },
+    video: {
+      type: VideoSchema,
+      default: () => ({}),
+    },
 
+    /* ---- audit ---- */
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
 
-    /* ---------------------------------------------------------
-       Soft delete fields
-    --------------------------------------------------------- */
     deletedAt: {
       type: Date,
       default: null,
@@ -105,7 +134,17 @@ const CoachMatchNoteSchema = new Schema(
       default: null,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    minimize: false, // 🔥 THIS IS THE FIX
+  }
+);
+
+/* --------------------- indexes --------------------- */
+
+CoachMatchNoteSchema.index(
+  { team: 1, athleteId: 1, deletedAt: 1 },
+  { name: "team_athlete_active" }
 );
 
 const CoachMatchNote =

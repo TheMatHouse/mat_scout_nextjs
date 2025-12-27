@@ -12,6 +12,7 @@ import CoachMatchNote from "@/models/coachMatchNoteModel";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+/* --------------------- helpers --------------------- */
 function normalizeVideoFromRaw(raw) {
   const rawUrl = typeof raw?.url === "string" ? raw.url.trim() : "";
   const rawStart = typeof raw?.start === "string" ? raw.start.trim() : "";
@@ -89,49 +90,44 @@ export async function POST(req, { params }) {
     }
 
     const team = await Team.findOne({ teamSlug: slug }).lean();
-    if (!team)
+    if (!team) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
+    }
 
     const isOwner = String(team.user) === String(me._id);
     const membership = await TeamMember.findOne({
       teamId: team._id,
       $or: [{ userId: me._id }, { familyMemberId: me._id }],
     }).lean();
+
     const role = (membership?.role || "").toLowerCase();
     const canWrite = isOwner || ["manager", "admin", "coach"].includes(role);
-    if (!canWrite)
+    if (!canWrite) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
 
     const event = await CoachEvent.findOne({
       _id: eventId,
       team: team._id,
     }).lean();
-    if (!event)
+    if (!event) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
 
     const entry = await CoachEntry.findOne({
       _id: entryId,
       event: event._id,
       team: team._id,
     }).lean();
-    if (!entry)
+    if (!entry) {
       return NextResponse.json({ error: "Entry not found" }, { status: 404 });
-
-    /* -------------------------------------------------
-       🔐 IDENTITY RESOLUTION (FIX)
-    ------------------------------------------------- */
+    }
 
     const athleteUserId = entry.athlete?.user || entry.athlete?.userId || null;
-
     const athleteFamilyId =
       entry.athlete?.familyMember || entry.athlete?.familyMemberId || null;
 
     if (!athleteUserId && !athleteFamilyId) {
-      console.error("[POST /matches] Entry missing athlete identity", {
-        entryId: entry._id,
-        athlete: entry.athlete,
-      });
-
       return NextResponse.json(
         { error: "Entry is missing athlete identity" },
         { status: 400 }
@@ -142,35 +138,70 @@ export async function POST(req, { params }) {
     const athleteType = athleteUserId ? "user" : "family";
     const athleteName = entry.athlete?.name;
 
-    /* ------------------------------------------------- */
-
     const raw = await req.json().catch(() => ({}));
 
-    const normalize = (obj) => ({
-      team: team._id,
-      event: event._id,
-      entry: entry._id,
+    const noteObjects = Array.isArray(raw)
+      ? raw
+      : Array.isArray(raw?.notes)
+      ? raw.notes
+      : [raw];
 
-      athleteId,
-      athleteType,
-      athleteName,
+    const docsPayload = noteObjects.map((obj) => {
+      const h = Math.max(0, parseInt(obj?.videoH || "0", 10) || 0);
+      const m = Math.max(0, parseInt(obj?.videoM || "0", 10) || 0);
+      const s = Math.max(0, parseInt(obj?.videoS || "0", 10) || 0);
+      const startMs = (h * 3600 + m * 60 + s) * 1000;
 
-      opponent: obj?.opponent || {},
-      whatWentWell: obj?.whatWentWell || "",
-      reinforce: obj?.reinforce || "",
-      needsFix: obj?.needsFix || "",
-      techniques: obj?.techniques || { ours: [], theirs: [] },
-      result: obj?.result || "",
-      score: obj?.score || "",
-      notes: obj?.notes || "",
-      video: obj?.video || {},
+      const videoUrl = String(obj?.videoUrlRaw || "").trim();
 
-      createdBy: me._id,
+      return {
+        team: team._id,
+        event: event._id,
+        entry: entry._id,
+
+        athleteId,
+        athleteType,
+        athleteName,
+
+        opponent: {
+          name: obj?.opponentName || "",
+          rank: obj?.opponentRank || "",
+          club: obj?.opponentClub || "",
+          country: obj?.opponentCountry || "",
+        },
+
+        whatWentWell: obj?.whatWentWell || "",
+        reinforce: obj?.reinforce || "",
+        needsFix: obj?.needsFix || "",
+
+        techniques: {
+          ours: Array.isArray(obj?.techOurs)
+            ? obj.techOurs
+                .map((t) => String(t?.label || "").trim())
+                .filter(Boolean)
+            : [],
+          theirs: Array.isArray(obj?.techTheirs)
+            ? obj.techTheirs
+                .map((t) => String(t?.label || "").trim())
+                .filter(Boolean)
+            : [],
+        },
+
+        result: obj?.result || "",
+        score: obj?.score || "",
+        notes: obj?.notes || "",
+
+        video: videoUrl
+          ? {
+              url: videoUrl,
+              label: String(obj?.videoTitle || "").trim(),
+              startMs,
+            }
+          : {},
+
+        createdBy: me._id,
+      };
     });
-
-    const docsPayload = Array.isArray(raw)
-      ? raw.map(normalize)
-      : [normalize(raw)];
 
     const created = await CoachMatchNote.insertMany(docsPayload);
 
@@ -180,11 +211,11 @@ export async function POST(req, { params }) {
     );
   } catch (err) {
     console.error("[POST /matches] error:", err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
-/* ---------------------  PATCH: edit one match --------------------- */
+/* --------------------- PATCH --------------------- */
 export async function PATCH(req) {
   try {
     const body = await req.json();
@@ -207,14 +238,15 @@ export async function PATCH(req) {
       { $set: update },
       { new: true }
     );
+
     return NextResponse.json({ message: "Updated", note: updated });
   } catch (err) {
     console.error("PATCH match error:", err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
-/* ---------------------  DELETE: soft delete --------------------- */
+/* --------------------- DELETE --------------------- */
 export async function DELETE(req) {
   try {
     const body = await req.json();
@@ -231,6 +263,6 @@ export async function DELETE(req) {
     return NextResponse.json({ message: "Deleted", note: deleted });
   } catch (err) {
     console.error("DELETE match error:", err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
