@@ -3,16 +3,18 @@
 import { useCallback, useEffect, useState } from "react";
 import NotePreviewModal from "@/components/dashboard/coach-notes/NotePreviewModal";
 
-function TeamCard({ children }) {
+const TeamCard = ({ children }) => {
   return (
     <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/70 shadow-sm">
       {children}
     </div>
   );
-}
+};
 
-export default function FamilyCoachNotes({ member }) {
+const FamilyCoachNotes = ({ member }) => {
   const memberId = member?._id;
+  const userId = member?.userId;
+
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -20,14 +22,14 @@ export default function FamilyCoachNotes({ member }) {
   const [error, setError] = useState("");
 
   const fetchNotes = useCallback(async () => {
-    if (!memberId) return;
+    if (!memberId || !userId) return;
 
     setLoading(true);
     setError("");
     try {
       const ts = Date.now();
       const res = await fetch(
-        `/api/dashboard/family/${memberId}/coach-notes?ts=${ts}`,
+        `/api/dashboard/${userId}/family/${memberId}/coach-notes?ts=${ts}`,
         { cache: "no-store" }
       );
       if (!res.ok) throw new Error(await res.text());
@@ -41,7 +43,7 @@ export default function FamilyCoachNotes({ member }) {
     } finally {
       setLoading(false);
     }
-  }, [memberId]);
+  }, [memberId, userId]);
 
   useEffect(() => {
     fetchNotes();
@@ -51,6 +53,7 @@ export default function FamilyCoachNotes({ member }) {
     setNoteId(id);
     setOpen(true);
   };
+
   const closePreview = () => {
     setOpen(false);
     setNoteId(null);
@@ -145,4 +148,6 @@ export default function FamilyCoachNotes({ member }) {
       />
     </>
   );
-}
+};
+
+export default FamilyCoachNotes;
