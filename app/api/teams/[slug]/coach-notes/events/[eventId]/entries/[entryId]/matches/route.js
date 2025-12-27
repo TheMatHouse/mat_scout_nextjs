@@ -12,56 +12,6 @@ import CoachMatchNote from "@/models/coachMatchNoteModel";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-/* --------------------- helpers: youtube & timecode --------------------- */
-// (UNCHANGED — same helpers you already had)
-function timecodeToMs(tc = "") {
-  const parts = String(tc)
-    .trim()
-    .split(":")
-    .map((p) => p.trim())
-    .filter(Boolean);
-  if (!parts.length) return 0;
-  let s = 0;
-  if (parts.length === 1) s = Number(parts[0] || 0);
-  else if (parts.length === 2)
-    s = Number(parts[0] || 0) * 60 + Number(parts[1] || 0);
-  else if (parts.length === 3)
-    s =
-      Number(parts[0] || 0) * 3600 +
-      Number(parts[1] || 0) * 60 +
-      Number(parts[2] || 0);
-  return Number.isFinite(s) && s > 0 ? Math.round(s * 1000) : 0;
-}
-
-function parseSecondsFromQueryVal(val = "") {
-  const t = String(val).trim();
-  if (!t) return 0;
-  if (/m|s/i.test(t)) {
-    const m = Number(t.match(/(\d+)m/i)?.[1] ?? 0);
-    const s = Number(t.match(/(\d+)s/i)?.[1] ?? 0);
-    const total = m * 60 + s;
-    return Number.isFinite(total) && total > 0 ? total : 0;
-  }
-  const num = Number(t);
-  return Number.isFinite(num) && num > 0 ? num : 0;
-}
-
-function extractYouTubeId(url = "") {
-  if (typeof url !== "string") return null;
-  const u = url.trim();
-  if (!u) return null;
-  if (!/(youtube\.com|youtu\.be|youtube-nocookie\.com)/i.test(u)) return null;
-  const re =
-    /(?:youtube\.com\/.*[?&]v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/|youtube-nocookie\.com\/embed\/)([^&?/]+)/i;
-  const m = u.match(re);
-  return m ? m[1] : null;
-}
-
-function toNoCookieEmbedUrl(videoId, startSeconds = 0) {
-  const base = `https://www.youtube-nocookie.com/embed/${videoId}`;
-  return startSeconds > 0 ? `${base}?start=${startSeconds}` : base;
-}
-
 function normalizeVideoFromRaw(raw) {
   const rawUrl = typeof raw?.url === "string" ? raw.url.trim() : "";
   const rawStart = typeof raw?.start === "string" ? raw.start.trim() : "";
@@ -69,26 +19,32 @@ function normalizeVideoFromRaw(raw) {
 
   if (!rawUrl) return {};
 
+  const extractYouTubeId = (url) => {
+    if (!/(youtube\.com|youtu\.be|youtube-nocookie\.com)/i.test(url))
+      return null;
+    const re =
+      /(?:youtube\.com\/.*[?&]v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/|youtube-nocookie\.com\/embed\/)([^&?/]+)/i;
+    const m = url.match(re);
+    return m ? m[1] : null;
+  };
+
   const id = extractYouTubeId(rawUrl);
   if (!id) return {};
 
-  let ms = timecodeToMs(rawStart);
-  if (!ms) {
-    try {
-      const u = new URL(rawUrl);
-      const tParam = u.searchParams.get("t") || u.searchParams.get("start");
-      if (tParam) {
-        const sec = parseSecondsFromQueryVal(tParam);
-        if (sec > 0) ms = sec * 1000;
-      }
-    } catch {}
+  let startSeconds = 0;
+  if (rawStart) {
+    const parts = rawStart.split(":").map(Number);
+    if (parts.length === 2) startSeconds = parts[0] * 60 + parts[1];
+    if (parts.length === 3)
+      startSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
   }
 
-  const startSeconds = Math.round((ms || 0) / 1000);
   return {
-    url: toNoCookieEmbedUrl(id, startSeconds),
+    url: `https://www.youtube-nocookie.com/embed/${id}${
+      startSeconds ? `?start=${startSeconds}` : ""
+    }`,
     publicId: null,
-    startMs: ms || 0,
+    startMs: startSeconds * 1000,
     label,
     width: null,
     height: null,
@@ -96,16 +52,14 @@ function normalizeVideoFromRaw(raw) {
   };
 }
 
-/* ---------------------  GET: list all matches --------------------- */
+/* --------------------- GET --------------------- */
 export async function GET(req, { params }) {
   try {
     const { slug, eventId, entryId } = await params;
     await connectDB();
 
     const team = await Team.findOne({ teamSlug: slug }).lean();
-    if (!team) {
-      return NextResponse.json({ notes: [] }, { status: 200 });
-    }
+    if (!team) return NextResponse.json({ notes: [] });
 
     const notes = await CoachMatchNote.find({
       team: team._id,
@@ -116,14 +70,14 @@ export async function GET(req, { params }) {
       .sort({ createdAt: -1 })
       .lean();
 
-    return NextResponse.json({ notes: notes || [] }, { status: 200 });
+    return NextResponse.json({ notes: notes || [] });
   } catch (err) {
     console.error("GET matches error:", err);
-    return NextResponse.json({ notes: [] }, { status: 200 });
+    return NextResponse.json({ notes: [] });
   }
 }
 
-/* ---------------------  POST: add match(es) --------------------- */
+/* --------------------- POST --------------------- */
 export async function POST(req, { params }) {
   try {
     const { slug, eventId, entryId } = await params;
@@ -163,12 +117,23 @@ export async function POST(req, { params }) {
     if (!entry)
       return NextResponse.json({ error: "Entry not found" }, { status: 404 });
 
-    const athleteUserId = entry.athlete?.user || null;
-    const athleteFamilyId = entry.athlete?.familyMember || null;
+    /* -------------------------------------------------
+       🔐 IDENTITY RESOLUTION (FIX)
+    ------------------------------------------------- */
+
+    const athleteUserId = entry.athlete?.user || entry.athlete?.userId || null;
+
+    const athleteFamilyId =
+      entry.athlete?.familyMember || entry.athlete?.familyMemberId || null;
 
     if (!athleteUserId && !athleteFamilyId) {
+      console.error("[POST /matches] Entry missing athlete identity", {
+        entryId: entry._id,
+        athlete: entry.athlete,
+      });
+
       return NextResponse.json(
-        { error: "Cannot create coach notes for guest entries" },
+        { error: "Entry is missing athlete identity" },
         { status: 400 }
       );
     }
@@ -176,6 +141,8 @@ export async function POST(req, { params }) {
     const athleteId = athleteUserId || athleteFamilyId;
     const athleteType = athleteUserId ? "user" : "family";
     const athleteName = entry.athlete?.name;
+
+    /* ------------------------------------------------- */
 
     const raw = await req.json().catch(() => ({}));
 
@@ -196,10 +163,7 @@ export async function POST(req, { params }) {
       result: obj?.result || "",
       score: obj?.score || "",
       notes: obj?.notes || "",
-      video:
-        obj?.videoRaw && typeof obj.videoRaw === "object"
-          ? normalizeVideoFromRaw(obj.videoRaw)
-          : {},
+      video: obj?.video || {},
 
       createdBy: me._id,
     });
@@ -214,10 +178,59 @@ export async function POST(req, { params }) {
       { message: "Saved", notes: created },
       { status: 201 }
     );
-  } catch (e) {
-    console.error("[POST /matches] error:", e);
+  } catch (err) {
+    console.error("[POST /matches] error:", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
 
-/* --------------------- PATCH & DELETE unchanged --------------------- */
+/* ---------------------  PATCH: edit one match --------------------- */
+export async function PATCH(req) {
+  try {
+    const body = await req.json();
+    const matchId = body?._id;
+    if (!matchId)
+      return NextResponse.json({ error: "Missing match ID" }, { status: 400 });
+
+    await connectDB();
+
+    let update = { ...body, updatedAt: new Date() };
+    delete update._id;
+
+    if (update.videoRaw && typeof update.videoRaw === "object") {
+      update.video = normalizeVideoFromRaw(update.videoRaw);
+      delete update.videoRaw;
+    }
+
+    const updated = await CoachMatchNote.findByIdAndUpdate(
+      matchId,
+      { $set: update },
+      { new: true }
+    );
+    return NextResponse.json({ message: "Updated", note: updated });
+  } catch (err) {
+    console.error("PATCH match error:", err);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
+}
+
+/* ---------------------  DELETE: soft delete --------------------- */
+export async function DELETE(req) {
+  try {
+    const body = await req.json();
+    const { matchId } = body || {};
+    if (!matchId)
+      return NextResponse.json({ error: "Missing matchId" }, { status: 400 });
+
+    await connectDB();
+
+    const deleted = await CoachMatchNote.findByIdAndUpdate(matchId, {
+      deletedAt: new Date(),
+    });
+
+    return NextResponse.json({ message: "Deleted", note: deleted });
+  } catch (err) {
+    console.error("DELETE match error:", err);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
+}
