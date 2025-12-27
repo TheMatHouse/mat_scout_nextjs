@@ -1,149 +1,223 @@
-// models/coachMatchNoteModel.js
-import pkg from "mongoose";
-const { Schema, model, models } = pkg;
+// app/api/teams/[slug]/coach-notes/events/[eventId]/entries/[entryId]/matches/route.js
+import { NextResponse } from "next/server";
+import { connectDB } from "@/lib/mongo";
+import { getCurrentUserFromCookies } from "@/lib/auth-server";
 
-/* ---------------------------------------------------------
-   Embedded Schemas
---------------------------------------------------------- */
+import Team from "@/models/teamModel";
+import TeamMember from "@/models/teamMemberModel";
+import CoachEvent from "@/models/coachEventModel";
+import CoachEntry from "@/models/coachEntryModel";
+import CoachMatchNote from "@/models/coachMatchNoteModel";
 
-const OpponentSchema = new Schema(
-  {
-    name: { type: String, trim: true },
-    rank: { type: String, trim: true },
-    club: { type: String, trim: true },
-    country: { type: String, trim: true },
-  },
-  { _id: false }
-);
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-const TechniquesSchema = new Schema(
-  {
-    ours: [{ type: String, trim: true }],
-    theirs: [{ type: String, trim: true }],
-  },
-  { _id: false }
-);
+/* --------------------- helpers: youtube & timecode --------------------- */
+// (UNCHANGED — same helpers you already had)
+function timecodeToMs(tc = "") {
+  const parts = String(tc)
+    .trim()
+    .split(":")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (!parts.length) return 0;
+  let s = 0;
+  if (parts.length === 1) s = Number(parts[0] || 0);
+  else if (parts.length === 2)
+    s = Number(parts[0] || 0) * 60 + Number(parts[1] || 0);
+  else if (parts.length === 3)
+    s =
+      Number(parts[0] || 0) * 3600 +
+      Number(parts[1] || 0) * 60 +
+      Number(parts[2] || 0);
+  return Number.isFinite(s) && s > 0 ? Math.round(s * 1000) : 0;
+}
 
-const VideoSchema = new Schema(
-  {
-    url: { type: String, default: null, trim: true },
-    publicId: { type: String, default: null, trim: true },
-    startMs: { type: Number, default: 0, min: 0 },
-    label: { type: String, default: "", trim: true },
-    width: { type: Number, default: null },
-    height: { type: Number, default: null },
-    duration: { type: Number, default: null },
-  },
-  { _id: false }
-);
+function parseSecondsFromQueryVal(val = "") {
+  const t = String(val).trim();
+  if (!t) return 0;
+  if (/m|s/i.test(t)) {
+    const m = Number(t.match(/(\d+)m/i)?.[1] ?? 0);
+    const s = Number(t.match(/(\d+)s/i)?.[1] ?? 0);
+    const total = m * 60 + s;
+    return Number.isFinite(total) && total > 0 ? total : 0;
+  }
+  const num = Number(t);
+  return Number.isFinite(num) && num > 0 ? num : 0;
+}
 
-/* ---------------------------------------------------------
-   Coach Match Note Schema
---------------------------------------------------------- */
+function extractYouTubeId(url = "") {
+  if (typeof url !== "string") return null;
+  const u = url.trim();
+  if (!u) return null;
+  if (!/(youtube\.com|youtu\.be|youtube-nocookie\.com)/i.test(u)) return null;
+  const re =
+    /(?:youtube\.com\/.*[?&]v=|youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/embed\/|youtube-nocookie\.com\/embed\/)([^&?/]+)/i;
+  const m = u.match(re);
+  return m ? m[1] : null;
+}
 
-const CoachMatchNoteSchema = new Schema(
-  {
-    event: {
-      type: Schema.Types.ObjectId,
-      ref: "CoachEvent",
-      required: true,
-      index: true,
-    },
+function toNoCookieEmbedUrl(videoId, startSeconds = 0) {
+  const base = `https://www.youtube-nocookie.com/embed/${videoId}`;
+  return startSeconds > 0 ? `${base}?start=${startSeconds}` : base;
+}
 
-    entry: {
-      type: Schema.Types.ObjectId,
-      ref: "CoachEntry",
-      required: true,
-      index: true,
-    },
+function normalizeVideoFromRaw(raw) {
+  const rawUrl = typeof raw?.url === "string" ? raw.url.trim() : "";
+  const rawStart = typeof raw?.start === "string" ? raw.start.trim() : "";
+  const label = typeof raw?.label === "string" ? raw.label.trim() : "";
 
-    team: {
-      type: Schema.Types.ObjectId,
-      ref: "Team",
-      required: true,
-      index: true,
-    },
+  if (!rawUrl) return {};
 
-    /* ---------------------------------------------------------
-       Athlete Identity (REQUIRED)
-    --------------------------------------------------------- */
+  const id = extractYouTubeId(rawUrl);
+  if (!id) return {};
 
-    athleteId: {
-      type: Schema.Types.ObjectId,
-      required: true,
-      index: true,
-    },
+  let ms = timecodeToMs(rawStart);
+  if (!ms) {
+    try {
+      const u = new URL(rawUrl);
+      const tParam = u.searchParams.get("t") || u.searchParams.get("start");
+      if (tParam) {
+        const sec = parseSecondsFromQueryVal(tParam);
+        if (sec > 0) ms = sec * 1000;
+      }
+    } catch {}
+  }
 
-    athleteType: {
-      type: String,
-      enum: ["user", "family"],
-      required: true,
-      index: true,
-    },
+  const startSeconds = Math.round((ms || 0) / 1000);
+  return {
+    url: toNoCookieEmbedUrl(id, startSeconds),
+    publicId: null,
+    startMs: ms || 0,
+    label,
+    width: null,
+    height: null,
+    duration: null,
+  };
+}
 
-    // Snapshot for display (not identity)
-    athleteName: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+/* ---------------------  GET: list all matches --------------------- */
+export async function GET(req, { params }) {
+  try {
+    const { slug, eventId, entryId } = await params;
+    await connectDB();
 
-    /* ---------------------------------------------------------
-       Match Content
-    --------------------------------------------------------- */
+    const team = await Team.findOne({ teamSlug: slug }).lean();
+    if (!team) {
+      return NextResponse.json({ notes: [] }, { status: 200 });
+    }
 
-    opponent: { type: OpponentSchema, default: {} },
+    const notes = await CoachMatchNote.find({
+      team: team._id,
+      event: eventId,
+      entry: entryId,
+      deletedAt: null,
+    })
+      .sort({ createdAt: -1 })
+      .lean();
 
-    whatWentWell: { type: String, trim: true },
-    reinforce: { type: String, trim: true },
-    needsFix: { type: String, trim: true },
+    return NextResponse.json({ notes: notes || [] }, { status: 200 });
+  } catch (err) {
+    console.error("GET matches error:", err);
+    return NextResponse.json({ notes: [] }, { status: 200 });
+  }
+}
 
-    techniques: {
-      type: TechniquesSchema,
-      default: { ours: [], theirs: [] },
-    },
+/* ---------------------  POST: add match(es) --------------------- */
+export async function POST(req, { params }) {
+  try {
+    const { slug, eventId, entryId } = await params;
+    await connectDB();
 
-    result: {
-      type: String,
-      enum: ["win", "loss", "draw", ""],
-      default: "",
-    },
+    const me = await getCurrentUserFromCookies().catch(() => null);
+    if (!me?._id) {
+      return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+    }
 
-    score: { type: String, trim: true },
-    notes: { type: String, trim: true },
+    const team = await Team.findOne({ teamSlug: slug }).lean();
+    if (!team)
+      return NextResponse.json({ error: "Team not found" }, { status: 404 });
 
-    video: { type: VideoSchema, default: () => ({}) },
+    const isOwner = String(team.user) === String(me._id);
+    const membership = await TeamMember.findOne({
+      teamId: team._id,
+      $or: [{ userId: me._id }, { familyMemberId: me._id }],
+    }).lean();
+    const role = (membership?.role || "").toLowerCase();
+    const canWrite = isOwner || ["manager", "admin", "coach"].includes(role);
+    if (!canWrite)
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
 
-    createdBy: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
+    const event = await CoachEvent.findOne({
+      _id: eventId,
+      team: team._id,
+    }).lean();
+    if (!event)
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
 
-    /* ---------------------------------------------------------
-       Soft Delete
-    --------------------------------------------------------- */
+    const entry = await CoachEntry.findOne({
+      _id: entryId,
+      event: event._id,
+      team: team._id,
+    }).lean();
+    if (!entry)
+      return NextResponse.json({ error: "Entry not found" }, { status: 404 });
 
-    deletedAt: {
-      type: Date,
-      default: null,
-      index: true,
-    },
+    const athleteUserId = entry.athlete?.user || null;
+    const athleteFamilyId = entry.athlete?.familyMember || null;
 
-    deletedByUserId: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
-  },
-  { timestamps: true }
-);
+    if (!athleteUserId && !athleteFamilyId) {
+      return NextResponse.json(
+        { error: "Cannot create coach notes for guest entries" },
+        { status: 400 }
+      );
+    }
 
-/* ---------------------------------------------------------
-   Model Export
---------------------------------------------------------- */
+    const athleteId = athleteUserId || athleteFamilyId;
+    const athleteType = athleteUserId ? "user" : "family";
+    const athleteName = entry.athlete?.name;
 
-const CoachMatchNote =
-  models.CoachMatchNote || model("CoachMatchNote", CoachMatchNoteSchema);
+    const raw = await req.json().catch(() => ({}));
 
-export default CoachMatchNote;
+    const normalize = (obj) => ({
+      team: team._id,
+      event: event._id,
+      entry: entry._id,
+
+      athleteId,
+      athleteType,
+      athleteName,
+
+      opponent: obj?.opponent || {},
+      whatWentWell: obj?.whatWentWell || "",
+      reinforce: obj?.reinforce || "",
+      needsFix: obj?.needsFix || "",
+      techniques: obj?.techniques || { ours: [], theirs: [] },
+      result: obj?.result || "",
+      score: obj?.score || "",
+      notes: obj?.notes || "",
+      video:
+        obj?.videoRaw && typeof obj.videoRaw === "object"
+          ? normalizeVideoFromRaw(obj.videoRaw)
+          : {},
+
+      createdBy: me._id,
+    });
+
+    const docsPayload = Array.isArray(raw)
+      ? raw.map(normalize)
+      : [normalize(raw)];
+
+    const created = await CoachMatchNote.insertMany(docsPayload);
+
+    return NextResponse.json(
+      { message: "Saved", notes: created },
+      { status: 201 }
+    );
+  } catch (e) {
+    console.error("[POST /matches] error:", e);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
+}
+
+/* --------------------- PATCH & DELETE unchanged --------------------- */
