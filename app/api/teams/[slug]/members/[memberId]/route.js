@@ -10,6 +10,7 @@ import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
 import CoachMatchNote from "@/models/coachMatchNoteModel";
 import TeamScoutingReport from "@/models/teamScoutingReportModel";
+import CoachEntry from "@/models/coachEntryModel";
 
 import { reconcileScoutingReportsForRemovedAthlete } from "@/lib/teams/reconcileScoutingReportsForRemovedAthlete";
 
@@ -99,8 +100,8 @@ export async function PATCH(request, { params }) {
       (actorRole === "manager" && targetRole !== "manager");
 
     /* ----------------------------------------------------------
-       REMOVE MEMBER (soft delete + cleanup)
-    ---------------------------------------------------------- */
+   REMOVE MEMBER (soft delete + cleanup)
+---------------------------------------------------------- */
     if (!role) {
       if (!canRemove) {
         await session.abortTransaction();
@@ -115,7 +116,26 @@ export async function PATCH(request, { params }) {
       tm.deletedByUserId = actor._id;
       await tm.save({ session });
 
-      // 2️⃣ Find scouting reports involving this athlete
+      // 2️⃣ Soft-delete coach EVENT ENTRIES for this athlete
+      await CoachEntry.updateMany(
+        {
+          team: team._id,
+          deletedAt: null,
+          $or: [
+            { "athlete.user": athleteId },
+            { "athlete.familyMember": athleteId },
+          ],
+        },
+        {
+          $set: {
+            deletedAt: new Date(),
+            deletedByUserId: actor._id,
+          },
+        },
+        { session }
+      );
+
+      // 3️⃣ Find scouting reports involving this athlete
       const reports = await TeamScoutingReport.find(
         {
           teamId: team._id,
@@ -131,7 +151,7 @@ export async function PATCH(request, { params }) {
 
       const reportIds = reports.map((r) => r._id);
 
-      // 3️⃣ Soft-delete coach notes tied to those reports
+      // 4️⃣ Soft-delete coach notes tied to those reports
       if (reportIds.length > 0) {
         await CoachMatchNote.updateMany(
           {
@@ -146,7 +166,7 @@ export async function PATCH(request, { params }) {
         );
       }
 
-      // 4️⃣ Reconcile scouting reports (remove athlete or delete report)
+      // 5️⃣ Reconcile scouting reports (remove athlete or delete report)
       await reconcileScoutingReportsForRemovedAthlete({
         session,
         teamId: team._id,
