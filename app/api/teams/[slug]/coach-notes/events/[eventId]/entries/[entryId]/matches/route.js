@@ -33,7 +33,6 @@ function timecodeToMs(tc = "") {
 }
 
 function parseSecondsFromQueryVal(val = "") {
-  // supports "90", "90s", "1m30s"
   const t = String(val).trim();
   if (!t) return 0;
   if (/m|s/i.test(t)) {
@@ -63,7 +62,6 @@ function toNoCookieEmbedUrl(videoId, startSeconds = 0) {
 }
 
 function normalizeVideoFromRaw(raw) {
-  // raw: { url, start, label }
   const rawUrl = typeof raw?.url === "string" ? raw.url.trim() : "";
   const rawStart = typeof raw?.start === "string" ? raw.start.trim() : "";
   const label = typeof raw?.label === "string" ? raw.label.trim() : "";
@@ -73,7 +71,6 @@ function normalizeVideoFromRaw(raw) {
   const id = extractYouTubeId(rawUrl);
   if (!id) return {};
 
-  // UI time wins; if absent, try URL query (?t= or ?start=)
   let ms = timecodeToMs(rawStart);
   if (!ms) {
     try {
@@ -83,10 +80,9 @@ function normalizeVideoFromRaw(raw) {
         const sec = parseSecondsFromQueryVal(tParam);
         if (sec > 0) ms = sec * 1000;
       }
-    } catch {
-      // ignore URL parse errors
-    }
+    } catch {}
   }
+
   const startSeconds = Math.round((ms || 0) / 1000);
   return {
     url: toNoCookieEmbedUrl(id, startSeconds),
@@ -109,13 +105,12 @@ export async function GET(req, { params }) {
     if (!team) return NextResponse.json({ notes: [] });
 
     const notes = await CoachMatchNote.find({
-      // tolerate both field names in existing data
       $or: [{ team: team._id }, { teamId: team._id }],
       $and: [
         { $or: [{ event: eventId }, { eventId }] },
         { $or: [{ entry: entryId }, { entryId }] },
       ],
-      deleted: { $ne: true },
+      deletedAt: null,
     })
       .sort({ createdAt: -1 })
       .lean();
@@ -131,8 +126,6 @@ export async function GET(req, { params }) {
 export async function POST(req, { params }) {
   try {
     const { slug, eventId, entryId } = await params;
-    console.log("[POST /matches] start", { slug, eventId, entryId });
-
     await connectDB();
 
     const me = await getCurrentUserFromCookies().catch(() => null);
@@ -140,7 +133,6 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     }
 
-    // --- Team
     const team = await Team.findOne({ teamSlug: slug }).lean();
     if (!team)
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
@@ -155,77 +147,60 @@ export async function POST(req, { params }) {
     if (!canWrite)
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
 
-    // --- Event (tolerate team/teamId)
     const event = await CoachEvent.findOne({
       _id: eventId,
       $or: [{ team: team._id }, { teamId: team._id }],
     }).lean();
-    if (!event) {
-      console.error("[POST /matches] Event not found", {
-        eventId,
-        teamId: team._id,
-      });
+    if (!event)
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
-    }
 
-    // --- Entry (tolerate event/eventId and team/teamId)
     const entry = await CoachEntry.findOne({
       _id: entryId,
       $and: [
-        { $or: [{ event: event._id }, { eventId: event._id }, { eventId }] },
+        { $or: [{ event: event._id }, { eventId }] },
         { $or: [{ team: team._id }, { teamId: team._id }] },
       ],
     }).lean();
-    if (!entry) {
-      console.error("[POST /matches] Entry not found", {
-        entryId,
-        eventObjectId: event._id,
-        eventIdParam: eventId,
-        teamId: team._id,
-      });
+    if (!entry)
       return NextResponse.json({ error: "Entry not found" }, { status: 404 });
-    }
 
-    // --- Athlete info (be flexible)
-    const athleteId = entry.athlete?.athleteId || entry.athleteId || null;
-    const athleteName =
-      entry.athlete?.name ||
-      entry.athleteName ||
-      entry.athlete?.displayName ||
-      entry.athlete?.fullName ||
-      entry.name ||
-      null;
+    // 🔐 HARD IDENTITY GUARANTEE
+    const athleteUserId = entry.athlete?.user || null;
+    const athleteFamilyId = entry.athlete?.familyMember || null;
 
-    if (!athleteName) {
-      console.error("[POST /matches] Entry missing athleteName", { entryId });
+    if (!athleteUserId && !athleteFamilyId) {
       return NextResponse.json(
-        { error: "Entry missing athleteName" },
+        { error: "Cannot create coach notes for guest entries" },
         { status: 400 }
       );
     }
 
-    // --- Parse body (allow single, array, or {notes:[...]})
+    const athleteId = athleteUserId || athleteFamilyId;
+    const athleteType = athleteUserId ? "user" : "family";
+    const athleteName = entry.athlete?.name;
+
+    if (!athleteName) {
+      return NextResponse.json(
+        { error: "Entry missing athlete name" },
+        { status: 400 }
+      );
+    }
+
     const raw = await req.json().catch(() => ({}));
 
     const normalize = (obj) => {
-      // --- normalize video from obj.videoRaw (optional)
       const video =
         obj?.videoRaw && typeof obj.videoRaw === "object"
           ? normalizeVideoFromRaw(obj.videoRaw)
           : {};
 
       return {
-        // write BOTH field names to satisfy either schema
         team: team._id,
-        teamId: team._id,
-
         event: event._id,
-        eventId, // keep the param too, if your schema stored string id
-
         entry: entry._id,
-        entryId: entryId,
 
-        athleteId: athleteId || null,
+        athleteId,
+        athleteType,
         athleteName,
 
         opponent: {
@@ -246,11 +221,8 @@ export async function POST(req, { params }) {
         result: obj?.result || "",
         score: obj?.score || "",
         notes: obj?.notes || "",
-
-        // NEW: normalized YouTube video (empty object if none/invalid)
         video,
 
-        deleted: false,
         createdBy: me._id,
       };
     };
@@ -261,7 +233,6 @@ export async function POST(req, { params }) {
       ? raw.notes.map(normalize)
       : [normalize(raw)];
 
-    console.log("[POST /matches] inserting", docsPayload.length, "note(s)");
     const created = await CoachMatchNote.insertMany(docsPayload);
 
     return NextResponse.json(
@@ -284,7 +255,6 @@ export async function PATCH(req) {
 
     await connectDB();
 
-    // If client sends videoRaw on edit, normalize it here
     let update = { ...body, updatedAt: new Date() };
     delete update._id;
 
@@ -316,7 +286,6 @@ export async function DELETE(req) {
     await connectDB();
 
     const deleted = await CoachMatchNote.findByIdAndUpdate(matchId, {
-      deleted: true,
       deletedAt: new Date(),
     });
 
