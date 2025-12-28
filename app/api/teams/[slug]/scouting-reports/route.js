@@ -7,12 +7,12 @@ import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 import Team from "@/models/teamModel";
 import TeamScoutingReport from "@/models/teamScoutingReportModel";
 import Video from "@/models/videoModel";
+import TeamMember from "@/models/teamMemberModel";
 import "@/models/divisionModel";
 import "@/models/weightCategoryModel";
-import TeamMember from "@/models/teamMemberModel";
 
 // ----------------------------------------------------------
-// YouTube / Video helpers (mirrors dashboard scouting route)
+// Helpers
 // ----------------------------------------------------------
 const safeStr = (v) => (v == null ? "" : String(v)).trim();
 
@@ -25,7 +25,6 @@ function extractYouTubeId(raw) {
   const str = safeStr(raw);
   if (!str) return "";
 
-  // If an <iframe> was pasted, extract the src first
   const iframe = str.match(
     /<iframe[\s\S]*?src\s*=\s*["']([^"']+)["'][\s\S]*?>/i
   );
@@ -37,90 +36,63 @@ function extractYouTubeId(raw) {
     const path = u.pathname || "";
 
     if (host.includes("youtu.be")) {
-      const seg = path.split("/").filter(Boolean)[0];
-      return seg || "";
+      return path.split("/").filter(Boolean)[0] || "";
     }
     if (host.includes("youtube.com")) {
-      const v = u.searchParams.get("v");
-      if (v) return v;
-      if (path.startsWith("/embed/")) return path.split("/")[2] || "";
-      if (path.startsWith("/shorts/")) return path.split("/")[2] || "";
+      return (
+        u.searchParams.get("v") ||
+        (path.startsWith("/embed/") && path.split("/")[2]) ||
+        (path.startsWith("/shorts/") && path.split("/")[2]) ||
+        ""
+      );
     }
-  } catch {
-    /* ignore and try regex */
-  }
+  } catch {}
 
-  const m = (urlStr || "").match(
-    /(?:v=|\/embed\/|youtu\.be\/|\/shorts\/)([^&?/]+)/i
-  );
-  return m && m[1] ? m[1] : "";
+  const m = urlStr.match(/(?:v=|\/embed\/|youtu\.be\/|\/shorts\/)([^&?/]+)/i);
+  return m?.[1] || "";
 }
 
 function buildCanonicalUrl(url, videoId) {
-  // Prefer a stable canonical watch URL for YouTube
   if (videoId) return `https://www.youtube.com/watch?v=${videoId}`;
-  const ustr = safeStr(url);
-  if (!ustr) return "";
   try {
-    // As a fallback, use the URL without its search params
-    const u = new URL(ustr);
+    const u = new URL(url);
     u.search = "";
     u.hash = "";
     return u.toString();
   } catch {
-    return ustr;
+    return safeStr(url);
   }
 }
 
-/**
- * normalizeIncomingVideoForCreate
- * - raw: incoming video object from the client
- * - reportId: the TeamScoutingReport._id
- * - userId: the current user creating the report
- *
- * Returns a document ready to pass to Video.insertMany(...)
- */
 function normalizeIncomingVideoForCreate(raw, reportId, userId) {
   if (!raw || typeof raw !== "object") return null;
 
   const url = safeStr(raw.url ?? raw.videoURL);
   const id = extractYouTubeId(url);
   const startSeconds = toNonNegInt(raw.startSeconds);
-  const videoId = id || new Types.ObjectId().toString(); // ensure required
-  const urlCanonical = buildCanonicalUrl(url, id) || url || ""; // ensure required
 
   return {
     title: safeStr(raw.title ?? raw.videoTitle),
     notes: safeStr(raw.notes ?? raw.videoNotes),
     url,
-    urlCanonical,
+    urlCanonical: buildCanonicalUrl(url, id),
     startSeconds,
-    videoId,
-    // Link back to this team scouting report and creator
+    videoId: id || new Types.ObjectId().toString(),
     report: reportId,
     createdBy: userId,
   };
 }
 
 // ============================================================
-// POST: Create a Scouting Report (plaintext or encrypted)
+// POST: Create a Scouting Report
 // ============================================================
 export async function POST(req, context) {
   try {
     await connectDB();
 
-    const { params } = context;
-    const { slug } = await params;
-    if (!slug) {
-      return NextResponse.json(
-        { message: "Missing team slug" },
-        { status: 400 }
-      );
-    }
-
+    const { slug } = await context.params;
     const body = await req.json();
 
-    // Handle slug normalization (_ vs -)
     const team =
       (await Team.findOne({ teamSlug: slug })) ||
       (await Team.findOne({ teamSlug: slug.replace(/[-_]/g, "") })) ||
@@ -131,124 +103,68 @@ export async function POST(req, context) {
     }
 
     const currentUser = await getCurrentUserFromCookies();
-    if (!currentUser || !currentUser._id) {
+    if (!currentUser?._id) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    // Deduplicate reportFor
     const seen = new Set();
-    const dedupedReportFor = (body.reportFor || []).filter((entry) => {
-      const key = `${entry.athleteId}-${entry.athleteType}`;
+    const reportFor = (body.reportFor || []).filter((r) => {
+      const key = `${r.athleteId}-${r.athleteType}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
 
-    // ✅ Normalize optional crypto block
-    const cryptoBlock =
-      body.crypto && typeof body.crypto === "object"
-        ? {
-            version: body.crypto.version || 1,
-            alg: body.crypto.alg || "TBK-AES-GCM-256",
-            ivB64: body.crypto.ivB64 || "",
-            ciphertextB64: body.crypto.ciphertextB64 || "",
-            wrappedReportKeyB64: body.crypto.wrappedReportKeyB64 || "",
-            teamKeyVersion:
-              body.crypto.teamKeyVersion != null
-                ? body.crypto.teamKeyVersion
-                : 1,
-          }
-        : null;
-
-    // Base doc from body (works for plaintext teams)
     const createdByName = `${currentUser.firstName || ""} ${
       currentUser.lastName || ""
     }`.trim();
 
-    const doc = {
+    const report = await TeamScoutingReport.create({
       ...body,
-      reportFor: dedupedReportFor,
+      reportFor,
       teamId: team._id,
       createdById: currentUser._id,
       createdByName,
       videos: [],
-    };
+    });
 
-    // If crypto is present, enforce that sensitive fields are blank on the server.
-    if (cryptoBlock) {
-      doc.crypto = cryptoBlock;
-      doc.athleteFirstName = "";
-      doc.athleteLastName = "";
-      doc.athleteNationalRank = "";
-      doc.athleteWorldRank = "";
-      doc.athleteClub = "";
-      doc.athleteCountry = "";
-      doc.athleteGrip = "";
-      doc.athleteAttacks = [];
-      doc.athleteAttackNotes = "";
-    }
-
-    // Create the report without videos first
-    const newReport = await TeamScoutingReport.create(doc);
-
-    // Save unknown techniques (plaintext flow will still work;
-    // encrypted flow may have empty athleteAttacks here, which is OK)
     await saveUnknownTechniques(
       Array.isArray(body.athleteAttacks) ? body.athleteAttacks : []
     );
 
-    // -------------------------------
-    // Save new videos and link to report
-    // -------------------------------
-    const incomingVideosRaw =
-      (Array.isArray(body.newVideos) && body.newVideos) ||
-      (Array.isArray(body.videos) && body.videos) ||
-      [];
+    const videos = (body.newVideos || body.videos || [])
+      .map((v) =>
+        normalizeIncomingVideoForCreate(v, report._id, currentUser._id)
+      )
+      .filter(Boolean);
 
-    if (incomingVideosRaw.length) {
-      const normalizedDocs = [];
-      for (const raw of incomingVideosRaw) {
-        if (!raw || (!raw.url && !raw.videoURL)) continue;
-        const videoDoc = normalizeIncomingVideoForCreate(
-          raw,
-          newReport._id,
-          currentUser._id
-        );
-        if (!videoDoc || !videoDoc.url) continue;
-        normalizedDocs.push(videoDoc);
-      }
-
-      if (normalizedDocs.length) {
-        const videoDocs = await Video.insertMany(normalizedDocs);
-        newReport.videos = videoDocs.map((v) => v._id);
-        await newReport.save();
-      }
+    if (videos.length) {
+      const saved = await Video.insertMany(videos);
+      report.videos = saved.map((v) => v._id);
+      await report.save();
     }
 
-    // In-app notifications + emails per assignment (unchanged)
-    // ... your existing notification/email logic lives here ...
-
     return NextResponse.json(
-      { message: "Scouting report created", report: newReport },
+      { message: "Scouting report created", report },
       { status: 201 }
     );
   } catch (err) {
-    console.error("Scouting Report POST error:", err);
+    console.error("POST scouting report error:", err);
     return NextResponse.json(
-      { message: "Server error: " + err.message },
+      { message: "Server error", error: err.message },
       { status: 500 }
     );
   }
 }
 
 // ============================================================
-// GET: List all Scouting Reports for a Team
+// GET: List Scouting Reports (FIXED)
 // ============================================================
-export async function GET(_request, context) {
+export async function GET(_req, context) {
   try {
-    const { params } = context;
-    const { slug } = await params;
     await connectDB();
+
+    const { slug } = await context.params;
 
     const team =
       (await Team.findOne({ teamSlug: slug })) ||
@@ -259,98 +175,67 @@ export async function GET(_request, context) {
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
     }
 
-    const currentUser = await getCurrentUserFromCookies();
-    if (!currentUser || !currentUser._id) {
+    const user = await getCurrentUserFromCookies();
+    if (!user?._id) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    // --------------------------------------------------------
-    // Determine privilege (owner / coach / manager)
-    // --------------------------------------------------------
-    const isOwner = String(team.user) === String(currentUser._id);
+    // ----- privilege -----
+    const isOwner = String(team.user) === String(user._id);
 
     const membership = await TeamMember.findOne({
       teamId: team._id,
-      userId: currentUser._id,
-      familyMemberId: null, // IMPORTANT: direct membership only
+      userId: user._id,
+      familyMemberId: null,
     })
       .select("role")
       .lean();
 
-    const role = membership?.role || null;
-    const isPrivileged = isOwner || role === "manager" || role === "coach";
+    const role = membership?.role;
+    const privileged = isOwner || role === "manager" || role === "coach";
 
-    // --------------------------------------------------------
-    // Build query
-    // --------------------------------------------------------
-    const query = { teamId: team._id };
+    // ----- child IDs -----
+    const childLinks = await TeamMember.find({
+      teamId: team._id,
+      userId: user._id,
+      familyMemberId: { $ne: null },
+    })
+      .select("familyMemberId")
+      .lean();
 
-    // 🔒 Non-privileged users only get THEIR reports
-    if (!isPrivileged) {
-      // Find my TeamMember record (adult membership)
-      const myMembership = await TeamMember.findOne({
-        teamId: team._id,
-        userId: currentUser._id,
-        familyMemberId: null,
-      })
-        .select("_id")
-        .lean();
-
-      // Find my child memberships
-      const myFamilyLinks = await TeamMember.find({
-        teamId: team._id,
-        userId: currentUser._id,
-        familyMemberId: { $ne: null },
-      })
-        .select("familyMemberId")
-        .lean();
-
-      const allowedAthleteIds = [
-        String(currentUser._id), // self (dashboard-style)
-        myMembership?._id?.toString(), // self (team member)
-        ...myFamilyLinks.map((m) => String(m.familyMemberId)), // children
-      ].filter(Boolean);
-
-      query["reportFor.athleteId"] = { $in: allowedAthleteIds };
-    }
-
-    const rawReports = await TeamScoutingReport.find(query)
+    const childIds = new Set(childLinks.map((m) => String(m.familyMemberId)));
+    console.log("child ids ", childIds);
+    const reports = await TeamScoutingReport.find({ teamId: team._id })
       .populate("videos")
       .populate("division", "name label gender")
       .sort({ createdAt: -1 })
       .lean();
+    console.log("REPORTS ", reports);
+    const allowedAthleteIds = new Set([
+      String(user._id),
+      ...Array.from(childIds),
+    ]);
 
-    // --------------------------------------------------------
-    // Normalize divisionLabel
-    // --------------------------------------------------------
-    const scoutingReports = rawReports.map((r) => {
-      let divisionLabel = "";
+    const visibleReports = privileged
+      ? reports
+      : reports.filter((r) => {
+          if (!Array.isArray(r.reportFor)) return false;
 
-      if (r.division && typeof r.division === "object") {
-        const name = String(r.division.label || r.division.name || "").trim();
-        const gender = String(r.division.gender || "").toLowerCase();
+          return r.reportFor.some((rf) => {
+            const athleteId =
+              rf?.athleteId?.toString?.() ?? String(rf?.athleteId);
 
-        let genderPretty = "";
-        if (gender === "male") genderPretty = "Men";
-        else if (gender === "female") genderPretty = "Women";
-        else if (gender === "coed" || gender === "open") genderPretty = "Coed";
+            return allowedAthleteIds.has(athleteId);
+          });
+        });
 
-        divisionLabel = name
-          ? genderPretty
-            ? `${name} - ${genderPretty}`
-            : name
-          : "";
-      }
-
-      return {
-        ...r,
-        divisionLabel,
-      };
-    });
-
-    return NextResponse.json({ scoutingReports }, { status: 200 });
+    console.log("visibleReports ", visibleReports);
+    return NextResponse.json(
+      { scoutingReports: visibleReports },
+      { status: 200 }
+    );
   } catch (err) {
-    console.error("GET team scoutingReports error:", err);
+    console.error("GET scouting reports error:", err);
     return NextResponse.json(
       { message: "Failed to fetch scouting reports", error: err.message },
       { status: 500 }

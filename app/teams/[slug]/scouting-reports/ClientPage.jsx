@@ -384,7 +384,7 @@ function TeamScoutingReportsPage() {
   const tableRows = useMemo(() => {
     if (!team || !user) return [];
 
-    const visible = getVisibleReports(team, teamMembers, user, reports);
+    const visible = reports;
 
     return visible.map((r) => {
       const namesArr =

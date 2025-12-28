@@ -6,10 +6,12 @@
 
 function normId(v) {
   if (!v) return null;
-  if (typeof v === "string") return v;
-  if (typeof v === "object") {
-    return String(v._id || v.id || v.value || "");
+
+  // Handle Mongo ObjectId correctly
+  if (typeof v === "object" && typeof v.toString === "function") {
+    return v.toString();
   }
+
   return String(v);
 }
 
@@ -64,38 +66,39 @@ export function isPrivileged(team, teamMembers, user) {
    Determine which reports the user is allowed to see
 --------------------------------------------------------- */
 export function getVisibleReports(team, teamMembers, user, reports) {
-  if (
-    !team ||
-    !user ||
-    !Array.isArray(reports) ||
-    !Array.isArray(teamMembers)
-  ) {
-    return [];
-  }
+  if (!team || !user || !Array.isArray(reports)) return [];
 
-  // Staff see everything
+  // Coaches / managers see everything
   if (isPrivileged(team, teamMembers, user)) {
     return reports;
   }
 
-  const userId = normId(user._id);
+  const viewerId = String(user._id);
 
-  const myFamilyMemberIds = teamMembers
-    .filter((m) => normId(m.userId) === userId && m.familyMemberId)
-    .map((m) => normId(m.familyMemberId));
+  // Collect all IDs this user is allowed to see reports for:
+  // - themselves
+  // - their family members
+  const allowedAthleteIds = new Set([viewerId]);
 
-  return reports.filter((r) => {
-    const reportUserId = normId(r.userId);
-    const reportFamilyId = normId(r.familyMemberId);
+  if (Array.isArray(user.familyMembers)) {
+    user.familyMembers.forEach((fm) => {
+      if (fm?._id) {
+        allowedAthleteIds.add(String(fm._id));
+      }
+    });
+  }
 
-    // Must belong to THIS parent
-    if (reportUserId !== userId) return false;
+  return reports.filter((report) => {
+    if (!Array.isArray(report.reportFor)) return false;
 
-    // Adult member report
-    if (!reportFamilyId) return true;
+    return report.reportFor.some((rf) => {
+      const athleteId =
+        typeof rf?.athleteId === "object" && rf.athleteId?.toString
+          ? rf.athleteId.toString()
+          : String(rf?.athleteId);
 
-    // Child report — must be MY child
-    return myFamilyMemberIds.includes(reportFamilyId);
+      return allowedAthleteIds.has(athleteId);
+    });
   });
 }
 
