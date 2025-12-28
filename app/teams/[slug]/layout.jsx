@@ -76,16 +76,39 @@ export default async function TeamLayout({ children, params }) {
   if (isOwner) {
     normalizedRole = "manager"; // treat owner as manager for UI auth
   } else if (currentUser?._id) {
-    const membership = await TeamMember.findOne({
+    // 1️⃣ Direct membership (non-family)
+    const directMembership = await TeamMember.findOne({
       teamId: teamDoc._id,
       userId: currentUser._id,
       familyMemberId: null,
     })
-      .select("role familyMemberId")
+      .select("role")
       .lean();
 
-    if (membership?.role) {
-      normalizedRole = String(membership.role).toLowerCase();
+    if (directMembership?.role && directMembership.role !== "pending") {
+      normalizedRole = String(directMembership.role).toLowerCase();
+    } else {
+      // 2️⃣ Family membership inheritance
+      const familyMembership = await TeamMember.findOne({
+        teamId: teamDoc._id,
+        familyMemberId: { $ne: null },
+      })
+        .populate({
+          path: "familyMemberId",
+          select: "parentUserId",
+        })
+        .select("role familyMemberId")
+        .lean();
+
+      if (
+        familyMembership?.role &&
+        familyMembership.role !== "pending" &&
+        familyMembership.familyMemberId?.parentUserId &&
+        String(familyMembership.familyMemberId.parentUserId) ===
+          String(currentUser._id)
+      ) {
+        normalizedRole = String(familyMembership.role).toLowerCase();
+      }
     }
   }
 
