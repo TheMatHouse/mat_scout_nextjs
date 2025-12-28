@@ -287,8 +287,16 @@ export async function GET(_request, context) {
 
     // 🔒 Non-privileged users only get THEIR reports
     if (!isPrivileged) {
-      // Parent/member can only see reports for themselves + their children on THIS team
+      // Find my TeamMember record (adult membership)
+      const myMembership = await TeamMember.findOne({
+        teamId: team._id,
+        userId: currentUser._id,
+        familyMemberId: null,
+      })
+        .select("_id")
+        .lean();
 
+      // Find my child memberships
       const myFamilyLinks = await TeamMember.find({
         teamId: team._id,
         userId: currentUser._id,
@@ -297,11 +305,11 @@ export async function GET(_request, context) {
         .select("familyMemberId")
         .lean();
 
-      const myFamilyIds = myFamilyLinks
-        .map((m) => String(m.familyMemberId))
-        .filter(Boolean);
-
-      const allowedAthleteIds = [String(currentUser._id), ...myFamilyIds];
+      const allowedAthleteIds = [
+        String(currentUser._id), // self (dashboard-style)
+        myMembership?._id?.toString(), // self (team member)
+        ...myFamilyLinks.map((m) => String(m.familyMemberId)), // children
+      ].filter(Boolean);
 
       query["reportFor.athleteId"] = { $in: allowedAthleteIds };
     }
