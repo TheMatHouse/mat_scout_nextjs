@@ -58,6 +58,10 @@ const teamSchema = new mongoose.Schema(
     logoId: { type: String }, // optional: for deleting uploaded avatars
 
     requireApproval: { type: Boolean, default: false },
+    attendanceEnabled: {
+      type: Boolean,
+      default: false,
+    },
 
     info: {
       type: String,

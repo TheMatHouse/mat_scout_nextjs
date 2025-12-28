@@ -18,17 +18,11 @@ async function main() {
   console.log("✅ Connected.");
 
   const idx = await ranks.indexes();
-  console.log(
-    "ℹ️ Existing indexes:",
-    idx.map((i) => ({ name: i.name, key: i.key, unique: !!i.unique }))
-  );
 
   // Drop the bad unique index on code, if present
   const hasCodeUnique = idx.find((i) => i.name === "code_1" && i.unique);
   if (hasCodeUnique) {
-    console.log("🧹 Dropping unique index code_1…");
     await ranks.dropIndex("code_1");
-    console.log("✅ Dropped code_1.");
   } else {
     console.log("➡️ No unique code_1 to drop.");
   }

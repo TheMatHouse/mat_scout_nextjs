@@ -204,13 +204,13 @@ export async function GET(_req, context) {
       .lean();
 
     const childIds = new Set(childLinks.map((m) => String(m.familyMemberId)));
-    console.log("child ids ", childIds);
+
     const reports = await TeamScoutingReport.find({ teamId: team._id })
       .populate("videos")
       .populate("division", "name label gender")
       .sort({ createdAt: -1 })
       .lean();
-    console.log("REPORTS ", reports);
+
     const allowedAthleteIds = new Set([
       String(user._id),
       ...Array.from(childIds),
@@ -229,7 +229,6 @@ export async function GET(_req, context) {
           });
         });
 
-    console.log("visibleReports ", visibleReports);
     return NextResponse.json(
       { scoutingReports: visibleReports },
       { status: 200 }

@@ -15,9 +15,11 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Spinner from "@/components/shared/Spinner";
+import AthleteCheckIn from "@/components/attendance/AthleteCheckIn";
 
 export default function DashboardHome() {
   const { user, loading } = useUser();
+  console.log("USER ", user);
   const [matchCount, setMatchCount] = useState(null);
   const [scoutingCount, setScoutingCount] = useState(null);
   const [teamCount, setTeamCount] = useState(null);
@@ -103,38 +105,59 @@ export default function DashboardHome() {
     <div className="max-w-7xl mx-auto px-6 md:px-12 py-10 space-y-12">
       {/* Hero */}
       <div className="bg-gradient-to-r from-ms-blue to-ms-dark-red rounded-2xl p-8 text-white shadow-lg">
-        <h1 className="text-4xl font-bold mb-2">
-          Welcome back, {user.firstName}!
-        </h1>
-        <p className="text-lg mb-6">
-          Track your matches, scout opponents, and manage your teams—all in one
-          place.
-        </p>
-        <Link
-          href="/dashboard/matches"
-          className="inline-block bg-white text-ms-blue font-semibold px-6 py-3 rounded-lg shadow hover:bg-gray-100 transition"
-        >
-          + Log a Match
-        </Link>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          {/* Left: Copy */}
+          <div className="max-w-2xl">
+            <h1 className="text-4xl font-bold mb-2">
+              Welcome back, {user.firstName}!
+            </h1>
+            <p className="text-lg">
+              Track your matches, scout opponents, and manage your teams—all in
+              one place.
+            </p>
+          </div>
+        </div>
+
+        {/* Secondary Action */}
+        <div className="mt-6">
+          <Link
+            href="/dashboard/matches"
+            className="inline-block bg-white/90 text-ms-blue font-semibold px-6 py-3 rounded-lg shadow hover:bg-white transition"
+          >
+            + Log a Match
+          </Link>
+        </div>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        <StatCard
-          title="Match Reports"
-          value={matchReady ? matchCount : "—"}
-          icon={<CalendarPlus className="w-6 h-6 text-ms-blue" />}
-        />
-        <StatCard
-          title="Scouting Reports"
-          value={scoutingReady ? scoutingCount : "—"}
-          icon={<Binoculars className="w-6 h-6 text-ms-blue" />}
-        />
-        <StatCard
-          title="Teams"
-          value={teamReady ? teamCount : "—"}
-          icon={<Users className="w-6 h-6 text-ms-blue" />}
-        />
+      {/* Primary Action Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        {/* LEFT: Stats (stacked) */}
+        <div className="space-y-6">
+          <StatCard
+            title="Match Reports"
+            value={matchReady ? matchCount : "—"}
+            icon={<CalendarPlus className="w-6 h-6 text-ms-blue" />}
+          />
+
+          <StatCard
+            title="Scouting Reports"
+            value={scoutingReady ? scoutingCount : "—"}
+            icon={<Binoculars className="w-6 h-6 text-ms-blue" />}
+          />
+
+          <StatCard
+            title="Teams"
+            value={teamReady ? teamCount : "—"}
+            icon={<Users className="w-6 h-6 text-ms-blue" />}
+          />
+        </div>
+
+        {/* RIGHT: Practice Check-In */}
+        <div className="lg:col-span-2 flex justify-center">
+          <div className="w-full max-w-xl">
+            <AthleteCheckIn />
+          </div>
+        </div>
       </div>
 
       {/* What's Next */}
