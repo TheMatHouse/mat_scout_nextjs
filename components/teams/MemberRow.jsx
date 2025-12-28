@@ -160,6 +160,12 @@ const MemberRow = ({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem
+                  value="pending"
+                  disabled
+                >
+                  Pending
+                </SelectItem>
                 <SelectItem value="member">Member</SelectItem>
                 <SelectItem value="coach">Coach</SelectItem>
                 {viewerRole === "owner" && (
