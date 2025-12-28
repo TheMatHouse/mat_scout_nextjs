@@ -2,17 +2,16 @@
 
 /**
  * FINAL ACCESS-CONTROL LOGIC FOR TEAM SCOUTING REPORTS
- *
- * Correct Rules:
- * --------------------------------------------------------
- *  • Team Owner  → team.user field → ALWAYS "manager"
- *  • TeamMember.role → "manager" | "coach" | "member"
- *  • Privileged Roles → manager + coach
- *  • Members → see ONLY:
- *        - reports where reportFor[].athleteId == user._id
- *        - OR reportFor matches any familyMemberId
- * --------------------------------------------------------
  */
+
+function normId(v) {
+  if (!v) return null;
+  if (typeof v === "string") return v;
+  if (typeof v === "object") {
+    return String(v._id || v.id || v.value || "");
+  }
+  return String(v);
+}
 
 /* ---------------------------------------------------------
    Resolve the user's role within the team
@@ -22,17 +21,21 @@ export function getUserRole(team, teamMembers, user) {
 
   const userId = String(user._id);
 
-  // TEAM OWNER (team.user is always the owner)
+  // TEAM OWNER
   if (String(team.user) === userId) {
     return "manager";
   }
 
-  // TEAM MEMBERS COLLECTION
   if (Array.isArray(teamMembers)) {
     for (const m of teamMembers) {
-      const id = String(m.userId || m.familyMemberId || "");
-      if (id === userId) {
+      // Direct membership (no familyMemberId)
+      if (String(m.userId) === userId && !m.familyMemberId) {
         return m.role || "member";
+      }
+
+      // Parent inheriting access via child → ALWAYS member
+      if (String(m.userId) === userId && m.familyMemberId) {
+        return "member";
       }
     }
   }
@@ -58,43 +61,42 @@ export function isPrivileged(team, teamMembers, user) {
 }
 
 /* ---------------------------------------------------------
-   MEMBER REPORT VISIBILITY
---------------------------------------------------------- */
-/**
- * A member can only see reports where:
- *   - report.reportFor[].athleteId matches their userId
- *   - OR matches ANY of their familyMemberIds
- */
-export function filterReportsForMember(reports, user) {
-  if (!Array.isArray(reports) || !user) return [];
-
-  const userId = String(user._id);
-  const familyIds = Array.isArray(user.familyMembers)
-    ? user.familyMembers.map((f) => String(f._id))
-    : [];
-
-  const allowedSet = new Set([userId, ...familyIds]);
-
-  return reports.filter((r) => {
-    if (!Array.isArray(r?.reportFor)) return false;
-
-    return r.reportFor.some((rf) => allowedSet.has(String(rf.athleteId || rf)));
-  });
-}
-
-/* ---------------------------------------------------------
    Determine which reports the user is allowed to see
 --------------------------------------------------------- */
 export function getVisibleReports(team, teamMembers, user, reports) {
-  if (!team || !user || !Array.isArray(reports)) return [];
+  if (
+    !team ||
+    !user ||
+    !Array.isArray(reports) ||
+    !Array.isArray(teamMembers)
+  ) {
+    return [];
+  }
 
-  // Managers & Coaches get ALL reports
+  // Staff see everything
   if (isPrivileged(team, teamMembers, user)) {
     return reports;
   }
 
-  // Members get filtered reports only
-  return filterReportsForMember(reports, user);
+  const userId = normId(user._id);
+
+  const myFamilyMemberIds = teamMembers
+    .filter((m) => normId(m.userId) === userId && m.familyMemberId)
+    .map((m) => normId(m.familyMemberId));
+
+  return reports.filter((r) => {
+    const reportUserId = normId(r.userId);
+    const reportFamilyId = normId(r.familyMemberId);
+
+    // Must belong to THIS parent
+    if (reportUserId !== userId) return false;
+
+    // Adult member report
+    if (!reportFamilyId) return true;
+
+    // Child report — must be MY child
+    return myFamilyMemberIds.includes(reportFamilyId);
+  });
 }
 
 /* ---------------------------------------------------------
@@ -120,7 +122,6 @@ export function canView(report, team, teamMembers, user) {
 
 /* ---------------------------------------------------------
    Build a map of userId → display name
-   Useful for "Report For" column in tables
 --------------------------------------------------------- */
 export function buildMembersMap(teamMembers) {
   const map = new Map();

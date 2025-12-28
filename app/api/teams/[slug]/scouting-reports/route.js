@@ -9,6 +9,7 @@ import TeamScoutingReport from "@/models/teamScoutingReportModel";
 import Video from "@/models/videoModel";
 import "@/models/divisionModel";
 import "@/models/weightCategoryModel";
+import TeamMember from "@/models/teamMemberModel";
 
 // ----------------------------------------------------------
 // YouTube / Video helpers (mirrors dashboard scouting route)
@@ -258,16 +259,63 @@ export async function GET(_request, context) {
       return NextResponse.json({ message: "Team not found" }, { status: 404 });
     }
 
-    const rawReports = await TeamScoutingReport.find({ teamId: team._id })
+    const currentUser = await getCurrentUserFromCookies();
+    if (!currentUser || !currentUser._id) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+
+    // --------------------------------------------------------
+    // Determine privilege (owner / coach / manager)
+    // --------------------------------------------------------
+    const isOwner = String(team.user) === String(currentUser._id);
+
+    const membership = await TeamMember.findOne({
+      teamId: team._id,
+      userId: currentUser._id,
+      familyMemberId: null, // IMPORTANT: direct membership only
+    })
+      .select("role")
+      .lean();
+
+    const role = membership?.role || null;
+    const isPrivileged = isOwner || role === "manager" || role === "coach";
+
+    // --------------------------------------------------------
+    // Build query
+    // --------------------------------------------------------
+    const query = { teamId: team._id };
+
+    // 🔒 Non-privileged users only get THEIR reports
+    if (!isPrivileged) {
+      // Parent/member can only see reports for themselves + their children on THIS team
+
+      const myFamilyLinks = await TeamMember.find({
+        teamId: team._id,
+        userId: currentUser._id,
+        familyMemberId: { $ne: null },
+      })
+        .select("familyMemberId")
+        .lean();
+
+      const myFamilyIds = myFamilyLinks
+        .map((m) => String(m.familyMemberId))
+        .filter(Boolean);
+
+      const allowedAthleteIds = [String(currentUser._id), ...myFamilyIds];
+
+      query["reportFor.athleteId"] = { $in: allowedAthleteIds };
+    }
+
+    const rawReports = await TeamScoutingReport.find(query)
       .populate("videos")
       .populate("division", "name label gender")
       .sort({ createdAt: -1 })
       .lean();
 
-    // Shape each report with a friendly divisionLabel
+    // --------------------------------------------------------
+    // Normalize divisionLabel
+    // --------------------------------------------------------
     const scoutingReports = rawReports.map((r) => {
-      if (r.divisionLabel) return r;
-
       let divisionLabel = "";
 
       if (r.division && typeof r.division === "object") {
@@ -292,7 +340,6 @@ export async function GET(_request, context) {
       };
     });
 
-    // ✅ Include crypto metadata in results but never decrypt server-side
     return NextResponse.json({ scoutingReports }, { status: 200 });
   } catch (err) {
     console.error("GET team scoutingReports error:", err);
