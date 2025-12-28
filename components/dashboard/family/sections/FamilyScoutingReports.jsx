@@ -1,715 +1,290 @@
-// components/dashboard/family/sections/FamilyScoutingReports.jsx
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
-import { ReportDataTable } from "@/components/shared/report-data-table";
-import ScoutingReportForm from "@/components/dashboard/forms/ScoutingReportForm";
-import PreviewReportModal from "@/components/dashboard/PreviewReportModal";
-import { Button } from "@/components/ui/button";
-import { ArrowUpDown, Eye, Edit, Trash } from "lucide-react";
-import ModalLayout from "@/components/shared/ModalLayout";
-import { normalizeStyles } from "@/lib/normalizeStyles";
+
 import Spinner from "@/components/shared/Spinner";
+import { Button } from "@/components/ui/button";
 
-/* ---------- helpers to pretty-print Division + Weight ---------- */
-function genderLabel(g) {
-  if (!g) return "";
-  const s = String(g).toLowerCase();
-  if (s === "male") return "Men";
-  if (s === "female") return "Women";
-  if (s === "coed" || s === "open") return "Coed";
-  return s;
-}
-function divisionPrettyFromObj(d) {
-  if (!d) return "";
-  const g = genderLabel(d.gender);
-  return g ? `${d.name} — ${g}` : d.name || "";
-}
-function ensureWeightDisplay(label, unit) {
-  if (!label) return "";
-  const low = String(label).toLowerCase();
-  if (low.includes("kg") || low.includes("lb")) return label;
-  return unit ? `${label} ${unit}` : label;
-}
-function getDivisionId(div) {
-  if (!div) return "";
-  if (typeof div === "string") return div;
-  if (typeof div === "object") {
-    if (div._id) return String(div._id);
-    if (div.id) return String(div.id);
-  }
-  return "";
-}
-async function fetchDivisionWeights(divisionId) {
-  const id = encodeURIComponent(String(divisionId));
-  try {
-    const res = await fetch(`/api/divisions/${id}/weights`, {
-      cache: "no-store",
-      credentials: "same-origin",
-      headers: { accept: "application/json" },
-    });
-    if (!res.ok) return null;
-    const data = await res.json().catch(() => ({}));
-    const cat = data?.weightCategory;
-    if (!cat) return null;
+import { Lock, LockOpen } from "lucide-react";
 
-    const unit = cat.unit || "";
-    const items = Array.isArray(cat.items) ? cat.items : [];
-    const normItems = items
-      .map((it) => ({
-        _id: String(it._id ?? it.id ?? it.value ?? it.label ?? "").trim(),
-        label: String(it.label ?? it.value ?? "").trim(),
-      }))
-      .filter((x) => x._id && x.label);
-    if (!normItems.length) return null;
-    return { unit, items: normItems };
-  } catch {
-    return null;
-  }
-}
+import FamilyMyScoutingReportsTab from "@/components/dashboard/family/sections/FamilyScouting/FamilyMyScoutingReportsTab";
 
-const FamilyScoutingReports = ({ member, onSwitchToStyles }) => {
+import { verifyPasswordLocally } from "@/lib/crypto/locker";
+
+/* -------------------------------------------------- */
+
+const STORAGE_KEY = (teamId) => `ms:teamlock:${teamId}`;
+
+const FamilyScoutingReports = ({ member }) => {
   const router = useRouter();
 
-  // Parent-created / personal reports for this family member
-  const [familyReports, setFamilyReports] = useState([]);
-  // Team-owned scouting reports about this family member
-  const [teamReports, setTeamReports] = useState([]);
+  /* ---------------- Tabs ---------------- */
+  const [activeTab, setActiveTab] = useState("mine"); // mine | team
 
-  const [open, setOpen] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [selectedReport, setSelectedReport] = useState(null);
+  /* ---------------- Team data ---------------- */
+  const [familyTeams, setFamilyTeams] = useState([]);
+  const [loadingTeams, setLoadingTeams] = useState(false);
 
-  // maps for pretty labels (used for family reports)
-  const [divisionMap, setDivisionMap] = useState({});
-  const [weightsMap, setWeightsMap] = useState({});
+  /* ---------------- Team unlock ---------------- */
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [activeTeam, setActiveTeam] = useState(null);
+  const [password, setPassword] = useState("");
+  const [submittingPassword, setSubmittingPassword] = useState(false);
+  const [unlockedTeams, setUnlockedTeams] = useState({});
 
-  // styles for the form (fetched on-demand)
-  const [stylesLoading, setStylesLoading] = useState(false);
-  const [stylesForForm, setStylesForForm] = useState([]);
-
-  // Baseline styles from the member prop (fallback only)
-  const stylesForMember = useMemo(() => {
-    const raw = member?.styles?.length
-      ? member.styles
-      : member?.userStyles || [];
-    return normalizeStyles(raw || []);
-  }, [member?.styles, member?.userStyles]);
-
+  /* -------------------------------------------------- */
+  /* Load teams ONLY when Team tab is active             */
+  /* -------------------------------------------------- */
   useEffect(() => {
-    if (!member?._id || !member?.userId) return;
-    fetchReports();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [member?._id, member?.userId]);
+    if (activeTab !== "team") return;
+    if (!member?.userId || !member?._id) return;
 
-  const fetchReports = async () => {
-    try {
-      const res = await fetch(
-        `/api/dashboard/${member.userId}/family/${
-          member._id
-        }/scoutingReports?ts=${Date.now()}`,
-        { cache: "no-store", credentials: "same-origin" }
-      );
-      if (!res.ok) throw new Error("Failed to fetch scouting reports");
-      const data = await res.json();
+    let cancelled = false;
 
-      let personal = [];
-      let team = [];
+    (async () => {
+      setLoadingTeams(true);
+      try {
+        const res = await fetch(
+          `/api/dashboard/${member.userId}/family/${member._id}/scoutingReports/teams`,
+          { cache: "no-store", credentials: "same-origin" }
+        );
+        if (!res.ok) throw new Error();
 
-      // If the API already splits them, use that
-      if (
-        Array.isArray(data?.familyReports) ||
-        Array.isArray(data?.teamReports)
-      ) {
-        personal = Array.isArray(data.familyReports) ? data.familyReports : [];
-        team = Array.isArray(data.teamReports) ? data.teamReports : [];
-      } else if (Array.isArray(data)) {
-        // Legacy: single array — heuristically split by presence of team fields
-        data.forEach((r) => {
-          const hasTeam =
-            r?.teamId ||
-            r?.teamSlug ||
-            r?.teamName ||
-            (r?.team && (r.team.teamSlug || r.team.teamName));
-          if (hasTeam) {
-            team.push(r);
-          } else {
-            personal.push(r);
-          }
-        });
-      } else if (Array.isArray(data?.reports)) {
-        data.reports.forEach((r) => {
-          const hasTeam =
-            r?.teamId ||
-            r?.teamSlug ||
-            r?.teamName ||
-            (r?.team && (r.team.teamSlug || r.team.teamName));
-          if (hasTeam) {
-            team.push(r);
-          } else {
-            personal.push(r);
-          }
-        });
-      }
-
-      setFamilyReports(personal);
-      setTeamReports(team);
-
-      // Hydrate pretty maps for division/weights (only needed for personal)
-      await Promise.all([
-        hydrateDivisionMap(personal),
-        hydrateWeightsMap(personal),
-      ]);
-    } catch (err) {
-      console.error(err);
-      toast.error("Could not load scouting reports.");
-    }
-  };
-
-  const hydrateDivisionMap = async (reports) => {
-    const entries = {};
-    (reports || []).forEach((r) => {
-      const divId = getDivisionId(r?.division);
-      const divObj =
-        r?.division && typeof r.division === "object" ? r.division : null;
-      if (divId && divObj && !entries[divId]) {
-        entries[divId] = divisionPrettyFromObj(divObj);
-      }
-    });
-    if (Object.keys(entries).length) {
-      setDivisionMap((prev) => ({ ...prev, ...entries }));
-    }
-
-    // Also fetch catalog per style to cover id-only divisions
-    const styles = Array.from(
-      new Set(
-        (reports || []).map((r) => (r?.matchType || "").trim()).filter(Boolean)
-      )
-    );
-    if (!styles.length) return;
-
-    const fetched = {};
-    await Promise.all(
-      styles.map(async (styleName) => {
-        try {
-          const res = await fetch(
-            `/api/divisions?styleName=${encodeURIComponent(styleName)}`,
-            {
-              cache: "no-store",
-              credentials: "same-origin",
-              headers: { accept: "application/json" },
-            }
-          );
-          const data = await res.json().catch(() => ({}));
-          const divs = Array.isArray(data?.divisions) ? data.divisions : [];
-          divs.forEach((d) => {
-            if (d?._id) fetched[d._id] = divisionPrettyFromObj(d);
-          });
-        } catch {
-          /* ignore */
+        const data = await res.json();
+        if (!cancelled) {
+          setFamilyTeams(Array.isArray(data?.teams) ? data.teams : []);
         }
-      })
-    );
-    if (Object.keys(fetched).length) {
-      setDivisionMap((prev) => ({ ...prev, ...fetched }));
-    }
-  };
-
-  const hydrateWeightsMap = async (reports) => {
-    const divIds = Array.from(
-      new Set(
-        (reports || []).map((r) => getDivisionId(r?.division)).filter(Boolean)
-      )
-    );
-    if (!divIds.length) return;
-
-    const entries = {};
-    await Promise.all(
-      divIds.map(async (id) => {
-        const weights = await fetchDivisionWeights(id);
-        if (weights) entries[id] = weights;
-      })
-    );
-    if (Object.keys(entries).length) {
-      setWeightsMap((prev) => ({ ...prev, ...entries }));
-    }
-  };
-
-  const handleDeleteReport = async (report) => {
-    if (
-      !window.confirm("This report will be permanently deleted! Are you sure?")
-    )
-      return;
-    try {
-      const res = await fetch(
-        `/api/dashboard/${member.userId}/family/${member._id}/scoutingReports/${report._id}`,
-        { method: "DELETE", headers: { "Content-Type": "application/json" } }
-      );
-      const data = await res.json();
-      if (res.ok) {
-        toast.success(data.message || "Deleted.");
-        setFamilyReports((prev) => prev.filter((r) => r._id !== report._id));
-        setSelectedReport(null);
-        router.refresh();
-      } else {
-        toast.error(data.message || "Failed to delete report");
+      } catch {
+        if (!cancelled) toast.error("Failed to load team reports.");
+      } finally {
+        if (!cancelled) setLoadingTeams(false);
       }
-    } catch (err) {
-      console.error(err);
-      toast.error("Error deleting report");
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, member?.userId, member?._id]);
+
+  /* -------------------------------------------------- */
+  /* Team click (password gate)                         */
+  /* -------------------------------------------------- */
+  const handleTeamClick = async (team) => {
+    const slug = team.teamSlug;
+    if (!slug) return;
+
+    try {
+      const res = await fetch(`/api/teams/${slug}/security`, {
+        credentials: "include",
+        headers: { accept: "application/json" },
+      });
+      if (!res.ok) throw new Error();
+
+      const json = await res.json();
+      const t = json?.team || {};
+      const sec = t.security || {};
+
+      if (!sec.lockEnabled) {
+        router.push(`/teams/${slug}/scouting-reports`);
+        return;
+      }
+
+      if (unlockedTeams[slug]) {
+        router.push(`/teams/${slug}/scouting-reports`);
+        return;
+      }
+
+      setActiveTeam({
+        _id: t._id,
+        slug,
+        teamName: t.teamName || team.teamName || "Team",
+        security: sec,
+      });
+      setPassword("");
+      setPasswordModalOpen(true);
+    } catch {
+      toast.error("Unable to load team security.");
     }
   };
 
-  // ===== Load styles (family endpoint) when opening the modal =====
-  const loadStylesForModal = useCallback(async () => {
-    if (!member?.userId || !member?._id) {
-      setStylesForForm([]);
-      return;
-    }
-    setStylesLoading(true);
+  /* -------------------------------------------------- */
+  /* Submit team password                               */
+  /* -------------------------------------------------- */
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!activeTeam) return;
+
+    setSubmittingPassword(true);
     try {
-      const res = await fetch(
-        `/api/dashboard/${member.userId}/family/${member._id}/styles`,
-        {
-          cache: "no-store",
-          credentials: "same-origin",
-          headers: { accept: "application/json" },
-        }
-      );
-      let list = [];
-      if (res.ok) {
-        const data = await res.json().catch(() => []);
-        list = Array.isArray(data)
-          ? data
-          : data.userStyles || data.styles || [];
+      const sec = activeTeam.security;
+      const ok = await verifyPasswordLocally(password.trim(), {
+        lockEnabled: true,
+        encVersion: sec.encVersion || "v1",
+        kdf: {
+          saltB64: sec.kdf?.saltB64,
+          iterations: sec.kdf?.iterations,
+        },
+        verifierB64: sec.verifierB64,
+      });
+
+      if (!ok) {
+        toast.error("Incorrect team password.");
+        return;
       }
-      const normalized = normalizeStyles(list);
-      setStylesForForm(normalized.length ? normalized : stylesForMember);
-    } catch (e) {
-      console.error("Failed to load family styles:", e);
-      setStylesForForm(stylesForMember);
+
+      sessionStorage.setItem(STORAGE_KEY(activeTeam._id), password.trim());
+      setUnlockedTeams((p) => ({ ...p, [activeTeam.slug]: true }));
+      setPasswordModalOpen(false);
+      router.push(`/teams/${activeTeam.slug}/scouting-reports`);
     } finally {
-      setStylesLoading(false);
+      setSubmittingPassword(false);
     }
-  }, [member?.userId, member?._id, stylesForMember]);
+  };
 
-  // Derive pretty division/weight for the table and mobile cards (personal only)
-  const tableData = useMemo(() => {
-    return (familyReports || []).map((r) => {
-      const divDisplay =
-        (r?.division && typeof r.division === "object"
-          ? divisionPrettyFromObj(r.division)
-          : r?.division && typeof r.division === "string"
-          ? divisionMap[r.division] || "—"
-          : "—") || "—";
-
-      let weightDisplay = "—";
-      if (r?.weightLabel && String(r.weightLabel).trim()) {
-        weightDisplay = ensureWeightDisplay(
-          String(r.weightLabel).trim(),
-          r?.weightUnit
-        );
-      } else {
-        const divId = getDivisionId(r?.division);
-        const w = divId ? weightsMap[divId] : null;
-        if (w && Array.isArray(w.items) && r?.weightItemId) {
-          const item = w.items.find(
-            (it) =>
-              String(it._id) === String(r.weightItemId) ||
-              String(it.label).toLowerCase() ===
-                String(r.weightItemId).toLowerCase()
-          );
-          if (item?.label) {
-            const unit = r?.weightUnit || w.unit || "";
-            weightDisplay = ensureWeightDisplay(item.label, unit);
-          }
-        }
-      }
-
-      return { ...r, divisionDisplay: divDisplay, weightDisplay };
-    });
-  }, [familyReports, divisionMap, weightsMap]);
-
-  const columns = [
-    {
-      accessorKey: "matchType",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Type <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-    },
-    { accessorKey: "athleteFirstName", header: "First Name" },
-    {
-      accessorKey: "athleteLastName",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Last Name <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-    },
-    { accessorKey: "athleteNationalRank", header: "Nat. Rank" },
-    { accessorKey: "athleteWorldRank", header: "World Rank" },
-    {
-      accessorKey: "athleteClub",
-      header: "Club",
-      meta: { className: "hidden md:table-cell" },
-    },
-    {
-      accessorKey: "athleteCountry",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Country <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-    },
-    // Pretty strings, not IDs
-    {
-      accessorKey: "divisionDisplay",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Division <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-      meta: { className: "hidden md:table-cell" },
-      sortingFn: (rowA, rowB) =>
-        String(rowA.getValue("divisionDisplay")).localeCompare(
-          String(rowB.getValue("divisionDisplay")),
-          undefined,
-          { sensitivity: "base" }
-        ),
-    },
-    {
-      accessorKey: "weightDisplay",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Weight Class <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-      meta: { className: "hidden md:table-cell" },
-      sortingFn: (rowA, rowB) =>
-        String(rowA.getValue("weightDisplay")).localeCompare(
-          String(rowB.getValue("weightDisplay")),
-          undefined,
-          { numeric: true }
-        ),
-    },
-    {
-      accessorKey: "createdByName",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Created By <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-      cell: ({ row }) => row.original.createdByName || "—",
-    },
-    {
-      id: "actions",
-      header: "Actions",
-      enableSorting: false,
-      cell: ({ row }) => {
-        const report = row.original;
-        return (
-          <div className="flex justify-center gap-3">
-            <button
-              onClick={() => {
-                setSelectedReport(report);
-                setPreviewOpen(true);
-              }}
-              title="View Scouting Details"
-              className="icon-btn"
-            >
-              <Eye className="w-5 h-5 text-blue-500" />
-            </button>
-            <button
-              onClick={async () => {
-                setSelectedReport(report);
-                setOpen(true);
-                await loadStylesForModal();
-              }}
-              title="Edit Scouting Report"
-              className="icon-btn"
-            >
-              <Edit className="w-5 h-5 text-green-500" />
-            </button>
-            <button
-              onClick={() => handleDeleteReport(report)}
-              title="Delete Scouting Report"
-              className="icon-btn"
-            >
-              <Trash className="w-5 h-5 text-red-500" />
-            </button>
-          </div>
-        );
-      },
-    },
-  ];
-
-  const excelHref = `/api/records/scouting?download=1&familyMemberId=${encodeURIComponent(
-    String(member?._id || "")
-  )}&ts=${Date.now()}`;
-
-  // Group team reports by teamSlug for the bottom section
-  const teamSummaries = useMemo(() => {
-    const map = new Map();
-    (teamReports || []).forEach((r) => {
-      const slug =
-        r.teamSlug || r.slug || r?.team?.teamSlug || r?.team?.slug || "";
-      if (!slug) return;
-      const key = slug;
-      const existing = map.get(key) || {
-        teamSlug: slug,
-        teamName: r.teamName || r?.team?.teamName || "Team",
-        count: 0,
-      };
-      existing.count += 1;
-      map.set(key, existing);
-    });
-    return Array.from(map.values());
-  }, [teamReports]);
+  /* -------------------------------------------------- */
+  /* RENDER                                             */
+  /* -------------------------------------------------- */
 
   return (
-    <div>
-      {/* Header: Title + Add on the LEFT, Export on the RIGHT */}
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold">Family Member Scouting</h1>
+    <section className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+          {member?.firstName
+            ? `${member.firstName}'s Scouting Reports`
+            : "Scouting Reports"}
+        </h1>
 
-        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 items-center gap-2">
-          <div>
-            <Button
-              className="btn btn-primary"
-              onClick={async () => {
-                setSelectedReport(null);
-                setOpen(true);
-                await loadStylesForModal();
-              }}
-            >
-              Add Scouting Report
-            </Button>
-          </div>
-          <div className="flex sm:justify-end">
-            <a
-              href={excelHref}
-              className="btn btn-outline"
-              title="Export to Excel"
-            >
-              Export to Excel
-            </a>
-          </div>
-        </div>
-      </div>
-
-      {/* Modal (personal / parent-created reports) */}
-      <ModalLayout
-        isOpen={open}
-        onClose={() => setOpen(false)}
-        title={selectedReport ? "Edit Scouting Report" : "Add Scouting Report"}
-        description="Fill out all scouting details below."
-        withCard={true}
-      >
-        {stylesLoading ? (
-          <div className="flex items-center justify-center py-10">
-            <Spinner size={40} />
-          </div>
-        ) : stylesForForm.length > 0 ? (
-          <ScoutingReportForm
-            key={selectedReport?._id}
-            athlete={member}
-            report={selectedReport}
-            setOpen={setOpen}
-            onSuccess={fetchReports}
-            userType="family"
-            styles={stylesForForm}
-          />
-        ) : (
-          <div className="p-6 text-center">
-            <p className="text-base text-muted-foreground mb-4">
-              This family member doesn’t have any styles yet. Please go to the{" "}
-              <strong>Styles</strong> tab on this profile and add a style before
-              creating a scouting report.
-            </p>
-            {typeof onSwitchToStyles === "function" && (
-              <Button
-                onClick={() => {
-                  setOpen(false);
-                  onSwitchToStyles();
-                }}
-                className="bg-ms-blue-gray hover:bg-ms-blue text-white"
-              >
-                Go to Styles
-              </Button>
-            )}
-          </div>
-        )}
-      </ModalLayout>
-
-      {/* Mobile cards (personal reports only) */}
-      <div className="grid grid-cols-1 sm:hidden gap-4 mb-6">
-        {tableData.length > 0 ? (
-          tableData.map((report) => (
-            <div
-              key={report._id}
-              className="bg-gray-900 text-white p-4 rounded-xl shadow-md border border-gray-700"
-            >
-              <p>
-                <strong>Type:</strong> {report.matchType}
-              </p>
-              <p>
-                <strong>Athlete:</strong> {report.athleteFirstName}{" "}
-                {report.athleteLastName}
-              </p>
-              <p>
-                <strong>Country:</strong> {report.athleteCountry}
-              </p>
-              <p>
-                <strong>Division:</strong> {report.divisionDisplay}
-              </p>
-              <p>
-                <strong>Weight Class:</strong> {report.weightDisplay}
-              </p>
-
-              <div className="flex justify-end gap-4 mt-4">
-                <button
-                  onClick={() => {
-                    setSelectedReport(report);
-                    setPreviewOpen(true);
-                  }}
-                  title="View Details"
-                  className="text-blue-400 hover:text-blue-300"
-                >
-                  <Eye size={18} />
-                </button>
-                <button
-                  onClick={async () => {
-                    setSelectedReport(report);
-                    setOpen(true);
-                    await loadStylesForModal();
-                  }}
-                  title="Edit"
-                  className="text-green-400 hover:text-green-300"
-                >
-                  <Edit size={18} />
-                </button>
-                <button
-                  onClick={() => handleDeleteReport(report)}
-                  title="Delete"
-                  className="text-red-500 hover:text-red-400"
-                >
-                  <Trash size={18} />
-                </button>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="text-gray-400">No scouting reports found.</p>
-        )}
-      </div>
-
-      {/* Desktop Table (personal reports only) */}
-      <div className="hidden md:block overflow-x-auto">
-        <div className="min-w-[800px]">
-          <ReportDataTable
-            columns={columns}
-            data={tableData}
-            onView={(report) => {
-              setSelectedReport(report);
-              setPreviewOpen(true);
-            }}
-            onEdit={async (report) => {
-              setSelectedReport(report);
-              setOpen(true);
-              await loadStylesForModal();
-            }}
-            onDelete={(report) => handleDeleteReport(report)}
-          />
-        </div>
-      </div>
-
-      {previewOpen && selectedReport && (
-        <PreviewReportModal
-          previewOpen={previewOpen}
-          setPreviewOpen={setPreviewOpen}
-          report={selectedReport}
-          reportType="scouting"
-        />
-      )}
-
-      {/* Team Scouting Reports section */}
-      <div className="mt-10 space-y-3">
-        <h2 className="text-xl font-semibold">Team Scouting Reports</h2>
-        <p className="text-sm text-gray-900 dark:text-gray-100">
-          These are scouting reports created by coaches on this family member’s
-          teams. They’re owned by the team and gated by the team’s password.
+        <p className="mt-1 text-sm text-gray-900 dark:text-gray-200">
+          Scouting reports created for this family member and reports created by
+          teams they belong to.
         </p>
+      </div>
 
-        {teamSummaries.length === 0 ? (
-          <p className="text-sm text-gray-900 dark:text-gray-100">
-            No team scouting reports found for this family member yet.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {teamSummaries.map((team) => (
-              <div
-                key={team.teamSlug}
-                className="flex flex-col justify-between border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 shadow-sm p-4 gap-3"
-              >
-                <div>
+      {/* Tabs */}
+      <div className="border-b border-gray-300 dark:border-gray-700">
+        <div className="inline-flex gap-1">
+          <button
+            onClick={() => setActiveTab("mine")}
+            className={`px-4 py-2 font-semibold rounded-t-md ${
+              activeTab === "mine"
+                ? "btn btn-primary"
+                : "text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-800"
+            }`}
+          >
+            My Reports
+          </button>
+
+          <button
+            onClick={() => setActiveTab("team")}
+            className={`px-4 py-2 font-semibold rounded-t-md ${
+              activeTab === "team"
+                ? "btn btn-primary"
+                : "text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-800"
+            }`}
+          >
+            Team Reports
+          </button>
+        </div>
+      </div>
+
+      {/* My Reports */}
+      {activeTab === "mine" && <FamilyMyScoutingReportsTab member={member} />}
+
+      {/* Team Reports */}
+      {activeTab === "team" && (
+        <>
+          {loadingTeams ? (
+            <Spinner size={40} />
+          ) : familyTeams.length === 0 ? (
+            <p className="text-sm text-gray-900 dark:text-gray-100">
+              This family member is not part of any teams.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {familyTeams.map((team) => (
+                <div
+                  key={team.teamId}
+                  className="border rounded-xl p-4 bg-white dark:bg-gray-900"
+                >
                   <p className="font-semibold text-gray-900 dark:text-gray-100">
                     {team.teamName}
                   </p>
-                  <p className="text-xs text-gray-900 dark:text-gray-100 mt-1">
-                    {team.count} team scouting report
-                    {team.count === 1 ? "" : "s"}.
-                  </p>
-                </div>
 
-                <div className="flex justify-end mt-2">
+                  <p className="text-xs mt-1 flex items-center gap-1">
+                    {team.lockEnabled ? (
+                      <>
+                        <Lock className="w-3 h-3 text-yellow-400" />
+                        <span className="text-yellow-300">
+                          Team password required
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <LockOpen className="w-3 h-3 text-green-400" />
+                        <span className="text-green-300">No team password</span>
+                      </>
+                    )}
+                  </p>
+
                   <Button
-                    type="button"
-                    onClick={() =>
-                      router.push(
-                        `/teams/${encodeURIComponent(
-                          team.teamSlug
-                        )}/scouting-reports`
-                      )
-                    }
-                    className="bg-ms-blue-gray hover:bg-ms-blue text-white text-sm"
+                    className="mt-3 bg-ms-blue-gray hover:bg-ms-blue text-white"
+                    onClick={() => handleTeamClick(team)}
                   >
                     View Team Reports
                   </Button>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </>
+      )}
 
-        <p className="text-xs text-gray-900 dark:text-gray-100">
-          Team reports open on the team’s scouting page. If the team has a
-          password set, you’ll be prompted once per session before the reports
-          are unlocked.
-        </p>
-      </div>
-    </div>
+      {/* Password Modal */}
+      {passwordModalOpen && activeTeam && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-gray-900 rounded-xl p-6 w-full max-w-md">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Enter team password
+            </h2>
+
+            <p className="text-sm mt-1 text-gray-900 dark:text-gray-100">
+              To view reports for {activeTeam.teamName}
+            </p>
+
+            <form
+              onSubmit={handlePasswordSubmit}
+              className="mt-4 space-y-4"
+            >
+              <input
+                type="password"
+                value={password}
+                autoFocus
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md"
+              />
+
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setPasswordModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={submittingPassword}
+                >
+                  {submittingPassword ? "Verifying…" : "Unlock"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </section>
   );
 };
 
