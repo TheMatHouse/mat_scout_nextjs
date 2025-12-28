@@ -3,17 +3,17 @@
 import { useCallback, useEffect, useState } from "react";
 import NotePreviewModal from "@/components/dashboard/coach-notes/NotePreviewModal";
 
-const TeamCard = ({ children }) => {
+function TeamCard({ children }) {
   return (
     <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/70 shadow-sm">
       {children}
     </div>
   );
-};
+}
 
-const FamilyCoachNotes = ({ member }) => {
+function FamilyCoachNotes({ member }) {
   const memberId = member?._id;
-  const userId = member?.userId;
+  const userId = member?.userId || member?.user?._id || member?.user?.id;
 
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,16 +22,18 @@ const FamilyCoachNotes = ({ member }) => {
   const [error, setError] = useState("");
 
   const fetchNotes = useCallback(async () => {
-    if (!memberId || !userId) return;
+    if (!userId || !memberId) return;
 
     setLoading(true);
     setError("");
+
     try {
       const ts = Date.now();
       const res = await fetch(
         `/api/dashboard/${userId}/family/${memberId}/coach-notes?ts=${ts}`,
         { cache: "no-store" }
       );
+
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
 
@@ -43,7 +45,7 @@ const FamilyCoachNotes = ({ member }) => {
     } finally {
       setLoading(false);
     }
-  }, [memberId, userId]);
+  }, [userId, memberId]);
 
   useEffect(() => {
     fetchNotes();
@@ -61,7 +63,9 @@ const FamilyCoachNotes = ({ member }) => {
 
   if (loading) {
     return (
-      <div className="text-sm text-gray-900 dark:text-gray-100">Loading…</div>
+      <div className="text-sm text-gray-900 dark:text-gray-100/80">
+        Loading…
+      </div>
     );
   }
 
@@ -72,7 +76,7 @@ const FamilyCoachNotes = ({ member }) => {
         <button
           type="button"
           onClick={fetchNotes}
-          className="ml-2 underline"
+          className="ml-2 inline-flex items-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-0.5 text-xs font-medium text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700"
         >
           Retry
         </button>
@@ -82,7 +86,7 @@ const FamilyCoachNotes = ({ member }) => {
 
   if (!teams.length) {
     return (
-      <div className="text-sm text-gray-900 dark:text-gray-100">
+      <div className="text-sm text-gray-900 dark:text-gray-100/80">
         No coach notes yet.
       </div>
     );
@@ -90,6 +94,7 @@ const FamilyCoachNotes = ({ member }) => {
 
   return (
     <>
+      {/* HEADER — EXACTLY LIKE USER PAGE */}
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
           Coach Notes
@@ -97,42 +102,59 @@ const FamilyCoachNotes = ({ member }) => {
         <button
           type="button"
           onClick={fetchNotes}
-          className="inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-medium"
+          className="inline-flex items-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2.5 py-1 text-xs font-medium text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700"
         >
           Refresh
         </button>
       </div>
 
+      {/* BODY — SAME STRUCTURE AS USER COACH NOTES */}
       <section className="space-y-6">
-        {teams.map((t) => (
-          <TeamCard key={t.teamId}>
-            <div className="px-4 py-3 border-b">
-              <h3 className="text-lg font-semibold">{t.teamName}</h3>
+        {teams.map((t, idxTeam) => (
+          <TeamCard key={t.teamId || idxTeam}>
+            {/* TEAM HEADER */}
+            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {t.teamName}
+              </h3>
             </div>
 
             <div className="p-4 space-y-5">
-              {t.events.map((e) => (
-                <div key={e.eventId}>
-                  <div className="text-base font-semibold mb-1">
+              {t.events.map((e, idxEvent) => (
+                <div key={e.eventId || idxEvent}>
+                  {/* EVENT NAME — NOT “Event” */}
+                  <div className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-1">
                     {e.eventName}
                   </div>
 
-                  <ul className="ml-4 space-y-2">
-                    {e.notes.map((n) => (
-                      <li
-                        key={n._id}
-                        className="text-sm flex justify-between"
-                      >
-                        <span>- {n.opponent?.name || "Opponent"}</span>
-                        <button
-                          type="button"
-                          onClick={() => openPreview(n._id)}
-                          className="text-xs underline"
+                  <ul className="mt-1 ml-4 space-y-2">
+                    {e.notes.map((n) => {
+                      const opponent = n.opponent || "";
+                      const coach = n.coachName || "Coach";
+
+                      return (
+                        <li
+                          key={n._id}
+                          className="text-sm flex flex-col sm:flex-row sm:items-center sm:gap-2"
                         >
-                          View
-                        </button>
-                      </li>
-                    ))}
+                          <div className="text-gray-900 dark:text-gray-100/90">
+                            - {opponent ? `${opponent} ` : ""}
+                            <span className="opacity-80">— notes by</span>{" "}
+                            {coach}
+                          </div>
+
+                          <div className="mt-1 sm:mt-0">
+                            <button
+                              type="button"
+                              onClick={() => openPreview(n._id)}
+                              className="inline-flex items-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2.5 py-1 text-xs font-medium text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700"
+                            >
+                              View
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               ))}
@@ -142,12 +164,13 @@ const FamilyCoachNotes = ({ member }) => {
       </section>
 
       <NotePreviewModal
+        userId={userId}
         noteId={noteId}
         open={open}
         onClose={closePreview}
       />
     </>
   );
-};
+}
 
 export default FamilyCoachNotes;
