@@ -6,6 +6,7 @@ import Link from "next/link";
 import { connectDB } from "@/lib/mongo";
 import Team from "@/models/teamModel";
 import TeamMember from "@/models/teamMemberModel";
+import FamilyMember from "@/models/familyMemberModel";
 import User from "@/models/userModel";
 import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import TeamProviderClient from "@/components/teams/TeamProviderClient";
@@ -85,29 +86,40 @@ export default async function TeamLayout({ children, params }) {
       .select("role")
       .lean();
 
-    if (directMembership?.role && directMembership.role !== "pending") {
+    if (
+      directMembership?.role &&
+      String(directMembership.role).toLowerCase() !== "pending"
+    ) {
       normalizedRole = String(directMembership.role).toLowerCase();
     } else {
-      // 2️⃣ Family membership inheritance
-      const familyMembership = await TeamMember.findOne({
-        teamId: teamDoc._id,
-        familyMemberId: { $ne: null },
+      // 2️⃣ Family membership inheritance:
+      // Find all family members where current user is the parent
+      const myFamilyMembers = await FamilyMember.find({
+        parentUserId: currentUser._id,
       })
-        .populate({
-          path: "familyMemberId",
-          select: "parentUserId",
-        })
-        .select("role familyMemberId")
+        .select("_id")
         .lean();
 
-      if (
-        familyMembership?.role &&
-        familyMembership.role !== "pending" &&
-        familyMembership.familyMemberId?.parentUserId &&
-        String(familyMembership.familyMemberId.parentUserId) ===
-          String(currentUser._id)
-      ) {
-        normalizedRole = String(familyMembership.role).toLowerCase();
+      const myFamilyMemberIds = myFamilyMembers
+        .map((f) => f._id?.toString())
+        .filter(Boolean);
+
+      if (myFamilyMemberIds.length > 0) {
+        // Find a team membership for any of my children
+        const childMembership = await TeamMember.findOne({
+          teamId: teamDoc._id,
+          familyMemberId: { $in: myFamilyMemberIds },
+        })
+          .select("role")
+          .lean();
+
+        const childRole = childMembership?.role
+          ? String(childMembership.role).toLowerCase()
+          : null;
+
+        if (childRole && childRole !== "pending") {
+          normalizedRole = childRole;
+        }
       }
     }
   }
