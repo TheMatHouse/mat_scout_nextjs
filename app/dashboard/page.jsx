@@ -19,7 +19,6 @@ import AthleteCheckIn from "@/components/attendance/AthleteCheckIn";
 
 export default function DashboardHome() {
   const { user, loading } = useUser();
-  console.log("USER ", user);
   const [matchCount, setMatchCount] = useState(null);
   const [scoutingCount, setScoutingCount] = useState(null);
   const [teamCount, setTeamCount] = useState(null);

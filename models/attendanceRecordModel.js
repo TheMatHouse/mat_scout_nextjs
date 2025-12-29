@@ -30,6 +30,12 @@ const AttendanceRecordSchema = new mongoose.Schema(
       default: null,
     },
 
+    discipline: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+
     attendedAt: {
       type: Date,
       required: true,
