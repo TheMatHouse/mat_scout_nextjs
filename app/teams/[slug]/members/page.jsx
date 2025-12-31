@@ -1,12 +1,11 @@
-// app/(teams)/team/[slug]/members/page.jsx
 "use client";
 
 import ManagerMembersClient from "@/components/teams/ManagerMembersClient";
 
-const MembersPage = ({ params }) => {
-  const { slug } = params;
+async function MembersPage({ params }) {
+  const { slug } = await params;
 
   return <ManagerMembersClient slug={slug} />;
-};
+}
 
 export default MembersPage;
