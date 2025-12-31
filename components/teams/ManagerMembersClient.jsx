@@ -1,4 +1,3 @@
-// components/teams/ManagerMembersClient.jsx
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -12,7 +11,7 @@ import InviteMemberForm from "@/components/teams/forms/InviteMemberForm";
 import InvitesTable from "@/components/teams/InvitesTable";
 import { toast } from "react-toastify";
 
-export default function ManagerMembersClient({ slug: slugProp }) {
+const ManagerMembersClient = ({ slug: slugProp }) => {
   const params = useParams();
   const router = useRouter();
   const slug = slugProp || params?.slug;
@@ -23,7 +22,6 @@ export default function ManagerMembersClient({ slug: slugProp }) {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Invitations state
   const [invites, setInvites] = useState([]);
   const [invitesLoading, setInvitesLoading] = useState(true);
 
@@ -38,17 +36,24 @@ export default function ManagerMembersClient({ slug: slugProp }) {
     }
   }
 
-  // --- Fetch Members (manager/coach only) ---
+  /* -------------------------------------------------------------
+     Fetch Members
+  ------------------------------------------------------------- */
   const fetchMembers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/teams/${slug}/members?ts=${Date.now()}`);
+      const res = await fetch(`/api/teams/${slug}/members?ts=${Date.now()}`, {
+        credentials: "include",
+      });
+
       if (res.status === 401 || res.status === 403) {
         toast.error("You are not authorized to view team members.");
         router.replace(`/teams/${slug}`);
         return;
       }
+
       if (!res.ok) throw new Error("Failed to load members");
+
       const data = await res.json();
       setMembers(data.members || []);
     } catch (err) {
@@ -59,16 +64,23 @@ export default function ManagerMembersClient({ slug: slugProp }) {
     }
   }, [slug, router]);
 
-  // --- Fetch Invites (manager/coach only) ---
+  /* -------------------------------------------------------------
+     Fetch Invites
+  ------------------------------------------------------------- */
   const fetchInvites = useCallback(async () => {
     setInvitesLoading(true);
     try {
-      const res = await fetch(`/api/teams/${slug}/invites?ts=${Date.now()}`);
+      const res = await fetch(`/api/teams/${slug}/invites?ts=${Date.now()}`, {
+        credentials: "include",
+      });
+
       if (res.status === 401 || res.status === 403) {
         setInvites([]);
         return;
       }
+
       if (!res.ok) throw new Error("Failed to load invites");
+
       const data = await res.json();
       setInvites(Array.isArray(data.invites) ? data.invites : []);
     } catch (err) {
@@ -95,7 +107,6 @@ export default function ManagerMembersClient({ slug: slugProp }) {
     );
   }
 
-  // Determine current user's role (from returned members list)
   const currentUserMembership = members.find((m) => m.userId === user?._id);
   const isManager = currentUserMembership?.role === "manager";
   const isCoach = currentUserMembership?.role === "coach";
@@ -111,35 +122,44 @@ export default function ManagerMembersClient({ slug: slugProp }) {
     user?.email ||
     "Team Manager";
 
+  /* -------------------------------------------------------------
+     Invite Actions
+  ------------------------------------------------------------- */
   const handleResendInvite = async (inviteId) => {
     try {
       const res = await fetch(`/api/teams/${slug}/invites/${inviteId}/resend`, {
         method: "POST",
+        credentials: "include",
+        cache: "no-store",
       });
+
       const { data } = await parseJsonSafe(res);
-      if (!res.ok) throw new Error(data?.message || "Failed to resend invite");
+      if (!res.ok) throw new Error(data?.error || "Failed to resend invite");
+
       toast.success("Invitation resent.");
+      fetchInvites();
     } catch (err) {
       console.error(err);
       toast.error(err.message || "Could not resend invite.");
-    } finally {
-      fetchInvites();
     }
   };
 
   const handleRevokeInvite = async (inviteId) => {
     try {
-      const res = await fetch(`/api/teams/${slug}/invites/${inviteId}/revoke`, {
-        method: "POST",
+      const res = await fetch(`/api/teams/${slug}/invites/${inviteId}`, {
+        method: "DELETE",
+        credentials: "include",
+        cache: "no-store",
       });
+
       const { data } = await parseJsonSafe(res);
-      if (!res.ok) throw new Error(data?.message || "Failed to revoke invite");
-      toast.success(data?.message || "Invitation revoked.");
+      if (!res.ok) throw new Error(data?.error || "Failed to revoke invite");
+
+      toast.success("Invitation revoked.");
+      fetchInvites();
     } catch (err) {
       console.error(err);
       toast.error(err.message || "Could not revoke invite.");
-    } finally {
-      fetchInvites();
     }
   };
 
@@ -180,7 +200,7 @@ export default function ManagerMembersClient({ slug: slugProp }) {
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           Pending Requests
         </h2>
-        {pending.length > 0 ? (
+        {pending.length ? (
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {pending.map((m) => (
               <div
@@ -190,7 +210,6 @@ export default function ManagerMembersClient({ slug: slugProp }) {
                 <MemberRow
                   member={m}
                   slug={slug}
-                  isManager={isManager}
                   onRoleChange={() => {
                     fetchMembers();
                     fetchInvites();
@@ -211,7 +230,7 @@ export default function ManagerMembersClient({ slug: slugProp }) {
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           Active Members
         </h2>
-        {active.length > 0 ? (
+        {active.length ? (
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {active.map((m) => (
               <div
@@ -221,7 +240,6 @@ export default function ManagerMembersClient({ slug: slugProp }) {
                 <MemberRow
                   member={m}
                   slug={slug}
-                  isManager={isManager}
                   onRoleChange={fetchMembers}
                 />
               </div>
@@ -254,4 +272,6 @@ export default function ManagerMembersClient({ slug: slugProp }) {
       </ModalLayout>
     </div>
   );
-}
+};
+
+export default ManagerMembersClient;
