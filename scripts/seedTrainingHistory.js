@@ -5,7 +5,7 @@ import { connectDB } from "../lib/mongo.js";
 import AttendanceRecord from "../models/attendanceRecordModel.js";
 
 // 🔴 CHANGE THIS TO YOUR USER ID
-const USER_ID = "68a92748fd42493d38ff2090";
+const USER_ID = "68c5ab521cff74bd05af45ce";
 
 const fakeClubs = [
   { name: "Northglenn Judo Club" },
