@@ -1,5 +1,3 @@
-"use client";
-
 import ManagerMembersClient from "@/components/teams/ManagerMembersClient";
 
 async function MembersPage({ params }) {
