@@ -15,11 +15,20 @@ function badgeForCount(count) {
   return null;
 }
 
+function normalizeDiscipline(d) {
+  return String(d || "")
+    .trim()
+    .toLowerCase();
+}
+
 function TrainingClient({ username, isOwner }) {
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState([]);
   const [stats, setStats] = useState({});
-  const [filters, setFilters] = useState({ showPrivate: false });
+  const [filters, setFilters] = useState({
+    showPrivate: false,
+    discipline: "all",
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -40,7 +49,6 @@ function TrainingClient({ username, isOwner }) {
       const data = await res.json();
 
       if (!cancelled) {
-        console.log("ATTENDANCE API STATS:", data.stats);
         setRecords(data.records || []);
         setStats(data.stats || {});
         setLoading(false);
@@ -52,12 +60,23 @@ function TrainingClient({ username, isOwner }) {
     };
   }, [username]);
 
+  /* ---------------- Visible records ---------------- */
   const visibleRecords = useMemo(() => {
-    return records.filter(
-      (r) => filters.showPrivate || r.visibility === "public"
-    );
-  }, [records, filters.showPrivate]);
+    return records.filter((r) => {
+      if (!filters.showPrivate && r.visibility !== "public") return false;
 
+      if (filters.discipline !== "all") {
+        return (
+          normalizeDiscipline(r.discipline) ===
+          normalizeDiscipline(filters.discipline)
+        );
+      }
+
+      return true;
+    });
+  }, [records, filters.showPrivate, filters.discipline]);
+
+  /* ---------------- Discipline stats (unchanged) ---------------- */
   const disciplineStats = useMemo(() => {
     const out = Object.create(null);
 
@@ -77,19 +96,16 @@ function TrainingClient({ username, isOwner }) {
     return out;
   }, [records, filters.showPrivate]);
 
-  function formatDateShort(d) {
-    try {
-      return new Date(d).toLocaleDateString(undefined, {
-        month: "short",
-        year: "numeric",
-      });
-    } catch {
-      return "";
-    }
-  }
-
-  // ✅ FIX: use the actual API key
   const sincePromotion = stats?.sincePromotion || {};
+
+  /* ---------------- Unique disciplines for filter ---------------- */
+  const disciplineOptions = useMemo(() => {
+    const set = new Set();
+    for (const r of records) {
+      if (r.discipline) set.add(r.discipline);
+    }
+    return Array.from(set).sort();
+  }, [records]);
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-10">
@@ -145,7 +161,6 @@ function TrainingClient({ username, isOwner }) {
             )}
           </div>
 
-          {/* ✅ ONLY CHANGE AREA START: Promotions section */}
           {Object.keys(sincePromotion).length > 0 && (
             <div className="rounded-xl bg-gray-900 border border-border p-5">
               <h3 className="font-semibold text-white mb-4">
@@ -168,7 +183,6 @@ function TrainingClient({ username, isOwner }) {
               </ul>
             </div>
           )}
-          {/* ✅ ONLY CHANGE AREA END */}
 
           {isOwner && (
             <div className="rounded-xl bg-gray-900 border border-border p-5">
@@ -192,6 +206,37 @@ function TrainingClient({ username, isOwner }) {
 
         {/* RIGHT */}
         <div className="flex-1">
+          {/* Discipline Filter */}
+          {disciplineOptions.length > 0 && (
+            <div className="mb-6 flex flex-wrap gap-2">
+              <button
+                onClick={() => setFilters((f) => ({ ...f, discipline: "all" }))}
+                className={`px-4 py-2 rounded-full text-sm font-semibold transition ${
+                  filters.discipline === "all"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                }`}
+              >
+                All
+              </button>
+
+              {disciplineOptions.map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setFilters((f) => ({ ...f, discipline: d }))}
+                  className={`px-4 py-2 rounded-full text-sm font-semibold capitalize transition ${
+                    normalizeDiscipline(filters.discipline) ===
+                    normalizeDiscipline(d)
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+                  }`}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
+          )}
+
           {loading ? (
             <div className="flex justify-center py-20">
               <Spinner size={48} />
