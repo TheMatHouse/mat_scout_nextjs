@@ -36,7 +36,6 @@ function mostRecentPromotion(promos) {
 }
 
 const StyleCard = ({ style, matches = [], username, isFamily }) => {
-  console.log("MATCHES ", matches);
   const [showHistory, setShowHistory] = useState(false);
 
   const styleName =

@@ -15,9 +15,7 @@ async function main() {
   const db = mongoose.connection.db;
   const ranks = db.collection("ranks");
 
-  console.log("🧹 Deleting all documents from ranks…");
   const result = await ranks.deleteMany({});
-  console.log(`✅ Deleted ${result.deletedCount} ranks.`);
 
   await mongoose.disconnect();
   process.exit(0);

@@ -9,6 +9,7 @@ import { notFound } from "next/navigation";
 import Spinner from "../shared/Spinner";
 import FollowButton from "@/components/shared/FollowButton";
 import FollowListModal from "@/components/profile/FollowListModal";
+import TrainingHistory from "@/components/profile/TrainingHistory";
 
 /* ---------------- helpers ---------------- */
 
@@ -92,6 +93,8 @@ const UserProfileClient = ({ username, userId }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState("");
+  const [trainingHistory, setTrainingHistory] = useState([]);
+  const [trainingLoading, setTrainingLoading] = useState(true);
 
   const [followCounts, setFollowCounts] = useState({
     followers: 0,
@@ -318,8 +321,44 @@ const UserProfileClient = ({ username, userId }) => {
     };
   }, [username]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadTraining() {
+      try {
+        console.log("FETCHING TRAINING HISTORY FOR", username);
+
+        const res = await fetch(
+          `/api/users/${encodeURIComponent(username)}/attendance`,
+          { cache: "no-store" }
+        );
+
+        console.log("ATTENDANCE RESPONSE STATUS", res.status);
+
+        const data = await res.json();
+        console.log("ATTENDANCE DATA", data);
+
+        if (!cancelled) {
+          setTrainingHistory(Array.isArray(data.records) ? data.records : []);
+        }
+      } catch (err) {
+        console.error("Attendance fetch failed", err);
+      } finally {
+        if (!cancelled) setTrainingLoading(false);
+      }
+    }
+
+    if (username) {
+      loadTraining();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [username]);
+
   /* ---------- render states ---------- */
-  console.log("USER ", profileUser);
+
   if (loading) {
     return (
       <div className="relative flex flex-col justify-center items-center h-[70vh] bg-background">
@@ -574,6 +613,9 @@ const UserProfileClient = ({ username, userId }) => {
           )}
         </div>
       </section>
+
+      {/* Training History */}
+      <TrainingHistory username={profileUser.username} />
 
       {/* Bio section */}
       {bioHtml && (
