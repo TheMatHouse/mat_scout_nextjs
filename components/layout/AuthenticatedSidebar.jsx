@@ -70,7 +70,6 @@ const AuthenticatedSidebar = () => {
     { href: "/teams/new", label: "Create Team" },
   ];
 
-  // Your original admin links (order preserved), with sensible icons
   const adminSubLinks = [
     { href: "/admin/dashboard", label: "Dashboard", icon: <Gauge size={16} /> },
     { href: "/admin/users", label: "Users", icon: <UsersIcon size={16} /> },
@@ -125,6 +124,19 @@ const AuthenticatedSidebar = () => {
     <aside className="hidden md:flex w-64 h-full bg-[hsl(222.2_47.4%_11.2%)] text-white flex-col">
       {/* (A) Scroll area */}
       <nav className="flex-1 min-h-0 overflow-y-auto no-scrollbar py-8 px-6 pb-28 space-y-4">
+        {/* Profile (moved to top) */}
+        <Link
+          href={`/${user.username}`}
+          className={cn(
+            "flex items-center gap-2 text-lg font-medium px-2 py-2 rounded-md transition hover:text-ms-light-red hover:bg-[hsl(222_47%_20%)]",
+            pathname === `/${user.username}` &&
+              "bg-[hsl(222_47%_25%)] text-ms-light-red font-semibold border-l-4 border-[var(--ms-light-red)]"
+          )}
+        >
+          <UserIcon size={18} />
+          Profile
+        </Link>
+
         {/* Dashboard */}
         <div>
           <Link
@@ -203,7 +215,7 @@ const AuthenticatedSidebar = () => {
           )}
         </div>
 
-        {/* Admin (only when user is admin OR already on /admin route) */}
+        {/* Admin */}
         {(isAdmin || pathname.startsWith("/admin")) && (
           <div>
             <Link
@@ -246,22 +258,6 @@ const AuthenticatedSidebar = () => {
           </div>
         )}
       </nav>
-
-      {/* (B) Bottom section */}
-      <div className="px-6 pt-4 pb-6 border-t border-gray-700 space-y-2 bg-[hsl(222.2_47.4%_10%)]">
-        <Link
-          href={`/${user.username}`}
-          className={cn(
-            "flex items-center gap-2 text-lg font-medium px-2 py-2 rounded-md transition hover:text-ms-light-red hover:bg-[hsl(222_47%_20%)]",
-            pathname === `/${user.username}` &&
-              "bg-[hsl(222_47%_25%)] text-ms-light-red font-semibold border-l-4 border-[var(--ms-light-red)]"
-          )}
-        >
-          <UserIcon size={18} />
-          Profile
-        </Link>
-        {/* No extra Admin link here—admin lives in the section above */}
-      </div>
     </aside>
   );
 };
