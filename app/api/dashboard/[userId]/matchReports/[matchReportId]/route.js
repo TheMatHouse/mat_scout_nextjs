@@ -4,6 +4,8 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import matchReport from "@/models/matchReportModel";
+import "@/models/divisionModel";
+import "@/models/weightCategoryModel";
 
 /* helpers */
 const sid = (v) => (v == null ? "" : String(v).trim());
