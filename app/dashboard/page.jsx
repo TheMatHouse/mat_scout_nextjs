@@ -154,7 +154,7 @@ export default function DashboardHome() {
         {/* RIGHT: Practice Check-In */}
         <div className="lg:col-span-2 flex justify-center">
           <div className="w-full max-w-xl">
-            <AthleteCheckIn />
+            <AthleteCheckIn username={user.username} />
           </div>
         </div>
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { Zap } from "lucide-react";
 
@@ -23,7 +24,8 @@ function todayISO() {
   return d.toISOString().slice(0, 10);
 }
 
-function AthleteCheckIn({ athleteId = null }) {
+function AthleteCheckIn({ athleteId = null, username }) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [successFlash, setSuccessFlash] = useState(false);
@@ -135,6 +137,9 @@ function AthleteCheckIn({ athleteId = null }) {
       if (selectedTeam?._id) {
         localStorage.setItem("lastCheckInClubId", selectedTeam._id);
       }
+      setTimeout(() => {
+        router.push(`/${username}/training`);
+      }, 600);
 
       setClubQuery("");
       setSelectedTeam(null);
