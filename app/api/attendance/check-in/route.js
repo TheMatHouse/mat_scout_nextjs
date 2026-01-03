@@ -18,6 +18,14 @@ function noStore(payload, status = 200) {
   });
 }
 
+/**
+ * Normalize a Date to a UTC day key (YYYY-MM-DD)
+ * This avoids timezone / morning boundary bugs.
+ */
+function toUTCDayKey(date) {
+  return date.toISOString().slice(0, 10);
+}
+
 export async function POST(req) {
   try {
     await connectDB();
@@ -39,8 +47,11 @@ export async function POST(req) {
       return noStore({ error: "Invalid attendedAt" }, 400);
     }
 
-    // 🚫 no future check-ins
-    if (attendedAt.getTime() > Date.now()) {
+    // 🚫 no future check-ins (DAY-BASED, NOT TIMESTAMP-BASED)
+    const todayKey = toUTCDayKey(new Date());
+    const attendedKey = toUTCDayKey(attendedAt);
+
+    if (attendedKey > todayKey) {
       return noStore({ error: "Future check-ins are not allowed" }, 400);
     }
 
@@ -53,6 +64,7 @@ export async function POST(req) {
       return noStore({ error: "Club is required" }, 400);
     }
 
+    // 🚫 prevent rapid duplicate check-ins (unchanged behavior)
     const existing = await AttendanceRecord.findOne({
       athlete: new mongoose.Types.ObjectId(athleteId),
       attendedAt: {
