@@ -23,7 +23,6 @@ const ADMIN_LINKS = [
 function SectionRow({ label, href, isOpen, setOpen, active, onNavigate }) {
   return (
     <div className="flex items-center justify-between">
-      {/* Header text is a real link (navigates) */}
       <Link
         href={href}
         onClick={onNavigate}
@@ -35,7 +34,6 @@ function SectionRow({ label, href, isOpen, setOpen, active, onNavigate }) {
         {label}
       </Link>
 
-      {/* Chevron only toggles submenu */}
       <button
         type="button"
         aria-expanded={isOpen}
@@ -49,7 +47,7 @@ function SectionRow({ label, href, isOpen, setOpen, active, onNavigate }) {
   );
 }
 
-export default function MobileSidebarDrawer({ isOpen, onClose }) {
+const MobileSidebarDrawer = ({ isOpen, onClose }) => {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading } = useUser();
@@ -81,6 +79,18 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
         {user ? (
           <>
             <nav className="space-y-4">
+              {/* Profile */}
+              <Link
+                href={`/${user.username}`}
+                onClick={onClose}
+                className={cn(
+                  "block text-lg font-medium hover:text-ms-light-red transition",
+                  pathname === `/${user.username}` && "text-ms-light-red"
+                )}
+              >
+                Profile
+              </Link>
+
               {/* Dashboard */}
               <div>
                 <SectionRow
@@ -89,9 +99,7 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
                   isOpen={isDashboardOpen}
                   setOpen={setDashboardOpen}
                   active={pathname.startsWith("/dashboard")}
-                  onNavigate={() => {
-                    onClose(); // close drawer after navigation
-                  }}
+                  onNavigate={onClose}
                 />
                 {isDashboardOpen && (
                   <div className="pl-4 mt-2 space-y-2 text-sm text-ms-blue-gray">
@@ -134,9 +142,7 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
                   isOpen={isTeamsOpen}
                   setOpen={setTeamsOpen}
                   active={pathname.startsWith("/teams")}
-                  onNavigate={() => {
-                    onClose(); // close drawer after navigation
-                  }}
+                  onNavigate={onClose}
                 />
                 {isTeamsOpen && (
                   <div className="pl-4 mt-2 space-y-2 text-sm text-ms-blue-gray">
@@ -174,7 +180,7 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
                 )}
               </div>
 
-              {/* ➕ Users (logged-in) */}
+              {/* Users */}
               <Link
                 href="/users"
                 onClick={onClose}
@@ -186,39 +192,23 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
                 Users
               </Link>
 
-              {/* Profile */}
-              <Link
-                href={`/${user.username}`}
-                onClick={onClose}
-                className={cn(
-                  "block text-lg font-medium hover:text-ms-light-red transition",
-                  pathname === `/${user.username}` && "text-ms-light-red"
-                )}
-              >
-                Profile
-              </Link>
-
               <Link
                 href="/faq"
                 onClick={onClose}
-                className={cn(
-                  "block text-lg font-medium hover:text-ms-light-red transition",
-                  pathname === "/users" && "text-ms-light-red"
-                )}
+                className="block text-lg font-medium hover:text-ms-light-red transition"
               >
-                faq
+                FAQ
               </Link>
+
               <Link
                 href="/contact"
                 onClick={onClose}
-                className={cn(
-                  "block text-lg font-medium hover:text-ms-light-red transition",
-                  pathname === "/users" && "text-ms-light-red"
-                )}
+                className="block text-lg font-medium hover:text-ms-light-red transition"
               >
                 Contact Us
               </Link>
-              {/* Admin (only for admins) */}
+
+              {/* Admin */}
               {user?.isAdmin && (
                 <div>
                   <SectionRow
@@ -227,9 +217,7 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
                     isOpen={isAdminOpen}
                     setOpen={setAdminOpen}
                     active={pathname.startsWith("/admin")}
-                    onNavigate={() => {
-                      onClose();
-                    }}
+                    onNavigate={onClose}
                   />
                   {isAdminOpen && (
                     <div className="pl-4 mt-2 space-y-2 text-sm text-ms-blue-gray">
@@ -282,7 +270,6 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
             >
               About
             </Link>
-
             <Link
               href="/users"
               onClick={onClose}
@@ -311,7 +298,6 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
             >
               Contact Us
             </Link>
-
             <Link
               href="/login"
               onClick={onClose}
@@ -319,7 +305,6 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
             >
               Log In
             </Link>
-
             <Link
               href="/register"
               onClick={onClose}
@@ -335,4 +320,6 @@ export default function MobileSidebarDrawer({ isOpen, onClose }) {
       </aside>
     </div>
   );
-}
+};
+
+export default MobileSidebarDrawer;
