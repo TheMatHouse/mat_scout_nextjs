@@ -107,9 +107,17 @@ const ManagerMembersClient = ({ slug: slugProp }) => {
     );
   }
 
+  // -------------------------------------------------------------
+  // 🔑 FIX: derive viewer role correctly
+  // -------------------------------------------------------------
   const currentUserMembership = members.find((m) => m.userId === user?._id);
-  const isManager = currentUserMembership?.role === "manager";
-  const isCoach = currentUserMembership?.role === "coach";
+
+  const isOwner = team?.user === user?._id;
+
+  const viewerRole = isOwner ? "owner" : currentUserMembership?.role || null;
+
+  const isManager = viewerRole === "manager";
+  const isCoach = viewerRole === "coach";
 
   const pending = members.filter((m) => m.role === "pending");
   const active = members.filter((m) =>
@@ -175,7 +183,7 @@ const ManagerMembersClient = ({ slug: slugProp }) => {
           </p>
         </div>
 
-        {(isManager || isCoach) && (
+        {(isOwner || isManager || isCoach) && (
           <button
             onClick={() => setInviteOpen(true)}
             className="btn btn-primary"
@@ -185,7 +193,7 @@ const ManagerMembersClient = ({ slug: slugProp }) => {
         )}
       </div>
 
-      {(isManager || isCoach) && (
+      {(isOwner || isManager || isCoach) && (
         <InvitesTable
           slug={slug}
           invites={invites}
@@ -210,6 +218,8 @@ const ManagerMembersClient = ({ slug: slugProp }) => {
                 <MemberRow
                   member={m}
                   slug={slug}
+                  viewerRole={viewerRole}
+                  viewerIsOwner={isOwner}
                   onRoleChange={() => {
                     fetchMembers();
                     fetchInvites();
@@ -240,6 +250,8 @@ const ManagerMembersClient = ({ slug: slugProp }) => {
                 <MemberRow
                   member={m}
                   slug={slug}
+                  viewerRole={viewerRole}
+                  viewerIsOwner={isOwner}
                   onRoleChange={fetchMembers}
                 />
               </div>

@@ -13,15 +13,21 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 
-const MemberRow = ({
+function MemberRow({
   member, // { id, name, username, avatarUrl, role, isOwner, isFamilyMember, userId, familyMemberId }
   slug,
-  viewerRole, // "owner" | "manager" | "coach" | "member"
+  viewerRole, // may be undefined if owner is not in teammembers
+  viewerIsOwner = false, // ✅ NEW: pass true if current user is team.user
   onRoleChange,
-}) => {
+}) {
   const [role, setRole] = useState((member.role || "").toLowerCase());
   const [saving, setSaving] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+
+  const normalizedViewerRole = (viewerRole || "").toLowerCase();
+
+  // ✅ If you're the team owner (team.user), treat you as "owner" even if you're not in teammembers
+  const effectiveViewerRole = viewerIsOwner ? "owner" : normalizedViewerRole;
 
   const roleLabel = (r) => (r ? r.charAt(0).toUpperCase() + r.slice(1) : "");
 
@@ -30,21 +36,24 @@ const MemberRow = ({
   ------------------------------------------------------------- */
   const canEditRole = useMemo(() => {
     if (member.isOwner) return false;
-    return ["owner", "manager"].includes(viewerRole);
-  }, [viewerRole, member.isOwner]);
+    return ["owner", "manager"].includes(effectiveViewerRole);
+  }, [effectiveViewerRole, member.isOwner]);
 
   const canRemove = useMemo(() => {
     if (member.isOwner) return false;
 
-    if (viewerRole === "owner") return true;
-    if (viewerRole === "manager") {
+    if (effectiveViewerRole === "owner") return true;
+
+    if (effectiveViewerRole === "manager") {
       return ["member", "coach"].includes(role);
     }
-    if (viewerRole === "coach") {
+
+    if (effectiveViewerRole === "coach") {
       return role === "member";
     }
+
     return false;
-  }, [viewerRole, role, member.isOwner]);
+  }, [effectiveViewerRole, role, member.isOwner]);
 
   /* -------------------------------------------------------------
      Role change
@@ -168,7 +177,7 @@ const MemberRow = ({
                 </SelectItem>
                 <SelectItem value="member">Member</SelectItem>
                 <SelectItem value="coach">Coach</SelectItem>
-                {viewerRole === "owner" && (
+                {effectiveViewerRole === "owner" && (
                   <SelectItem value="manager">Manager</SelectItem>
                 )}
               </SelectContent>
@@ -219,6 +228,6 @@ const MemberRow = ({
       )}
     </>
   );
-};
+}
 
 export default MemberRow;
