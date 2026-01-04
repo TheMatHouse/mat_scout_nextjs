@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useUser } from "@/context/UserContext";
 
-export default function LogoutButton() {
+function LogoutButton() {
   const { logout } = useUser();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -12,8 +12,8 @@ export default function LogoutButton() {
   const handleLogout = async () => {
     setLoading(true);
     try {
-      await logout(); // ✅ Clears context + calls API
-      router.push("/login"); // Redirect after logout
+      await logout(); // clears context + calls API
+      router.push("/login");
     } catch (err) {
       console.error("Logout failed:", err);
     } finally {
@@ -23,11 +23,21 @@ export default function LogoutButton() {
 
   return (
     <button
+      type="button"
       onClick={handleLogout}
       disabled={loading}
-      className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 transition"
+      className="
+  font-medium
+  text-white
+  hover:text-ms-light-red
+  hover:underline
+  transition-colors
+  disabled:opacity-60
+"
     >
       {loading ? "Logging out..." : "Logout"}
     </button>
   );
 }
+
+export default LogoutButton;

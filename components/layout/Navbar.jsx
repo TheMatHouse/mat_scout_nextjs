@@ -41,7 +41,7 @@ const Navbar = () => {
         <div className="hidden md:flex items-center gap-6">
           <ThemeToggle />
 
-          {/* Profile (logged in only, before Dashboard) */}
+          {/* Profile */}
           {user && (
             <Link
               href={`/${user.username}`}
@@ -85,7 +85,9 @@ const Navbar = () => {
               >
                 Contact Us
               </Link>
-              <LogoutButton />
+
+              {/* Logout — toned down */}
+              <LogoutButton className="hover:underline" />
             </>
           ) : (
             <>
@@ -127,7 +129,7 @@ const Navbar = () => {
               </Link>
               <Link
                 href="/login"
-                className="hover:underline font-semibold text-white bg-ms-red px-4 py-2 rounded"
+                className="font-semibold text-white bg-ms-red px-4 py-2 rounded hover:opacity-90 transition"
               >
                 Log In
               </Link>
@@ -141,6 +143,7 @@ const Navbar = () => {
           )}
         </div>
 
+        {/* Mobile menu */}
         <div className="md:hidden">
           <Menu
             size={24}
