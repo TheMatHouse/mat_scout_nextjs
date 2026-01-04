@@ -1,21 +1,20 @@
-// app/(teams)/teams/[slug]/social-invite/page.jsx
 "use client";
 
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { toast } from "react-toastify";
 
 import { useUser } from "@/context/UserContext";
 import Spinner from "@/components/shared/Spinner";
 import { Button } from "@/components/ui/button";
 
-export default function SocialInvitePage({ params }) {
-  const router = useRouter();
+const SocialInvitePage = () => {
   const { user, loading: userLoading } = useUser();
 
+  const params = useParams();
   const slug = params?.slug;
 
   const [team, setTeam] = useState(null);
@@ -27,7 +26,6 @@ export default function SocialInvitePage({ params }) {
     try {
       setMembershipStatus("loading");
 
-      // Public-safe team info + membership state (if logged in)
       const res = await fetch(`/api/teams/${slug}/public`, {
         cache: "no-store",
       });
@@ -63,7 +61,7 @@ export default function SocialInvitePage({ params }) {
     loadInviteContext();
   }, [slug, userLoading, loadInviteContext]);
 
-  async function handleRequestJoin() {
+  const handleRequestJoin = async () => {
     if (submitting) return;
 
     setSubmitting(true);
@@ -82,7 +80,6 @@ export default function SocialInvitePage({ params }) {
 
       if (!res.ok) {
         toast.error(data?.error || "Failed to request to join team.");
-        setSubmitting(false);
         return;
       }
 
@@ -94,7 +91,7 @@ export default function SocialInvitePage({ params }) {
     } finally {
       setSubmitting(false);
     }
-  }
+  };
 
   if (membershipStatus === "loading") {
     return (
@@ -120,7 +117,7 @@ export default function SocialInvitePage({ params }) {
         You’ve been invited to request access to this team on MatScout.
       </p>
 
-      <p className="text-sm text-gray-700 dark:text-gray-300">
+      <p className="text-sm text-gray-900 dark:text-gray-100">
         A coach must approve your request before you can view team content.
       </p>
 
@@ -146,10 +143,18 @@ export default function SocialInvitePage({ params }) {
       )}
 
       {membershipStatus === "member" && (
-        <p className="font-medium text-gray-900 dark:text-gray-100">
-          You are already a member of this team.
-        </p>
+        <div className="space-y-4">
+          <p className="font-medium text-gray-900 dark:text-gray-100">
+            You are already a member of {team.teamName || team.name}.
+          </p>
+
+          <Link href={`/teams/${slug}`}>
+            <Button>Go to Team Page</Button>
+          </Link>
+        </div>
       )}
     </div>
   );
-}
+};
+
+export default SocialInvitePage;
