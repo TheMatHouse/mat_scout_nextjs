@@ -27,6 +27,14 @@ const teamMemberSchema = new mongoose.Schema(
       default: "pending",
     },
 
+    // ✅ NEW: how the member joined the team
+    joinedVia: {
+      type: String,
+      enum: ["invite", "request", "social-invite"],
+      default: "request",
+      index: true,
+    },
+
     /* ---------------------------------------------------------
        Soft delete fields
     --------------------------------------------------------- */

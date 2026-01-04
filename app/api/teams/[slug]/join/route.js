@@ -34,20 +34,22 @@ export async function POST(req, context) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
-  // Parse optional body (family member join)
+  // Parse optional body
   let familyMemberId = null;
+  let joinedVia = null;
+
   try {
-    const text = await req.text(); // works even if body empty
+    const text = await req.text();
     if (text) {
       const body = JSON.parse(text);
       familyMemberId = body?.familyMemberId || null;
+      joinedVia = body?.joinedVia || null;
     }
   } catch {
     // ignore parse errors
   }
 
-  // 🛑 Owner guard: the team "owner" (team.user) is inherently part of the team.
-  // They should NOT create a TeamMember row for themselves. Allow if adding a family member.
+  // 🛑 Owner guard
   if (!familyMemberId && String(team.user) === String(user._id)) {
     return NextResponse.json(
       { error: "Owner is already part of the team" },
@@ -55,7 +57,7 @@ export async function POST(req, context) {
     );
   }
 
-  // If joining on behalf of a family member, validate that family member belongs to the current user
+  // Joiner identity (user or family member)
   let joinerName =
     `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.username;
   let joinerId = String(user._id);
@@ -79,7 +81,7 @@ export async function POST(req, context) {
     joinerId = String(familyMember._id);
   }
 
-  // Prevent duplicates (pending or active) for this user/family member on this team
+  // Prevent duplicates
   const existing = await TeamMember.findOne({
     teamId: team._id,
     ...(familyMemberId
@@ -101,6 +103,7 @@ export async function POST(req, context) {
       userId: user._id,
       role: "pending",
       ...(familyMemberId && { familyMemberId }),
+      ...(joinedVia && { joinedVia }), // ✅ NEW (optional)
     });
 
     // Notify team owner in-app
@@ -115,13 +118,12 @@ export async function POST(req, context) {
       console.error("Failed to create join request notification:", notifErr);
     }
 
-    // Prepare HTTP response first (don’t block on email)
     const response = NextResponse.json(
       { message: "Request submitted" },
       { status: 200 }
     );
 
-    // Best-effort email to owner (respects prefs + 24h dedupe in Mail layer)
+    // Best-effort email to owner
     try {
       const owner = await User.findById(team.user);
       if (owner?.email) {
@@ -133,30 +135,20 @@ export async function POST(req, context) {
             <p><strong>${joinerName}</strong> has requested to join <strong>${
             team.teamName
           }</strong>.</p>
-            <p>Please <a href="https://matscout.com/login" style="color:#1a73e8;">sign in</a> to approve or deny this request.</p>
-            <p>
-              <a href="https://matscout.com/login"
-                style="display:inline-block;background-color:#1a73e8;color:white;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:bold;">
-                Login to MatScout
-              </a>
-            </p>
+            <p>Please <a href="https://matscout.com/login">sign in</a> to approve or deny this request.</p>
           `,
           logoUrl:
             "https://res.cloudinary.com/matscout/image/upload/v1752188084/matScout_email_logo_rx30tk.png",
         });
 
-        const result = await Mail.sendEmail({
+        await Mail.sendEmail({
           type: Mail.kinds.JOIN_REQUEST,
           toUser: owner,
           subject,
           html,
-          relatedUserId: joinerId, // used in dedupe key
-          teamId: String(team._id), // used in dedupe key
+          relatedUserId: joinerId,
+          teamId: String(team._id),
         });
-
-        if (!result.sent) {
-          console.warn("Join request email skipped:", result.reason);
-        }
       }
     } catch (emailErr) {
       console.error("Failed to send join request email:", emailErr);
