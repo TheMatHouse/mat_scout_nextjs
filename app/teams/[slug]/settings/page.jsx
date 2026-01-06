@@ -839,33 +839,6 @@ const TeamSettingsPage = () => {
         </Card>
       )}
 
-      {/* Team Flyer (Managers & Coaches) */}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Team Flyer</CardTitle>
-        </CardHeader>
-        <CardContent className="flex items-center justify-between gap-4">
-          <p className="text-sm text-gray-700 dark:text-gray-200">
-            Print a QR-code flyer for your gym wall so athletes can request
-            access to this team.
-          </p>
-
-          <Button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => {
-              window.open(
-                `/api/teams/${team.teamSlug}/flyer/pdf`,
-                "_blank",
-                "noopener,noreferrer"
-              );
-            }}
-          >
-            Print Team Flyer
-          </Button>
-        </CardContent>
-      </Card>
       {team && (
         <DeleteTeamSection
           teamSlug={team.teamSlug}
