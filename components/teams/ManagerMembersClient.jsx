@@ -173,26 +173,57 @@ const ManagerMembersClient = ({ slug: slugProp }) => {
 
   return (
     <div className="max-w-5xl mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Team Members
-          </h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-            Manage pending requests and team members.
-          </p>
-        </div>
-
-        {(isOwner || isManager || isCoach) && (
-          <button
-            onClick={() => setInviteOpen(true)}
-            className="btn btn-primary"
-          >
-            Invite members
-          </button>
-        )}
+      {/* Page Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          Team Members
+        </h1>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+          Manage pending requests and team members.
+        </p>
       </div>
 
+      {/* Grow Your Team – Primary Action Section */}
+      {(isOwner || isManager || isCoach) && (
+        <section>
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#334155] p-6 shadow-xl border border-white/10">
+            {/* subtle highlight */}
+            <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top_left,white,transparent_60%)]" />
+
+            <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+              <div>
+                <h2 className="text-xl font-semibold text-white">
+                  Grow your team
+                </h2>
+                <p className="text-sm text-white/90 mt-2 max-w-lg">
+                  Invite athletes directly or print a QR code flyer for your gym
+                  wall so members can request access instantly.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => setInviteOpen(true)}
+                  className="btn bg-white text-ms-blue hover:bg-gray-100 font-semibold px-6"
+                >
+                  Invite Members
+                </button>
+
+                <button
+                  onClick={() =>
+                    window.open(`/api/teams/${slug}/flyer/pdf`, "_blank")
+                  }
+                  className="btn bg-white/90 text-ms-blue hover:bg-white font-semibold px-6"
+                >
+                  Print QR Flyer
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Invites Table */}
       {(isOwner || isManager || isCoach) && (
         <InvitesTable
           slug={slug}
@@ -208,6 +239,7 @@ const ManagerMembersClient = ({ slug: slugProp }) => {
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           Pending Requests
         </h2>
+
         {pending.length ? (
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {pending.map((m) => (
@@ -240,6 +272,7 @@ const ManagerMembersClient = ({ slug: slugProp }) => {
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           Active Members
         </h2>
+
         {active.length ? (
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {active.map((m) => (
@@ -264,6 +297,7 @@ const ManagerMembersClient = ({ slug: slugProp }) => {
         )}
       </section>
 
+      {/* Invite Modal */}
       <ModalLayout
         isOpen={inviteOpen}
         onClose={() => setInviteOpen(false)}
