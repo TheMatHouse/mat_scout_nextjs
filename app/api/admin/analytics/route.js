@@ -3,16 +3,15 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth-server";
-import { getAnalyticsClient, getProperty } from "@/lib/ga";
 
 /* --------------------------------------------------
-   ENV GATE — analytics ONLY on real production
+   ONLY allow analytics on real production
 -------------------------------------------------- */
 const IS_REAL_PROD = process.env.VERCEL_ENV === "production";
 
 /* -------------------- simple in-memory cache -------------------- */
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const cache = new Map(); // key -> { ts, payload }
+const cache = new Map();
 
 /* -------------------- utils -------------------- */
 function hasAdminAccess(user) {
@@ -70,27 +69,9 @@ function parseRange(searchParams) {
     startDate = toISODate(addDays(today, -days + 1));
   }
 
-  const compare =
-    (searchParams.get("compare") || "false").toLowerCase() === "true";
-
-  let prevStart = null,
-    prevEnd = null;
-  if (compare) {
-    const len = daysBetween(startDate, endDate);
-    prevEnd = toISODate(addDays(new Date(startDate), -1));
-    prevStart = toISODate(addDays(new Date(prevEnd), -(len - 1)));
-  }
-
   const limit = clamp(parseInt(searchParams.get("limit") || "10", 10), 5, 50);
 
-  return {
-    startDate,
-    endDate,
-    compare,
-    prevStart,
-    prevEnd,
-    limit,
-  };
+  return { startDate, endDate, limit };
 }
 
 function makeKey(property, opts) {
@@ -116,52 +97,10 @@ function calcTotals(rows) {
   );
 }
 
-function csvEscape(val) {
-  const s = String(val ?? "");
-  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
-function toCSV(headers, rows) {
-  const head = headers.map(csvEscape).join(",") + "\n";
-  const body = rows
-    .map((r) => headers.map((h) => csvEscape(r[h])).join(","))
-    .join("\n");
-  return head + body + (body ? "\n" : "");
-}
-
-/* -------------------- GA calls -------------------- */
-async function runReports(property, analytics, opts) {
-  const { startDate, endDate, prevStart, prevEnd, compare, limit } = opts;
-
-  const run = async (body) => {
-    const [resp] = await analytics.runReport({ property, ...body });
-    return resp;
-  };
-
-  const traffic = await run({
-    dateRanges: [{ startDate, endDate }],
-    dimensions: [{ name: "date" }],
-    metrics: [{ name: "totalUsers" }, { name: "screenPageViews" }],
-  });
-
-  const rows = toRows(traffic).map((r) => ({
-    date: r.dimensionValues?.[0]?.value ?? "",
-    users: toNumber(r.metricValues?.[0]?.value),
-    views: toNumber(r.metricValues?.[1]?.value),
-  }));
-
-  const totals = calcTotals(rows);
-
-  return {
-    totals,
-    traffic: rows,
-  };
-}
-
 /* -------------------- main handler -------------------- */
 export async function GET(req) {
   try {
-    // 🚫 Hard stop outside real production
+    // 🚫 HARD STOP OUTSIDE REAL PRODUCTION
     if (!IS_REAL_PROD) {
       return NextResponse.json(
         {
@@ -178,6 +117,9 @@ export async function GET(req) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // ⬇️ Import GA ONLY now (never at build time)
+    const { getAnalyticsClient, getProperty } = await import("@/lib/ga");
+
     const url = new URL(req.url);
     const opts = parseRange(url.searchParams);
 
@@ -190,7 +132,18 @@ export async function GET(req) {
       return NextResponse.json(hit.payload);
     }
 
-    const data = await runReports(property, analytics, opts);
+    const [trafficResp] = await analytics.runReport({
+      property,
+      dateRanges: [{ startDate: opts.startDate, endDate: opts.endDate }],
+      dimensions: [{ name: "date" }],
+      metrics: [{ name: "totalUsers" }, { name: "screenPageViews" }],
+    });
+
+    const traffic = toRows(trafficResp).map((r) => ({
+      date: r.dimensionValues?.[0]?.value ?? "",
+      users: toNumber(r.metricValues?.[0]?.value),
+      views: toNumber(r.metricValues?.[1]?.value),
+    }));
 
     const payload = {
       ok: true,
@@ -198,7 +151,8 @@ export async function GET(req) {
         property,
         range: { startDate: opts.startDate, endDate: opts.endDate },
       },
-      ...data,
+      totals: calcTotals(traffic),
+      traffic,
     };
 
     cache.set(key, { ts: Date.now(), payload });
