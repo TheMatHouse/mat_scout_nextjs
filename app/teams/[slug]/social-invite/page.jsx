@@ -124,7 +124,9 @@ const SocialInvitePage = () => {
 
       {membershipStatus === "not-logged-in" && (
         <Link href={`/login?redirect=/teams/${slug}/social-invite`}>
-          <Button>Log in or create an account to continue</Button>
+          <Button className="btn btn-primary">
+            Log in or create an account to continue
+          </Button>
         </Link>
       )}
 
@@ -132,6 +134,7 @@ const SocialInvitePage = () => {
         <Button
           onClick={handleRequestJoin}
           disabled={submitting}
+          className="btn btn-primary"
         >
           {submitting ? "Requesting..." : "Request to Join Team"}
         </Button>

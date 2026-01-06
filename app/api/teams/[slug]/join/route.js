@@ -84,6 +84,7 @@ export async function POST(req, context) {
   // Prevent duplicates
   const existing = await TeamMember.findOne({
     teamId: team._id,
+    deletedAt: null, // ✅ ignore soft-deleted members
     ...(familyMemberId
       ? { familyMemberId }
       : { userId: user._id, familyMemberId: { $exists: false } }),
