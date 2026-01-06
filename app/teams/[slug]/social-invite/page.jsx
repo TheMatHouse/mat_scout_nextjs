@@ -26,8 +26,9 @@ const SocialInvitePage = () => {
     try {
       setMembershipStatus("loading");
 
-      const res = await fetch(`/api/teams/${slug}/public`, {
+      const res = await fetch(`/api/teams/${encodeURIComponent(slug)}`, {
         cache: "no-store",
+        credentials: "include",
       });
 
       if (!res.ok) {
