@@ -856,7 +856,7 @@ const TeamSettingsPage = () => {
             className="btn btn-primary"
             onClick={() => {
               window.open(
-                `${window.location.origin}/teams/${team.teamSlug}/flyer`,
+                `/api/teams/${team.teamSlug}/flyer/pdf`,
                 "_blank",
                 "noopener,noreferrer"
               );
