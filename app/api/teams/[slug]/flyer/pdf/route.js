@@ -17,8 +17,12 @@ export async function GET(req, context) {
     return new NextResponse("Team not found", { status: 404 });
   }
 
-  const inviteUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/teams/${slug}/social-invite`;
+  const origin =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    req.headers.get("origin") ||
+    "https://matscout.com";
 
+  const inviteUrl = `${origin}/teams/${slug}/social-invite`;
   const qrDataUrl = await QRCode.toDataURL(inviteUrl, {
     width: 600,
     margin: 2,
