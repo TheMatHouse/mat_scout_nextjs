@@ -3,18 +3,20 @@ export const dynamic = "force-dynamic";
 
 import { use, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { format } from "date-fns";
-import { Eye, CheckCircle2, XCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { slugToStyleMap } from "@/lib/styleSlugMap";
 import PreviewReportModal from "@/components/dashboard/PreviewReportModal";
 import BackToProfile from "@/components/profile/BackToProfile";
 import MatchReportCard from "@/components/shared/MatchReportCard";
 
+const PAGE_SIZE = 10;
+
+/* ---------- helpers ---------- */
 const uniq = (arr) => Array.from(new Set(arr));
 const toDate = (v) => (v ? new Date(v) : null);
 
-/* ---------- Match division helpers (same as DashboardMatches) ---------- */
+/* ---------- Match division helpers (UNCHANGED) ---------- */
 const genderWord = (g) =>
   g === "male" ? "Men" : g === "female" ? "Women" : g === "coed" ? "Coed" : "";
 
@@ -23,7 +25,6 @@ const isObjectId = (v) => typeof v === "string" && /^[0-9a-f]{24}$/i.test(v);
 const getDivisionDisplay = (report) => {
   const d = report?.division;
 
-  // Object case (populated division)
   if (d && typeof d === "object") {
     const name = (d.name || d.label || d.code || "").trim();
     const gender = genderWord(d.gender);
@@ -31,7 +32,6 @@ const getDivisionDisplay = (report) => {
     if (name) return name;
   }
 
-  // Snapshot or fallback
   const snap =
     report?.divisionDisplay ||
     report?.divisionLabel ||
@@ -39,78 +39,13 @@ const getDivisionDisplay = (report) => {
     "";
   if (snap && !isObjectId(snap)) return snap;
 
-  // Raw string fallback
   if (typeof report?.division === "string" && !isObjectId(report.division)) {
     return report.division.trim();
   }
 
   return "—";
 };
-/* ---------------------------------------------------------------------- */
-
-const LoadingSkeleton = () => (
-  <div className="p-6 max-w-6xl mx-auto">
-    <div className="h-8 w-40 rounded bg-muted mb-4" />
-    <div className="rounded-2xl border border-border overflow-hidden shadow-sm">
-      <div className="h-11 bg-muted/70" />
-      <div className="divide-y divide-border">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div
-            key={i}
-            className="h-12 bg-background animate-pulse"
-          />
-        ))}
-      </div>
-    </div>
-  </div>
-);
-
-/* ---------- UI helpers ---------- */
-const ResultBadge = ({ result, score }) => {
-  if (!result) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-xs text-foreground/60">
-        —
-      </span>
-    );
-  }
-  const isWin = String(result).toLowerCase().startsWith("w");
-  const base =
-    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1";
-  return (
-    <span
-      className={
-        base +
-        " " +
-        (isWin
-          ? "bg-emerald-600/12 text-emerald-300 ring-emerald-500/25"
-          : "bg-rose-600/12 text-rose-300 ring-rose-500/25")
-      }
-    >
-      {isWin ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
-      {isWin ? "Win" : "Loss"}
-      {score ? ` • ${score}` : ""}
-    </span>
-  );
-};
-
-const StyleChip = ({ label }) => {
-  if (!label) return <span className="text-foreground/60">—</span>;
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-background/40 px-2 py-0.5 text-[11px] text-foreground/80">
-      <span className="h-1.5 w-1.5 rounded-full bg-foreground/50" />
-      {label}
-    </span>
-  );
-};
-
-const StatPill = ({ label, value }) => (
-  <div className="inline-flex items-center gap-2 rounded-xl border border-border/70 bg-background/40 px-3 py-1.5 text-sm">
-    <span className="text-foreground/60">{label}</span>
-    <span className="font-semibold text-foreground">{value}</span>
-  </div>
-);
-/* ---------------------------------------------------------------------- */
+/* ------------------------------------------------------ */
 
 const UserMatchReportsPage = ({ params }) => {
   const { username } = use(params);
@@ -124,11 +59,11 @@ const UserMatchReportsPage = ({ params }) => {
   const [open, setOpen] = useState(false);
 
   const [selectedStyle, setSelectedStyle] = useState("All");
-  const [resultFilter, setResultFilter] = useState("All");
+  const [yearFilter, setYearFilter] = useState("All");
+  const [eventFilter, setEventFilter] = useState("All");
+  const [currentPage, setCurrentPage] = useState(1);
 
-  const [sortBy, setSortBy] = useState("matchDate");
-  const [sortDirection, setSortDirection] = useState("desc");
-
+  /* ---------- read style from URL ---------- */
   useEffect(() => {
     const styleSlug = searchParams.get("style");
     if (styleSlug && slugToStyleMap[styleSlug]) {
@@ -136,6 +71,7 @@ const UserMatchReportsPage = ({ params }) => {
     }
   }, [searchParams]);
 
+  /* ---------- fetch reports ---------- */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -151,19 +87,6 @@ const UserMatchReportsPage = ({ params }) => {
         const publicReports = Array.isArray(data?.reports)
           ? data.reports.filter((r) => r?.isPublic)
           : [];
-
-        console.log("[profile/match-reports] fetched reports:", {
-          total: publicReports.length,
-          sample: publicReports[0]
-            ? {
-                _id: publicReports[0]._id,
-                division: publicReports[0].division,
-                typeofDivision: typeof publicReports[0].division,
-                divisionDisplay: getDivisionDisplay(publicReports[0]),
-              }
-            : "none",
-        });
-
         if (alive) setReports(publicReports);
       } catch (err) {
         console.error(err);
@@ -177,49 +100,46 @@ const UserMatchReportsPage = ({ params }) => {
     };
   }, [username]);
 
-  const stylesAvailable = useMemo(
-    () => uniq(reports.map((r) => r?.matchType).filter(Boolean)),
-    [reports]
-  );
+  /* ---------- derived filter options ---------- */
+  const yearsAvailable = useMemo(() => {
+    const years = reports
+      .map((r) => toDate(r.matchDate)?.getFullYear())
+      .filter(Boolean);
+    return uniq(years).sort((a, b) => b - a);
+  }, [reports]);
 
-  const hasFilters = selectedStyle !== "All" || resultFilter !== "All";
+  const eventsAvailable = useMemo(() => {
+    return uniq(reports.map((r) => r.eventName).filter(Boolean)).sort();
+  }, [reports]);
 
+  /* ---------- filtering + sorting ---------- */
   const filteredReports = useMemo(() => {
     let out = [...reports];
-    if (selectedStyle !== "All")
+
+    if (selectedStyle !== "All") {
       out = out.filter((r) => r.matchType === selectedStyle);
-    if (resultFilter !== "All")
-      out = out.filter((r) => r.result === resultFilter);
+    }
+
+    if (yearFilter !== "All") {
+      out = out.filter(
+        (r) => toDate(r.matchDate)?.getFullYear() === Number(yearFilter)
+      );
+    }
+
+    if (eventFilter !== "All") {
+      out = out.filter((r) => r.eventName === eventFilter);
+    }
 
     out.sort((a, b) => {
-      let aVal = a[sortBy];
-      let bVal = b[sortBy];
-
-      if (sortBy === "matchDate") {
-        aVal = toDate(aVal)?.getTime() ?? 0;
-        bVal = toDate(bVal)?.getTime() ?? 0;
-      } else {
-        aVal = aVal?.toString().toLowerCase() ?? "";
-        bVal = bVal?.toString().toLowerCase() ?? "";
-      }
-
-      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
-      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
-      return 0;
+      const aVal = toDate(a.matchDate)?.getTime() ?? 0;
+      const bVal = toDate(b.matchDate)?.getTime() ?? 0;
+      return bVal - aVal;
     });
 
     return out;
-  }, [reports, selectedStyle, resultFilter, sortBy, sortDirection]);
+  }, [reports, selectedStyle, yearFilter, eventFilter]);
 
-  const handleSort = (field) => {
-    if (sortBy === field) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-    } else {
-      setSortBy(field);
-      setSortDirection("asc");
-    }
-  };
-
+  /* ---------- summary ---------- */
   const summary = useMemo(() => {
     const wins = filteredReports.filter((r) =>
       String(r.result || "")
@@ -231,139 +151,180 @@ const UserMatchReportsPage = ({ params }) => {
         .toLowerCase()
         .startsWith("l")
     ).length;
-    return { wins, losses };
+    return {
+      wins,
+      losses,
+      total: filteredReports.length,
+    };
   }, [filteredReports]);
 
-  if (loading) return <LoadingSkeleton />;
+  /* ---------- pagination ---------- */
+  const totalPages = Math.ceil(filteredReports.length / PAGE_SIZE);
+  const pagedReports = filteredReports.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedStyle, yearFilter, eventFilter]);
+
+  if (loading) {
+    return (
+      <main className="mx-auto max-w-6xl px-6 py-10 text-gray-900 dark:text-gray-100">
+        <div className="h-8 w-64 rounded bg-muted mb-4" />
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-40 rounded-2xl border border-border bg-background animate-pulse"
+            />
+          ))}
+        </div>
+      </main>
+    );
+  }
 
   if (error) {
     return (
-      <main className="relative w-full no-x-overflow">
-        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="p-6 max-w-6xl mx-auto text-gray-900 dark:text-gray-100">
-            <BackToProfile
-              username={username}
-              className="mb-4"
-            />
-            <h1 className="text-2xl font-bold text-center mb-4">
-              Match Reports
-            </h1>
-            <div className="max-w-xl mx-auto rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
-              <p className="text-red-300">{error}</p>
-            </div>
-          </div>
-        </section>
+      <main className="mx-auto max-w-6xl px-6 py-10 text-gray-900 dark:text-gray-100">
+        <BackToProfile
+          username={username}
+          className="mb-4"
+        />
+        <h1 className="text-2xl font-bold mb-4">Match Reports</h1>
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+          <p className="text-red-300">{error}</p>
+        </div>
       </main>
     );
   }
 
   return (
     <>
-      <main className="relative w-full no-x-overflow">
-        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="px-4 md:px-6 lg:px-8 py-4 max-w-6xl mx-auto text-gray-900 dark:text-gray-100">
-            {/* MOBILE */}
-            <div className="md:hidden space-y-4">
-              {filteredReports.map((report) => (
-                <MatchReportCard
-                  key={report._id}
-                  match={{
+      <main className="mx-auto max-w-6xl px-6 py-10 text-gray-900 dark:text-gray-100">
+        {/* Header */}
+        <div className="mb-6">
+          <BackToProfile
+            username={username}
+            className="mb-4"
+          />
+          <h1 className="text-3xl font-bold">{username}’s Match Reports</h1>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">
+            Public competition match history
+          </p>
+        </div>
+
+        {/* Summary */}
+        <div className="mb-6 flex flex-wrap gap-3">
+          <div className="rounded-xl border border-border bg-background px-4 py-2">
+            <span className="text-sm text-foreground/60">Wins</span>
+            <div className="text-lg font-semibold">{summary.wins}</div>
+          </div>
+          <div className="rounded-xl border border-border bg-background px-4 py-2">
+            <span className="text-sm text-foreground/60">Losses</span>
+            <div className="text-lg font-semibold">{summary.losses}</div>
+          </div>
+          <div className="rounded-xl border border-border bg-background px-4 py-2">
+            <span className="text-sm text-foreground/60">Matches</span>
+            <div className="text-lg font-semibold">{summary.total}</div>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="mb-6 flex flex-wrap gap-3">
+          <select
+            value={yearFilter}
+            onChange={(e) => setYearFilter(e.target.value)}
+            className="w-40 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+          >
+            <option value="All">All Years</option>
+            {yearsAvailable.map((y) => (
+              <option
+                key={y}
+                value={y}
+              >
+                {y}
+              </option>
+            ))}
+          </select>
+
+          {eventsAvailable.length >= 3 && (
+            <select
+              value={eventFilter}
+              onChange={(e) => setEventFilter(e.target.value)}
+              className="w-64 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+            >
+              <option value="All">All Events</option>
+              {eventsAvailable.map((ev) => (
+                <option
+                  key={ev}
+                  value={ev}
+                >
+                  {ev}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {/* Empty */}
+        {filteredReports.length === 0 && (
+          <div className="rounded-2xl border border-border bg-background p-8 text-center">
+            <p className="text-gray-600 dark:text-gray-300">
+              No matches found for the selected filters.
+            </p>
+          </div>
+        )}
+
+        {/* Cards */}
+        {pagedReports.length > 0 && (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {pagedReports.map((report) => (
+              <MatchReportCard
+                key={report._id}
+                match={{
+                  ...report,
+                  divisionDisplay: getDivisionDisplay(report),
+                }}
+                onView={() => {
+                  setSelectedReport({
                     ...report,
                     divisionDisplay: getDivisionDisplay(report),
-                  }}
-                  onView={() => {
-                    console.log("[profile/mobile] before modal", {
-                      _id: report._id,
-                      division: report.division,
-                      typeofDivision: typeof report.division,
-                      divisionDisplay_raw: report.divisionDisplay,
-                      divisionDisplay_safe: getDivisionDisplay(report),
-                    });
-                    setSelectedReport({
-                      ...report,
-                      divisionDisplay: getDivisionDisplay(report),
-                    });
-                    setOpen(true);
-                  }}
-                />
-              ))}
-            </div>
-
-            {/* DESKTOP */}
-            <div className="hidden md:block relative">
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm text-left">
-                  <thead>
-                    <tr className="text-foreground/80">
-                      <th className="px-5 py-3">Event</th>
-                      <th className="px-5 py-3">Opponent</th>
-                      <th className="px-5 py-3">Result</th>
-                      <th className="px-5 py-3">Date</th>
-                      <th className="px-5 py-3">Style</th>
-                      <th className="px-5 py-3 text-center">View</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/80">
-                    {filteredReports.map((report, idx) => (
-                      <tr
-                        key={report._id}
-                        className={`group transition-colors ${
-                          idx % 2 === 0
-                            ? "bg-background/40"
-                            : "bg-background/20"
-                        } hover:bg-muted/50`}
-                      >
-                        <td className="px-5 py-4">{report.eventName || "—"}</td>
-                        <td className="px-5 py-4">
-                          {report.opponentName || "—"}
-                        </td>
-                        <td className="px-5 py-4">
-                          <ResultBadge
-                            result={report.result}
-                            score={report.score}
-                          />
-                        </td>
-                        <td className="px-5 py-4">
-                          {report.matchDate
-                            ? format(new Date(report.matchDate), "PPP")
-                            : "N/A"}
-                        </td>
-                        <td className="px-5 py-4">
-                          <StyleChip label={report.matchType} />
-                        </td>
-                        <td className="px-5 py-4">
-                          <div className="flex justify-center">
-                            <button
-                              onClick={() => {
-                                console.log("[profile/desktop] before modal", {
-                                  _id: report._id,
-                                  division: report.division,
-                                  typeofDivision: typeof report.division,
-                                  divisionDisplay_raw: report.divisionDisplay,
-                                  divisionDisplay_safe:
-                                    getDivisionDisplay(report),
-                                });
-                                setSelectedReport({
-                                  ...report,
-                                  divisionDisplay: getDivisionDisplay(report),
-                                });
-                                setOpen(true);
-                              }}
-                              className="inline-flex items-center gap-2 border border-border/70 bg-background/40 px-3 py-1.5 rounded-lg"
-                            >
-                              <Eye size={16} />
-                              <span className="text-xs font-medium">View</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                  });
+                  setOpen(true);
+                }}
+              />
+            ))}
           </div>
-        </section>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-8 flex items-center justify-center gap-2">
+            <button
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 disabled:opacity-40"
+            >
+              <ChevronLeft size={16} />
+              Prev
+            </button>
+
+            <span className="text-sm text-gray-600 dark:text-gray-300">
+              Page {currentPage} of {totalPages}
+            </span>
+
+            <button
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 disabled:opacity-40"
+            >
+              Next
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
       </main>
 
       {open && selectedReport && (
