@@ -1,4 +1,3 @@
-// components/layout/AuthenticatedSidebar.jsx
 "use client";
 export const dynamic = "force-dynamic";
 
@@ -61,6 +60,7 @@ const AuthenticatedSidebar = () => {
     { href: "/dashboard/matches", label: "Match Reports" },
     { href: "/dashboard/scouting", label: "Scouting Reports" },
     { href: "/dashboard/coach-notes", label: "Coach's Notes" },
+    { href: "/dashboard/practice-notes", label: "Practice Notes" }, // ✅ NEW
     { href: "/dashboard/family", label: "Family" },
   ];
 
@@ -122,9 +122,8 @@ const AuthenticatedSidebar = () => {
 
   return (
     <aside className="hidden md:flex w-64 h-full bg-[hsl(222.2_47.4%_11.2%)] text-white flex-col">
-      {/* (A) Scroll area */}
       <nav className="flex-1 min-h-0 overflow-y-auto no-scrollbar py-8 px-6 pb-28 space-y-4">
-        {/* Profile (moved to top) */}
+        {/* Profile */}
         <Link
           href={`/${user.username}`}
           className={cn(
