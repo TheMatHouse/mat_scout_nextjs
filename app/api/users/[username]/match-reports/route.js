@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import MatchReport from "@/models/matchReportModel";
 import User from "@/models/userModel";
+import Division from "@/models/divisionModel";
 
 /* keep this tiny helper inline (same as DashboardMatches) */
 const genderWord = (g) =>
