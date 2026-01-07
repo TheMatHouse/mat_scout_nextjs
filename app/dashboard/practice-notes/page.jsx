@@ -37,11 +37,11 @@ function sessionBadge(type) {
     "inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold";
 
   switch (type) {
-    case "Clinic":
+    case "clinic":
       return `${base} bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100`;
-    case "Seminar":
+    case "seminar":
       return `${base} bg-purple-100 text-purple-900 dark:bg-purple-900/30 dark:text-purple-100`;
-    case "Training Camp":
+    case "training-camp":
       return `${base} bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100`;
     default:
       return `${base} bg-gray-200 text-gray-900 dark:bg-gray-700 dark:text-gray-100`;
@@ -74,12 +74,6 @@ const PracticeNotesPage = () => {
   const [tagFilter, setTagFilter] = useState("all");
   const [instructorFilter, setInstructorFilter] = useState("all");
 
-  const hasActiveFilters =
-    sessionType !== "all" ||
-    itemType !== "all" ||
-    tagFilter !== "all" ||
-    instructorFilter !== "all";
-
   useEffect(() => {
     loadNotes();
   }, []);
@@ -91,6 +85,8 @@ const PracticeNotesPage = () => {
     setNotes(Array.isArray(data?.notes) ? data.notes : []);
     setLoading(false);
   }
+
+  /* ---------- derived filter options ---------- */
 
   const allTags = useMemo(() => {
     const set = new Set();
@@ -109,6 +105,12 @@ const PracticeNotesPage = () => {
     );
     return Array.from(set).sort();
   }, [notes]);
+
+  const hasActiveFilters =
+    sessionType !== "all" ||
+    itemType !== "all" ||
+    tagFilter !== "all" ||
+    instructorFilter !== "all";
 
   const filteredNotes = useMemo(() => {
     return notes.filter((n) => {
@@ -151,18 +153,20 @@ const PracticeNotesPage = () => {
 
         {/* Filters */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Session */}
           <select
             value={sessionType}
             onChange={(e) => setSessionType(e.target.value)}
             className="rounded-lg border px-3 py-2 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
           >
             <option value="all">All Sessions</option>
-            <option value="Practice">Practice</option>
-            <option value="Clinic">Clinic</option>
-            <option value="Seminar">Seminar</option>
-            <option value="Training Camp">Training Camp</option>
+            <option value="practice">Practice</option>
+            <option value="clinic">Clinic</option>
+            <option value="seminar">Seminar</option>
+            <option value="training-camp">Training Camp</option>
           </select>
 
+          {/* Item Type */}
           <select
             value={itemType}
             onChange={(e) => setItemType(e.target.value)}
@@ -175,37 +179,43 @@ const PracticeNotesPage = () => {
             <option value="cool-down">Cool-downs</option>
           </select>
 
-          <select
-            value={tagFilter}
-            onChange={(e) => setTagFilter(e.target.value)}
-            className="rounded-lg border px-3 py-2 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-          >
-            <option value="all">All Tags</option>
-            {allTags.map((t) => (
-              <option
-                key={t}
-                value={t}
-              >
-                #{t}
-              </option>
-            ))}
-          </select>
+          {/* Tags (only if present) */}
+          {allTags.length > 0 && (
+            <select
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value)}
+              className="rounded-lg border px-3 py-2 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+            >
+              <option value="all">All Tags</option>
+              {allTags.map((t) => (
+                <option
+                  key={t}
+                  value={t}
+                >
+                  #{t}
+                </option>
+              ))}
+            </select>
+          )}
 
-          <select
-            value={instructorFilter}
-            onChange={(e) => setInstructorFilter(e.target.value)}
-            className="rounded-lg border px-3 py-2 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-          >
-            <option value="all">All Instructors</option>
-            {allInstructors.map((n) => (
-              <option
-                key={n}
-                value={n}
-              >
-                {n}
-              </option>
-            ))}
-          </select>
+          {/* Instructors (only if present) */}
+          {allInstructors.length > 0 && (
+            <select
+              value={instructorFilter}
+              onChange={(e) => setInstructorFilter(e.target.value)}
+              className="rounded-lg border px-3 py-2 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+            >
+              <option value="all">All Instructors</option>
+              {allInstructors.map((n) => (
+                <option
+                  key={n}
+                  value={n}
+                >
+                  {n}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Reset Filters */}
@@ -234,24 +244,6 @@ const PracticeNotesPage = () => {
             <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               No practice notes found
             </div>
-            <div className="mt-2 text-sm text-gray-900 dark:text-gray-100">
-              {notes.length === 0
-                ? "Create your first practice note to get started."
-                : "No notes match your current filters."}
-            </div>
-            {notes.length === 0 && (
-              <div className="mt-4">
-                <Button
-                  className="btn btn-primary"
-                  onClick={() => {
-                    setEditNote(null);
-                    setOpen(true);
-                  }}
-                >
-                  Create Practice Note
-                </Button>
-              </div>
-            )}
           </div>
         )}
 
@@ -269,7 +261,6 @@ const PracticeNotesPage = () => {
                       {formatDate(note.startAt)}
                     </div>
 
-                    {/* session type pill (use stored value as-is) */}
                     <div className={sessionBadge(note.sessionType)}>
                       {formatSessionType(note.sessionType)}
                     </div>
@@ -313,14 +304,14 @@ const PracticeNotesPage = () => {
         </div>
       </div>
 
-      {/* MODAL — OVERLAY, NOT INLINE */}
+      {/* MODAL */}
       <ModalLayout
         isOpen={open}
         onClose={() => {
           setOpen(false);
           setEditNote(null);
         }}
-        withCard={true}
+        withCard
       >
         {open && (
           <PracticeNoteModal

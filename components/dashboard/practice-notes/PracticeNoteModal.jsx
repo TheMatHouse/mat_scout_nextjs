@@ -142,7 +142,7 @@ function PracticeNoteModal({ note, onSaved, setOpen }) {
         type: i.type,
         title: i.title,
         description: i.description || "",
-        externalInstructorName: i.externalInstructorName || "",
+        externalInstructorName: i.instructorName || "",
         youtubeUrl: i.youtubeUrl || "",
         videoTimestamp: i.timestamp ? Number(i.timestamp) : null,
         tags: i.tags
