@@ -6,13 +6,14 @@ import { toast } from "react-toastify";
 import { Button } from "@/components/ui/button";
 import FormField from "@/components/shared/FormField";
 import Spinner from "@/components/shared/Spinner";
-import { Check, X, RefreshCw, Plus } from "lucide-react";
+import { Check, X, RefreshCw, Plus, Pencil, Save } from "lucide-react";
 import { useUser } from "@/context/UserContext";
 
 const TABS = ["pending", "approved", "all"];
 
-export default function TechniquesAdmin() {
+const TechniquesAdmin = () => {
   const { user } = useUser();
+
   const [status, setStatus] = useState("pending");
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
@@ -20,7 +21,10 @@ export default function TechniquesAdmin() {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [total, setTotal] = useState(0);
+
   const [newName, setNewName] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [editingName, setEditingName] = useState("");
 
   const pages = useMemo(
     () => Math.max(1, Math.ceil(total / pageSize)),
@@ -33,12 +37,15 @@ export default function TechniquesAdmin() {
       const url = `/api/admin/techniques?status=${encodeURIComponent(
         status
       )}&q=${encodeURIComponent(q)}&page=${page}&pageSize=${pageSize}`;
+
       const res = await fetch(url, {
         credentials: "same-origin",
         cache: "no-store",
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to load techniques");
+
       setItems(Array.isArray(data.items) ? data.items : []);
       setTotal(Number(data?.pagination?.total || 0));
     } catch (e) {
@@ -56,33 +63,43 @@ export default function TechniquesAdmin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, page, pageSize]);
 
-  const approve = async (id) => {
+  const save = async (id, nameOverride, approveToo = false) => {
     try {
       const res = await fetch(`/api/admin/techniques/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "approve" }),
+        body: JSON.stringify({
+          action: "approve",
+          name: nameOverride,
+        }),
       });
+
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Failed to approve");
-      toast.success(`Approved: ${data.name}`);
-      setItems((prev) => prev.filter((x) => x._id !== id));
-      if (status !== "pending") load();
+      if (!res.ok) throw new Error(data?.error || "Failed to save");
+
+      toast.success(
+        approveToo ? `Approved: ${data.name}` : `Updated: ${data.name}`
+      );
+      setEditingId(null);
+      load();
     } catch (e) {
       console.error(e);
-      toast.error(e.message || "Error approving technique");
+      toast.error(e.message || "Error saving technique");
     }
   };
 
   const decline = async (id) => {
     if (!confirm("Decline (delete) this technique? This cannot be undone."))
       return;
+
     try {
       const res = await fetch(`/api/admin/techniques/${id}`, {
         method: "DELETE",
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to decline");
+
       toast.success("Declined (deleted).");
       setItems((prev) => prev.filter((x) => x._id !== id));
       setTotal((t) => Math.max(0, t - 1));
@@ -95,16 +112,19 @@ export default function TechniquesAdmin() {
   const seedOne = async () => {
     const nm = newName.trim();
     if (!nm) return;
+
     try {
       const res = await fetch(`/api/admin/techniques`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: nm, approved: false }),
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to add");
+
       setNewName("");
-      toast.success(data.created ? "Added (pending)" : "Already existed");
+      toast.success(data.created ? "Added (pending)" : "Already exists");
       load();
     } catch (e) {
       console.error(e);
@@ -112,7 +132,6 @@ export default function TechniquesAdmin() {
     }
   };
 
-  // Optional: guard
   if (user && user.isAdmin === false) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -124,13 +143,19 @@ export default function TechniquesAdmin() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <h1 className="text-2xl font-bold">Techniques (Admin)</h1>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            Techniques
+          </h1>
+          <p className="text-sm text-gray-900/70 dark:text-gray-100/70 mt-1">
+            Canonical technique list used across scouting reports and match
+            data.
+          </p>
+        </div>
         <Button
           onClick={load}
-          title="Reload"
-          // Force visible colors (no white-on-white)
-          className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-200 dark:hover:bg-gray-300 dark:text-gray-900"
+          className="btn btn-primary"
         >
           <RefreshCw className="w-4 h-4 mr-2" />
           Reload
@@ -139,14 +164,14 @@ export default function TechniquesAdmin() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">
-        <div className="flex gap-1 rounded-md border p-1">
+        <div className="flex gap-1 border-b">
           {TABS.map((s) => (
             <button
               key={s}
-              className={`px-3 py-1 rounded transition ${
+              className={`px-3 py-2 text-sm transition border-b-2 ${
                 s === status
-                  ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900"
-                  : "hover:bg-gray-100 dark:hover:bg-gray-800"
+                  ? "border-[var(--ms-light-red,#ef4444)] font-semibold"
+                  : "border-transparent opacity-70 hover:opacity-100"
               }`}
               onClick={() => {
                 setStatus(s);
@@ -168,11 +193,8 @@ export default function TechniquesAdmin() {
         </div>
 
         <Button
-          onClick={() => {
-            setPage(1);
-            load();
-          }}
-          className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-200 dark:hover:bg-gray-300 dark:text-gray-900"
+          onClick={load}
+          className="btn btn-primary"
         >
           Apply
         </Button>
@@ -184,11 +206,11 @@ export default function TechniquesAdmin() {
           label="Add technique (pending)"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
-          placeholder="e.g., Hiza Guruma"
+          placeholder="e.g., Ippon Seoi Nage"
         />
         <Button
           onClick={seedOne}
-          className="bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-500 dark:hover:bg-blue-600"
+          className="btn btn-primary"
         >
           <Plus className="w-4 h-4 mr-2" />
           Add
@@ -198,82 +220,138 @@ export default function TechniquesAdmin() {
       {/* Table */}
       <div className="rounded-lg border overflow-x-auto">
         <table className="min-w-[720px] w-full text-sm">
-          <thead className="bg-muted/50">
+          <thead className="bg-gray-50 dark:bg-gray-800">
             <tr>
-              <th className="text-left p-3">Name</th>
+              <th className="text-left p-3">Technique</th>
               <th className="text-left p-3">Status</th>
               <th className="text-left p-3">Created</th>
               <th className="text-right p-3">Actions</th>
             </tr>
           </thead>
+
           <tbody>
             {loading ? (
               <tr>
                 <td
                   colSpan={4}
-                  className="p-6"
+                  className="p-6 text-center"
                 >
-                  <div className="flex items-center justify-center">
-                    <Spinner size={28} />
-                  </div>
+                  <Spinner size={28} />
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
                 <td
                   colSpan={4}
-                  className="p-6 text-center text-muted-foreground"
+                  className="p-6 text-center"
                 >
                   No techniques found.
                 </td>
               </tr>
             ) : (
-              items.map((t) => (
-                <tr
-                  key={t._id}
-                  className="border-t"
-                >
-                  <td className="p-3">{t.name}</td>
-                  <td className="p-3">
-                    {t.approved ? (
-                      <span className="text-emerald-600 dark:text-emerald-400">
-                        Approved
-                      </span>
-                    ) : (
-                      <span className="text-amber-600 dark:text-amber-400">
-                        Pending
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-3">
-                    {t.createdAt ? new Date(t.createdAt).toLocaleString() : "—"}
-                  </td>
-                  <td className="p-3">
-                    <div className="flex justify-end gap-2">
-                      {!t.approved && (
+              items.map((t) => {
+                const isEditing = editingId === t._id;
+                const isApproved = t.approved;
+
+                return (
+                  <tr
+                    key={t._id}
+                    className={`border-t even:bg-gray-50/50 dark:even:bg-gray-800/40 ${
+                      isEditing ? "bg-blue-50/60 dark:bg-blue-900/20" : ""
+                    }`}
+                  >
+                    <td className="p-3">
+                      {isEditing ? (
+                        <input
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          className="w-full px-2 py-1 rounded border"
+                        />
+                      ) : (
+                        <span className="font-semibold">{t.name}</span>
+                      )}
+                    </td>
+
+                    <td className="p-3">
+                      {isApproved ? (
+                        <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
+                          Approved
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                          Pending
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="p-3 text-gray-900/80 dark:text-gray-100/80">
+                      {t.createdAt
+                        ? new Date(t.createdAt).toLocaleDateString()
+                        : "—"}
+                    </td>
+
+                    <td className="p-3">
+                      <div className="flex justify-end gap-2">
+                        {!isEditing && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setEditingId(t._id);
+                              setEditingName(t.name);
+                            }}
+                          >
+                            <Pencil className="w-4 h-4 mr-1" />
+                            Edit
+                          </Button>
+                        )}
+
+                        {isEditing && isApproved && (
+                          <Button
+                            size="sm"
+                            onClick={() => save(t._id, editingName, false)}
+                            className="btn btn-primary"
+                          >
+                            <Save className="w-4 h-4 mr-1" />
+                            Save
+                          </Button>
+                        )}
+
+                        {isEditing && !isApproved && (
+                          <Button
+                            size="sm"
+                            onClick={() => save(t._id, editingName, true)}
+                            className="bg-emerald-600 text-white"
+                          >
+                            <Save className="w-4 h-4 mr-1" />
+                            Save & Approve
+                          </Button>
+                        )}
+
+                        {!isApproved && !isEditing && (
+                          <Button
+                            size="sm"
+                            onClick={() => save(t._id)}
+                            className="bg-emerald-600 text-white"
+                          >
+                            <Check className="w-4 h-4 mr-1" />
+                            Approve
+                          </Button>
+                        )}
+
                         <Button
                           size="sm"
-                          onClick={() => approve(t._id)}
-                          title="Approve"
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-emerald-500 dark:hover:bg-emerald-600"
+                          onClick={() => decline(t._id)}
+                          className="bg-red-600 text-white"
                         >
-                          <Check className="w-4 h-4 mr-1" />
-                          Approve
+                          <X className="w-4 h-4 mr-1" />
+                          Decline
                         </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        onClick={() => decline(t._id)}
-                        title="Decline (delete)"
-                        className="bg-red-600 hover:bg-red-700 text-white dark:bg-red-500 dark:hover:bg-red-600"
-                      >
-                        <X className="w-4 h-4 mr-1" />
-                        Decline
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -281,15 +359,14 @@ export default function TechniquesAdmin() {
 
       {/* Pagination */}
       <div className="flex items-center justify-between">
-        <div className="text-xs text-muted-foreground">
+        <div className="text-xs text-gray-900/70 dark:text-gray-100/70">
           Page {page} of {pages} • {total} total
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex gap-2">
           <Button
             variant="outline"
             disabled={page <= 1}
             onClick={() => setPage((p) => p - 1)}
-            className="border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100"
           >
             Prev
           </Button>
@@ -297,7 +374,6 @@ export default function TechniquesAdmin() {
             variant="outline"
             disabled={page >= pages}
             onClick={() => setPage((p) => p + 1)}
-            className="border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100"
           >
             Next
           </Button>
@@ -305,4 +381,6 @@ export default function TechniquesAdmin() {
       </div>
     </div>
   );
-}
+};
+
+export default TechniquesAdmin;

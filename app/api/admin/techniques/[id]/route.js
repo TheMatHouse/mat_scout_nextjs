@@ -18,29 +18,46 @@ async function requireAdmin() {
   return { ok: true, user };
 }
 
-// PATCH /api/admin/techniques/:id  { action: "approve" }
+// PATCH /api/admin/techniques/:id
+// Body: { action: "approve", name?: string }
 export async function PATCH(request, { params }) {
   const gate = await requireAdmin();
   if (!gate.ok) return gate.res;
 
   await connectDB();
+
   const { id } = params || {};
   if (!id || !Types.ObjectId.isValid(id)) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
 
-  const { action } = await request.json();
+  const body = await request.json();
+  const { action, name } = body || {};
+
   if (action !== "approve") {
     return NextResponse.json({ error: "Unsupported action" }, { status: 400 });
   }
 
+  const update = {
+    approved: true,
+  };
+
+  if (typeof name === "string" && name.trim()) {
+    const trimmed = name.trim();
+
+    update.name = trimmed;
+    update.nameLower = trimmed.toLowerCase();
+  }
+
   const updated = await Technique.findByIdAndUpdate(
     id,
-    { $set: { approved: true } },
+    { $set: update },
     { new: true }
   ).lean();
-  if (!updated)
+
+  if (!updated) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   return NextResponse.json(updated);
 }
@@ -51,14 +68,16 @@ export async function DELETE(_request, { params }) {
   if (!gate.ok) return gate.res;
 
   await connectDB();
+
   const { id } = params || {};
   if (!id || !Types.ObjectId.isValid(id)) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
 
   const deleted = await Technique.findByIdAndDelete(id).lean();
-  if (!deleted)
+  if (!deleted) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   return NextResponse.json({ ok: true });
 }

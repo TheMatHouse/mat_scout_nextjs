@@ -198,8 +198,75 @@ const AdminTeamsPage = () => {
         </div>
       </header>
 
+      {/* Mobile cards */}
+      <div className="sm:hidden divide-y divide-gray-200 dark:divide-gray-800">
+        {rows.map((t) => (
+          <div
+            key={t._id}
+            className="p-4 space-y-3"
+          >
+            <div className="flex items-center gap-3">
+              <TeamLogoCell
+                team={t}
+                className="h-10 w-10"
+              />
+              <div>
+                <div className="font-semibold text-gray-900 dark:text-gray-100">
+                  {t.teamName}
+                </div>
+                <div className="text-sm text-gray-900 dark:text-gray-100/80">
+                  {t.owner ? t.owner.name : "—"}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 text-sm">
+              <div>
+                <div className="text-gray-900 dark:text-gray-100/70">
+                  Active
+                </div>
+                <div className="font-medium text-gray-900 dark:text-gray-100">
+                  {t.activeMembers ?? 0}
+                </div>
+              </div>
+              <div>
+                <div className="text-gray-900 dark:text-gray-100/70">
+                  Pending
+                </div>
+                <div className="font-medium text-gray-900 dark:text-gray-100">
+                  {t.pendingMembers ?? 0}
+                </div>
+              </div>
+              <div>
+                <div className="text-gray-900 dark:text-gray-100/70">
+                  Invites
+                </div>
+                <div className="font-medium text-gray-900 dark:text-gray-100">
+                  {t.pendingInvites ?? 0}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Link
+                href={`/teams/${t.teamSlug}`}
+                className="flex-1 inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm font-medium"
+              >
+                View
+              </Link>
+              <Link
+                href={`/admin/teams/${t._id}`}
+                className="flex-1 inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm font-medium"
+              >
+                Manage
+              </Link>
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* Table (mobile-friendly: horizontal scroll, sticky header) */}
-      <div className="overflow-x-auto">
+      <div className="hidden sm:block overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800/90 sticky top-0 z-10 backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 dark:supports-[backdrop-filter]:bg-gray-800/80">
             <tr>

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import CoachMatchNote from "@/models/coachMatchNoteModel";
 import { getCurrentUser } from "@/lib/auth-server";
+import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 // If your schema has `select: false` on video, keep this true:
 const NEEDS_PLUS_VIDEO = true;
@@ -89,6 +90,19 @@ export async function PATCH(req, ctx) {
     return NextResponse.json({ error: "Match not found" }, { status: 404 });
   }
 
+  // Save any newly-added techniques (pending approval)
+  try {
+    const allTechniques = [
+      ...(Array.isArray(body?.techniques?.ours) ? body.techniques.ours : []),
+      ...(Array.isArray(body?.techniques?.theirs)
+        ? body.techniques.theirs
+        : []),
+    ];
+
+    await saveUnknownTechniques(allTechniques);
+  } catch (e) {
+    console.warn("[saveUnknownTechniques] coach notes PATCH failed:", e);
+  }
   return NextResponse.json({ match: updated });
 }
 

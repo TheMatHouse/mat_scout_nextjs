@@ -29,8 +29,7 @@ export async function GET(req) {
       teamSlug: 1,
       user: 1,
       createdAt: 1,
-      logoURL: 1, // <-- IMPORTANT
-      // If you also store alternates:
+      logoURL: 1,
       logoUrl: 1,
       logo: 1,
     };
@@ -45,7 +44,6 @@ export async function GET(req) {
         .lean(),
     ]);
 
-    // Precompute counts + owner name
     const teamIds = teams.map((t) => t._id);
     const ownerIds = teams.map((t) => t.user).filter(Boolean);
 
@@ -57,12 +55,12 @@ export async function GET(req) {
             _id: "$teamId",
             active: {
               $sum: {
-                $cond: [{ $eq: ["$status", "active"] }, 1, 0],
+                $cond: [{ $ne: ["$role", "pending"] }, 1, 0],
               },
             },
             pending: {
               $sum: {
-                $cond: [{ $eq: ["$status", "pending"] }, 1, 0],
+                $cond: [{ $eq: ["$role", "pending"] }, 1, 0],
               },
             },
           },
@@ -110,7 +108,6 @@ export async function GET(req) {
         teamSlug: t.teamSlug,
         createdAt: t.createdAt,
         owner,
-        // Make sure admin client receives this:
         logoURL:
           t.logoURL ||
           t.logoUrl ||
@@ -118,7 +115,6 @@ export async function GET(req) {
           null,
         activeMembers: counts.active,
         pendingMembers: counts.pending,
-        // keep “invites” if you derive it elsewhere; default 0 here
         pendingInvites: 0,
       };
     });
