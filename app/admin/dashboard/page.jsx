@@ -4,7 +4,6 @@ import {
   Users,
   Shield,
   FileText,
-  Settings,
   UserPlus,
   ClipboardList,
   Search,
@@ -190,11 +189,6 @@ const AdminDashboardPage = async () => {
       value: "-",
       icon: BarChart3,
       href: "/admin/analytics",
-    },
-    {
-      label: "Settings",
-      value: "-",
-      icon: Settings,
     },
     {
       label: "Manage FAQs",

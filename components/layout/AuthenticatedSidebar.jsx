@@ -85,11 +85,6 @@ const AuthenticatedSidebar = () => {
       icon: <FileBarChart2 size={16} />,
     },
     {
-      href: "/admin/settings",
-      label: "Settings",
-      icon: <Settings size={16} />,
-    },
-    {
       href: "/admin/analytics",
       label: "Analytics",
       icon: <BarChart3 size={16} />,
