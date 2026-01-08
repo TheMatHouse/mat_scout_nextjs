@@ -23,7 +23,7 @@ import MatchReport from "@/models/matchReportModel";
 import ScoutingReport from "@/models/scoutingReportModel";
 import CoachMatchNote from "@/models/coachMatchNoteModel";
 import AttendanceRecord from "@/models/attendanceRecordModel";
-import PracticeNote from "@/models/practiceNoteModel";
+//import PracticeNote from "@/models/practiceNoteModel";
 
 /* ---------------------------------------------
    Card primitives (unchanged)
@@ -127,8 +127,8 @@ const AdminDashboardPage = async () => {
     AttendanceRecord.countDocuments(),
     AttendanceRecord.distinct("athlete").then((u) => u.length),
 
-    PracticeNote.countDocuments(),
-    PracticeNote.distinct("user").then((u) => u.length),
+    //PracticeNote.countDocuments(),
+    //PracticeNote.distinct("user").then((u) => u.length),
   ]);
 
   const cards = [
@@ -172,11 +172,11 @@ const AdminDashboardPage = async () => {
       value: `${checkInTotal} / ${checkInUsers}`,
       icon: CheckCircle2,
     },
-    {
-      label: "Practice Notes",
-      value: `${practiceNoteTotal} / ${practiceNoteUsers}`,
-      icon: NotebookPen,
-    },
+    // {
+    //   label: "Practice Notes",
+    //   value: `${practiceNoteTotal} / ${practiceNoteUsers}`,
+    //   icon: NotebookPen,
+    // },
 
     /* ------------------------- */
 
