@@ -4,6 +4,7 @@ import { Types } from "mongoose";
 import { connectDB } from "@/lib/mongo";
 import ScoutingReport from "@/models/scoutingReportModel";
 import Video from "@/models/videoModel";
+import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 export const dynamic = "force-dynamic";
 
@@ -138,6 +139,15 @@ export async function PATCH(req, context) {
     if (body.weightUnit !== undefined) update.weightUnit = body.weightUnit;
 
     await ScoutingReport.updateOne({ _id: report._id }, { $set: update });
+
+    // Save any newly-added techniques (pending approval)
+    try {
+      await saveUnknownTechniques(
+        Array.isArray(body.athleteAttacks) ? body.athleteAttacks : []
+      );
+    } catch (e) {
+      console.warn("[saveUnknownTechniques] scouting report PATCH failed:", e);
+    }
 
     /* ------------ videos: create/update/delete ------------ */
     const updatedVideos = Array.isArray(body.updatedVideos)

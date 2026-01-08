@@ -5,6 +5,7 @@ import { connectDB } from "@/lib/mongo";
 import ScoutingReport from "@/models/scoutingReportModel";
 import Division from "@/models/divisionModel";
 import Video from "@/models/videoModel";
+import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 export const dynamic = "force-dynamic";
 
@@ -196,6 +197,15 @@ export async function POST(req, context) {
         { _id: report._id },
         { $addToSet: { videos: { $each: createdIds } } }
       );
+    }
+
+    // Save unknown techniques (pending approval)
+    try {
+      await saveUnknownTechniques(
+        Array.isArray(body.athleteAttacks) ? body.athleteAttacks : []
+      );
+    } catch (e) {
+      console.warn("[saveUnknownTechniques] scouting report POST failed:", e);
     }
 
     return NextResponse.json(

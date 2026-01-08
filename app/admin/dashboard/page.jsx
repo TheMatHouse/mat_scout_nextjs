@@ -11,7 +11,10 @@ import {
   BarChart3,
   StickyNote,
   HelpCircle,
+  CheckCircle2,
+  NotebookPen,
 } from "lucide-react";
+
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
 import Team from "@/models/teamModel";
@@ -19,6 +22,12 @@ import FamilyMember from "@/models/familyMemberModel";
 import MatchReport from "@/models/matchReportModel";
 import ScoutingReport from "@/models/scoutingReportModel";
 import CoachMatchNote from "@/models/coachMatchNoteModel";
+import AttendanceRecord from "@/models/attendanceRecordModel";
+import PracticeNote from "@/models/practiceNoteModel";
+
+/* ---------------------------------------------
+   Card primitives (unchanged)
+---------------------------------------------- */
 
 const CardShell = ({ children, interactive = false, label }) => {
   const base =
@@ -85,6 +94,10 @@ const StatTile = ({ label, value, Icon, href }) => {
   );
 };
 
+/* ---------------------------------------------
+   Page
+---------------------------------------------- */
+
 const AdminDashboardPage = async () => {
   await connectDB();
 
@@ -95,6 +108,14 @@ const AdminDashboardPage = async () => {
     matchReportCount,
     scoutingReportCount,
     coachNotesCount,
+
+    // Check-ins
+    checkInTotal,
+    checkInUsers,
+
+    // Practice Notes
+    practiceNoteTotal,
+    practiceNoteUsers,
   ] = await Promise.all([
     User.countDocuments(),
     FamilyMember.countDocuments(),
@@ -102,9 +123,14 @@ const AdminDashboardPage = async () => {
     MatchReport.countDocuments(),
     ScoutingReport.countDocuments(),
     CoachMatchNote.countDocuments(),
+
+    AttendanceRecord.countDocuments(),
+    AttendanceRecord.distinct("athlete").then((u) => u.length),
+
+    PracticeNote.countDocuments(),
+    PracticeNote.distinct("user").then((u) => u.length),
   ]);
 
-  // Link ONLY to pages that exist today.
   const cards = [
     {
       label: "Total Users",
@@ -118,19 +144,64 @@ const AdminDashboardPage = async () => {
       icon: Shield,
       href: "/admin/teams",
     },
-    { label: "Family Members", value: familyCount, icon: UserPlus },
-    { label: "Match Reports", value: matchReportCount, icon: ClipboardList },
-    { label: "Scouting Reports", value: scoutingReportCount, icon: Search },
-    { label: "Coach’s Notes", value: coachNotesCount, icon: StickyNote },
-    { label: "Reports", value: "-", icon: FileText },
+    {
+      label: "Family Members",
+      value: familyCount,
+      icon: UserPlus,
+    },
+    {
+      label: "Match Reports",
+      value: matchReportCount,
+      icon: ClipboardList,
+    },
+    {
+      label: "Scouting Reports",
+      value: scoutingReportCount,
+      icon: Search,
+    },
+    {
+      label: "Coach’s Notes",
+      value: coachNotesCount,
+      icon: StickyNote,
+    },
+
+    /* ---------- NEW ---------- */
+
+    {
+      label: "Check-Ins",
+      value: `${checkInTotal} / ${checkInUsers}`,
+      icon: CheckCircle2,
+    },
+    {
+      label: "Practice Notes",
+      value: `${practiceNoteTotal} / ${practiceNoteUsers}`,
+      icon: NotebookPen,
+    },
+
+    /* ------------------------- */
+
+    {
+      label: "Reports",
+      value: "-",
+      icon: FileText,
+    },
     {
       label: "Analytics",
       value: "-",
       icon: BarChart3,
       href: "/admin/analytics",
-    }, // now opens
-    { label: "Settings", value: "-", icon: Settings },
-    { label: "Manage FAQs", value: "-", icon: HelpCircle },
+    },
+    {
+      label: "Settings",
+      value: "-",
+      icon: Settings,
+    },
+    {
+      label: "Manage FAQs",
+      value: "-",
+      icon: HelpCircle,
+      href: "/admin/faqs",
+    },
   ];
 
   return (
@@ -140,7 +211,7 @@ const AdminDashboardPage = async () => {
           Admin Dashboard
         </h1>
         <p className="mb-6 sm:mb-8 text-gray-900 dark:text-gray-100/90">
-          At-a-glance stats. Tiles only link where a management page exists.
+          At-a-glance platform health and usage.
         </p>
 
         <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">

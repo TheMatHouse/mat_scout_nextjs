@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import matchReport from "@/models/matchReportModel";
 import { notifyFollowers } from "@/lib/notify-followers";
+import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 // ✅ Ensure populated refs are registered with Mongoose:
 import "@/models/divisionModel";
@@ -167,6 +168,16 @@ export async function POST(req, ctx) {
       weightLabel: body.weightLabel || "",
       weightUnit: body.weightUnit || "",
     });
+
+    // Save unknown techniques (pending)
+    try {
+      await saveUnknownTechniques([
+        ...(Array.isArray(body.opponentAttacks) ? body.opponentAttacks : []),
+        ...(Array.isArray(body.athleteAttacks) ? body.athleteAttacks : []),
+      ]);
+    } catch (e) {
+      console.warn("[saveUnknownTechniques] match report POST failed:", e);
+    }
 
     // Fan-out to followers (actor is the user who created it)
     try {

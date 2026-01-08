@@ -1,10 +1,10 @@
-// app/api/dashboard/[userId]/family/[memberId]/matchReports/[matchReportId]/route.js
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import matchReport from "@/models/matchReportModel";
+import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 /* ---------------- helpers ---------------- */
 const sid = (v) => (v == null ? "" : String(v).trim());
@@ -23,11 +23,9 @@ function buildUpdate(body) {
     eventName: body.eventName,
     matchDate: body.matchDate,
 
-    // ranks stored as labels
     myRank: body.myRank || "",
     opponentRank: body.opponentRank || "",
 
-    // opponent
     opponentName: body.opponentName || "",
     opponentClub: body.opponentClub || "",
     opponentCountry: body.opponentCountry ?? "",
@@ -43,11 +41,9 @@ function buildUpdate(body) {
       : [],
     athleteAttackNotes: body.athleteAttackNotes || "",
 
-    // result
     result: body.result || "",
     score: body.score || "",
 
-    // video
     video: {
       videoTitle: body.video?.videoTitle || body.videoTitle || "",
       videoURL: body.video?.videoURL || body.videoURL || "",
@@ -55,7 +51,6 @@ function buildUpdate(body) {
 
     isPublic: !!body.isPublic,
 
-    // division / weights (ids + snapshot)
     division: body.division || null,
     weightCategory: body.weightCategory || null,
     weightItemId: body.weightItemId || null,
@@ -64,11 +59,10 @@ function buildUpdate(body) {
   };
 }
 
-/* ---------------- GET (single family report) ---------------- */
-// GET /api/dashboard/:userId/family/:memberId/matchReports/:matchReportId
+/* ---------------- GET (single) ---------------- */
 export async function GET(_req, ctx) {
   try {
-    const p = await ctx.params; // ✅ Next.js 15: params can be a Promise
+    const p = await ctx.params;
     const userId = sid(p?.userId);
     const memberId = sid(p?.memberId);
     const reportId = sid(p?.matchReportId);
@@ -103,10 +97,7 @@ export async function GET(_req, ctx) {
 
     return NextResponse.json({ ok: true, report: doc }, { status: 200 });
   } catch (err) {
-    console.error(
-      "GET /api/dashboard/[userId]/family/[memberId]/matchReports/[matchReportId] error:",
-      err
-    );
+    console.error("GET family match report error:", err);
     return NextResponse.json(
       { message: "Failed to load report" },
       { status: 500 }
@@ -114,13 +105,12 @@ export async function GET(_req, ctx) {
   }
 }
 
-/* ---------------- PATCH (update family report) ---------------- */
-// PATCH /api/dashboard/:userId/family/:memberId/matchReports/:matchReportId
+/* ---------------- PATCH (update) ---------------- */
 export async function PATCH(req, ctx) {
   try {
     const body = await safeJson(req);
+    const p = await ctx.params;
 
-    const p = await ctx.params; // ✅
     const userId = sid(p?.userId) || sid(body?.userId);
     const memberId =
       sid(p?.memberId) || sid(body?.familyMemberId) || sid(body?.athleteId);
@@ -150,15 +140,25 @@ export async function PATCH(req, ctx) {
       );
     }
 
+    // ✅ Save newly-added techniques
+    try {
+      await saveUnknownTechniques([
+        ...(Array.isArray(body.opponentAttacks) ? body.opponentAttacks : []),
+        ...(Array.isArray(body.athleteAttacks) ? body.athleteAttacks : []),
+      ]);
+    } catch (e) {
+      console.warn(
+        "[saveUnknownTechniques] family match report PATCH failed:",
+        e
+      );
+    }
+
     return NextResponse.json(
       { ok: true, message: "Match report updated" },
       { status: 200 }
     );
   } catch (err) {
-    console.error(
-      "PATCH /api/dashboard/[userId]/family/[memberId]/matchReports/[matchReportId] error:",
-      err
-    );
+    console.error("PATCH family match report error:", err);
     return NextResponse.json(
       { message: "Failed to update match report" },
       { status: 500 }
@@ -166,11 +166,10 @@ export async function PATCH(req, ctx) {
   }
 }
 
-/* ---------------- DELETE (remove family report) ---------------- */
-// DELETE /api/dashboard/:userId/family/:memberId/matchReports/:matchReportId
+/* ---------------- DELETE ---------------- */
 export async function DELETE(_req, ctx) {
   try {
-    const p = await ctx.params; // ✅
+    const p = await ctx.params;
     const userId = sid(p?.userId);
     const memberId = sid(p?.memberId);
     const reportId = sid(p?.matchReportId);
@@ -202,10 +201,7 @@ export async function DELETE(_req, ctx) {
       { status: 200 }
     );
   } catch (err) {
-    console.error(
-      "DELETE /api/dashboard/[userId]/family/[memberId]/matchReports/[matchReportId] error:",
-      err
-    );
+    console.error("DELETE family match report error:", err);
     return NextResponse.json(
       { message: "Failed to delete match report" },
       { status: 500 }

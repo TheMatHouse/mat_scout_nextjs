@@ -8,6 +8,7 @@ import { getCurrentUserFromCookies } from "@/lib/auth-server";
 import matchReport from "@/models/matchReportModel";
 import division from "@/models/divisionModel";
 import weightCategory from "@/models/weightCategoryModel";
+import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 import { notifyFamilyFollowers } from "@/lib/notify-family-followers";
 
@@ -143,12 +144,19 @@ export async function POST(req, ctx) {
     }
 
     const saved = await matchReport.create(doc);
-    console.log(
-      "[family match report] created",
-      String(saved._id),
-      "for memberId=",
-      memberId
-    );
+
+    // Save unknown techniques (pending)
+    try {
+      await saveUnknownTechniques([
+        ...(Array.isArray(body.opponentAttacks) ? body.opponentAttacks : []),
+        ...(Array.isArray(body.athleteAttacks) ? body.athleteAttacks : []),
+      ]);
+    } catch (e) {
+      console.warn(
+        "[saveUnknownTechniques] family match report POST failed:",
+        e
+      );
+    }
 
     // Fan-out to followers of this family member (owner is the actor)
     try {

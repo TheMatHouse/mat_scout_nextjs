@@ -8,6 +8,7 @@ import TeamMember from "@/models/teamMemberModel";
 import CoachEvent from "@/models/coachEventModel";
 import CoachEntry from "@/models/coachEntryModel";
 import CoachMatchNote from "@/models/coachMatchNoteModel";
+import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -205,6 +206,18 @@ export async function POST(req, { params }) {
 
     const created = await CoachMatchNote.insertMany(docsPayload);
 
+    // Save any unknown techniques (pending approval)
+    try {
+      const allTechniques = docsPayload.flatMap((d) => [
+        ...(Array.isArray(d?.techniques?.ours) ? d.techniques.ours : []),
+        ...(Array.isArray(d?.techniques?.theirs) ? d.techniques.theirs : []),
+      ]);
+
+      await saveUnknownTechniques(allTechniques);
+    } catch (e) {
+      console.warn("[saveUnknownTechniques] coach notes POST failed:", e);
+    }
+
     return NextResponse.json(
       { message: "Saved", notes: created },
       { status: 201 }
@@ -238,6 +251,20 @@ export async function PATCH(req) {
       { $set: update },
       { new: true }
     );
+
+    // Save any newly-added techniques (pending approval)
+    try {
+      const allTechniques = [
+        ...(Array.isArray(body?.techniques?.ours) ? body.techniques.ours : []),
+        ...(Array.isArray(body?.techniques?.theirs)
+          ? body.techniques.theirs
+          : []),
+      ];
+
+      await saveUnknownTechniques(allTechniques);
+    } catch (e) {
+      console.warn("[saveUnknownTechniques] coach notes PATCH failed:", e);
+    }
 
     return NextResponse.json({ message: "Updated", note: updated });
   } catch (err) {

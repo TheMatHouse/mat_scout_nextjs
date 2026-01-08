@@ -6,6 +6,7 @@ import { connectDB } from "@/lib/mongo";
 import matchReport from "@/models/matchReportModel";
 import "@/models/divisionModel";
 import "@/models/weightCategoryModel";
+import { saveUnknownTechniques } from "@/lib/saveUnknownTechniques";
 
 /* helpers */
 const sid = (v) => (v == null ? "" : String(v).trim());
@@ -139,6 +140,16 @@ export async function PATCH(req, ctx) {
         { message: "Report not found" },
         { status: 404 }
       );
+    }
+
+    // Save any newly-added techniques (pending)
+    try {
+      await saveUnknownTechniques([
+        ...(Array.isArray(body.opponentAttacks) ? body.opponentAttacks : []),
+        ...(Array.isArray(body.athleteAttacks) ? body.athleteAttacks : []),
+      ]);
+    } catch (e) {
+      console.warn("[saveUnknownTechniques] match report PATCH failed:", e);
     }
 
     return NextResponse.json(
