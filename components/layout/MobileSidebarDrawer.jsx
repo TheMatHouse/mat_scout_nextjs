@@ -117,6 +117,10 @@ const MobileSidebarDrawer = ({ isOpen, onClose }) => {
                         label: "Coach's Notes",
                       },
                       { href: "/dashboard/family", label: "Family" },
+                      {
+                        href: "/dashboard/practice-notes",
+                        label: "Practice Notes",
+                      },
                     ].map((sub) => (
                       <Link
                         key={sub.href}
