@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import Spinner from "@/components/shared/Spinner";
 import ModalLayout from "@/components/shared/ModalLayout";
 import PracticeNoteModal from "@/components/dashboard/practice-notes/PracticeNoteModal";
+import { Calendar, Pencil, Video } from "lucide-react";
 
 /* ---------------- helpers ---------------- */
 
@@ -249,53 +250,121 @@ const PracticeNotesPage = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {filteredNotes.map((note) => {
-            const counts = summarizeItems(note.items || []);
+            const items = note.items || [];
+            const item =
+              items.length > 0
+                ? items[Math.floor(Math.random() * items.length)]
+                : null;
+
+            const title = item?.title || "Practice Item";
+            const description = item?.description || "";
+            const shortDesc =
+              description.length > 40
+                ? description.slice(0, 40) + "…"
+                : description;
+
+            const hasVideo = !!item?.videoUrl;
+
+            const sport = item?.sport || "judo"; // fallback
+
+            function sportBadge(s) {
+              const base =
+                "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold";
+
+              switch (s) {
+                case "bjj":
+                  return `${base} bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100`;
+                case "wrestling":
+                  return `${base} bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100`;
+                default:
+                  return `${base} bg-green-100 text-green-900 dark:bg-green-900/30 dark:text-green-100`; // Judo
+              }
+            }
+
             return (
               <div
                 key={note._id}
-                className="rounded-xl border p-4 bg-gray-50 dark:bg-gray-900"
+                className="rounded-xl border p-4 bg-gray-50 dark:bg-gray-900 flex flex-col justify-between"
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-2">
-                    <div className="font-semibold text-gray-900 dark:text-gray-100">
-                      {formatDate(note.startAt)}
-                    </div>
-
-                    <div className={sessionBadge(note.sessionType)}>
-                      {formatSessionType(note.sessionType)}
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      {Object.entries(counts).map(([k, v]) => (
-                        <span
-                          key={k}
-                          className="px-2 py-1 rounded-full bg-black/10 dark:bg-white/10 text-xs font-semibold text-gray-900 dark:text-gray-100"
-                        >
-                          {pluralize(v, k)}
-                        </span>
-                      ))}
-                    </div>
+                {/* Top */}
+                <div className="space-y-2">
+                  {/* Item title */}
+                  <div className="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                    {title}
                   </div>
 
-                  <div className="flex flex-col gap-2 shrink-0">
-                    <Button
-                      className="btn btn-primary"
+                  {/* Badges */}
+                  <div>
+                    <span
+                      className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold shadow-sm text-white"
+                      style={{
+                        backgroundColor:
+                          sport === "bjj"
+                            ? "#0d6efd"
+                            : sport === "wrestling"
+                            ? "#ffc107"
+                            : "#28a745", // Judo (toast success green)
+                      }}
+                    >
+                      {sport.toUpperCase()}
+
+                      {item?.type && (
+                        <>
+                          <span className="mx-2 opacity-75">•</span>
+                          {item.type.charAt(0).toUpperCase() +
+                            item.type.slice(1)}
+                        </>
+                      )}
+
+                      {note.sessionType && (
+                        <>
+                          <span className="mx-2 opacity-75">•</span>
+                          {formatSessionType(note.sessionType)}
+                        </>
+                      )}
+                    </span>
+                  </div>
+
+                  {/* Date */}
+                  <div className="flex items-center gap-2 text-sm text-gray-900 dark:text-gray-100">
+                    <Calendar className="w-4 h-4" />
+                    {formatDate(note.startAt)}
+                  </div>
+
+                  <hr className="border-gray-300 dark:border-gray-700" />
+
+                  {/* Description */}
+                  <div className="text-sm text-gray-900 dark:text-gray-100">
+                    {shortDesc || "No description"}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-between pt-4">
+                  <button
+                    onClick={() => {
+                      setEditNote(note);
+                      setOpen(true);
+                    }}
+                    className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100 hover:underline"
+                  >
+                    <Pencil className="w-4 h-4" />
+                    Edit
+                  </button>
+
+                  <div className="flex items-center gap-4">
+                    {hasVideo && (
+                      <Video className="w-4 h-4 text-gray-900 dark:text-gray-100" />
+                    )}
+
+                    <button
                       onClick={() =>
                         router.push(`/dashboard/practice-notes/${note._id}`)
                       }
+                      className="text-sm font-semibold text-gray-900 dark:text-gray-100 hover:underline"
                     >
                       View
-                    </Button>
-
-                    <Button
-                      className="btn btn-primary"
-                      onClick={() => {
-                        setEditNote(note);
-                        setOpen(true);
-                      }}
-                    >
-                      Edit
-                    </Button>
+                    </button>
                   </div>
                 </div>
               </div>
