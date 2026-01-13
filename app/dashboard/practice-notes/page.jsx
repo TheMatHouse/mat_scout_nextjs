@@ -70,6 +70,7 @@ const PracticeNotesPage = () => {
   const [editNote, setEditNote] = useState(null);
 
   /* ---------- filters ---------- */
+  const [styleFilter, setStyleFilter] = useState("all");
   const [sessionType, setSessionType] = useState("all");
   const [itemType, setItemType] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
@@ -108,6 +109,7 @@ const PracticeNotesPage = () => {
   }, [notes]);
 
   const hasActiveFilters =
+    styleFilter !== "all" ||
     sessionType !== "all" ||
     itemType !== "all" ||
     tagFilter !== "all" ||
@@ -115,6 +117,7 @@ const PracticeNotesPage = () => {
 
   const filteredNotes = useMemo(() => {
     return notes.filter((n) => {
+      if (styleFilter !== "all" && n.style !== styleFilter) return false;
       if (sessionType !== "all" && n.sessionType !== sessionType) return false;
       if (itemType !== "all" && !n.items?.some((i) => i.type === itemType))
         return false;
@@ -151,6 +154,102 @@ const PracticeNotesPage = () => {
             New Practice Note
           </Button>
         </div>
+
+        {/* Filters */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Style */}
+          <select
+            value={styleFilter}
+            onChange={(e) => setStyleFilter(e.target.value)}
+            className="rounded-lg border px-3 py-2 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+          >
+            <option value="all">All Styles</option>
+            <option value="judo">Judo</option>
+            <option value="bjj">Brazilian Jiu-Jitsu</option>
+            <option value="wrestling">Wrestling</option>
+          </select>
+          {/* Session */}
+          <select
+            value={sessionType}
+            onChange={(e) => setSessionType(e.target.value)}
+            className="rounded-lg border px-3 py-2 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+          >
+            <option value="all">All Sessions</option>
+            <option value="practice">Practice</option>
+            <option value="clinic">Clinic</option>
+            <option value="seminar">Seminar</option>
+            <option value="training-camp">Training Camp</option>
+          </select>
+
+          {/* Item Type */}
+          <select
+            value={itemType}
+            onChange={(e) => setItemType(e.target.value)}
+            className="rounded-lg border px-3 py-2 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+          >
+            <option value="all">All Items</option>
+            <option value="warm-up">Warm-ups</option>
+            <option value="drill">Drills</option>
+            <option value="technique">Techniques</option>
+            <option value="cool-down">Cool-downs</option>
+          </select>
+
+          {/* Tags (only if present) */}
+          {allTags.length > 0 && (
+            <select
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value)}
+              className="rounded-lg border px-3 py-2 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+            >
+              <option value="all">All Tags</option>
+              {allTags.map((t) => (
+                <option
+                  key={t}
+                  value={t}
+                >
+                  #{t}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {/* Instructors (only if present) */}
+          {allInstructors.length > 0 && (
+            <select
+              value={instructorFilter}
+              onChange={(e) => setInstructorFilter(e.target.value)}
+              className="rounded-lg border px-3 py-2 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+            >
+              <option value="all">All Instructors</option>
+              {allInstructors.map((n) => (
+                <option
+                  key={n}
+                  value={n}
+                >
+                  {n}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {hasActiveFilters && (
+          <div className="flex items-center justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setStyleFilter("all");
+                setSessionType("all");
+                setItemType("all");
+                setTagFilter("all");
+                setInstructorFilter("all");
+              }}
+              className="px-3 py-2 rounded-lg border bg-gray-50 dark:bg-gray-900 text-sm font-semibold text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800"
+            >
+              Reset Filters
+            </button>
+          </div>
+        )}
 
         {/* Content */}
         {loading && <Spinner />}
