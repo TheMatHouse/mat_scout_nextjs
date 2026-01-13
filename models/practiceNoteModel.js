@@ -82,6 +82,12 @@ const PracticeNoteSchema = new mongoose.Schema(
       default: null,
     },
 
+    style: {
+      type: String,
+      enum: ["judo", "bjj", "wrestling"],
+      required: true,
+      index: true,
+    },
     externalClubName: {
       type: String,
       default: "",

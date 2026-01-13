@@ -100,6 +100,7 @@ function PracticeNoteDetailClient({ note }) {
             </h1>
 
             <div className="text-base sm:text-lg font-semibold capitalize text-gray-900 dark:text-gray-100">
+              {note.style?.toUpperCase()} ·{" "}
               {formatSessionType(note.sessionType)}
             </div>
 

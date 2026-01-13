@@ -92,9 +92,22 @@ export async function PUT(req, context) {
       };
     });
 
+    // ✅ NEW: validate and persist style
+    const style =
+      typeof body?.style === "string" ? body.style.trim().toLowerCase() : "";
+
+    const allowed = new Set(["judo", "bjj", "wrestling"]);
+    if (!allowed.has(style)) {
+      return noStore(
+        { error: "style is required and must be judo, bjj, or wrestling" },
+        400
+      );
+    }
+
     const update = {
       startAt: body?.startAt ? new Date(body.startAt) : undefined,
       sessionType: body?.sessionType || undefined,
+      style, // ✅ persist discipline
       items: normalizedItems,
       generalNotes: body?.generalNotes || "",
       externalClubName: body?.externalClubName || "",

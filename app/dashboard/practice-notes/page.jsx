@@ -152,91 +152,6 @@ const PracticeNotesPage = () => {
           </Button>
         </div>
 
-        {/* Filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Session */}
-          <select
-            value={sessionType}
-            onChange={(e) => setSessionType(e.target.value)}
-            className="rounded-lg border px-3 py-2 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-          >
-            <option value="all">All Sessions</option>
-            <option value="practice">Practice</option>
-            <option value="clinic">Clinic</option>
-            <option value="seminar">Seminar</option>
-            <option value="training-camp">Training Camp</option>
-          </select>
-
-          {/* Item Type */}
-          <select
-            value={itemType}
-            onChange={(e) => setItemType(e.target.value)}
-            className="rounded-lg border px-3 py-2 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-          >
-            <option value="all">All Items</option>
-            <option value="warm-up">Warm-ups</option>
-            <option value="drill">Drills</option>
-            <option value="technique">Techniques</option>
-            <option value="cool-down">Cool-downs</option>
-          </select>
-
-          {/* Tags (only if present) */}
-          {allTags.length > 0 && (
-            <select
-              value={tagFilter}
-              onChange={(e) => setTagFilter(e.target.value)}
-              className="rounded-lg border px-3 py-2 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-            >
-              <option value="all">All Tags</option>
-              {allTags.map((t) => (
-                <option
-                  key={t}
-                  value={t}
-                >
-                  #{t}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {/* Instructors (only if present) */}
-          {allInstructors.length > 0 && (
-            <select
-              value={instructorFilter}
-              onChange={(e) => setInstructorFilter(e.target.value)}
-              className="rounded-lg border px-3 py-2 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-            >
-              <option value="all">All Instructors</option>
-              {allInstructors.map((n) => (
-                <option
-                  key={n}
-                  value={n}
-                >
-                  {n}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-
-        {/* Reset Filters */}
-        {hasActiveFilters && (
-          <div className="flex items-center justify-end">
-            <button
-              type="button"
-              onClick={() => {
-                setSessionType("all");
-                setItemType("all");
-                setTagFilter("all");
-                setInstructorFilter("all");
-              }}
-              className="px-3 py-2 rounded-lg border bg-gray-50 dark:bg-gray-900 text-sm font-semibold text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800"
-            >
-              Reset Filters
-            </button>
-          </div>
-        )}
-
         {/* Content */}
         {loading && <Spinner />}
 
@@ -265,49 +180,31 @@ const PracticeNotesPage = () => {
 
             const hasVideo = !!item?.videoUrl;
 
-            const sport = item?.sport || "judo"; // fallback
-
-            function sportBadge(s) {
-              const base =
-                "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold";
-
-              switch (s) {
-                case "bjj":
-                  return `${base} bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100`;
-                case "wrestling":
-                  return `${base} bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100`;
-                default:
-                  return `${base} bg-green-100 text-green-900 dark:bg-green-900/30 dark:text-green-100`; // Judo
-              }
-            }
+            const style = note.style || "judo";
 
             return (
               <div
                 key={note._id}
                 className="rounded-xl border p-4 bg-gray-50 dark:bg-gray-900 flex flex-col justify-between"
               >
-                {/* Top */}
                 <div className="space-y-2">
-                  {/* Item title */}
                   <div className="font-semibold text-lg text-gray-900 dark:text-gray-100">
                     {title}
                   </div>
 
-                  {/* Badges */}
                   <div>
                     <span
                       className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold shadow-sm text-white"
                       style={{
                         backgroundColor:
-                          sport === "bjj"
+                          style === "bjj"
                             ? "#0d6efd"
-                            : sport === "wrestling"
+                            : style === "wrestling"
                             ? "#ffc107"
-                            : "#28a745", // Judo (toast success green)
+                            : "#28a745",
                       }}
                     >
-                      {sport.toUpperCase()}
-
+                      {style.toUpperCase()}
                       {item?.type && (
                         <>
                           <span className="mx-2 opacity-75">•</span>
@@ -315,7 +212,6 @@ const PracticeNotesPage = () => {
                             item.type.slice(1)}
                         </>
                       )}
-
                       {note.sessionType && (
                         <>
                           <span className="mx-2 opacity-75">•</span>
@@ -325,7 +221,6 @@ const PracticeNotesPage = () => {
                     </span>
                   </div>
 
-                  {/* Date */}
                   <div className="flex items-center gap-2 text-sm text-gray-900 dark:text-gray-100">
                     <Calendar className="w-4 h-4" />
                     {formatDate(note.startAt)}
@@ -333,13 +228,11 @@ const PracticeNotesPage = () => {
 
                   <hr className="border-gray-300 dark:border-gray-700" />
 
-                  {/* Description */}
                   <div className="text-sm text-gray-900 dark:text-gray-100">
                     {shortDesc || "No description"}
                   </div>
                 </div>
 
-                {/* Actions */}
                 <div className="flex items-center justify-between pt-4">
                   <button
                     onClick={() => {
@@ -356,7 +249,6 @@ const PracticeNotesPage = () => {
                     {hasVideo && (
                       <Video className="w-4 h-4 text-gray-900 dark:text-gray-100" />
                     )}
-
                     <button
                       onClick={() =>
                         router.push(`/dashboard/practice-notes/${note._id}`)
@@ -373,7 +265,6 @@ const PracticeNotesPage = () => {
         </div>
       </div>
 
-      {/* MODAL */}
       <ModalLayout
         isOpen={open}
         onClose={() => {

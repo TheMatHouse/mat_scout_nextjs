@@ -42,6 +42,7 @@ function PracticeNoteModal({ note, onSaved, setOpen }) {
 
   const [date, setDate] = useState(initialDateTime.date);
   const [time, setTime] = useState(initialDateTime.time);
+  const [style, setStyle] = useState(note?.style || "");
 
   /* ---------------- club search ---------------- */
   const [myClubs, setMyClubs] = useState([]);
@@ -67,6 +68,8 @@ function PracticeNoteModal({ note, onSaved, setOpen }) {
   /* ---------------- hydrate edit ---------------- */
   useEffect(() => {
     if (!note) return;
+
+    setStyle(note.style || "");
 
     setItems(
       (note.items || []).map((i) => ({
@@ -124,6 +127,11 @@ function PracticeNoteModal({ note, onSaved, setOpen }) {
       return;
     }
 
+    if (!style) {
+      toast.error("Please select a style (Judo, BJJ, or Wrestling).");
+      return;
+    }
+
     if (!selectedTeam && !clubQuery.trim()) {
       toast.error("Please select or enter a club.");
       return;
@@ -136,6 +144,7 @@ function PracticeNoteModal({ note, onSaved, setOpen }) {
       ...(isEdit && { id: note._id }),
       startAt,
       sessionType: e.currentTarget.sessionType.value,
+      style,
       clubId: selectedTeam?._id || null,
       externalClubName: selectedTeam ? null : clubQuery.trim(),
       items: items.map((i) => ({
@@ -178,7 +187,7 @@ function PracticeNoteModal({ note, onSaved, setOpen }) {
       className="space-y-6"
     >
       {/* Date / Session */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <input
           type="date"
           value={date}
@@ -201,6 +210,22 @@ function PracticeNoteModal({ note, onSaved, setOpen }) {
           <option value="clinic">Clinic</option>
           <option value="seminar">Seminar</option>
           <option value="training-camp">Training Camp</option>
+        </select>
+        <select
+          value={style}
+          onChange={(e) => setStyle(e.target.value)}
+          required
+          className="border rounded-lg px-3 py-2"
+        >
+          <option
+            value=""
+            disabled
+          >
+            Select your style / sport
+          </option>
+          <option value="judo">Judo</option>
+          <option value="bjj">Brazilian Jiu-Jitsu</option>
+          <option value="wrestling">Wrestling</option>
         </select>
       </div>
 

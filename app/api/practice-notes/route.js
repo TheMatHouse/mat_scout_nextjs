@@ -101,10 +101,29 @@ export async function POST(req) {
 
   const body = await req.json().catch(() => ({}));
 
+  // ✅ REQUIRE style so it's not silently "judo"
+  const style =
+    typeof body.style === "string" ? body.style.trim().toLowerCase() : "";
+
+  const allowed = new Set(["judo", "bjj", "wrestling"]);
+  if (!allowed.has(style)) {
+    return noStore(
+      {
+        error: "style is required and must be one of: judo, bjj, wrestling",
+        received: body.style ?? null,
+      },
+      400
+    );
+  }
+
   const note = await PracticeNote.create({
     user: user._id,
     startAt: body.startAt,
     sessionType: body.sessionType,
+
+    // ✅ now guaranteed valid
+    style,
+
     club: body.clubId || null,
     externalClubName: body.externalClubName || "",
 
