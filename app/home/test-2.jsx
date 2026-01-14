@@ -1,253 +1,288 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
-const HomePage = () => {
+export default function HomePage() {
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-[#050612] text-[var(--ms-light-gray)]">
-      <Hero />
+    <div className="min-h-screen w-full overflow-x-hidden bg-[#070914] text-gray-100">
+      <style
+        jsx
+        global
+      >{`
+        :root {
+          --ms-red: var(--ms-light-red, #ff3c5a);
+          --ms-blue: var(--ms-blue-gray, #5aa0ff);
+        }
 
-      {/* =============================
-         Audience (3 cards only)
-      ============================== */}
-      <section className="relative px-6 lg:px-24 py-24 bg-[#050612]">
-        <Heading
+        @keyframes ms-drift {
+          0% {
+            transform: translate3d(0, 0, 0) scale(1);
+          }
+          50% {
+            transform: translate3d(-2%, 1%, 0) scale(1.03);
+          }
+          100% {
+            transform: translate3d(0, 0, 0) scale(1);
+          }
+        }
+        @keyframes ms-pulse {
+          0% {
+            opacity: 0.55;
+          }
+          50% {
+            opacity: 0.85;
+          }
+          100% {
+            opacity: 0.55;
+          }
+        }
+        @keyframes ms-shimmer {
+          0% {
+            transform: translateX(-12%) rotate(-8deg);
+            opacity: 0.35;
+          }
+          50% {
+            transform: translateX(6%) rotate(-8deg);
+            opacity: 0.55;
+          }
+          100% {
+            transform: translateX(-12%) rotate(-8deg);
+            opacity: 0.35;
+          }
+        }
+
+        .ms-tilt {
+          transform: perspective(1200px) rotateY(-12deg) rotateX(6deg)
+            rotateZ(-2deg);
+        }
+        .ms-tilt:hover {
+  transform: perspective(1200px) rotateY(-12deg) rotateX(6deg)
+    rotateZ(-2deg);
+}
+        }
+      `}</style>
+
+      {/* ========================= HERO ========================= */}
+      <section className="relative px-6 lg:px-24 pt-16 lg:pt-24 pb-20 lg:pb-28 overflow-hidden">
+        <div className="absolute inset-0 -z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-[#070914] via-[#120a20] to-[#070914]" />
+          <div
+            className="absolute inset-0"
+            style={{
+              animation: "ms-drift 10s ease-in-out infinite",
+              background:
+                "radial-gradient(900px 500px at 25% 30%, rgba(90,160,255,0.22), transparent 60%), radial-gradient(900px 520px at 78% 35%, rgba(255,60,90,0.20), transparent 62%)",
+            }}
+          />
+        </div>
+
+        <div className="mx-auto max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          <div className="lg:col-span-6">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-tight">
+              The platform to{" "}
+              <span className="text-[var(--ms-red)]">track</span>,{" "}
+              <span className="text-[var(--ms-red)]">scout</span>, and{" "}
+              <span className="text-[var(--ms-red)]">manage</span> grappling
+              athletes.
+            </h1>
+
+            <p className="mt-6 text-lg text-gray-200 max-w-2xl">
+              MatScout brings match history, scouting reports, team management,
+              and training notes into one clean system — so your athletes
+              improve faster.
+            </p>
+
+            <div className="mt-8 flex gap-4">
+              <Link
+                href="/register"
+                className="px-6 py-3 rounded-xl bg-[var(--ms-red)] text-white font-semibold"
+              >
+                Get started free
+              </Link>
+              <Link
+                href="/features"
+                className="px-6 py-3 rounded-xl border border-white/20"
+              >
+                Explore features →
+              </Link>
+            </div>
+          </div>
+
+          {/* HERO IMAGE */}
+          <div className="lg:col-span-6">
+            <div className="ms-tilt will-change-transform">
+              <div className="relative w-full aspect-[3/2] rounded-xl overflow-hidden bg-white/5">
+                <Image
+                  src="/assets/judo-throw-hero.png"
+                  alt="Grappling throw"
+                  fill
+                  className="object-contain"
+                />
+              </div>
+
+              {/* UPDATED MINI STATS */}
+              <div className="grid grid-cols-3 gap-3 mt-4">
+                <MiniStat
+                  title="Practice Notes"
+                  subtitle="Track every session"
+                />
+                <MiniStat
+                  title="Scouting Reports"
+                  subtitle="Study opponents"
+                />
+                <MiniStat
+                  title="Team History"
+                  subtitle="Build over time"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ========================= AUDIENCE ========================= */}
+      <section className="relative px-6 lg:px-24 pt-10 pb-24">
+        <HeadingBlock
           title="Built for your whole team ecosystem"
-          subtitle="Coaches, athletes, and families all stay aligned in one place — without spreadsheets, group chats, or chaos."
+          subtitle="Start free, invite your team, and build a clean history of matches, notes, and reports."
         />
 
-        <div className="max-w-7xl mx-auto mt-14 grid grid-cols-1 md:grid-cols-3 gap-8">
-          <GlassCard
+        <div className="mx-auto max-w-7xl grid grid-cols-1 md:grid-cols-3 gap-8 mt-12">
+          <AudienceCard
             title="Coaches"
+            subtitle="Run your program"
             img="/assets/coaches.png"
-            bullets={[
-              "Manage teams, roles, and invitations",
-              "Centralize scouting and match history",
-              "Plan training and competition prep",
-            ]}
+            bullets={["Manage teams", "Centralize scouting", "Track prep"]}
             href="/features#coaches"
           />
-
-          <GlassCard
+          <AudienceCard
             title="Athletes"
+            subtitle="Improve faster"
             img="/assets/athletes.png"
-            bullets={[
-              "Track matches and performance",
-              "Review scouting and feedback",
-              "Build confidence over time",
-            ]}
+            bullets={["Log matches", "Review notes", "Build momentum"]}
             href="/features#athletes"
           />
-
-          <GlassCard
+          <AudienceCard
             title="Families"
+            subtitle="Stay aligned"
             img="/assets/community.png"
-            bullets={[
-              "Follow athlete progress",
-              "Stay aligned on goals and events",
-              "Support without overwhelm",
-            ]}
+            bullets={["Follow progress", "See updates", "Support"]}
             href="/features#everyone"
           />
         </div>
       </section>
 
-      {/* =============================
-         Why MatScout
-      ============================== */}
-      <section className="relative px-6 lg:px-24 pb-28 bg-[#050612]">
-        <Heading
-          title="Why MatScout"
-          subtitle="MatScout was built for real gyms and real seasons — not generic fitness tracking."
-        />
-
-        <div className="max-w-5xl mx-auto mt-12 grid grid-cols-1 md:grid-cols-3 gap-10">
-          <WhyBlock
-            title="Everything in one place"
-            text="Scouting reports, training notes, attendance, and competition history stay together — no more lost context."
-          />
-          <WhyBlock
-            title="Built for teams"
-            text="Invite coaches, athletes, and families with role-based access so everyone sees exactly what they should."
-          />
-          <WhyBlock
-            title="Grows with you"
-            text="From one athlete to a full club, MatScout scales without changing how you work."
-          />
+      {/* =========================
+    FINAL CALL TO ACTION
+========================== */}
+      <section className="relative px-6 lg:px-24 py-32 overflow-hidden">
+        <div className="absolute inset-0 -z-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-[#0a0c1f] via-[#120a20] to-[#070914]" />
+          <div className="absolute inset-0 opacity-70 bg-[radial-gradient(900px_400px_at_50%_30%,rgba(255,60,90,0.25),transparent_70%)]" />
+          <div className="absolute inset-0 opacity-60 bg-[radial-gradient(900px_400px_at_50%_70%,rgba(90,160,255,0.25),transparent_70%)]" />
         </div>
-      </section>
-    </div>
-  );
-};
 
-export default HomePage;
-
-/* ===========================
-   HERO
-=========================== */
-
-const Hero = () => {
-  return (
-    <section className="relative px-6 lg:px-24 pt-20 pb-28 overflow-hidden">
-      <Nebula />
-
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/40" />
-
-      <div className="pointer-events-none absolute left-1/2 bottom-10 -translate-x-1/2 w-[1000px] h-[160px] blur-[26px] opacity-40 bg-gradient-to-r from-transparent via-[color:var(--ms-blue-gray)] to-transparent" />
-      <div className="pointer-events-none absolute left-1/2 bottom-8 -translate-x-1/2 w-[900px] h-[140px] blur-[26px] opacity-35 bg-gradient-to-r from-transparent via-[color:var(--ms-light-red)] to-transparent" />
-
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-        <div className="lg:col-span-6">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-tight">
-            Track. Scout. Manage. <br />
-            <span className="text-[var(--ms-light-red)]">
-              All in one place.
+        <div className="mx-auto max-w-5xl text-center space-y-10">
+          <h2 className="text-4xl sm:text-5xl font-extrabold text-gray-100 leading-tight">
+            Stop losing context.
+            <br />
+            <span className="text-[var(--ms-red)]">
+              Start building your team’s history.
             </span>
-          </h1>
+          </h2>
 
-          <p className="mt-6 text-lg text-[var(--ms-nav-text)] max-w-2xl">
-            MatScout helps grappling teams keep match history, scouting reports,
-            and training notes organized so athletes improve faster and coaches
-            stay in control.
+          <p className="text-lg sm:text-xl text-gray-200 max-w-3xl mx-auto leading-relaxed">
+            Every practice, every match, every scouting report — all in one
+            place. Invite your team, log your sessions, and finally have a
+            system that grows with your athletes.
           </p>
 
-          <div className="mt-8 flex gap-4">
+          <div className="flex flex-wrap justify-center gap-5 pt-6">
             <Link
               href="/register"
-              className="px-6 py-3 rounded-xl bg-[var(--ms-light-red)] text-white font-semibold hover:brightness-110 transition"
+              className="px-8 py-4 rounded-2xl bg-[var(--ms-red)] text-white font-bold text-lg shadow-[0_20px_60px_rgba(255,60,90,0.45)] hover:brightness-110 transition"
             >
               Get started free
             </Link>
 
             <Link
               href="/features"
-              className="px-6 py-3 rounded-xl border border-white/20 text-[var(--ms-light-gray)] hover:bg-white/10 transition"
+              className="px-8 py-4 rounded-2xl border border-white/20 bg-white/5 text-gray-100 font-semibold text-lg hover:bg-white/10 transition"
             >
-              Explore features →
+              See how it works →
             </Link>
           </div>
-        </div>
 
-        <div className="lg:col-span-6">
-          <HeroCarousel />
+          <div className="pt-10 text-sm text-gray-300">
+            Free to start • No credit card • Built for real gyms
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
   );
-};
+}
 
-/* ===========================
-   HERO CAROUSEL
-=========================== */
+/* ---------------- components ---------------- */
 
-function HeroCarousel() {
-  const [i, setI] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setI((v) => (v + 1) % 3);
-    }, 4000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const slides = [<PracticeSlide />, <MatchSlide />, <ScoutingSlide />];
-
+function HeadingBlock({ title, subtitle }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-[0_50px_160px_rgba(0,0,0,0.7)] overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-        <div className="text-sm font-semibold">MatScout Snapshot</div>
-        <div className="flex gap-2">
-          {[0, 1, 2].map((n) => (
-            <button
-              key={n}
-              onClick={() => setI(n)}
-              className={`w-2.5 h-2.5 rounded-full ${
-                i === n ? "bg-[var(--ms-light-red)]" : "bg-white/30"
-              }`}
-            />
+    <div className="mx-auto max-w-4xl text-center">
+      <h2 className="text-4xl font-extrabold">{title}</h2>
+      <p className="mt-4 text-gray-200">{subtitle}</p>
+    </div>
+  );
+}
+
+function MiniStat({ title, subtitle }) {
+  return (
+    <div className="relative rounded-xl border border-white/20 bg-white/10 backdrop-blur-md px-4 py-3 text-center shadow-[0_12px_40px_rgba(0,0,0,0.6)] hover:border-white/30 transition">
+      {/* glow */}
+      <div className="pointer-events-none absolute -inset-1 rounded-xl opacity-40 bg-gradient-to-r from-[rgba(90,160,255,0.25)] via-[rgba(255,60,90,0.25)] to-[rgba(168,85,247,0.25)] blur-lg" />
+
+      <div className="relative">
+        <div className="text-sm font-extrabold tracking-wide text-white">
+          {title}
+        </div>
+        <div className="mt-1 text-xs text-gray-200">{subtitle}</div>
+      </div>
+    </div>
+  );
+}
+
+/* AudienceCard stays exactly as you provided (already animated) */
+function AudienceCard({ title, subtitle, img, bullets, href }) {
+  return (
+    <Link
+      href={href}
+      className="group relative rounded-2xl overflow-hidden border border-white/10 bg-white/6 backdrop-blur-xl shadow-[0_24px_80px_rgba(0,0,0,0.35)] transition-all duration-500 hover:-translate-y-3 hover:shadow-[0_40px_140px_rgba(0,0,0,0.8)] hover:border-white/25"
+    >
+      <div className="pointer-events-none absolute -inset-1 rounded-2xl opacity-0 group-hover:opacity-100 transition duration-500 bg-gradient-to-r from-[rgba(90,160,255,0.45)] via-[rgba(255,60,90,0.45)] to-[rgba(168,85,247,0.35)] blur-xl" />
+
+      <div className="relative aspect-[16/9] overflow-hidden">
+        <Image
+          src={img}
+          alt={title}
+          fill
+          className="object-cover transition-transform duration-700 group-hover:scale-110"
+        />
+      </div>
+
+      <div className="relative p-6">
+        <div className="text-xl font-extrabold">{title}</div>
+        <div className="text-sm">{subtitle}</div>
+        <ul className="mt-4 space-y-2 text-sm">
+          {bullets.map((b) => (
+            <li
+              key={b}
+              className="flex gap-2"
+            >
+              <span className="h-2 w-2 rounded-full bg-[var(--ms-red)] mt-2" />
+              {b}
+            </li>
           ))}
-        </div>
+        </ul>
       </div>
-      <div className="p-6 min-h-[280px]">{slides[i]}</div>
-    </div>
-  );
-}
-
-/* ===========================
-   HERO SLIDES
-=========================== */
-
-function PracticeSlide() {
-  return (
-    <div className="space-y-4">
-      <span className="px-4 py-1 rounded-full bg-emerald-500 text-sm text-white font-semibold">
-        JUDO · TECHNIQUE · PRACTICE
-      </span>
-
-      <div className="rounded-xl bg-white/8 border border-white/10 p-5 space-y-4">
-        <div className="font-bold text-xl">Left-side Seoi-nage Entries</div>
-
-        <div className="text-base text-[var(--ms-nav-text)]">
-          Focus on breaking right-hand grip and entering drop seoi off movement.
-        </div>
-
-        <div className="flex justify-between text-sm text-[var(--ms-nav-text)] pt-2 border-t border-white/10">
-          <span>Jan 12 · 7:00 PM</span>
-          <span className="text-emerald-400">Video linked</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MatchSlide() {
-  return (
-    <div className="space-y-4">
-      <span className="px-4 py-1 rounded-full bg-emerald-500 text-sm text-white font-semibold">
-        JUDO · WIN · IPPON
-      </span>
-
-      <div className="rounded-xl bg-white/8 border border-white/10 p-5 space-y-4">
-        <div className="font-bold text-xl">Quarterfinal Match</div>
-
-        <div className="grid grid-cols-2 gap-4 text-base text-[var(--ms-nav-text)]">
-          <div>
-            <div className="opacity-70">Winning throw</div>
-            Ouchi-gari
-          </div>
-          <div>
-            <div className="opacity-70">Time</div>
-            2:28
-          </div>
-        </div>
-
-        <div className="pt-2 border-t border-white/10 text-sm text-[var(--ms-nav-text)]">
-          Video and referee call available
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ScoutingSlide() {
-  return (
-    <div className="space-y-4">
-      <span className="px-4 py-1 rounded-full bg-blue-500 text-sm text-white font-semibold">
-        SCOUTING REPORT
-      </span>
-
-      <div className="rounded-xl bg-white/8 border border-white/10 p-5 text-base text-[var(--ms-nav-text)] space-y-3">
-        <div className="font-semibold text-white">
-          Grip Fighting & Ground Control
-        </div>
-
-        <p>
-          Strong right-side throws and dominant transitions on the ground. Needs
-          work on grip breaks and lateral movement.
-        </p>
-      </div>
-    </div>
+    </Link>
   );
 }
