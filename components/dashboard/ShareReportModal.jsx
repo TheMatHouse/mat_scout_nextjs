@@ -369,6 +369,14 @@ function ShareReportModal({
                     <div className="font-medium text-gray-100">{i.email}</div>
                     <div className="text-xs text-gray-300">Invite pending</div>
                   </div>
+
+                  <button
+                    onClick={() => revokeShare(i._id)}
+                    className="text-red-400 hover:text-red-300"
+                    title="Delete invite"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               ))}
             </div>

@@ -1,111 +1,159 @@
-"use client";
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { redirect, notFound } from "next/navigation";
 
-function InviteClaimPage({ params }) {
-  const router = useRouter();
-  const [status, setStatus] = useState("loading"); // loading | redirecting | accepting | error
-  const [message, setMessage] = useState("Preparing invite…");
+import { connectDB } from "@/lib/mongo";
+import { getCurrentUser } from "@/lib/auth-server";
 
-  useEffect(() => {
-    let cancelled = false;
+import PendingPrivateShareInvite from "@/models/pendingPrivateShareInviteModel";
+import PrivateShare from "@/models/privateShareModel";
+import User from "@/models/userModel";
 
-    async function run() {
-      try {
-        const { token } = params || {};
-        if (!token) {
-          setStatus("error");
-          setMessage("Missing invite token.");
-          return;
-        }
+/* ============================================================
+   Share Invite Page (Server Component, Auto-Accept)
+============================================================ */
+const ShareInvitePage = async ({ params }) => {
+  await connectDB();
 
-        // If not logged in, your auth middleware/guards might redirect automatically,
-        // but we handle it explicitly by trying the accept endpoint and catching 401.
-        setStatus("accepting");
-        setMessage("Claiming your invite…");
+  const { token } = await params;
+  if (!token) notFound();
 
-        const res = await fetch("/api/shares/invites/accept", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ token }),
-        });
+  const invite = await PendingPrivateShareInvite.findOne({ token }).lean();
+  if (!invite) notFound();
 
-        // If unauthorized, send to login and preserve the invite route.
-        if (res.status === 401) {
-          try {
-            localStorage.setItem("ms_post_auth_redirect", `/invite/${token}`);
-          } catch (_) {
-            // ignore
-          }
+  /* ------------------------------------------------------------
+     Expiration check
+  ------------------------------------------------------------ */
+  if (invite.expiresAt && invite.expiresAt < new Date()) {
+    return (
+      <InviteContainer>
+        <InviteMessage
+          title="Invite Expired"
+          message="This sharing invite has expired."
+        />
+      </InviteContainer>
+    );
+  }
 
-          setStatus("redirecting");
-          setMessage("Please log in to claim this invite…");
+  const user = await getCurrentUser();
 
-          // Use your actual login route if different
-          router.replace(
-            `/login?next=${encodeURIComponent(`/invite/${token}`)}`
-          );
-          return;
-        }
+  /* ------------------------------------------------------------
+     Not logged in → show auth options
+  ------------------------------------------------------------ */
+  if (!user) {
+    const redirectTo = `/share/${token}`;
 
-        const data = await res.json().catch(() => ({}));
-
-        if (!res.ok) {
-          setStatus("error");
-          setMessage(data?.message || "This invite is invalid or expired.");
-          return;
-        }
-
-        const redirectTo = data?.redirect || "/dashboard/matches?view=shared";
-
-        if (cancelled) return;
-
-        setStatus("redirecting");
-        setMessage("Invite claimed! Redirecting…");
-        router.replace(redirectTo);
-      } catch (err) {
-        setStatus("error");
-        setMessage(String(err?.message || err || "Failed to claim invite."));
-      }
-    }
-
-    run();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [params, router]);
-
-  return (
-    <div className="min-h-[70vh] w-full flex items-center justify-center px-4">
-      <div className="w-full max-w-lg rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 p-6 shadow-sm">
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-          Claim Invite
+    return (
+      <InviteContainer>
+        <h1 className="text-2xl font-bold mb-4">
+          You’ve been invited to view shared reports
         </h1>
 
-        <p className="mt-2 text-gray-900 dark:text-gray-100">{message}</p>
+        <p className="mb-6">
+          Please sign in or create an account to access this content.
+        </p>
 
-        {status === "error" ? (
-          <div className="mt-4 rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 p-4">
-            <p className="text-gray-900 dark:text-gray-100">
-              If you believe this is a mistake, ask the sender to resend the
-              invite.
-            </p>
+        <div className="flex gap-4">
+          <Link
+            href={`/login?redirect=${encodeURIComponent(redirectTo)}`}
+            className="btn btn-primary"
+          >
+            Log In
+          </Link>
 
-            <button
-              type="button"
-              onClick={() => router.replace("/")}
-              className="mt-3 inline-flex items-center justify-center rounded-xl px-4 py-2 font-medium bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900"
-            >
-              Go to Home
-            </button>
-          </div>
-        ) : null}
-      </div>
+          <Link
+            href={`/register?redirect=${encodeURIComponent(redirectTo)}`}
+            className="btn btn-secondary"
+          >
+            Create Account
+          </Link>
+        </div>
+      </InviteContainer>
+    );
+  }
+
+  /* ------------------------------------------------------------
+     Wrong account (email mismatch)
+  ------------------------------------------------------------ */
+  if (invite.email !== user.email.toLowerCase()) {
+    return (
+      <InviteContainer>
+        <InviteMessage
+          title="Wrong Account"
+          message={`This invite was sent to ${invite.email}. You are logged in as ${user.email}.`}
+        />
+
+        <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
+          Please log out and sign in with the correct email address.
+        </p>
+      </InviteContainer>
+    );
+  }
+
+  /* ------------------------------------------------------------
+     AUTO-ACCEPT (server-side, idempotent)
+  ------------------------------------------------------------ */
+  await PrivateShare.updateOne(
+    {
+      ownerId: invite.ownerId,
+      documentType: invite.documentType,
+      scope: invite.scope,
+      ...(invite.documentId && { documentId: invite.documentId }),
+      "sharedWith.athleteType": "user",
+      "sharedWith.athleteId": user._id,
+    },
+    {
+      $setOnInsert: {
+        ownerId: invite.ownerId,
+        documentType: invite.documentType,
+        scope: invite.scope,
+        ...(invite.documentId && { documentId: invite.documentId }),
+        sharedWith: {
+          athleteType: "user",
+          athleteId: user._id,
+        },
+        createdAt: new Date(),
+      },
+    },
+    { upsert: true }
+  );
+
+  await PendingPrivateShareInvite.updateOne(
+    { _id: invite._id },
+    {
+      $set: {
+        acceptedAt: new Date(),
+        acceptedByUserId: user._id,
+      },
+    }
+  );
+
+  /* ------------------------------------------------------------
+     Redirect to shared content
+  ------------------------------------------------------------ */
+  redirect("/dashboard/matches?view=shared");
+};
+
+export default ShareInvitePage;
+
+/* ============================================================
+   UI Helpers
+============================================================ */
+
+const InviteContainer = ({ children }) => {
+  return (
+    <div className="max-w-xl mx-auto mt-16 p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
+      {children}
     </div>
   );
-}
+};
 
-export default InviteClaimPage;
+const InviteMessage = ({ title, message }) => {
+  return (
+    <>
+      <h1 className="text-xl font-bold mb-3">{title}</h1>
+      <p>{message}</p>
+    </>
+  );
+};

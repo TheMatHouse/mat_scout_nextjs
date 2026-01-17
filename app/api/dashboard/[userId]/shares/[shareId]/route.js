@@ -1,3 +1,4 @@
+//app/api/dashboard/[userId]/shares/[shareId]/route.js
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
