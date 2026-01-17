@@ -222,150 +222,154 @@ const PreviewReportModal = ({
         </DialogHeader>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 py-6 px-2 text-sm sm:text-base">
-          {/* ===== Match/Scouting Details ===== */}
-          <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow p-6">
-            <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4 border-b border-gray-300 dark:border-gray-700 pb-2">
-              {reportType === "match" ? "Match Details" : "Report Details"}
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Info
-                label="Match Type"
-                value={safeStr(report?.matchType)}
-              />
-              <Info
-                label="Event"
-                value={safeStr(report?.eventName)}
-              />
-              <Info
-                label="Date"
-                value={derived.eventDateDisplay}
-              />
-              <Info
-                label="Created By"
-                value={derived.createdByDisplay}
-              />
-              <Info
-                label="Division"
-                value={derived.divisionDisplay}
-              />
-              <Info
-                label="Weight Class"
-                value={derived.weightDisplay}
-              />
-              <Info
-                label="Result"
-                value={derived.resultDisplay}
-              />
-              <Info
-                label="Score"
-                value={derived.scoreDisplay}
-              />
-              <Info
-                label="Public"
-                value={derived.isPublicDisplay}
-              />
-            </div>
-          </section>
-
-          {/* ===== Opponent / Athlete Info & Techniques ===== */}
-          <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow p-6">
-            <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4 border-b border-gray-300 dark:border-gray-700 pb-2">
-              Opponent & Athlete
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Info
-                label="Opponent Name"
-                value={safeStr(report?.opponentName)}
-              />
-              <Info
-                label="Opponent Country"
-                value={safeStr(report?.opponentCountry)}
-              />
-              <Info
-                label="Opponent Club"
-                value={safeStr(report?.opponentClub)}
-              />
-              <Info
-                label="Opponent Rank"
-                value={safeStr(report?.opponentRank)}
-              />
-              <Info
-                label="Opponent Grip/Stance"
-                value={safeStr(report?.opponentGrip)}
-              />
-              <Info
-                label="My Rank (at match)"
-                value={safeStr(report?.myRank)}
-              />
-            </div>
-
-            {/* Opponent techs */}
-            {derived.opponentTechs.length > 0 && (
-              <div className="mt-4">
-                <h4 className="font-semibold text-gray-800 dark:text-gray-200">
-                  Opponent’s Techniques Used
-                </h4>
-                <ul className="list-disc list-inside ml-2 text-sm mt-1">
-                  {derived.opponentTechs.map((a, i) => (
-                    <li key={`opp-${i}`}>{safeStr(a)}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Opponent notes (HTML) */}
-            {safeStr(report?.opponentAttackNotes) && (
-              <div className="mt-3">
-                <h4 className="font-semibold text-gray-800 dark:text-gray-200">
-                  Opponent Notes
-                </h4>
-                <div
-                  className="prose dark:prose-invert max-w-none text-sm"
-                  dangerouslySetInnerHTML={{
-                    __html: report.opponentAttackNotes,
-                  }}
+          {/* LEFT COLUMN – All data */}
+          <div className="space-y-6">
+            {/* ===== Match/Scouting Details ===== */}
+            <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow p-6">
+              <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4 border-b border-gray-300 dark:border-gray-700 pb-2">
+                {reportType === "match" ? "Match Details" : "Report Details"}
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Info
+                  label="Match Type"
+                  value={safeStr(report?.matchType)}
+                />
+                <Info
+                  label="Event"
+                  value={safeStr(report?.eventName)}
+                />
+                <Info
+                  label="Date"
+                  value={derived.eventDateDisplay}
+                />
+                <Info
+                  label="Created By"
+                  value={derived.createdByDisplay}
+                />
+                <Info
+                  label="Division"
+                  value={derived.divisionDisplay}
+                />
+                <Info
+                  label="Weight Class"
+                  value={derived.weightDisplay}
+                />
+                <Info
+                  label="Result"
+                  value={derived.resultDisplay}
+                />
+                <Info
+                  label="Score"
+                  value={derived.scoreDisplay}
+                />
+                <Info
+                  label="Public"
+                  value={derived.isPublicDisplay}
                 />
               </div>
-            )}
+            </section>
 
-            {/* Athlete techs */}
-            {derived.athleteTechs.length > 0 && (
-              <div className="mt-6">
-                <h4 className="font-semibold text-gray-800 dark:text-gray-200">
-                  My Techniques Used
-                </h4>
-                <ul className="list-disc list-inside ml-2 text-sm mt-1">
-                  {derived.athleteTechs.map((a, i) => (
-                    <li key={`me-${i}`}>{safeStr(a)}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            {/* ===== Opponent / Athlete Info ===== */}
+            <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow p-6">
+              <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4 border-b border-gray-300 dark:border-gray-700 pb-2">
+                Opponent & Athlete
+              </h3>
 
-            {/* Athlete notes (HTML) */}
-            {safeStr(report?.athleteAttackNotes) && (
-              <div className="mt-3">
-                <h4 className="font-semibold text-gray-800 dark:text-gray-200">
-                  My Notes
-                </h4>
-                <div
-                  className="prose dark:prose-invert max-w-none text-sm"
-                  dangerouslySetInnerHTML={{
-                    __html: report.athleteAttackNotes,
-                  }}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Info
+                  label="Opponent Name"
+                  value={safeStr(report?.opponentName)}
+                />
+                <Info
+                  label="Opponent Country"
+                  value={safeStr(report?.opponentCountry)}
+                />
+                <Info
+                  label="Opponent Club"
+                  value={safeStr(report?.opponentClub)}
+                />
+                <Info
+                  label="Opponent Rank"
+                  value={safeStr(report?.opponentRank)}
+                />
+                <Info
+                  label="Opponent Grip/Stance"
+                  value={safeStr(report?.opponentGrip)}
+                />
+                <Info
+                  label="My Rank (at match)"
+                  value={safeStr(report?.myRank)}
                 />
               </div>
-            )}
-          </section>
 
-          {/* ===== Videos ===== */}
-          <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow p-6 lg:col-span-2">
+              {/* Opponent techs */}
+              {derived.opponentTechs.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="font-semibold text-gray-800 dark:text-gray-200">
+                    Opponent’s Techniques Used
+                  </h4>
+                  <ul className="list-disc list-inside ml-2 text-sm mt-1">
+                    {derived.opponentTechs.map((a, i) => (
+                      <li key={`opp-${i}`}>{safeStr(a)}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Opponent notes */}
+              {safeStr(report?.opponentAttackNotes) && (
+                <div className="mt-3">
+                  <h4 className="font-semibold text-gray-800 dark:text-gray-200">
+                    Opponent Notes
+                  </h4>
+                  <div
+                    className="prose dark:prose-invert max-w-none text-sm"
+                    dangerouslySetInnerHTML={{
+                      __html: report.opponentAttackNotes,
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Athlete techs */}
+              {derived.athleteTechs.length > 0 && (
+                <div className="mt-6">
+                  <h4 className="font-semibold text-gray-800 dark:text-gray-200">
+                    My Techniques Used
+                  </h4>
+                  <ul className="list-disc list-inside ml-2 text-sm mt-1">
+                    {derived.athleteTechs.map((a, i) => (
+                      <li key={`me-${i}`}>{safeStr(a)}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Athlete notes */}
+              {safeStr(report?.athleteAttackNotes) && (
+                <div className="mt-3">
+                  <h4 className="font-semibold text-gray-800 dark:text-gray-200">
+                    My Notes
+                  </h4>
+                  <div
+                    className="prose dark:prose-invert max-w-none text-sm"
+                    dangerouslySetInnerHTML={{
+                      __html: report.athleteAttackNotes,
+                    }}
+                  />
+                </div>
+              )}
+            </section>
+          </div>
+
+          {/* RIGHT COLUMN – Video */}
+          <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow p-6">
             <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4 border-b border-gray-300 dark:border-gray-700 pb-2">
               {derived.videos.length > 1 ? "Match Videos" : "Match Video"}
             </h3>
 
             {derived.videos.length ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-6">
                 {derived.videos.map((v, i) => (
                   <div
                     key={v.embedUrl + i}
@@ -376,12 +380,14 @@ const PreviewReportModal = ({
                         {safeStr(v.title)}
                       </h4>
                     )}
+
                     {!!safeStr(v.notes) && (
                       <div
                         className="prose dark:prose-invert max-w-none text-sm"
                         dangerouslySetInnerHTML={{ __html: v.notes }}
                       />
                     )}
+
                     <div className="aspect-video w-full rounded-lg shadow overflow-hidden">
                       <iframe
                         className="w-full h-full"
