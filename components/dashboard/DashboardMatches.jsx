@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "react-toastify";
 
 import MatchReportForm from "./forms/MatchReportForm";
@@ -12,6 +12,7 @@ import { Printer, X } from "lucide-react";
 import ModalLayout from "@/components/shared/ModalLayout";
 import Spinner from "@/components/shared/Spinner";
 import MatchReportCard from "@/components/shared/MatchReportCard";
+import ShareReportModal from "./ShareReportModal";
 
 /* ---------------- helpers ---------------- */
 const genderWord = (g) =>
@@ -31,8 +32,11 @@ function getDivisionDisplay(m) {
 
 function DashboardMatches({ user }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState("mine");
+  const initialTab = searchParams.get("view") === "shared" ? "shared" : "mine";
+
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   const [matchReports, setMatchReports] = useState([]);
   const [matchesLoading, setMatchesLoading] = useState(true);
@@ -46,6 +50,9 @@ function DashboardMatches({ user }) {
 
   const [stylesLoading, setStylesLoading] = useState(false);
   const [stylesForForm, setStylesForForm] = useState([]);
+
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareMatch, setShareMatch] = useState(null);
 
   /* ---------------- Filters ---------------- */
   const [yearFilter, setYearFilter] = useState("All");
@@ -178,7 +185,15 @@ function DashboardMatches({ user }) {
         {["mine", "shared"].map((t) => (
           <button
             key={t}
-            onClick={() => setActiveTab(t)}
+            onClick={() => {
+              setActiveTab(t);
+
+              if (t === "shared") {
+                router.replace("/dashboard/matches?view=shared");
+              } else {
+                router.replace("/dashboard/matches");
+              }
+            }}
             className={`px-4 py-2 rounded-lg border font-medium ${
               activeTab === t
                 ? "bg-gray-900 text-white border-gray-900"
@@ -282,6 +297,19 @@ function DashboardMatches({ user }) {
               <MatchReportCard
                 key={m._id}
                 match={{ ...m, divisionDisplay: getDivisionDisplay(m) }}
+                onView={(match) => {
+                  setSelectedMatch(match);
+                  setPreviewOpen(true);
+                }}
+                onEdit={(match) => {
+                  setSelectedMatch(match);
+                  setOpen(true);
+                  loadStylesForModal();
+                }}
+                onShare={(match) => {
+                  setShareMatch(match);
+                  setShareOpen(true);
+                }}
               />
             ))}
           </div>
@@ -307,11 +335,13 @@ function DashboardMatches({ user }) {
                       <MatchReportCard
                         key={m._id}
                         match={{ ...m, divisionDisplay: getDivisionDisplay(m) }}
-                        onView={() =>
-                          router.push(
-                            `/dashboard/match-reports/shared/${m._id}`
-                          )
-                        }
+                        onView={() => {
+                          setSelectedMatch({
+                            ...m,
+                            divisionDisplay: getDivisionDisplay(m),
+                          });
+                          setPreviewOpen(true);
+                        }}
                       />
                     ))}
                   </div>
@@ -347,6 +377,19 @@ function DashboardMatches({ user }) {
           setPreviewOpen={setPreviewOpen}
           report={selectedMatch}
           reportType="match"
+        />
+      )}
+
+      {shareOpen && shareMatch && (
+        <ShareReportModal
+          open={shareOpen}
+          onClose={() => {
+            setShareOpen(false);
+            setShareMatch(null);
+          }}
+          ownerId={user._id}
+          documentType="match-report"
+          documentId={shareMatch._id}
         />
       )}
     </div>

@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import Link from "next/link";
-
 import { useUser } from "@/context/UserContext";
 import {
   Form,
@@ -22,6 +21,9 @@ import PasswordInput from "../shared/PasswordInput";
 
 export default function LoginForm({ redirect = "/dashboard" }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const nextUrl = searchParams.get("next");
   const { refreshUser } = useUser();
 
   const form = useForm({
@@ -45,7 +47,7 @@ export default function LoginForm({ redirect = "/dashboard" }) {
       if (!res.ok) throw new Error(data?.error || "Login failed.");
 
       await refreshUser();
-      router.replace(redirect);
+      router.replace(nextUrl || redirect);
     } catch (err) {
       setError(err.message || "Login failed. Please try again.");
     } finally {

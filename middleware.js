@@ -97,6 +97,7 @@ function handleAuth(req, { bypass }) {
   if (
     PUBLIC_PAGES.has(pathname) ||
     pathname.startsWith("/teams/") ||
+    pathname.startsWith("/share/") ||
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/assets/") ||
     pathname === "/favicon.ico" ||

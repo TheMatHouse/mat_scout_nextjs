@@ -1,3 +1,4 @@
+// app/api/dashboard/[userId]/matchReports/shared/route.js
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
@@ -6,6 +7,7 @@ import { connectDB } from "@/lib/mongo";
 import MatchReport from "@/models/matchReportModel";
 import PrivateShare from "@/models/privateShareModel";
 import User from "@/models/userModel";
+import FamilyMember from "@/models/familyMemberModel";
 
 // ensure refs exist
 import "@/models/divisionModel";
@@ -30,6 +32,7 @@ const inferGenderFromName = (nameRaw) => {
   }
   return "coed";
 };
+
 const genderWord = (g) =>
   g === "male" ? "Men" : g === "female" ? "Women" : "Coed";
 
@@ -43,27 +46,50 @@ export async function GET(_req, ctx) {
 
     await connectDB();
 
-    // 1) Find all active shares for this viewer
+    /* -------------------------------------------------
+       Resolve family members for this user
+       ------------------------------------------------- */
+    const familyMembers = await FamilyMember.find({ userId })
+      .select("_id")
+      .lean();
+
+    const familyIds = familyMembers.map((f) => String(f._id));
+
+    /* -------------------------------------------------
+       Load active shares using NEW sharedWith model
+       ------------------------------------------------- */
     const shares = await PrivateShare.find({
-      sharedWithUserId: userId,
       documentType: "match-report",
       revokedAt: null,
       $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }],
+      $or: [
+        {
+          "sharedWith.athleteType": "user",
+          "sharedWith.athleteId": userId,
+        },
+        {
+          "sharedWith.athleteType": "family",
+          "sharedWith.athleteId": { $in: familyIds },
+        },
+      ],
     }).lean();
 
     if (!shares.length) {
       return NextResponse.json([], { status: 200 });
     }
 
-    // 2) Split ALL vs ONE
+    /* -------------------------------------------------
+       Split ALL vs ONE per owner
+       ------------------------------------------------- */
     const allOwners = new Set();
     const oneByOwner = {};
 
     for (const s of shares) {
+      const ownerId = String(s.ownerId);
+
       if (s.scope === "all") {
-        allOwners.add(String(s.ownerId));
+        allOwners.add(ownerId);
       } else if (s.scope === "one" && s.documentId) {
-        const ownerId = String(s.ownerId);
         if (!oneByOwner[ownerId]) oneByOwner[ownerId] = [];
         oneByOwner[ownerId].push(String(s.documentId));
       }
@@ -73,7 +99,9 @@ export async function GET(_req, ctx) {
       new Set([...allOwners, ...Object.keys(oneByOwner)])
     );
 
-    // 3) Load owners
+    /* -------------------------------------------------
+       Load owners
+       ------------------------------------------------- */
     const owners = await User.find({ _id: { $in: ownerIds } })
       .select("_id name username")
       .lean();
@@ -81,7 +109,9 @@ export async function GET(_req, ctx) {
     const ownerMap = {};
     for (const o of owners) ownerMap[String(o._id)] = o;
 
-    // 4) Load reports per owner
+    /* -------------------------------------------------
+       Load reports per owner
+       ------------------------------------------------- */
     const result = [];
 
     for (const ownerId of ownerIds) {
@@ -129,7 +159,11 @@ export async function GET(_req, ctx) {
           }
         }
 
-        return { ...d, divisionDisplay, weightDisplay: weightDisplay || "—" };
+        return {
+          ...d,
+          divisionDisplay,
+          weightDisplay: weightDisplay || "—",
+        };
       });
 
       result.push({

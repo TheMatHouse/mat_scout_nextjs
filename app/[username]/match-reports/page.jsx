@@ -1,3 +1,4 @@
+// app/[username]/match-reports/page.jsx
 "use client";
 export const dynamic = "force-dynamic";
 
@@ -99,6 +100,8 @@ const UserMatchReportsPage = ({ params }) => {
       alive = false;
     };
   }, [username]);
+
+  const hasAnyReports = reports.length > 0;
 
   /* ---------- derived filter options ---------- */
   const yearsAvailable = useMemo(() => {
@@ -210,120 +213,119 @@ const UserMatchReportsPage = ({ params }) => {
             className="mb-4"
           />
           <h1 className="text-3xl font-bold">{username}’s Match Reports</h1>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">
+          <p className="mt-1 text-gray-900 dark:text-gray-100">
             Public competition match history
           </p>
         </div>
 
-        {/* Summary */}
-        <div className="mb-6 flex flex-wrap gap-3">
-          <div className="rounded-xl border border-border bg-background px-4 py-2">
-            <span className="text-sm text-foreground/60">Wins</span>
-            <div className="text-lg font-semibold">{summary.wins}</div>
-          </div>
-          <div className="rounded-xl border border-border bg-background px-4 py-2">
-            <span className="text-sm text-foreground/60">Losses</span>
-            <div className="text-lg font-semibold">{summary.losses}</div>
-          </div>
-          <div className="rounded-xl border border-border bg-background px-4 py-2">
-            <span className="text-sm text-foreground/60">Matches</span>
-            <div className="text-lg font-semibold">{summary.total}</div>
-          </div>
-        </div>
-
-        {/* Filters */}
-        <div className="mb-6 flex flex-wrap gap-3">
-          <select
-            value={yearFilter}
-            onChange={(e) => setYearFilter(e.target.value)}
-            className="w-40 rounded-lg border border-border bg-background px-3 py-2 text-sm"
-          >
-            <option value="All">All Years</option>
-            {yearsAvailable.map((y) => (
-              <option
-                key={y}
-                value={y}
-              >
-                {y}
-              </option>
-            ))}
-          </select>
-
-          {eventsAvailable.length >= 3 && (
-            <select
-              value={eventFilter}
-              onChange={(e) => setEventFilter(e.target.value)}
-              className="w-64 rounded-lg border border-border bg-background px-3 py-2 text-sm"
-            >
-              <option value="All">All Events</option>
-              {eventsAvailable.map((ev) => (
-                <option
-                  key={ev}
-                  value={ev}
-                >
-                  {ev}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-
-        {/* Empty */}
-        {filteredReports.length === 0 && (
-          <div className="rounded-2xl border border-border bg-background p-8 text-center">
-            <p className="text-gray-600 dark:text-gray-300">
-              No matches found for the selected filters.
+        {/* === EMPTY STATE === */}
+        {!hasAnyReports && (
+          <div className="mt-12 rounded-2xl border border-border bg-background p-10 text-center">
+            <h2 className="text-2xl font-semibold mb-3 text-gray-900 dark:text-gray-100">
+              This athlete has not shared any public match reports yet.
+            </h2>
+            <p className="text-gray-900 dark:text-gray-100">
+              When they do, their competition history will appear here.
             </p>
           </div>
         )}
 
-        {/* Cards */}
-        {pagedReports.length > 0 && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {pagedReports.map((report) => (
-              <MatchReportCard
-                key={report._id}
-                match={{
-                  ...report,
-                  divisionDisplay: getDivisionDisplay(report),
-                }}
-                onView={() => {
-                  setSelectedReport({
-                    ...report,
-                    divisionDisplay: getDivisionDisplay(report),
-                  });
-                  setOpen(true);
-                }}
-              />
-            ))}
-          </div>
-        )}
+        {hasAnyReports && (
+          <>
+            {/* Summary */}
+            <div className="mb-6 flex flex-wrap gap-3">
+              <div className="rounded-xl border border-border bg-background px-4 py-2">
+                <span className="text-sm">Wins</span>
+                <div className="text-lg font-semibold">{summary.wins}</div>
+              </div>
+              <div className="rounded-xl border border-border bg-background px-4 py-2">
+                <span className="text-sm">Losses</span>
+                <div className="text-lg font-semibold">{summary.losses}</div>
+              </div>
+              <div className="rounded-xl border border-border bg-background px-4 py-2">
+                <span className="text-sm">Matches</span>
+                <div className="text-lg font-semibold">{summary.total}</div>
+              </div>
+            </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="mt-8 flex items-center justify-center gap-2">
-            <button
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 disabled:opacity-40"
-            >
-              <ChevronLeft size={16} />
-              Prev
-            </button>
+            {/* Filters */}
+            <div className="mb-6 flex flex-wrap gap-3">
+              <select
+                value={yearFilter}
+                onChange={(e) => setYearFilter(e.target.value)}
+                className="w-40 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              >
+                <option value="All">All Years</option>
+                {yearsAvailable.map((y) => (
+                  <option key={y}>{y}</option>
+                ))}
+              </select>
 
-            <span className="text-sm text-gray-600 dark:text-gray-300">
-              Page {currentPage} of {totalPages}
-            </span>
+              {eventsAvailable.length >= 3 && (
+                <select
+                  value={eventFilter}
+                  onChange={(e) => setEventFilter(e.target.value)}
+                  className="w-64 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                >
+                  <option value="All">All Events</option>
+                  {eventsAvailable.map((ev) => (
+                    <option key={ev}>{ev}</option>
+                  ))}
+                </select>
+              )}
+            </div>
 
-            <button
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 disabled:opacity-40"
-            >
-              Next
-              <ChevronRight size={16} />
-            </button>
-          </div>
+            {/* Cards */}
+            {pagedReports.length > 0 && (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {pagedReports.map((report) => (
+                  <MatchReportCard
+                    key={report._id}
+                    match={{
+                      ...report,
+                      divisionDisplay: getDivisionDisplay(report),
+                    }}
+                    onView={() => {
+                      setSelectedReport({
+                        ...report,
+                        divisionDisplay: getDivisionDisplay(report),
+                      });
+                      setOpen(true);
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="mt-8 flex items-center justify-center gap-2">
+                <button
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 disabled:opacity-40"
+                >
+                  <ChevronLeft size={16} />
+                  Prev
+                </button>
+
+                <span className="text-sm">
+                  Page {currentPage} of {totalPages}
+                </span>
+
+                <button
+                  disabled={currentPage === totalPages}
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
+                  className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 disabled:opacity-40"
+                >
+                  Next
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
+          </>
         )}
       </main>
 

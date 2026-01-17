@@ -1,4 +1,3 @@
-// models/privateShareModel.js
 import mongoose from "mongoose";
 
 const PrivateShareSchema = new mongoose.Schema(
@@ -17,7 +16,6 @@ const PrivateShareSchema = new mongoose.Schema(
       index: true,
     },
 
-    // null when scope === "all"
     documentId: {
       type: mongoose.Schema.Types.ObjectId,
       default: null,
@@ -28,26 +26,28 @@ const PrivateShareSchema = new mongoose.Schema(
       type: String,
       enum: ["one", "all"],
       required: true,
-      default: "one",
       index: true,
     },
 
-    sharedWithUserId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-      index: true,
+    /* WHO this is shared WITH */
+    sharedWith: {
+      athleteType: {
+        type: String,
+        enum: ["user", "family"],
+        required: true,
+        index: true,
+      },
+      athleteId: {
+        type: mongoose.Schema.Types.ObjectId,
+        required: true,
+        index: true,
+      },
     },
 
     permission: {
       type: String,
       enum: ["view"],
       default: "view",
-    },
-
-    revokedAt: {
-      type: Date,
-      default: null,
     },
 
     expiresAt: {
@@ -58,16 +58,13 @@ const PrivateShareSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-/* -------------------------------------------------------
-   Indexes
-   ----------------------------------------------------- */
-
-// ONE report share: (doc + user) must be unique
+/* One-report share */
 PrivateShareSchema.index(
   {
     documentType: 1,
     documentId: 1,
-    sharedWithUserId: 1,
+    "sharedWith.athleteType": 1,
+    "sharedWith.athleteId": 1,
     scope: 1,
   },
   {
@@ -76,12 +73,13 @@ PrivateShareSchema.index(
   }
 );
 
-// ALL reports share: (owner + type + user) must be unique
+/* All-reports share */
 PrivateShareSchema.index(
   {
     ownerId: 1,
     documentType: 1,
-    sharedWithUserId: 1,
+    "sharedWith.athleteType": 1,
+    "sharedWith.athleteId": 1,
     scope: 1,
   },
   {
@@ -90,8 +88,5 @@ PrivateShareSchema.index(
   }
 );
 
-const PrivateShare =
-  mongoose.models.PrivateShare ||
+export default mongoose.models.PrivateShare ||
   mongoose.model("PrivateShare", PrivateShareSchema);
-
-export default PrivateShare;
