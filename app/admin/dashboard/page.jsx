@@ -23,6 +23,7 @@ import ScoutingReport from "@/models/scoutingReportModel";
 import CoachMatchNote from "@/models/coachMatchNoteModel";
 import AttendanceRecord from "@/models/attendanceRecordModel";
 import PracticeNote from "@/models/practiceNoteModel";
+import TeamScoutingReport from "@/models/teamScoutingReportModel";
 
 /* ---------------------------------------------
    Card primitives (unchanged)
@@ -106,13 +107,10 @@ const AdminDashboardPage = async () => {
     teamCount,
     matchReportCount,
     scoutingReportCount,
+    teamScoutingReportCount,
     coachNotesCount,
-
-    // Check-ins
     checkInTotal,
     checkInUsers,
-
-    // Practice Notes
     practiceNoteTotal,
     practiceNoteUsers,
   ] = await Promise.all([
@@ -121,11 +119,10 @@ const AdminDashboardPage = async () => {
     Team.countDocuments(),
     MatchReport.countDocuments(),
     ScoutingReport.countDocuments(),
+    TeamScoutingReport.countDocuments(),
     CoachMatchNote.countDocuments(),
-
     AttendanceRecord.countDocuments(),
     AttendanceRecord.distinct("athlete").then((u) => u.length),
-
     PracticeNote.countDocuments(),
     PracticeNote.distinct("user").then((u) => u.length),
   ]);
@@ -156,6 +153,11 @@ const AdminDashboardPage = async () => {
     {
       label: "Scouting Reports",
       value: scoutingReportCount,
+      icon: Search,
+    },
+    {
+      label: "Team Scouting Reports",
+      value: teamScoutingReportCount,
       icon: Search,
     },
     {
