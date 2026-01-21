@@ -58,18 +58,24 @@ const buildPreviewPayload = (r) => {
     weightDisplay = `${weightDisplay} ${weightUnit}`;
   }
 
+  const isEmbeddableVideoUrl = (url = "") =>
+    /youtube\.com|youtu\.be|vimeo\.com/i.test(url);
+
   const videos = Array.isArray(r?.videos)
     ? r.videos
-        .map((v) =>
-          v && typeof v === "object"
-            ? {
-                title: toSafeStr(v.title || v.videoTitle),
-                notes: toSafeStr(v.notes || v.videoNotes),
-                url: toSafeStr(v.url || v.videoURL || v.urlCanonical),
-                startSeconds: toNonNegInt(v.startSeconds),
-              }
-            : null
-        )
+        .map((v) => {
+          if (!v || typeof v !== "object") return null;
+
+          const rawUrl = toSafeStr(v.url || v.videoURL || v.urlCanonical);
+
+          return {
+            title: toSafeStr(v.title || v.videoTitle),
+            notes: toSafeStr(v.notes || v.videoNotes),
+            // 🔑 critical fix: only pass embeddable URLs
+            url: isEmbeddableVideoUrl(rawUrl) ? rawUrl : "",
+            startSeconds: toNonNegInt(v.startSeconds),
+          };
+        })
         .filter(Boolean)
     : [];
 
