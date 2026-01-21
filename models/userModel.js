@@ -101,6 +101,7 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
     lastLogin: { type: Date, default: Date.now },
+    lastActiveAt: { type: Date },
 
     userStyles: [
       {

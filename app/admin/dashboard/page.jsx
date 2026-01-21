@@ -26,7 +26,7 @@ import PracticeNote from "@/models/practiceNoteModel";
 import TeamScoutingReport from "@/models/teamScoutingReportModel";
 
 /* ---------------------------------------------
-   Card primitives (unchanged)
+   Card primitives
 ---------------------------------------------- */
 
 const CardShell = ({ children, interactive = false, label }) => {
@@ -166,8 +166,6 @@ const AdminDashboardPage = async () => {
       icon: StickyNote,
     },
 
-    /* ---------- NEW ---------- */
-
     {
       label: "Check-Ins",
       value: `${checkInTotal} / ${checkInUsers}`,
@@ -179,7 +177,14 @@ const AdminDashboardPage = async () => {
       icon: NotebookPen,
     },
 
-    /* ------------------------- */
+    /* ---------- NEW DASHBOARD CARD ---------- */
+    {
+      label: "User Activity",
+      value: "Heatmap",
+      icon: BarChart3,
+      href: "/admin/analytics/activity",
+    },
+    /* ---------------------------------------- */
 
     {
       label: "Reports",

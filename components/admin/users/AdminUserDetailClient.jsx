@@ -18,27 +18,72 @@ const ROLE_RANK = {
   manager: 3,
   coach: 2,
   member: 1,
-  // anything else -> 0
 };
 
 function rankOf(role) {
   return ROLE_RANK[String(role || "").toLowerCase()] || 0;
 }
 
-/**
- * Normalize various shapes into a consistent entry:
- *  { key, team: { name, slug }, role }
- *
- * Supports:
- * - Memberships items like:
- *    { _id, role, team: { name, slug } }
- * - Owner teams items like:
- *    { _id, teamName, teamSlug }
- */
+/* ---------------- activity helpers (today / recent / inactive) ---------------- */
+
+function getLastActivityDate(user) {
+  return user?.lastActiveAt || user?.lastLogin || null;
+}
+
+function daysSince(date) {
+  if (!date) return Infinity;
+  const ms = Date.now() - new Date(date).getTime();
+  return Math.floor(ms / (1000 * 60 * 60 * 24));
+}
+
+function formatRelativeTime(date) {
+  if (!date) return "Never";
+
+  const ts = new Date(date).getTime();
+  if (!ts) return "Never";
+
+  const diffMin = Math.floor((Date.now() - ts) / 60000);
+
+  if (diffMin < 1) return "Just now";
+  if (diffMin < 60) return `${diffMin} min ago`;
+
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hr${diffHr === 1 ? "" : "s"} ago`;
+
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay === 1) return "Yesterday";
+
+  return `${diffDay} days ago`;
+}
+
+function getActivityBadge(date) {
+  const d = daysSince(date);
+
+  if (d < 1) {
+    return {
+      label: "Active today",
+      className: "bg-green-600 text-white",
+    };
+  }
+
+  if (d < 30) {
+    return {
+      label: "Recently active",
+      className: "bg-yellow-500 text-black",
+    };
+  }
+
+  return {
+    label: "Inactive 30+ days",
+    className: "bg-red-600 text-white",
+  };
+}
+
+/* ---------------- memberships helpers ---------------- */
+
 function normalizeMembershipItem(item) {
   if (!item) return null;
 
-  // Shape 1: membership doc with nested team
   if (item.team && (item.team.name || item.team.slug)) {
     return {
       key: item._id || `${item.team.slug}-${item.role || "member"}`,
@@ -50,7 +95,6 @@ function normalizeMembershipItem(item) {
     };
   }
 
-  // Shape 2: owner team document
   if ((item.teamName || item.teamSlug) && !item.team) {
     return {
       key: item._id || `${item.teamSlug}-owner`,
@@ -62,7 +106,6 @@ function normalizeMembershipItem(item) {
     };
   }
 
-  // Shape 3: already-normalized or unexpected
   if (item.team && item.role) {
     return {
       key: item.key || item._id || `${item.team.slug}-${item.role}`,
@@ -77,9 +120,6 @@ function normalizeMembershipItem(item) {
   return null;
 }
 
-/**
- * Merge memberships + ownerTeams, dedupe by team.slug, and keep the highest role.
- */
 function useMergedTeams(memberships = [], ownerTeams = []) {
   return useMemo(() => {
     const normalized = [
@@ -93,18 +133,11 @@ function useMergedTeams(memberships = [], ownerTeams = []) {
         entry.team?.slug || `__no_slug__:${entry.team?.name || "unknown"}`;
       const existing = bySlug.get(slug);
 
-      if (!existing) {
-        bySlug.set(slug, entry);
-        continue;
-      }
-
-      // keep whichever has higher role rank
-      if (rankOf(entry.role) > rankOf(existing.role)) {
+      if (!existing || rankOf(entry.role) > rankOf(existing.role)) {
         bySlug.set(slug, entry);
       }
     }
 
-    // Sort by role rank desc, then by name
     return Array.from(bySlug.values()).sort((a, b) => {
       const rdiff = rankOf(b.role) - rankOf(a.role);
       if (rdiff !== 0) return rdiff;
@@ -112,6 +145,8 @@ function useMergedTeams(memberships = [], ownerTeams = []) {
     });
   }, [memberships, ownerTeams]);
 }
+
+/* ---------------- component ---------------- */
 
 const AdminUserDetailClient = ({ initialData }) => {
   const [bundle, setBundle] = useState(initialData);
@@ -131,9 +166,11 @@ const AdminUserDetailClient = ({ initialData }) => {
   });
 
   const mergedTeams = useMergedTeams(memberships, ownerTeams);
-
   const [saving, setSaving] = useState(false);
   const id = user?._id;
+
+  const lastActive = getLastActivityDate(user);
+  const activityBadge = getActivityBadge(lastActive);
 
   async function saveProfile(e) {
     e.preventDefault();
@@ -172,12 +209,15 @@ const AdminUserDetailClient = ({ initialData }) => {
               @{user.username}
             </Link>
           </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-300">
-            {user.email} • Last login:{" "}
-            {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : "—"}
+          <p className="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2">
+            {user.email} • {formatRelativeTime(lastActive)}
+            <span
+              className={`px-2 py-0.5 rounded-full text-xs font-medium ${activityBadge.className}`}
+            >
+              {activityBadge.label}
+            </span>
           </p>
         </div>
-        <div className="flex gap-2">{/* actions in future */}</div>
       </div>
 
       {/* Tabs */}
@@ -202,7 +242,7 @@ const AdminUserDetailClient = ({ initialData }) => {
         </nav>
       </div>
 
-      {/* Panels */}
+      {/* Profile */}
       {tab === "Profile" && (
         <form
           onSubmit={saveProfile}
@@ -260,21 +300,18 @@ const AdminUserDetailClient = ({ initialData }) => {
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <FormSelect
-              label="Gender"
-              value={form.gender}
-              onChange={(val) => setForm({ ...form, gender: val })}
-              options={GENDER_OPTIONS}
-              placeholder="Select gender…"
-            />
-          </div>
+          <FormSelect
+            label="Gender"
+            value={form.gender}
+            onChange={(val) => setForm({ ...form, gender: val })}
+            options={GENDER_OPTIONS}
+            placeholder="Select gender…"
+          />
 
-          <div className="flex flex-col sm:flex-row sm:items-center sm:gap-6 gap-3">
-            <label className="inline-flex items-center gap-2 whitespace-nowrap">
+          <div className="flex gap-6">
+            <label className="inline-flex items-center gap-2">
               <input
                 type="checkbox"
-                className="h-4 w-4"
                 checked={form.verified}
                 onChange={(e) =>
                   setForm({ ...form, verified: e.target.checked })
@@ -283,10 +320,9 @@ const AdminUserDetailClient = ({ initialData }) => {
               <span>Verified</span>
             </label>
 
-            <label className="inline-flex items-center gap-2 whitespace-nowrap">
+            <label className="inline-flex items-center gap-2">
               <input
                 type="checkbox"
-                className="h-4 w-4"
                 checked={form.allowPublic}
                 onChange={(e) =>
                   setForm({ ...form, allowPublic: e.target.checked })
@@ -308,6 +344,7 @@ const AdminUserDetailClient = ({ initialData }) => {
         </form>
       )}
 
+      {/* Family */}
       {tab === "Family" && (
         <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
           {family?.length ? (
@@ -334,6 +371,7 @@ const AdminUserDetailClient = ({ initialData }) => {
         </div>
       )}
 
+      {/* Teams */}
       {tab === "Teams" && (
         <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
           {mergedTeams?.length ? (
@@ -370,6 +408,7 @@ const AdminUserDetailClient = ({ initialData }) => {
         </div>
       )}
 
+      {/* Reports */}
       {tab === "Reports" && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="p-4 rounded-lg bg-[hsl(222_47%_11%)] text-white">
