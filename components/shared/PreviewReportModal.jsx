@@ -87,21 +87,32 @@ const toEmbedUrl = (rawUrl, startSeconds = 0) => {
   const url = extractUrlFromMaybeIframe(rawUrl);
   if (!url) return "";
 
-  // YouTube patterns
-  const ytIdMatch =
+  // YouTube: watch, youtu.be, embed, shorts
+  let ytIdMatch =
     url.match(/(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/i) ||
     url.match(/youtube\.com\/shorts\/([^?]+)/i);
+
+  // ✅ YouTube LIVE support (THIS WAS MISSING)
+  if (!ytIdMatch) {
+    ytIdMatch = url.match(/youtube\.com\/live\/([^?]+)/i);
+  }
+
   if (ytIdMatch && ytIdMatch[1]) {
     const base = `https://www.youtube.com/embed/${ytIdMatch[1]}`;
     const start = Math.max(0, parseInt(startSeconds || 0, 10)) || 0;
     return start ? `${base}?start=${start}` : base;
   }
 
-  // Vimeo embeds are usually already in player form
+  // Vimeo embeds
   if (/player\.vimeo\.com\/video\//i.test(url)) return url;
 
-  // Fallback: return whatever we got
-  return url;
+  const vimeoMatch = url.match(/vimeo\.com\/(\d+)/i);
+  if (vimeoMatch && vimeoMatch[1]) {
+    return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+  }
+
+  // Not embeddable
+  return "";
 };
 
 // Field pickers by reportType
@@ -194,7 +205,7 @@ const PreviewReportModal = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-2 px-2 text-sm sm:text-base">
             {/* -------- Athlete Info -------- */}
-            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow p-6">
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow p-6 md:col-span-2">
               <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4 border-b border-gray-300 dark:border-gray-700 pb-2">
                 Athlete Information
               </h3>
@@ -290,7 +301,7 @@ const PreviewReportModal = ({
             </div>
 
             {/* -------- Videos -------- */}
-            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow p-6">
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow p-6 md:col-span-2">
               <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4 border-b border-gray-300 dark:border-gray-700 pb-2">
                 Videos
               </h3>
@@ -306,7 +317,51 @@ const PreviewReportModal = ({
                     )
                       ? parseInt(video.startSeconds, 10)
                       : 0;
-                    const embedUrl = toEmbedUrl(url, start);
+
+                    // Only treat YouTube/Vimeo as embeddable. Everything else gets a safe fallback.
+                    const isYoutube = /youtube\.com|youtu\.be/i.test(url);
+                    const isVimeo = /vimeo\.com/i.test(url);
+                    const canEmbed = isYoutube || isVimeo;
+
+                    const embedUrl = canEmbed ? toEmbedUrl(url, start) : "";
+
+                    // Safe, same-layout fallback that never triggers the browser iframe error.
+                    // Clicking the video area navigates to the actual URL (same tab).
+                    const safeSrcDoc =
+                      !embedUrl && url
+                        ? `<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      html,body{height:100%;margin:0}
+      body{
+        background:#e5e7eb;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        cursor:pointer;
+      }
+      .btn{
+        width:72px;height:72px;border-radius:9999px;
+        background:rgba(0,0,0,.65);
+        display:flex;align-items:center;justify-content:center;
+      }
+      svg{display:block}
+    </style>
+  </head>
+  <body onclick="window.top.location.href='${String(url).replace(
+    /'/g,
+    "%27"
+  )}'">
+    <div class="btn" aria-label="Play">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="white" aria-hidden="true">
+        <path d="M8 5v14l11-7z"></path>
+      </svg>
+    </div>
+  </body>
+</html>`
+                        : "";
 
                     return (
                       <div
@@ -318,18 +373,22 @@ const PreviewReportModal = ({
                             {title}
                           </h4>
                         )}
+
                         {notes && (
                           <div
                             className="wysiwyg-content prose dark:prose-invert text-sm max-w-none"
                             dangerouslySetInnerHTML={{ __html: notes }}
                           />
                         )}
-                        {embedUrl && (
-                          <div className="aspect-video w-full rounded-lg shadow overflow-hidden">
+
+                        {(embedUrl || safeSrcDoc) && (
+                          <div className="w-full rounded-lg shadow overflow-hidden h-[320px] sm:h-[380px] md:h-[420px] lg:h-[480px]">
                             <iframe
                               className="w-full h-full"
-                              src={embedUrl}
+                              src={embedUrl || undefined}
+                              srcDoc={safeSrcDoc || undefined}
                               title={title || `Video ${i + 1}`}
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                               allowFullScreen
                             />
                           </div>
