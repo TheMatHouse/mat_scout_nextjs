@@ -1,3 +1,4 @@
+// app/teams/[slug]/scouting-reports/ClientPage.jsx
 "use client";
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ import TeamUnlockGate from "@/components/teams/TeamUnlockGate";
 import ScoutingReportCard from "@/components/shared/ScoutingReportCard";
 
 import { decryptScoutingBody } from "@/lib/crypto/teamLock";
-import { canView, canEdit, canDelete } from "./logic/roleUtils";
+import { canView, canEdit, canDelete, canCreate } from "./logic/roleUtils";
 
 /* ---------------- helpers ---------------- */
 
@@ -31,6 +32,90 @@ const computeDivisionDisplay = (division) => {
   const name = division?.name || "";
   const g = genderLabel(division?.gender);
   return name ? (g ? `${name} — ${g}` : name) : "—";
+};
+
+/* ---------------- preview payload (from your original) ---------------- */
+
+const toSafeStr = (v) => (v == null ? "" : String(v));
+const toNonNegInt = (v) => {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+
+const buildPreviewPayload = (r) => {
+  const divisionDisplay = computeDivisionDisplay(r?.division);
+
+  const weightLabel = toSafeStr(r?.weightLabel).trim();
+  const weightUnit = toSafeStr(r?.weightUnit).trim();
+
+  const rawCategoryLabel =
+    (typeof r?.weightCategory === "object"
+      ? toSafeStr(r?.weightCategory?.label || r?.weightCategory?.name)
+      : toSafeStr(r?.weightCategory)) || "";
+
+  let weightDisplay = weightLabel || rawCategoryLabel || "";
+  if (weightDisplay && weightUnit && !/\b(kg|lb)s?\b/i.test(weightDisplay)) {
+    weightDisplay = `${weightDisplay} ${weightUnit}`;
+  }
+
+  const videos = Array.isArray(r?.videos)
+    ? r.videos
+        .map((v) =>
+          v && typeof v === "object"
+            ? {
+                title: toSafeStr(v.title || v.videoTitle),
+                notes: toSafeStr(v.notes || v.videoNotes),
+                url: toSafeStr(v.url || v.videoURL || v.urlCanonical),
+                startSeconds: toNonNegInt(v.startSeconds),
+              }
+            : null
+        )
+        .filter(Boolean)
+    : [];
+
+  return {
+    _id: toSafeStr(r?._id),
+    matchType: toSafeStr(r?.matchType),
+    eventName: toSafeStr(r?.eventName),
+    matchDate: r?.matchDate || null,
+    createdByName: toSafeStr(r?.createdByName),
+    result: toSafeStr(r?.result),
+    score: toSafeStr(r?.score),
+    isPublic: !!r?.isPublic,
+
+    athleteFirstName: toSafeStr(r?.athleteFirstName),
+    athleteLastName: toSafeStr(r?.athleteLastName),
+    athleteCountry: toSafeStr(r?.athleteCountry),
+    athleteNationalRank: toSafeStr(r?.athleteNationalRank),
+    athleteWorldRank: toSafeStr(r?.athleteWorldRank),
+    athleteClub: toSafeStr(r?.athleteClub),
+    athleteGrip: toSafeStr(r?.athleteGrip),
+
+    divisionDisplay,
+    division: divisionDisplay,
+
+    weightDisplay: weightDisplay || "—",
+    weightLabel,
+    weightUnit,
+
+    opponentAttacks: Array.isArray(r?.opponentAttacks)
+      ? r.opponentAttacks.map(toSafeStr)
+      : [],
+    athleteAttacks: Array.isArray(r?.athleteAttacks)
+      ? r.athleteAttacks.map(toSafeStr)
+      : [],
+    opponentAttackNotes: toSafeStr(r?.opponentAttackNotes),
+    athleteAttackNotes: toSafeStr(r?.athleteAttackNotes),
+
+    opponentName: toSafeStr(r?.opponentName),
+    opponentCountry: toSafeStr(r?.opponentCountry),
+    opponentClub: toSafeStr(r?.opponentClub),
+    opponentRank: toSafeStr(r?.opponentRank),
+    opponentGrip: toSafeStr(r?.opponentGrip),
+    myRank: toSafeStr(r?.myRank),
+
+    videos,
+  };
 };
 
 /* ---------------- main ---------------- */
@@ -116,6 +201,35 @@ function TeamScoutingReportsPage() {
     if (!slug || !isUnlocked || !team) return;
     fetchReports();
   }, [slug, isUnlocked, team]);
+
+  /* ---------------- delete (RESTORED) ---------------- */
+
+  const handleDeleteReport = async (report) => {
+    if (!report?._id) return;
+
+    if (!window.confirm("This report will be permanently deleted. Continue?")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `/api/teams/${slug}/scouting-reports/${report._id}`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+        }
+      );
+
+      if (!res.ok) throw new Error("Delete failed");
+
+      toast.success("Report deleted");
+      setReports((prev) => prev.filter((r) => r._id !== report._id));
+      router.refresh();
+    } catch (err) {
+      toast.error(err?.message || "Failed to delete");
+    }
+  };
 
   /* ---------------- user + members ---------------- */
 
@@ -291,7 +405,21 @@ function TeamScoutingReportsPage() {
       onUnlocked={() => setIsUnlocked(true)}
     >
       <div>
-        <h1 className="text-2xl font-bold mb-4">Scouting Reports</h1>
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-2xl font-bold">Scouting Reports</h1>
+
+          {team && user && canCreate(team, teamMembers, user) && (
+            <button
+              className="rounded-md bg-ms-blue px-4 py-2 text-white"
+              onClick={() => {
+                setSelectedReport(null);
+                setOpen(true);
+              }}
+            >
+              ➕ Add Scouting Report
+            </button>
+          )}
+        </div>
 
         {/* Filters */}
         <div className="mb-6 flex gap-3 flex-wrap">
@@ -375,7 +503,7 @@ function TeamScoutingReportsPage() {
               onView={
                 canView(r, team, teamMembers, user)
                   ? () => {
-                      setPreviewPayload(r);
+                      setPreviewPayload(buildPreviewPayload(r));
                       setPreviewOpen(true);
                     }
                   : null
@@ -390,9 +518,7 @@ function TeamScoutingReportsPage() {
               }
               onDelete={
                 canDelete(r, team, teamMembers, user)
-                  ? () => {
-                      // handled elsewhere
-                    }
+                  ? () => handleDeleteReport(r)
                   : null
               }
             />
@@ -419,6 +545,45 @@ function TeamScoutingReportsPage() {
               Next
             </button>
           </div>
+        )}
+
+        {/* EDIT / CREATE (RESTORED) */}
+        <ModalLayout
+          isOpen={open}
+          onClose={() => setOpen(false)}
+          title={
+            selectedReport ? "Edit Scouting Report" : "Add Scouting Report"
+          }
+          withCard
+        >
+          <ScoutingReportForm
+            key={selectedReport?._id}
+            report={selectedReport}
+            team={team}
+            user={user}
+            setOpen={setOpen}
+            onSuccess={fetchReports}
+          />
+        </ModalLayout>
+
+        {/* PREVIEW (RESTORED) */}
+        {previewOpen && previewPayload && (
+          <ModalLayout
+            isOpen={previewOpen}
+            onClose={() => setPreviewOpen(false)}
+            title={`Scouting Report – ${
+              previewPayload.athleteFirstName || ""
+            } ${previewPayload.athleteLastName || ""}`}
+            withCard
+            size="xl"
+          >
+            <PreviewReportModal
+              previewOpen={previewOpen}
+              setPreviewOpen={setPreviewOpen}
+              report={previewPayload}
+              reportType="scouting"
+            />
+          </ModalLayout>
         )}
       </div>
     </TeamUnlockGate>
