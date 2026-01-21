@@ -13,7 +13,12 @@ function ScoutingReportCard({ report, onView, onEdit, onDelete }) {
       <div className="absolute right-3 top-3 flex flex-col gap-2">
         {onView && (
           <button
-            onClick={onView}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onView();
+            }}
             title="View"
             className="h-9 w-9 rounded-lg border border-border bg-white dark:bg-slate-900 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800"
           >
@@ -32,7 +37,12 @@ function ScoutingReportCard({ report, onView, onEdit, onDelete }) {
 
         {onEdit && (
           <button
-            onClick={onEdit}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onEdit();
+            }}
             title="Edit"
             className="h-9 w-9 rounded-lg border border-border bg-white dark:bg-slate-900 flex items-center justify-center text-green-600 hover:bg-slate-100 dark:hover:bg-slate-800"
           >
@@ -42,7 +52,12 @@ function ScoutingReportCard({ report, onView, onEdit, onDelete }) {
 
         {onDelete && (
           <button
-            onClick={onDelete}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDelete();
+            }}
             title="Delete"
             className="h-9 w-9 rounded-lg border border-border bg-white dark:bg-slate-900 flex items-center justify-center text-red-600 hover:bg-slate-100 dark:hover:bg-slate-800"
           >
