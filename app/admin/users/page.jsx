@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { Trash2, ShieldCheck, Eye, Download } from "lucide-react";
+import { Eye, Download } from "lucide-react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
-/* ---------------- activity helpers (MATCH DETAIL PAGE) ---------------- */
+/* ---------------- activity helpers ---------------- */
 
 function getLastActivityDate(u) {
   return u.lastActiveAt || u.lastLogin || null;
@@ -32,7 +32,6 @@ function formatRelativeTime(date) {
   if (!ts) return "Never";
 
   const diffMin = Math.floor((Date.now() - ts) / 60000);
-
   if (diffMin < 1) return "Just now";
   if (diffMin < 60) return `${diffMin} min ago`;
 
@@ -49,23 +48,14 @@ function getActivityBadge(date) {
   const d = daysSince(date);
 
   if (d < 1) {
-    return {
-      label: "Active today",
-      className: "bg-green-600 text-white",
-    };
+    return { label: "Active today", className: "bg-green-600 text-white" };
   }
 
   if (d < 30) {
-    return {
-      label: "Recently active",
-      className: "bg-yellow-500 text-black",
-    };
+    return { label: "Recently active", className: "bg-yellow-500 text-black" };
   }
 
-  return {
-    label: "Inactive 30+ days",
-    className: "bg-red-600 text-white",
-  };
+  return { label: "Inactive 30+ days", className: "bg-red-600 text-white" };
 }
 
 /* ---------------- CSV export ---------------- */
@@ -117,7 +107,6 @@ const AdminUsersPage = () => {
   const [users, setUsers] = useState([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
-  const [actionLoadingId, setActionLoadingId] = useState(null);
 
   async function fetchUsers(search = "") {
     setLoading(true);
@@ -129,7 +118,7 @@ const AdminUsersPage = () => {
       const data = await res.json();
       setUsers(data.users || []);
     } catch (err) {
-      console.error("Error fetching users:", err);
+      console.error(err);
       toast.error("Failed to load users.");
     } finally {
       setLoading(false);
@@ -187,10 +176,11 @@ const AdminUsersPage = () => {
         />
       </div>
 
-      <div className="overflow-x-auto rounded-md border border-gray-300 dark:border-gray-700">
+      {/* ---------- DESKTOP TABLE ---------- */}
+      <div className="hidden md:block overflow-x-auto rounded-md border border-gray-300 dark:border-gray-700">
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="bg-gray-100 dark:bg-[hsl(222_47%_12%)] text-gray-900 dark:text-gray-100">
+            <tr className="bg-gray-100 dark:bg-[hsl(222_47%_12%)]">
               <th className="border px-2 py-2 text-left">Name</th>
               <th className="border px-2 py-2 text-left">Email</th>
               <th className="border px-2 py-2 text-left">Username</th>
@@ -207,15 +197,6 @@ const AdminUsersPage = () => {
                   className="py-6 text-center"
                 >
                   Loading users…
-                </td>
-              </tr>
-            ) : sortedUsers.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={6}
-                  className="py-6 text-center"
-                >
-                  No users found.
                 </td>
               </tr>
             ) : (
@@ -255,6 +236,57 @@ const AdminUsersPage = () => {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* ---------- MOBILE CARDS ---------- */}
+      <div className="md:hidden space-y-4">
+        {loading ? (
+          <div className="py-6 text-center">Loading users…</div>
+        ) : (
+          sortedUsers.map((u) => {
+            const lastActive = getLastActivityDate(u);
+            const badge = getActivityBadge(lastActive);
+
+            return (
+              <div
+                key={u._id}
+                className="rounded-lg border border-gray-300 dark:border-gray-700 p-4 bg-white dark:bg-gray-900"
+              >
+                <div className="font-semibold text-lg">
+                  {u.firstName} {u.lastName}
+                </div>
+                <div className="text-sm text-gray-700 dark:text-gray-300">
+                  {u.email}
+                </div>
+                <div className="text-sm text-gray-700 dark:text-gray-300">
+                  @{u.username}
+                </div>
+
+                <div className="mt-2 text-sm">
+                  Last active: {formatRelativeTime(lastActive)}
+                </div>
+
+                <div className="mt-2">
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs font-medium ${badge.className}`}
+                  >
+                    {badge.label}
+                  </span>
+                </div>
+
+                <div className="mt-4">
+                  <Link
+                    href={`/admin/users/${u._id}`}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded bg-gray-600 hover:bg-gray-700 text-white"
+                  >
+                    <Eye size={16} />
+                    View
+                  </Link>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
     </>
   );
