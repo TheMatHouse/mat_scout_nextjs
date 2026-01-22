@@ -12,12 +12,7 @@ const Editor = dynamic(() => import("@/components/shared/Editor"), {
   ),
 });
 
-export default function TeamUpdateForm({
-  slug,
-  initial = null,
-  onSuccess,
-  onClose,
-}) {
+const TeamUpdateForm = ({ slug, initial = null, onSuccess, onClose }) => {
   const [title, setTitle] = useState(initial?.title || "");
   const [body, setBody] = useState(initial?.body || "");
   const [saving, setSaving] = useState(false);
@@ -39,6 +34,7 @@ export default function TeamUpdateForm({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     const t = title.trim();
     const b = (body ?? "").trim();
     if (!t || !b) {
@@ -47,32 +43,42 @@ export default function TeamUpdateForm({
     }
 
     setSaving(true);
+
     try {
       const isEdit = !!initial?._id;
       const url = isEdit
         ? `/api/teams/${encodeURIComponent(slug)}/updates/${encodeURIComponent(
-            initial._id
+            initial._id,
           )}`
         : `/api/teams/${encodeURIComponent(slug)}/updates`;
+
       const method = isEdit ? "PATCH" : "POST";
 
       const res = await fetch(url, {
         method,
+        credentials: "include", // REQUIRED for NextAuth cookies
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: t, body: b }),
       });
 
       const { data, raw } = await parseJsonMaybe(res);
+
       if (!res.ok) {
-        console.error("Update save failed:", { status: res.status, raw });
+        console.error("Update save failed:", {
+          status: res.status,
+          raw,
+        });
+
         const msg =
           (data && (data.error || data.message)) ||
           `Failed to save (HTTP ${res.status})`;
+
         toast.error(msg);
         return;
       }
 
       toast.success(isEdit ? "Update edited." : "Update posted.");
+
       onSuccess?.(data?.update || null);
       onClose?.();
     } catch (err) {
@@ -121,6 +127,7 @@ export default function TeamUpdateForm({
         >
           Cancel
         </button>
+
         <button
           type="submit"
           className="btn btn-primary"
@@ -131,4 +138,6 @@ export default function TeamUpdateForm({
       </div>
     </form>
   );
-}
+};
+
+export default TeamUpdateForm;

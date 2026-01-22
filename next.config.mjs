@@ -3,10 +3,19 @@ import { withSentryConfig } from "@sentry/nextjs";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: [
-      "graph.facebook.com", // Facebook avatars
-      "lh3.googleusercontent.com", // Google avatars
-      "res.cloudinary.com", // Cloudinary uploads (including your default avatar)
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "graph.facebook.com",
+      },
+      {
+        protocol: "https",
+        hostname: "lh3.googleusercontent.com",
+      },
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+      },
     ],
   },
 

@@ -32,22 +32,21 @@ function toObjectIdSafe(id) {
 export async function GET(_req, { params }) {
   try {
     await connectDB();
-    const { slug } = await params;
+    const { slug } = await params; // ✅ REQUIRED in your Next 15 setup
 
     const team = await Team.findOne({ teamSlug: slug })
       .select("_id teamName teamSlug")
       .lean();
+
     if (!team) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
     }
 
-    // 1) Load updates and populate createdBy (preferred)
     const raw = await TeamUpdate.find({ teamId: team._id })
       .sort({ createdAt: -1 })
       .populate({ path: "createdBy", select: "firstName lastName username" })
       .lean();
 
-    // 2) Collect any authorIds that still need resolving (legacy)
     const fallbackIds = [];
     for (const u of raw) {
       if (!u.createdBy && u.authorId) {
@@ -65,7 +64,6 @@ export async function GET(_req, { params }) {
       fallbackMap = new Map(users.map((u) => [String(u._id), u]));
     }
 
-    // 3) Shape response with authorName/authorUsername filled in
     const updates = raw.map((u) => {
       const createdByUser = u.createdBy;
       const fallbackUser = u.authorId
@@ -80,7 +78,7 @@ export async function GET(_req, { params }) {
         body: u.body,
         createdAt: u.createdAt,
         updatedAt: u.updatedAt,
-        authorName: fullNameOrUsername(authorUser), // ← always filled or "—"
+        authorName: fullNameOrUsername(authorUser),
         authorUsername: authorUser?.username || "",
       };
     });
@@ -90,52 +88,75 @@ export async function GET(_req, { params }) {
     console.error("GET /teams/:slug/updates failed:", err);
     return NextResponse.json(
       { error: "Failed to load updates" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 /* =========================
    POST  /api/teams/:slug/updates
-   (unchanged logic, but ensures createdBy is set)
    ========================= */
 export async function POST(req, { params }) {
   try {
     await connectDB();
-    const { slug } = await params;
+    const { slug } = await params; // Next 15 requirement in your setup
 
     const me = await getCurrentUser();
-    if (!me)
+    if (!me) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const team = await Team.findOne({ teamSlug: slug })
-      .select("_id teamName teamSlug")
+      .select("_id teamName teamSlug user")
       .lean();
+
     if (!team) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
     }
 
-    const myMembership = await TeamMember.findOne({
-      teamId: team._id,
-      userId: me._id,
-    })
-      .select("role")
-      .lean();
-    if (!myMembership || !["manager", "coach"].includes(myMembership.role)) {
+    // Owner is stored in team.user
+    const isOwner = String(team.user) === String(me._id);
+
+    // Check membership (only if not owner)
+    let myMembership = null;
+    if (!isOwner) {
+      myMembership = await TeamMember.findOne({
+        teamId: team._id,
+        userId: me._id,
+      })
+        .select("role")
+        .lean();
+    }
+
+    // Permission gate
+    if (
+      !isOwner &&
+      (!myMembership ||
+        !["member", "coach", "manager", "owner"].includes(myMembership.role))
+    ) {
+      console.warn("TEAM UPDATE FORBIDDEN", {
+        teamUser: String(team.user),
+        me: String(me._id),
+        isOwner,
+        role: myMembership?.role,
+      });
+
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    // Parse body
     const { title, body } = await req.json();
     const t = String(title || "").trim();
     const b = String(body || "").trim();
+
     if (!t || !b) {
       return NextResponse.json(
         { error: "Title and body are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // Set both createdBy (new) and authorId (legacy) for maximum compatibility
+    // Create update
     const created = await TeamUpdate.create({
       teamId: team._id,
       title: t,
@@ -144,46 +165,46 @@ export async function POST(req, { params }) {
       authorId: me._id,
     });
 
-    // Notify members according to prefs (kept from your setup)
+    // =========================
+    // NOTIFICATIONS + EMAILS
+    // =========================
+
+    // Get all team members except pending
     const memberships = await TeamMember.find({
       teamId: team._id,
-      role: { $in: ["member", "coach", "manager"] },
+      role: { $ne: "pending" },
     })
       .select("userId")
       .lean();
 
-    const wantsInApp = (user) =>
-      user?.notificationSettings?.teamUpdates?.inApp ?? true;
-    const wantsEmail = (user) =>
-      user?.notificationSettings?.teamUpdates?.email ?? false;
+    // Always include owner (owner is NOT in TeamMembers)
+    memberships.push({ userId: team.user });
+
+    const userIds = memberships.map((m) => m.userId);
+    const users = await User.find({ _id: { $in: userIds } }).lean();
 
     const link = `/teams/${team.teamSlug}/updates`;
     const strip = (html) => String(html || "").replace(/<[^>]+>/g, "");
     const preview = strip(b).slice(0, 240);
     const notifBody = `New team update: ${t}`;
 
-    for (const m of memberships) {
-      const u = await User.findById(m.userId)
-        .select("email firstName lastName username notificationSettings")
-        .lean();
-      if (!u) continue;
+    for (const u of users) {
+      // Skip author
       if (String(u._id) === String(me._id)) continue;
 
-      if (wantsInApp(u)) {
-        try {
-          await Notification.create({
-            user: u._id,
-            notificationType: "team_update",
-            notificationBody: notifBody,
-            notificationLink: link,
-            viewed: false,
-          });
-        } catch (e) {
-          console.error("Notification create failed:", u._id, e);
-        }
-      }
+      // -------- In-App Notification --------
+      await Notification.create({
+        user: u._id, // CHANGE to userId if your Notification model uses userId
+        notificationType: "team_update",
+        notificationBody: notifBody,
+        notificationLink: link,
+        viewed: false,
+      });
 
-      if (wantsEmail(u)) {
+      // -------- Email (only if user enabled) --------
+      const wantsEmail = u?.notificationSettings?.teamUpdates?.email ?? false;
+
+      if (wantsEmail) {
         const fullName = fullNameOrUsername(u);
         const html = baseEmailTemplate({
           title: `Team update: ${t}`,
@@ -216,8 +237,9 @@ export async function POST(req, { params }) {
       }
     }
 
-    // Shape one row for immediate UI
+    // Return for UI
     const meName = fullNameOrUsername(me);
+
     return NextResponse.json(
       {
         update: {
@@ -230,13 +252,13 @@ export async function POST(req, { params }) {
           authorUsername: me.username || "",
         },
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (err) {
     console.error("POST /teams/:slug/updates failed:", err);
     return NextResponse.json(
       { error: "Failed to create update" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
