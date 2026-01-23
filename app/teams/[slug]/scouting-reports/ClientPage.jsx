@@ -34,7 +34,7 @@ const computeDivisionDisplay = (division) => {
   return name ? (g ? `${name} — ${g}` : name) : "—";
 };
 
-/* ---------------- preview payload (from your original) ---------------- */
+/* ---------------- preview payload ---------------- */
 
 const toSafeStr = (v) => (v == null ? "" : String(v));
 const toNonNegInt = (v) => {
@@ -71,7 +71,6 @@ const buildPreviewPayload = (r) => {
           return {
             title: toSafeStr(v.title || v.videoTitle),
             notes: toSafeStr(v.notes || v.videoNotes),
-            // 🔑 critical fix: only pass embeddable URLs
             url: isEmbeddableVideoUrl(rawUrl) ? rawUrl : "",
             startSeconds: toNonNegInt(v.startSeconds),
           };
@@ -80,46 +79,9 @@ const buildPreviewPayload = (r) => {
     : [];
 
   return {
-    _id: toSafeStr(r?._id),
-    matchType: toSafeStr(r?.matchType),
-    eventName: toSafeStr(r?.eventName),
-    matchDate: r?.matchDate || null,
-    createdByName: toSafeStr(r?.createdByName),
-    result: toSafeStr(r?.result),
-    score: toSafeStr(r?.score),
-    isPublic: !!r?.isPublic,
-
-    athleteFirstName: toSafeStr(r?.athleteFirstName),
-    athleteLastName: toSafeStr(r?.athleteLastName),
-    athleteCountry: toSafeStr(r?.athleteCountry),
-    athleteNationalRank: toSafeStr(r?.athleteNationalRank),
-    athleteWorldRank: toSafeStr(r?.athleteWorldRank),
-    athleteClub: toSafeStr(r?.athleteClub),
-    athleteGrip: toSafeStr(r?.athleteGrip),
-
+    ...r,
     divisionDisplay,
-    division: divisionDisplay,
-
     weightDisplay: weightDisplay || "—",
-    weightLabel,
-    weightUnit,
-
-    opponentAttacks: Array.isArray(r?.opponentAttacks)
-      ? r.opponentAttacks.map(toSafeStr)
-      : [],
-    athleteAttacks: Array.isArray(r?.athleteAttacks)
-      ? r.athleteAttacks.map(toSafeStr)
-      : [],
-    opponentAttackNotes: toSafeStr(r?.opponentAttackNotes),
-    athleteAttackNotes: toSafeStr(r?.athleteAttackNotes),
-
-    opponentName: toSafeStr(r?.opponentName),
-    opponentCountry: toSafeStr(r?.opponentCountry),
-    opponentClub: toSafeStr(r?.opponentClub),
-    opponentRank: toSafeStr(r?.opponentRank),
-    opponentGrip: toSafeStr(r?.opponentGrip),
-    myRank: toSafeStr(r?.myRank),
-
     videos,
   };
 };
@@ -170,7 +132,7 @@ function TeamScoutingReportsPage() {
       setLoading(true);
 
       const res = await fetch(
-        `/api/teams/${slug}/scouting-reports?ts=${Date.now()}`
+        `/api/teams/${slug}/scouting-reports?ts=${Date.now()}`,
       );
       if (!res.ok) throw new Error();
 
@@ -207,35 +169,6 @@ function TeamScoutingReportsPage() {
     if (!slug || !isUnlocked || !team) return;
     fetchReports();
   }, [slug, isUnlocked, team]);
-
-  /* ---------------- delete (RESTORED) ---------------- */
-
-  const handleDeleteReport = async (report) => {
-    if (!report?._id) return;
-
-    if (!window.confirm("This report will be permanently deleted. Continue?")) {
-      return;
-    }
-
-    try {
-      const res = await fetch(
-        `/api/teams/${slug}/scouting-reports/${report._id}`,
-        {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-        }
-      );
-
-      if (!res.ok) throw new Error("Delete failed");
-
-      toast.success("Report deleted");
-      setReports((prev) => prev.filter((r) => r._id !== report._id));
-      router.refresh();
-    } catch (err) {
-      toast.error(err?.message || "Failed to delete");
-    }
-  };
 
   /* ---------------- user + members ---------------- */
 
@@ -297,57 +230,11 @@ function TeamScoutingReportsPage() {
     });
   }, [reports, teamMembers]);
 
-  /* ---------------- filter options ---------------- */
-
-  const reportForOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(normalizedReports.flatMap((r) => r.reportForNamesArr))
-      ),
-    [normalizedReports]
-  );
-
-  const athleteOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(normalizedReports.map((r) => r.athleteDisplay).filter(Boolean))
-      ),
-    [normalizedReports]
-  );
-
-  const countryOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(normalizedReports.map((r) => r.countryDisplay).filter(Boolean))
-      ),
-    [normalizedReports]
-  );
-
-  const divisionOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(normalizedReports.map((r) => r.divisionDisplay).filter(Boolean))
-      ),
-    [normalizedReports]
-  );
-
-  const weightOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(normalizedReports.map((r) => r.weightDisplay).filter(Boolean))
-      ),
-    [normalizedReports]
-  );
-
-  /* ---------------- filtering ---------------- */
+  /* ---------------- filtering (actual results) ---------------- */
 
   const filteredReports = useMemo(() => {
     return normalizedReports.filter((r) => {
-      if (
-        filterAthlete &&
-        !r.athleteDisplay.toLowerCase().includes(filterAthlete.toLowerCase())
-      )
-        return false;
+      if (filterAthlete && r.athleteDisplay !== filterAthlete) return false;
 
       if (filterReportFor && !r.reportForNamesArr.includes(filterReportFor))
         return false;
@@ -366,6 +253,134 @@ function TeamScoutingReportsPage() {
     filterDivision,
     filterWeight,
   ]);
+
+  /* ---------------- filter option pools (exclude self) ---------------- */
+
+  const poolForReportFor = useMemo(() => {
+    return normalizedReports.filter((r) => {
+      if (filterAthlete && r.athleteDisplay !== filterAthlete) return false;
+      if (filterCountry && r.countryDisplay !== filterCountry) return false;
+      if (filterDivision && r.divisionDisplay !== filterDivision) return false;
+      if (filterWeight && r.weightDisplay !== filterWeight) return false;
+      return true;
+    });
+  }, [
+    normalizedReports,
+    filterAthlete,
+    filterCountry,
+    filterDivision,
+    filterWeight,
+  ]);
+
+  const poolForAthlete = useMemo(() => {
+    return normalizedReports.filter((r) => {
+      if (filterReportFor && !r.reportForNamesArr.includes(filterReportFor))
+        return false;
+      if (filterCountry && r.countryDisplay !== filterCountry) return false;
+      if (filterDivision && r.divisionDisplay !== filterDivision) return false;
+      if (filterWeight && r.weightDisplay !== filterWeight) return false;
+      return true;
+    });
+  }, [
+    normalizedReports,
+    filterReportFor,
+    filterCountry,
+    filterDivision,
+    filterWeight,
+  ]);
+
+  const poolForCountry = useMemo(() => {
+    return normalizedReports.filter((r) => {
+      if (filterReportFor && !r.reportForNamesArr.includes(filterReportFor))
+        return false;
+      if (filterAthlete && r.athleteDisplay !== filterAthlete) return false;
+      if (filterDivision && r.divisionDisplay !== filterDivision) return false;
+      if (filterWeight && r.weightDisplay !== filterWeight) return false;
+      return true;
+    });
+  }, [
+    normalizedReports,
+    filterReportFor,
+    filterAthlete,
+    filterDivision,
+    filterWeight,
+  ]);
+
+  const poolForDivision = useMemo(() => {
+    return normalizedReports.filter((r) => {
+      if (filterReportFor && !r.reportForNamesArr.includes(filterReportFor))
+        return false;
+      if (filterAthlete && r.athleteDisplay !== filterAthlete) return false;
+      if (filterCountry && r.countryDisplay !== filterCountry) return false;
+      if (filterWeight && r.weightDisplay !== filterWeight) return false;
+      return true;
+    });
+  }, [
+    normalizedReports,
+    filterReportFor,
+    filterAthlete,
+    filterCountry,
+    filterWeight,
+  ]);
+
+  const poolForWeight = useMemo(() => {
+    return normalizedReports.filter((r) => {
+      if (filterReportFor && !r.reportForNamesArr.includes(filterReportFor))
+        return false;
+      if (filterAthlete && r.athleteDisplay !== filterAthlete) return false;
+      if (filterCountry && r.countryDisplay !== filterCountry) return false;
+      if (filterDivision && r.divisionDisplay !== filterDivision) return false;
+      return true;
+    });
+  }, [
+    normalizedReports,
+    filterReportFor,
+    filterAthlete,
+    filterCountry,
+    filterDivision,
+  ]);
+
+  /* ---------------- dependent filter options (alphabetized) ---------------- */
+
+  const sortAlpha = (arr) =>
+    [...arr].sort((a, b) =>
+      String(a).localeCompare(String(b), undefined, { sensitivity: "base" }),
+    );
+
+  const buildOptionsFromPool = (pool, selector) =>
+    sortAlpha(Array.from(new Set(pool.map(selector).filter(Boolean))));
+
+  const reportForOptions = useMemo(() => {
+    const values = new Set();
+    poolForReportFor.forEach((r) => {
+      r.reportForNamesArr.forEach((name) => {
+        if (name) values.add(name);
+      });
+    });
+    return sortAlpha(Array.from(values));
+  }, [poolForReportFor]);
+
+  const athleteOptions = useMemo(
+    () => buildOptionsFromPool(poolForAthlete, (r) => r.athleteDisplay),
+    [poolForAthlete],
+  );
+
+  const countryOptions = useMemo(
+    () => buildOptionsFromPool(poolForCountry, (r) => r.countryDisplay),
+    [poolForCountry],
+  );
+
+  const divisionOptions = useMemo(
+    () => buildOptionsFromPool(poolForDivision, (r) => r.divisionDisplay),
+    [poolForDivision],
+  );
+
+  const weightOptions = useMemo(
+    () => buildOptionsFromPool(poolForWeight, (r) => r.weightDisplay),
+    [poolForWeight],
+  );
+
+  /* ---------------- pagination ---------------- */
 
   const totalPages = Math.ceil(filteredReports.length / PAGE_SIZE);
 
@@ -531,29 +546,7 @@ function TeamScoutingReportsPage() {
           ))}
         </div>
 
-        {totalPages > 1 && (
-          <div className="mt-8 flex items-center justify-center gap-3">
-            <button
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              className="rounded-lg border px-4 py-2 text-sm disabled:opacity-40"
-            >
-              Prev
-            </button>
-            <span className="text-sm">
-              Page {currentPage} of {totalPages}
-            </span>
-            <button
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              className="rounded-lg border px-4 py-2 text-sm disabled:opacity-40"
-            >
-              Next
-            </button>
-          </div>
-        )}
-
-        {/* EDIT / CREATE (RESTORED) */}
+        {/* EDIT / CREATE */}
         <ModalLayout
           isOpen={open}
           onClose={() => setOpen(false)}
@@ -572,14 +565,14 @@ function TeamScoutingReportsPage() {
           />
         </ModalLayout>
 
-        {/* PREVIEW (RESTORED) */}
+        {/* PREVIEW */}
         {previewOpen && previewPayload && (
           <ModalLayout
             isOpen={previewOpen}
             onClose={() => setPreviewOpen(false)}
-            title={`Scouting Report – ${
-              previewPayload.athleteFirstName || ""
-            } ${previewPayload.athleteLastName || ""}`}
+            title={`Scouting Report – ${previewPayload.athleteFirstName || ""} ${
+              previewPayload.athleteLastName || ""
+            }`}
             withCard
             size="xl"
           >
