@@ -15,6 +15,78 @@ import { createNotification } from "@/lib/createNotification";
 import { Mail } from "@/lib/email/mailer";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
+// ----------------------------------------------------------
+// Video helpers (copied from POST route for parity)
+// ----------------------------------------------------------
+const safeStr = (v) => (v == null ? "" : String(v)).trim();
+
+const toNonNegInt = (v) => {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+
+function extractYouTubeId(raw) {
+  const str = safeStr(raw);
+  if (!str) return "";
+
+  const iframe = str.match(
+    /<iframe[\s\S]*?src\s*=\s*["']([^"']+)["'][\s\S]*?>/i,
+  );
+  const urlStr = iframe ? iframe[1] : str;
+
+  try {
+    const u = new URL(urlStr);
+    const host = (u.hostname || "").toLowerCase();
+    const path = u.pathname || "";
+
+    if (host.includes("youtu.be")) {
+      return path.split("/").filter(Boolean)[0] || "";
+    }
+    if (host.includes("youtube.com")) {
+      return (
+        u.searchParams.get("v") ||
+        (path.startsWith("/embed/") && path.split("/")[2]) ||
+        (path.startsWith("/shorts/") && path.split("/")[2]) ||
+        ""
+      );
+    }
+  } catch {}
+
+  const m = urlStr.match(/(?:v=|\/embed\/|youtu\.be\/|\/shorts\/)([^&?/]+)/i);
+  return m?.[1] || "";
+}
+
+function buildCanonicalUrl(url, videoId) {
+  if (videoId) return `https://www.youtube.com/watch?v=${videoId}`;
+  try {
+    const u = new URL(url);
+    u.search = "";
+    u.hash = "";
+    return u.toString();
+  } catch {
+    return safeStr(url);
+  }
+}
+
+function normalizeIncomingVideoForCreate(raw, reportId, userId) {
+  if (!raw || typeof raw !== "object") return null;
+
+  const url = safeStr(raw.url ?? raw.videoURL);
+  const id = extractYouTubeId(url);
+  const startSeconds = toNonNegInt(raw.startSeconds);
+
+  return {
+    title: safeStr(raw.title ?? raw.videoTitle),
+    notes: safeStr(raw.notes ?? raw.videoNotes),
+    url,
+    urlCanonical: buildCanonicalUrl(url, id),
+    startSeconds,
+    videoId: id || new Types.ObjectId().toString(),
+    report: reportId,
+    createdBy: userId,
+  };
+}
+
 // ============================================================
 // GET: Fetch a single team scouting report (includes crypto)
 // ============================================================
@@ -26,20 +98,20 @@ export async function GET(_req, { params }) {
     if (!Types.ObjectId.isValid(reportId)) {
       return NextResponse.json(
         { message: "Invalid report ID" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     // Tolerant team lookup (_ vs -)
     const team =
       (await Team.findOne({ teamSlug: slug }).select(
-        "_id teamName teamSlug"
+        "_id teamName teamSlug",
       )) ||
       (await Team.findOne({ teamSlug: slug.replace(/[-_]/g, "") }).select(
-        "_id teamName teamSlug"
+        "_id teamName teamSlug",
       )) ||
       (await Team.findOne({ teamSlug: slug.replace(/_/g, "-") }).select(
-        "_id teamName teamSlug"
+        "_id teamName teamSlug",
       ));
 
     if (!team) {
@@ -57,17 +129,16 @@ export async function GET(_req, { params }) {
     if (!report) {
       return NextResponse.json(
         { message: "Scouting report not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    // Return as-is; client will decrypt if report.crypto is present.
     return NextResponse.json({ report }, { status: 200 });
   } catch (err) {
     console.error("GET single scouting report error:", err);
     return NextResponse.json(
       { message: "Server error: " + err.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -90,13 +161,13 @@ export async function PATCH(req, context) {
     // Tolerant team lookup (_ vs -)
     const team =
       (await Team.findOne({ teamSlug: slug }).select(
-        "_id teamName teamSlug"
+        "_id teamName teamSlug",
       )) ||
       (await Team.findOne({ teamSlug: slug.replace(/[-_]/g, "") }).select(
-        "_id teamName teamSlug"
+        "_id teamName teamSlug",
       )) ||
       (await Team.findOne({ teamSlug: slug.replace(/_/g, "-") }).select(
-        "_id teamName teamSlug"
+        "_id teamName teamSlug",
       ));
 
     if (!team) {
@@ -110,13 +181,13 @@ export async function PATCH(req, context) {
     if (!report) {
       return NextResponse.json(
         { message: "Scouting report not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
     // ---- Compute newly added assignees -------------------------------
     const prevKeys = new Set(
-      (report.reportFor || []).map((e) => `${e.athleteType}:${e.athleteId}`)
+      (report.reportFor || []).map((e) => `${e.athleteType}:${e.athleteId}`),
     );
     const incoming = Array.isArray(body.reportFor)
       ? body.reportFor
@@ -129,7 +200,7 @@ export async function PATCH(req, context) {
       return true;
     });
     const newlyAdded = dedupedIncoming.filter(
-      (e) => !prevKeys.has(`${e.athleteType}:${e.athleteId}`)
+      (e) => !prevKeys.has(`${e.athleteType}:${e.athleteId}`),
     );
 
     const isEncryptedUpdate = !!(
@@ -173,7 +244,6 @@ export async function PATCH(req, context) {
         return;
       }
 
-      // If this is an encrypted update, ignore any incoming *sensitive* field values.
       if (isEncryptedUpdate && sensitiveFields.includes(field)) {
         return;
       }
@@ -183,7 +253,7 @@ export async function PATCH(req, context) {
       }
     });
 
-    // ✅ optional crypto update (for encrypted payload changes)
+    // crypto update
     if (isEncryptedUpdate) {
       report.crypto = {
         version: body.crypto.version || 1,
@@ -195,7 +265,6 @@ export async function PATCH(req, context) {
           body.crypto.teamKeyVersion != null ? body.crypto.teamKeyVersion : 1,
       };
 
-      // Enforce blank sensitive fields whenever crypto is present
       report.athleteFirstName = "";
       report.athleteLastName = "";
       report.athleteNationalRank = "";
@@ -209,32 +278,36 @@ export async function PATCH(req, context) {
 
     // ---- Save related entities ---------------------------------------
     await saveUnknownTechniques(
-      Array.isArray(body.athleteAttacks) ? body.athleteAttacks : []
+      Array.isArray(body.athleteAttacks) ? body.athleteAttacks : [],
     );
 
+    // ✅ NEW VIDEOS (normalized like POST)
     if (Array.isArray(body.newVideos) && body.newVideos.length) {
-      for (const vid of body.newVideos) {
-        const newVid = await Video.create({
-          title: vid.title,
-          notes: vid.notes,
-          url: vid.url,
-          report: report._id,
-          createdBy: currentUser._id,
-        });
-        report.videos.push(newVid._id);
+      const videos = body.newVideos
+        .map((v) =>
+          normalizeIncomingVideoForCreate(v, report._id, currentUser._id),
+        )
+        .filter(Boolean);
+
+      if (videos.length) {
+        const saved = await Video.insertMany(videos);
+        report.videos.push(...saved.map((v) => v._id));
       }
     }
 
+    // ✅ UPDATED VIDEOS (re-normalize if URL changed)
     if (Array.isArray(body.updatedVideos) && body.updatedVideos.length) {
       for (const vid of body.updatedVideos) {
-        await Video.findByIdAndUpdate(vid._id, {
-          title: vid.title,
-          notes: vid.notes,
-          url: vid.url,
-        });
+        const normalized = normalizeIncomingVideoForCreate(
+          vid,
+          report._id,
+          currentUser._id,
+        );
+        await Video.findByIdAndUpdate(vid._id, normalized);
       }
     }
 
+    // Deleted videos
     if (Array.isArray(body.deletedVideos) && body.deletedVideos.length) {
       for (const videoId of body.deletedVideos) {
         await Video.findByIdAndDelete(videoId);
@@ -261,13 +334,11 @@ export async function PATCH(req, context) {
               const subject = `Scouting report shared in ${team.teamName}`;
               const message = `
                 <p>Hi ${recipient.firstName || recipient.username},</p>
-                <p>A scouting report has been shared with you in <strong>${
-                  team.teamName
-                }</strong>.</p>
+                <p>A scouting report has been shared with you in <strong>${team.teamName}</strong>.</p>
                 <p>You can review it here after signing in.</p>
                 <p>
                   <a href="https://matscout.com/teams/${encodeURIComponent(
-                    team.teamSlug
+                    team.teamSlug,
                   )}/scouting-reports"
                     style="display:inline-block;background-color:#1a73e8;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:bold;">
                     View Scouting Reports
@@ -305,15 +376,11 @@ export async function PATCH(req, context) {
                 const subject = `Scouting report for ${familyMember.firstName} ${familyMember.lastName}`;
                 const message = `
                   <p>Hi ${parentUser.firstName || parentUser.username},</p>
-                  <p>A scouting report has been shared for <strong>${
-                    familyMember.firstName
-                  } ${familyMember.lastName}</strong> in <strong>${
-                  team.teamName
-                }</strong>.</p>
+                  <p>A scouting report has been shared for <strong>${familyMember.firstName} ${familyMember.lastName}</strong> in <strong>${team.teamName}</strong>.</p>
                   <p>You can review it here after signing in.</p>
                   <p>
                     <a href="https://matscout.com/teams/${encodeURIComponent(
-                      team.teamSlug
+                      team.teamSlug,
                     )}/scouting-reports"
                       style="display:inline-block;background-color:#1a73e8;color:#fff;padding:10px 16px;border-radius:4px;text-decoration:none;font-weight:bold%;">
                       View Scouting Reports
@@ -338,7 +405,7 @@ export async function PATCH(req, context) {
               }
             }
           }
-        })
+        }),
       );
     } catch (notifyErr) {
       console.error("❌ Scouting report update notify/email error:", notifyErr);
@@ -346,13 +413,13 @@ export async function PATCH(req, context) {
 
     return NextResponse.json(
       { message: "Report updated", report },
-      { status: 200 }
+      { status: 200 },
     );
   } catch (err) {
     console.error("PATCH error:", err);
     return NextResponse.json(
       { message: "Server error: " + err.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -404,16 +471,14 @@ export async function DELETE(_request, context) {
         {
           status: 404,
           headers: { "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
-    // Delete associated videos if any
     if (report.videos && report.videos.length > 0) {
       await Video.deleteMany({ _id: { $in: report.videos } });
     }
 
-    // Delete the report
     await TeamScoutingReport.findByIdAndDelete(reportId);
 
     return new NextResponse(
@@ -423,7 +488,7 @@ export async function DELETE(_request, context) {
       {
         status: 200,
         headers: { "Content-Type": "application/json" },
-      }
+      },
     );
   } catch (err) {
     console.error("DELETE team scouting report error:", err);
@@ -432,7 +497,7 @@ export async function DELETE(_request, context) {
       {
         status: 500,
         headers: { "Content-Type": "application/json" },
-      }
+      },
     );
   }
 }
