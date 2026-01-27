@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import Link from "next/link";
 
@@ -23,6 +23,9 @@ import PasswordInput from "@/components/shared/PasswordInput";
 
 const RegisterForm = ({ redirect = "/dashboard" }) => {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const nextUrl = searchParams.get("next");
   const { refreshUser } = useUser();
 
   const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
@@ -248,7 +251,7 @@ const RegisterForm = ({ redirect = "/dashboard" }) => {
         setError(res.error);
       } else {
         await refreshUser();
-        router.replace(redirect);
+        router.replace(nextUrl || redirect);
       }
     } catch (err) {
       console.error("Registration error:", err);
