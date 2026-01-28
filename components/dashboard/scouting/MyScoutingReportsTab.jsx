@@ -228,13 +228,14 @@ const MyScoutingReportsTab = ({ user }) => {
           </h1>
 
           <Button
-            className="btn btn-primary"
+            type="button"
+            className="btn-add relative z-[50] pointer-events-auto touch-manipulation"
             onClick={() => {
               setSelectedReport(null);
               setOpen(true);
             }}
           >
-            Add Scouting Report
+            <Plus size={16} /> Add Scouting Report
           </Button>
         </div>
 
