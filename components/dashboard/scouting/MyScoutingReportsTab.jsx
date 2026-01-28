@@ -243,14 +243,8 @@ const MyScoutingReportsTab = ({ user }) => {
             My Reports
           </h1>
           <Button
-<<<<<<< HEAD
-            type="button"
-            className="btn-add"
-            onClick={() => {
-=======
             className="btn btn-primary"
             onClick={async () => {
->>>>>>> fix/scouting-modal
               setSelectedReport(null);
               await loadStylesAndTechniques(); // <<< WAIT FOR DATA
               setOpen(true);
