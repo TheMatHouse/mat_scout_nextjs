@@ -59,12 +59,12 @@ export default function ReportsDashboard({ data }) {
   const goToMatchesForStyle = (styleName) =>
     styleName &&
     router.push(
-      `/admin/reports/matches?style=${encodeURIComponent(styleName)}`
+      `/admin/reports/matches?style=${encodeURIComponent(styleName)}`,
     );
   const goToScoutingForOpponent = (opponent) =>
     opponent &&
     router.push(
-      `/admin/reports/scouting?opponent=${encodeURIComponent(opponent)}`
+      `/admin/reports/scouting?opponent=${encodeURIComponent(opponent)}`,
     );
   const goToScoutingForTag = (tag) =>
     tag &&
@@ -232,11 +232,12 @@ export default function ReportsDashboard({ data }) {
           <Button
             size="sm"
             variant="outline"
+            className="btn-file"
             onClick={() =>
               downloadCSV(
                 winLossByStyle,
                 ["styleName", "wins", "losses", "total", "winRate"],
-                "win_loss_by_style.csv"
+                "win_loss_by_style.csv",
               )
             }
           >
@@ -311,11 +312,12 @@ export default function ReportsDashboard({ data }) {
             <Button
               size="sm"
               variant="outline"
+              clasName="btn-file"
               onClick={() =>
                 downloadCSV(
                   topOpponents,
                   ["opponent", "reports"],
-                  "top_opponents.csv"
+                  "top_opponents.csv",
                 )
               }
             >
@@ -356,6 +358,7 @@ export default function ReportsDashboard({ data }) {
             <Button
               size="sm"
               variant="outline"
+              className="btn-file"
               onClick={() =>
                 downloadCSV(topTags, ["tag", "count"], "top_tags.csv")
               }
