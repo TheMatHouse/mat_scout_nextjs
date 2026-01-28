@@ -243,16 +243,12 @@ const MyScoutingReportsTab = ({ user }) => {
             My Reports
           </h1>
           <Button
-            className="btn btn-primary"
             onClick={async () => {
               setSelectedReport(null);
-              await loadStylesAndTechniques(); // <<< WAIT FOR DATA
+              await loadStylesAndTechniques();
               setOpen(true);
             }}
-            onTouchStart={() => {
-              setSelectedReport(null);
-              setOpen(true);
-            }}
+            className="btn-add"
           >
             <Plus size={16} /> Add Scouting Report
           </Button>
@@ -306,7 +302,7 @@ const MyScoutingReportsTab = ({ user }) => {
         title={selectedReport ? "Edit Scouting Report" : "Add Scouting Report"}
         withCard
       >
-        {stylesLoading || techniquesLoading ? (
+        {stylesLoading || techniquesLoading || stylesForForm.length === 0 ? (
           <Spinner size={40} />
         ) : (
           <ScoutingReportForm
