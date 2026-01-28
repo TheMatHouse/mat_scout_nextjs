@@ -4,6 +4,7 @@
 import { useState, useCallback } from "react";
 import ModalLayout from "@/components/shared/ModalLayout";
 import NewCoachEventForm from "./NewCoachEventForm";
+import { Plus } from "lucide-react";
 
 const AddCoachEventModalButton = ({ slug }) => {
   const [open, setOpen] = useState(false);
@@ -14,9 +15,9 @@ const AddCoachEventModalButton = ({ slug }) => {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="px-4 py-2 rounded-xl shadow bg-black text-white dark:bg-white dark:text-black"
+        className="btn-add"
       >
-        Add Event
+        <Plus size={16} /> Add Event
       </button>
 
       <ModalLayout

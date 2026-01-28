@@ -123,7 +123,7 @@ const RegisterForm = ({ redirect = "/dashboard" }) => {
       try {
         const res = await fetch(
           `/api/auth/check-username?username=${encodeURIComponent(u)}&debug=1`,
-          { cache: "no-store", headers: { "cache-control": "no-cache" } }
+          { cache: "no-store", headers: { "cache-control": "no-cache" } },
         );
         const data = await res.json().catch(() => null);
         setUsernameDebug(data?.debug ?? null);
@@ -162,7 +162,7 @@ const RegisterForm = ({ redirect = "/dashboard" }) => {
       try {
         const res = await fetch(
           `/api/auth/check-email?email=${encodeURIComponent(e)}`,
-          { cache: "no-store", headers: { "cache-control": "no-cache" } }
+          { cache: "no-store", headers: { "cache-control": "no-cache" } },
         );
         const data = await res.json().catch(() => null);
 
@@ -216,7 +216,7 @@ const RegisterForm = ({ redirect = "/dashboard" }) => {
       // 🛑 NEW SAFETY: Ensure grecaptcha exists to prevent infinite loading
       if (!window.grecaptcha || !window.grecaptcha.execute) {
         setError(
-          "Security checks failed to initialize. Please refresh the page."
+          "Security checks failed to initialize. Please refresh the page.",
         );
         setLoading(false);
         return;
@@ -484,14 +484,14 @@ const RegisterForm = ({ redirect = "/dashboard" }) => {
             {/* SUBMIT */}
             <button
               type="submit"
-              className="w-full py-2.5 rounded-lg font-semibold shadow-md text-white bg-[var(--ms-blue)] hover:bg-[var(--ms-blue-gray)] transition disabled:opacity-60"
+              className="w-full btn-submit"
               disabled={submitDisabled}
             >
               {loading
                 ? "Registering…"
                 : recaptchaReady
-                ? "Sign Up"
-                : "Loading…"}
+                  ? "Sign Up"
+                  : "Loading…"}
             </button>
           </form>
         </Form>
@@ -505,7 +505,7 @@ const RegisterForm = ({ redirect = "/dashboard" }) => {
               href="/api/auth/google"
               onClick={() => {
                 document.cookie = `post_auth_redirect=${encodeURIComponent(
-                  redirect
+                  redirect,
                 )}; Path=/; Max-Age=600; SameSite=Lax`;
               }}
               className="flex items-center gap-2 px-4 py-2 border rounded bg-white dark:bg-gray-800 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"

@@ -202,14 +202,14 @@ export default function InviteMemberForm({
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="btn btn-secondary"
+          className="btn-cancel"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={submitting}
-          className="btn btn-primary disabled:opacity-60"
+          className="btn-submit"
         >
           {submitting ? "Sending…" : "Send Invite"}
         </button>

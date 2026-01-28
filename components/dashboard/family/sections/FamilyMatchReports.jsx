@@ -7,7 +7,7 @@ import { ReportDataTable } from "@/components/shared/report-data-table";
 import MatchReportForm from "@/components/dashboard/forms/MatchReportForm";
 import PreviewReportModal from "@/components/dashboard/PreviewReportModal";
 import { Button } from "@/components/ui/button";
-import { ArrowUpDown, Eye, Edit, Trash, Printer } from "lucide-react";
+import { ArrowUpDown, Eye, Edit, Trash, Printer, Plus } from "lucide-react";
 import ModalLayout from "@/components/shared/ModalLayout";
 import { normalizeStyles } from "@/lib/normalizeStyles";
 import Spinner from "@/components/shared/Spinner";
@@ -99,7 +99,7 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
         `/api/dashboard/${member.userId}/family/${
           member._id
         }/matchReports?ts=${Date.now()}`,
-        { cache: "no-store" }
+        { cache: "no-store" },
       );
       if (!res.ok) throw new Error("Failed to fetch match reports");
       const data = await res.json();
@@ -124,7 +124,7 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
         try {
           const res = await fetch(
             `/api/divisions?styleName=${encodeURIComponent(styleName)}`,
-            { cache: "no-store" }
+            { cache: "no-store" },
           );
           const data = await res.json();
           const divisions = Array.isArray(data?.divisions)
@@ -143,7 +143,7 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
     }
 
     const uniqueStyles = Array.from(
-      new Set((matchReports || []).map((r) => r?.matchType).filter(Boolean))
+      new Set((matchReports || []).map((r) => r?.matchType).filter(Boolean)),
     );
 
     if (uniqueStyles.length === 0) {
@@ -171,7 +171,7 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
     try {
       const res = await fetch(
         `/api/dashboard/${member.userId}/family/${member._id}/styles`,
-        { cache: "no-store" }
+        { cache: "no-store" },
       );
       let list = [];
       if (res.ok) {
@@ -199,7 +199,7 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
     try {
       const res = await fetch(
         `/api/dashboard/${member.userId}/family/${member._id}/matchReports/${match._id}`,
-        { method: "DELETE", headers: { "Content-Type": "application/json" } }
+        { method: "DELETE", headers: { "Content-Type": "application/json" } },
       );
       let data = {};
       try {
@@ -210,7 +210,7 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
         toast.success(data.message || "Deleted.");
         // optimistic update
         setMatchReports((prev) =>
-          prev.filter((r) => String(r._id) !== String(match._id))
+          prev.filter((r) => String(r._id) !== String(match._id)),
         );
         setSelectedMatch(null);
         // silent refresh to ensure consistency
@@ -230,11 +230,11 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
       try {
         const res = await fetch(
           `/api/dashboard/${encodeURIComponent(
-            String(member.userId)
+            String(member.userId),
           )}/family/${encodeURIComponent(
-            String(member._id)
+            String(member._id),
           )}/matchReports/${encodeURIComponent(String(reportId))}`,
-          { cache: "no-store", credentials: "same-origin" }
+          { cache: "no-store", credentials: "same-origin" },
         );
         if (!res.ok) return null;
         const data = await res.json().catch(() => ({}));
@@ -243,7 +243,7 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
         return null;
       }
     },
-    [member.userId, member._id]
+    [member.userId, member._id],
   );
 
   // Render helpers that prefer server-provided display strings
@@ -446,14 +446,14 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
         <div className="flex flex-col items-start gap-4">
           <h1 className="text-2xl font-bold">Family Member Matches</h1>
           <Button
-            className="bg-gray-900 hover:bg-gray-500 text-white border-2 border-gray-500 dark:border-gray-100"
+            className="btn-add"
             onClick={async () => {
               setSelectedMatch(null);
               setOpen(true);
               await loadStylesForModal();
             }}
           >
-            Add Match Report
+            <Plus size={16} /> Add Match Report
           </Button>
         </div>
 
@@ -481,7 +481,7 @@ const FamilyMatchReports = ({ member, onSwitchToStyles }) => {
               onClick={handlePrint}
               title="Open a PDF of the selected matches"
             >
-              <Printer className="mr-2 h-4 w-4" />
+              <Printer className="btn-print" />
               Print
             </Button>
           </div>

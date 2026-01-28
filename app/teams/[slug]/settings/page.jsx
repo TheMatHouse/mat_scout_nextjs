@@ -46,7 +46,7 @@ async function pbkdf2DeriveKeyBytes(
   password,
   saltBytes,
   iterations = 250000,
-  length = 32
+  length = 32,
 ) {
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
@@ -54,7 +54,7 @@ async function pbkdf2DeriveKeyBytes(
     enc.encode(password),
     "PBKDF2",
     false,
-    ["deriveBits"]
+    ["deriveBits"],
   );
   const params = {
     name: "PBKDF2",
@@ -153,9 +153,9 @@ const TeamSettingsPage = () => {
     try {
       const res = await fetch(
         `/api/teams/${encodeURIComponent(
-          teamSlug
+          teamSlug,
         )}?fullSecurity=1&ts=${Date.now()}`,
-        { credentials: "include" }
+        { credentials: "include" },
       );
       const text = await res.text();
       let payload = null;
@@ -281,7 +281,7 @@ const TeamSettingsPage = () => {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ kdf, verifierB64 }),
-      }
+      },
     );
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -307,12 +307,12 @@ const TeamSettingsPage = () => {
       // 1) Load ALL reports for this team
       const res = await fetch(
         `/api/teams/${encodeURIComponent(
-          teamSlug
+          teamSlug,
         )}/scouting-reports?ts=${Date.now()}`,
         {
           credentials: "include",
           headers: { accept: "application/json" },
-        }
+        },
       );
 
       const text = await res.text();
@@ -332,16 +332,16 @@ const TeamSettingsPage = () => {
       const allReports = Array.isArray(data?.scoutingReports)
         ? data.scoutingReports
         : Array.isArray(data?.reports)
-        ? data.reports
-        : Array.isArray(data)
-        ? data
-        : [];
+          ? data.reports
+          : Array.isArray(data)
+            ? data
+            : [];
 
       console.log("[BULK ENCRYPT] fetched total reports:", allReports.length);
 
       // 2) Only encrypt reports that do NOT yet have ciphertext
       const unencrypted = allReports.filter(
-        (r) => !r?.crypto || !r.crypto.ciphertextB64
+        (r) => !r?.crypto || !r.crypto.ciphertextB64,
       );
 
       console.log("[BULK ENCRYPT] unencrypted candidates:", unencrypted.length);
@@ -361,7 +361,7 @@ const TeamSettingsPage = () => {
           if (!crypto) {
             console.warn(
               "[BULK ENCRYPT] encryptScoutingBody returned no crypto for",
-              r._id
+              r._id,
             );
             continue;
           }
@@ -375,7 +375,7 @@ const TeamSettingsPage = () => {
           console.warn(
             "[BULK ENCRYPT] failed to encrypt report, skipping",
             r._id,
-            err
+            err,
           );
         }
       }
@@ -388,7 +388,7 @@ const TeamSettingsPage = () => {
       // 4) Send encrypted payload to bulk-encrypt API
       const bulkRes = await fetch(
         `/api/teams/${encodeURIComponent(
-          teamSlug
+          teamSlug,
         )}/scouting-reports/bulk-encrypt`,
         {
           method: "POST",
@@ -398,7 +398,7 @@ const TeamSettingsPage = () => {
           },
           credentials: "include",
           body: JSON.stringify({ reports: reportsPayload }),
-        }
+        },
       );
 
       const bulkText = await bulkRes.text();
@@ -413,7 +413,7 @@ const TeamSettingsPage = () => {
         console.error(
           "[BULK ENCRYPT] bulk-encrypt failed:",
           bulkRes.status,
-          bulkText
+          bulkText,
         );
         toast.error(bulkData?.message || "Bulk encrypt failed.");
         return;
@@ -421,7 +421,7 @@ const TeamSettingsPage = () => {
 
       toast.success(
         bulkData?.message ||
-          `Encrypted ${reportsPayload.length} scouting report(s).`
+          `Encrypted ${reportsPayload.length} scouting report(s).`,
       );
     } catch (e) {
       console.error("[BULK ENCRYPT] unexpected error:", e);
@@ -453,7 +453,7 @@ const TeamSettingsPage = () => {
         const freshTeam = await refetchTeam();
         await bulkEncryptExistingReports(freshTeam);
         toast.success(
-          "Team password set. Existing and new reports are locked."
+          "Team password set. Existing and new reports are locked.",
         );
       } else {
         // Password change: preserve TBK using the helper
@@ -477,7 +477,7 @@ const TeamSettingsPage = () => {
     if (!isOwner) return;
     if (
       !window.confirm(
-        "Disabling the lock will stop the team password prompt for this team. All existing reports remain encrypted in the database. Continue?"
+        "Disabling the lock will stop the team password prompt for this team. All existing reports remain encrypted in the database. Continue?",
       )
     ) {
       return;
@@ -493,7 +493,7 @@ const TeamSettingsPage = () => {
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({ lockEnabled: false }),
-        }
+        },
       );
 
       const text = await res.text();
@@ -508,14 +508,14 @@ const TeamSettingsPage = () => {
         console.error(
           "[DISABLE LOCK] Disable lock failed:",
           res.status,
-          text || payload
+          text || payload,
         );
         toast.error(payload?.message || "Failed to disable team lock.");
         return;
       }
 
       toast.success(
-        "Team lock disabled. Existing reports stay encrypted in the database."
+        "Team lock disabled. Existing reports stay encrypted in the database.",
       );
       await refetchTeam();
     } catch (e) {
@@ -678,7 +678,7 @@ const TeamSettingsPage = () => {
           <Button
             type="submit"
             disabled={saving}
-            className="btn btn-primary"
+            className="btn-submit"
           >
             {saving ? "Saving..." : "Save Changes"}
           </Button>

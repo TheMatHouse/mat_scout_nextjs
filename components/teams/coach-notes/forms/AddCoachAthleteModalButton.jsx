@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import ModalLayout from "@/components/shared/ModalLayout";
 import NewCoachAthleteForm from "@/components/teams/coach-notes/forms/NewCoachAthleteForm";
+import { Plus } from "lucide-react";
 
 function AddCoachAthleteModalButton({ slug, eventId, className = "" }) {
   const router = useRouter();
@@ -15,9 +16,9 @@ function AddCoachAthleteModalButton({ slug, eventId, className = "" }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`px-3 py-1.5 rounded-xl shadow bg-black text-white dark:bg-white dark:text-black ${className}`}
+        className="btn-add"
       >
-        Add Athlete
+        <Plus size={16} /> Add Athlete
       </button>
 
       <ModalLayout

@@ -20,7 +20,7 @@ function SearchBox({ value, onChange, onSubmit }) {
       />
       <button
         type="submit"
-        className="px-3 py-2 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-800 text-sm whitespace-nowrap"
+        className="btn-submit"
       >
         Search
       </button>
@@ -199,7 +199,7 @@ export default function FamilyMembersListPage() {
                       View
                     </Link>
                     <button
-                      className="px-2 py-1 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200/70 dark:hover:bg-neutral-700/70"
+                      className="btn-delete"
                       onClick={() => onDelete(r.id)}
                     >
                       Delete

@@ -163,7 +163,7 @@ const StyleForm = ({
       <div className="rounded-xl border border-border bg-card p-5 md:p-6 shadow-xl">
         <form
           onSubmit={submit}
-          className="space-y-6"
+          className="btn-submit space-y-6"
           aria-busy={!stylesLoaded}
         >
           <FormSelect
@@ -227,7 +227,7 @@ const StyleForm = ({
           <div className="flex justify-center pt-4">
             <Button
               type="submit"
-              className="btn btn-primary"
+              className="btn-submit"
             >
               {isEdit ? "Update Style" : "Add Style"}
             </Button>

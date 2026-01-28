@@ -173,7 +173,7 @@ export default function FindTeamsPage() {
           <div className="flex gap-3 mt-4">
             <Button
               type="submit"
-              className="btn btn-primary"
+              className="btn-submit"
             >
               Search
             </Button>
@@ -236,7 +236,7 @@ export default function FindTeamsPage() {
                     >
                       {p}
                     </button>
-                  )
+                  ),
                 )}
 
                 <button

@@ -251,7 +251,7 @@ const AddPromotionInline = ({ userStyleId, onAdded, onClose, rankOptions }) => {
         <Button
           type="submit"
           disabled={saving}
-          className="btn btn-primary min-w-[140px]"
+          className="btn-submit min-w-[140px]"
         >
           {saving ? "Adding…" : "Add Promotion"}
         </Button>
@@ -414,7 +414,7 @@ export default function PromotionsForm({ userStyleId, onUpdated, onClose }) {
   const rankOptions = useMemo(() => {
     if (!styleKey) return [];
     const filtered = (allRanks || []).filter(
-      (r) => String(r.style || "").toLowerCase() === styleKey
+      (r) => String(r.style || "").toLowerCase() === styleKey,
     );
     return filtered
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))

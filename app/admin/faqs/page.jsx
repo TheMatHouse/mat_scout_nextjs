@@ -37,7 +37,7 @@ export default function AdminFaqsPage() {
     return rows.filter((r) =>
       `${r.question} ${r.answer} ${(r.tags || []).join(" ")}`
         .toLowerCase()
-        .includes(needle)
+        .includes(needle),
     );
   }, [q, rows]);
 
@@ -191,7 +191,7 @@ export default function AdminFaqsPage() {
           <div className="mt-2 flex gap-3">
             <button
               type="submit"
-              className="rounded-lg bg-[#d90429] px-4 py-2 font-semibold text-white hover:opacity-90"
+              className="btn-submit"
             >
               {form._id ? "Update FAQ" : "Create FAQ"}
             </button>
@@ -199,7 +199,7 @@ export default function AdminFaqsPage() {
               <button
                 type="button"
                 onClick={resetForm}
-                className="rounded-lg border px-4 py-2 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-700"
+                className="btn-cancel"
               >
                 Cancel
               </button>
@@ -265,7 +265,7 @@ export default function AdminFaqsPage() {
                       </button>
                       <button
                         onClick={() => delRow(r._id)}
-                        className="rounded-lg bg-[#ef233c] px-3 py-1 text-sm text-white"
+                        className="btn-delete"
                       >
                         Delete
                       </button>

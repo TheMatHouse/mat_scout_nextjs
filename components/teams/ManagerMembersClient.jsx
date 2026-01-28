@@ -121,7 +121,7 @@ const ManagerMembersClient = ({ slug: slugProp }) => {
 
   const pending = members.filter((m) => m.role === "pending");
   const active = members.filter((m) =>
-    ["member", "manager", "coach"].includes(m.role)
+    ["member", "manager", "coach"].includes(m.role),
   );
 
   const managerName =
@@ -213,7 +213,7 @@ const ManagerMembersClient = ({ slug: slugProp }) => {
                   onClick={() =>
                     window.open(`/api/teams/${slug}/flyer/pdf`, "_blank")
                   }
-                  className="btn bg-white/90 text-ms-blue hover:bg-white font-semibold px-6"
+                  className="btn-print"
                 >
                   Print QR Flyer
                 </button>

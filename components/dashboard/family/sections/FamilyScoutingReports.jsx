@@ -48,7 +48,7 @@ const FamilyScoutingReports = ({ member }) => {
       try {
         const res = await fetch(
           `/api/dashboard/${member.userId}/family/${member._id}/scoutingReports/teams`,
-          { cache: "no-store", credentials: "same-origin" }
+          { cache: "no-store", credentials: "same-origin" },
         );
         if (!res.ok) throw new Error();
 
@@ -269,6 +269,7 @@ const FamilyScoutingReports = ({ member }) => {
               <div className="flex justify-end gap-2">
                 <Button
                   variant="outline"
+                  className="btn-cancel"
                   onClick={() => setPasswordModalOpen(false)}
                 >
                   Cancel
@@ -276,6 +277,7 @@ const FamilyScoutingReports = ({ member }) => {
                 <Button
                   type="submit"
                   disabled={submittingPassword}
+                  className="btn-submit"
                 >
                   {submittingPassword ? "Verifying…" : "Unlock"}
                 </Button>

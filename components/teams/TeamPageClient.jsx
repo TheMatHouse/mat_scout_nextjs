@@ -5,14 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useUser } from "@/context/UserContext";
 import Spinner from "@/components/shared/Spinner";
 import { toast } from "react-toastify";
-import {
-  MapPin,
-  Mail,
-  Phone,
-  CalendarDays,
-  LogOut,
-  UserPlus,
-} from "lucide-react";
+import { MapPin, Mail, Phone, CalendarDays, LogOut, Plus } from "lucide-react";
 
 /* ---------- id helpers ---------- */
 const asId = (v) =>
@@ -82,7 +75,7 @@ export default function TeamPageClient({ slug, initialData }) {
             setMemberships(
               Array.isArray(dataM.memberships)
                 ? dataM.memberships.filter((m) => !m.deletedAt)
-                : []
+                : [],
             );
           }
 
@@ -90,7 +83,7 @@ export default function TeamPageClient({ slug, initialData }) {
           const dataF = await resF.json();
           if (!cancelled) {
             setFamily(
-              Array.isArray(dataF.familyMembers) ? dataF.familyMembers : []
+              Array.isArray(dataF.familyMembers) ? dataF.familyMembers : [],
             );
           }
         }
@@ -111,7 +104,7 @@ export default function TeamPageClient({ slug, initialData }) {
   const rowMembership = useMemo(() => {
     if (!userId) return undefined;
     return (Array.isArray(memberships) ? memberships : []).find(
-      (m) => !m.familyMemberId && String(m.userId) === String(userId)
+      (m) => !m.familyMemberId && String(m.userId) === String(userId),
     );
   }, [memberships, userId]);
 
@@ -355,8 +348,8 @@ export default function TeamPageClient({ slug, initialData }) {
                             cannotLeave
                               ? "Managers/Owners cannot leave from here"
                               : !hasRow
-                              ? "No membership row to leave"
-                              : "Leave team"
+                                ? "No membership row to leave"
+                                : "Leave team"
                           }
                         >
                           <LogOut className="w-4 h-4" />
@@ -374,7 +367,7 @@ export default function TeamPageClient({ slug, initialData }) {
                         disabled={buttonLoading}
                         className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-[var(--ms-blue)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--ms-blue-gray)] disabled:opacity-60"
                       >
-                        <UserPlus className="w-4 h-4" />
+                        <Plus size={16} />
                         {buttonLoading ? "Joining..." : "Join Team"}
                       </button>
                     </>
@@ -396,7 +389,7 @@ export default function TeamPageClient({ slug, initialData }) {
                   <div className="space-y-3 min-w-0">
                     {family.map((fm) => {
                       const m = memberships.find(
-                        (m) => String(m.familyMemberId) === String(fm._id)
+                        (m) => String(m.familyMemberId) === String(fm._id),
                       );
                       const mRole = (m?.role || "").toLowerCase();
                       const mStatus = (m?.status || "active").toLowerCase();
@@ -412,9 +405,9 @@ export default function TeamPageClient({ slug, initialData }) {
                         <button
                           onClick={() => handleJoin(fm._id)}
                           disabled={buttonLoading}
-                          className="inline-flex items-center gap-2 rounded-md bg-[var(--ms-blue)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--ms-blue-gray)] disabled:opacity-60"
+                          className="btn-add"
                         >
-                          <UserPlus className="w-4 h-4" />
+                          <Plus size={16} />
                           {buttonLoading ? "Adding..." : "Add to Team"}
                         </button>
                       );
@@ -434,7 +427,7 @@ export default function TeamPageClient({ slug, initialData }) {
                           );
                         } else if (
                           ["member", "manager", "owner", "coach"].includes(
-                            mRole
+                            mRole,
                           )
                         ) {
                           button = (

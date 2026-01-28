@@ -155,7 +155,7 @@ function TransferOwnershipContent({ slug, onComplete, onClose }) {
         <button
           type="submit"
           disabled={!canSubmit}
-          className="px-4 py-2 rounded-xl bg-blue-600 text-white disabled:opacity-60 disabled:cursor-not-allowed"
+          className="btn-submit"
         >
           {loading ? "Transferring…" : "Transfer Ownership"}
         </button>

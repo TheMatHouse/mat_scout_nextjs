@@ -127,7 +127,7 @@ function PracticeNoteDetailClient({ note }) {
             </button>
 
             <button
-              className="btn bg-red-600 hover:bg-red-700 text-white"
+              className="btn-delete"
               onClick={() => setDeleteOpen(true)}
             >
               Delete
@@ -267,6 +267,7 @@ function PracticeNoteDetailClient({ note }) {
               variant="outline"
               onClick={() => setDeleteOpen(false)}
               disabled={deleting}
+              className="btn-cancel"
             >
               Cancel
             </Button>

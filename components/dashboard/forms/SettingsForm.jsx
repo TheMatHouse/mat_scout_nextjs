@@ -475,7 +475,7 @@ export default function SettingsForm({ user, onClose, refreshUser }) {
           <Button
             type="submit"
             disabled={isSubmitting}
-            className="btn btn-primary"
+            className="btn-submit"
           >
             {isSubmitting ? "Saving..." : "Save Changes"}
           </Button>

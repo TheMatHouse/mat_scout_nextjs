@@ -99,7 +99,7 @@ export default function TeamUnlockGate({
             await unwrapTeamBoxKey(
               cached,
               wrapped,
-              teamData.security?.kdf?.iterations
+              teamData.security?.kdf?.iterations,
             );
 
             onUnlocked?.();
@@ -128,7 +128,7 @@ export default function TeamUnlockGate({
     try {
       const ok = await verifyPasswordLocally(
         password.trim(),
-        teamData.security
+        teamData.security,
       );
       if (!ok) {
         toast.error("Incorrect password.");
@@ -141,7 +141,7 @@ export default function TeamUnlockGate({
           await unwrapTeamBoxKey(
             password.trim(),
             wrapped,
-            teamData.security?.kdf?.iterations
+            teamData.security?.kdf?.iterations,
           );
         } catch (err) {
           toast.error("Unable to unwrap Team Key. Wrong password?");
@@ -210,7 +210,7 @@ export default function TeamUnlockGate({
           <button
             type="submit"
             disabled={unlocking}
-            className="bg-ms-blue text-white py-2 rounded-md hover:bg-ms-blue/90"
+            className="btn-submit"
           >
             {unlocking ? "Verifying…" : "Unlock"}
           </button>

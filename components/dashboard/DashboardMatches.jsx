@@ -8,7 +8,7 @@ import MatchReportForm from "./forms/MatchReportForm";
 import PreviewReportModal from "./PreviewReportModal";
 
 import { Button } from "@/components/ui/button";
-import { Printer, X } from "lucide-react";
+import { Plus, Printer, X } from "lucide-react";
 import ModalLayout from "@/components/shared/ModalLayout";
 import Spinner from "@/components/shared/Spinner";
 import MatchReportCard from "@/components/shared/MatchReportCard";
@@ -86,7 +86,7 @@ function DashboardMatches({ user }) {
     try {
       const res = await fetch(
         `/api/dashboard/${user._id}/matchReports/shared`,
-        { cache: "no-store" }
+        { cache: "no-store" },
       );
       const data = await res.json();
       setSharedGroups(Array.isArray(data) ? data : []);
@@ -147,7 +147,7 @@ function DashboardMatches({ user }) {
 
   const filteredMine = useMemo(
     () => matchReports.filter(applyFilters),
-    [matchReports, yearFilter, eventFilter, resultFilter, printStyle]
+    [matchReports, yearFilter, eventFilter, resultFilter, printStyle],
   );
 
   const filteredShared = useMemo(() => {
@@ -209,13 +209,14 @@ function DashboardMatches({ user }) {
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold">Your Reports</h2>
           <Button
-            className="bg-gray-900 hover:bg-gray-800 text-white border border-gray-700"
+            className="btn-add"
             onClick={async () => {
               setSelectedMatch(null);
               setOpen(true);
               await loadStylesForModal();
             }}
           >
+            <Plus size={16} />
             Add Match Report
           </Button>
         </div>
@@ -281,7 +282,7 @@ function DashboardMatches({ user }) {
               onClick={handlePrint}
               className="ml-auto bg-gray-900 hover:bg-gray-800 text-white border border-gray-700"
             >
-              <Printer className="mr-2 h-4 w-4" /> Print
+              <Printer className="btn-print" /> Print
             </Button>
           )}
         </div>
@@ -346,7 +347,7 @@ function DashboardMatches({ user }) {
                     ))}
                   </div>
                 </div>
-              )
+              ),
             )}
           </div>
         ))}

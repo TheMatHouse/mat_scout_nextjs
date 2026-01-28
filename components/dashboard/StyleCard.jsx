@@ -130,7 +130,7 @@ function resolveTotals({ style, member, styleResultsMap, styleResults }) {
 
   if (lowerNameKey && styleResultsMap) {
     const foundKey = Object.keys(styleResultsMap).find(
-      (k) => norm(k) === lowerNameKey
+      (k) => norm(k) === lowerNameKey,
     );
     if (foundKey) {
       return {
@@ -204,7 +204,7 @@ function mostRecentPromotion(promos) {
   if (!Array.isArray(promos) || promos.length === 0) return null;
   // choose max by date
   return [...promos].sort(
-    (a, b) => new Date(b.promotedOn) - new Date(a.promotedOn)
+    (a, b) => new Date(b.promotedOn) - new Date(a.promotedOn),
   )[0];
 }
 
@@ -237,7 +237,7 @@ const StyleCard = ({
         styleResultsMap: styleResultsMap || {},
         styleResults: styleResults || [],
       }),
-    [style, member, styleResultsMap, styleResults]
+    [style, member, styleResultsMap, styleResults],
   );
 
   const { wins, losses, draws, _debugKey } = resolved;
@@ -246,30 +246,30 @@ const StyleCard = ({
   const noPromotions = isNoPromotionStyle(style?.styleName);
   const promotions = useMemo(
     () => normalizePromotions(style?.promotions),
-    [style?.promotions]
+    [style?.promotions],
   );
   const mostRecent = useMemo(
     () => mostRecentPromotion(promotions),
-    [promotions]
+    [promotions],
   );
 
   const currentRankExplicit = String(
-    style?.currentRank ?? style?.rank ?? ""
+    style?.currentRank ?? style?.rank ?? "",
   ).trim();
   const currentRank =
     !noPromotions && currentRankExplicit
       ? currentRankExplicit
       : !noPromotions && mostRecent?.rank
-      ? mostRecent.rank
-      : currentRankExplicit || "—";
+        ? mostRecent.rank
+        : currentRankExplicit || "—";
 
   // Sorted history (oldest → newest)
   const promotionsSorted = useMemo(
     () =>
       [...promotions].sort(
-        (a, b) => new Date(a.promotedOn) - new Date(b.promotedOn)
+        (a, b) => new Date(a.promotedOn) - new Date(b.promotedOn),
       ),
-    [promotions]
+    [promotions],
   );
 
   const grip =
@@ -321,7 +321,7 @@ const StyleCard = ({
   const qsPromos = new URLSearchParams(qs.toString());
   qsPromos.set("view", "promotions");
   const pdfPromotionsHref = `/api/records/style/${encodeURIComponent(
-    styleParam
+    styleParam,
   )}${qsPromos.toString() ? `?${qsPromos.toString()}` : ""}`;
 
   return (
@@ -458,7 +458,7 @@ const StyleCard = ({
             href={pdfHref}
             target="_blank"
             rel="noopener"
-            className="btn-white-sm"
+            className="btn-print"
           >
             Print PDF Record
           </a>
@@ -470,14 +470,14 @@ const StyleCard = ({
               href={pdfPromotionsHref}
               target="_blank"
               rel="noopener"
-              className="btn-white-sm"
+              className="btn-print"
             >
               Print Promotions
             </a>
           )}
           <button
             onClick={handleDeleteStyle}
-            className="px-3 py-1.5 rounded-lg border border-red-400 text-red-400 hover:bg-red-500/10 hover:text-red-300 transition text-xs font-medium"
+            className="btn-delete"
           >
             Delete
           </button>

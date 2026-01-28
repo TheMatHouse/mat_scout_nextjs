@@ -335,7 +335,7 @@ const AdminUserDetailClient = ({ initialData }) => {
           <div className="flex justify-end">
             <button
               type="submit"
-              className="btn btn-primary"
+              className="btn-submit"
               disabled={saving}
             >
               {saving ? "Saving…" : "Save Changes"}
