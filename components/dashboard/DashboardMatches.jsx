@@ -35,7 +35,6 @@ function DashboardMatches({ user }) {
   const searchParams = useSearchParams();
 
   const initialTab = searchParams.get("view") === "shared" ? "shared" : "mine";
-
   const [activeTab, setActiveTab] = useState(initialTab);
 
   const [matchReports, setMatchReports] = useState([]);
@@ -97,14 +96,29 @@ function DashboardMatches({ user }) {
     }
   }
 
+  /* ================= FIXED STYLE LOADER (ARRAY SAFE + DEBUG) ================= */
   const loadStylesForModal = useCallback(async () => {
+    if (!user?._id) return;
+
     setStylesLoading(true);
     try {
       const res = await fetch(`/api/dashboard/${user._id}/userStyles`, {
         cache: "no-store",
+        credentials: "include",
       });
+
       const data = await res.json();
-      setStylesForForm(data?.styles || data?.userStyles || []);
+
+      const styles = Array.isArray(data)
+        ? data
+        : data?.styles || data?.userStyles || [];
+
+      console.log("🔥 MATCH STYLES LOADED:", styles);
+
+      setStylesForForm(styles);
+    } catch (err) {
+      console.error("❌ Failed to load styles:", err);
+      setStylesForForm([]);
     } finally {
       setStylesLoading(false);
     }
@@ -187,12 +201,11 @@ function DashboardMatches({ user }) {
             key={t}
             onClick={() => {
               setActiveTab(t);
-
-              if (t === "shared") {
-                router.replace("/dashboard/matches?view=shared");
-              } else {
-                router.replace("/dashboard/matches");
-              }
+              router.replace(
+                t === "shared"
+                  ? "/dashboard/matches?view=shared"
+                  : "/dashboard/matches",
+              );
             }}
             className={`px-4 py-2 rounded-lg border font-medium ${
               activeTab === t
@@ -212,8 +225,8 @@ function DashboardMatches({ user }) {
             className="btn-add"
             onClick={async () => {
               setSelectedMatch(null);
-              setOpen(true);
-              await loadStylesForModal();
+              await loadStylesForModal(); // LOAD FIRST
+              setOpen(true); // THEN OPEN
             }}
           >
             <Plus size={16} />
@@ -222,7 +235,7 @@ function DashboardMatches({ user }) {
         </div>
       )}
 
-      {/* ONE SINGLE-LINE FILTER BAR */}
+      {/* FILTER BAR */}
       {(activeTab === "mine" || allReports.length > 0) && (
         <div className="flex items-center gap-3 mb-6 overflow-x-auto whitespace-nowrap">
           <select
@@ -280,9 +293,9 @@ function DashboardMatches({ user }) {
           {activeTab === "mine" && (
             <Button
               onClick={handlePrint}
-              className="ml-auto bg-gray-900 hover:bg-gray-800 text-white border border-gray-700"
+              className="ml-auto btn-print"
             >
-              <Printer className="btn-print" /> Print
+              <Printer size={16} /> Print
             </Button>
           )}
         </div>
@@ -302,10 +315,10 @@ function DashboardMatches({ user }) {
                   setSelectedMatch(match);
                   setPreviewOpen(true);
                 }}
-                onEdit={(match) => {
+                onEdit={async (match) => {
                   setSelectedMatch(match);
+                  await loadStylesForModal();
                   setOpen(true);
-                  loadStylesForModal();
                 }}
                 onShare={(match) => {
                   setShareMatch(match);
@@ -352,6 +365,7 @@ function DashboardMatches({ user }) {
           </div>
         ))}
 
+      {/* MODAL */}
       <ModalLayout
         isOpen={open}
         onClose={() => setOpen(false)}

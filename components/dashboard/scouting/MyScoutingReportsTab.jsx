@@ -146,37 +146,29 @@ const MyScoutingReportsTab = ({ user }) => {
     }
   };
 
-  /* ================= MATCH REPORTS STYLE LOADER CLONE + HARD PROOF LOGGING ================= */
+  /* ================= STYLE + TECHNIQUE LOADER (MATCH REPORTS CLONE) ================= */
   const loadStylesAndTechniques = useCallback(async () => {
     if (!user?._id) return;
-
-    console.log("🔥 SCOUTING LOADER CALLED");
 
     // -------- STYLES --------
     setStylesLoading(true);
     try {
       const res = await fetch(`/api/dashboard/${user._id}/userStyles`, {
         cache: "no-store",
-        credentials: "include", // <<< THIS WAS MISSING
-        headers: {
-          "Content-Type": "application/json",
-        },
+        credentials: "include",
       });
 
-      console.log("🔥 STYLES FETCH STATUS:", res.status);
-
       const data = await res.json();
-      console.log("🔥 RAW STYLES RESPONSE:", data);
 
       const styles = Array.isArray(data)
         ? data
         : data?.styles || data?.userStyles || [];
 
-      console.log("🔥 NORMALIZED STYLES:", styles);
+      console.log("🔥 SCOUT STYLES:", styles);
 
       setStylesForForm(styles);
     } catch (err) {
-      console.error("❌ STYLES FETCH ERROR:", err);
+      console.error("❌ STYLE LOAD ERROR:", err);
       setStylesForForm([]);
     } finally {
       setStylesLoading(false);
@@ -187,15 +179,11 @@ const MyScoutingReportsTab = ({ user }) => {
     try {
       const res = await fetch(`/api/techniques`, {
         cache: "no-store",
-        credentials: "include", // <<< ADD THIS TOO
+        credentials: "include",
       });
-
       const data = await res.json();
-      console.log("🔥 TECHNIQUES:", data);
-
       setTechniquesForForm(data?.techniques || data || []);
-    } catch (err) {
-      console.error("❌ TECH FETCH ERROR:", err);
+    } catch {
       setTechniquesForForm([]);
     } finally {
       setTechniquesLoading(false);
@@ -230,25 +218,23 @@ const MyScoutingReportsTab = ({ user }) => {
   );
 
   const exportUrl = `/api/records/scouting?download=1`;
-  useEffect(() => {
-    console.log("🔥 STYLES STATE IN TAB:", stylesForForm);
-  }, [stylesForForm]);
+
   return (
     <>
       {/* Header */}
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
-          {" "}
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             My Reports
           </h1>
+
           <Button
+            className="btn-add"
             onClick={async () => {
               setSelectedReport(null);
-              await loadStylesAndTechniques();
-              setOpen(true);
+              await loadStylesAndTechniques(); // LOAD FIRST
+              setOpen(true); // THEN OPEN
             }}
-            class="btn-add"
           >
             <Plus size={16} /> Add Scouting Report
           </Button>
@@ -256,9 +242,8 @@ const MyScoutingReportsTab = ({ user }) => {
 
         <div className="flex justify-end mt-3">
           <Button
-            variant="outline"
             onClick={() => window.open(exportUrl, "_blank")}
-            className="flex items-center gap-2"
+            className="btn-file"
           >
             <FileDown className="w-4 h-4" />
             Export to Excel
@@ -302,7 +287,7 @@ const MyScoutingReportsTab = ({ user }) => {
         title={selectedReport ? "Edit Scouting Report" : "Add Scouting Report"}
         withCard
       >
-        {stylesLoading || techniquesLoading || stylesForForm.length === 0 ? (
+        {stylesLoading || techniquesLoading ? (
           <Spinner size={40} />
         ) : (
           <ScoutingReportForm
