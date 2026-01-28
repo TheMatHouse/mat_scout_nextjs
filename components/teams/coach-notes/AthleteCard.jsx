@@ -14,7 +14,7 @@ const AthleteCard = ({ slug, entry, showDelete = true }) => {
   const handleDelete = async () => {
     if (
       !window.confirm(
-        `Remove ${entry.athlete?.name || "athlete"} from this event?`
+        `Remove ${entry.athlete?.name || "athlete"} from this event?`,
       )
     )
       return;
@@ -24,7 +24,7 @@ const AthleteCard = ({ slug, entry, showDelete = true }) => {
         {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
-        }
+        },
       );
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || j?.message || "Delete failed");
@@ -58,7 +58,7 @@ const AthleteCard = ({ slug, entry, showDelete = true }) => {
           {showDelete && (
             <button
               onClick={handleDelete}
-              className="px-3 py-1 rounded bg-red-600 text-white"
+              className="btn-delete"
               title="Manager only"
             >
               Delete

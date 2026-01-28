@@ -54,8 +54,8 @@ const FamilyTeamScoutingReportsTab = ({ member }) => {
         const list = Array.isArray(payload)
           ? payload
           : Array.isArray(payload?.teams)
-          ? payload.teams
-          : [];
+            ? payload.teams
+            : [];
 
         setTeams(list);
       } catch (err) {
@@ -84,7 +84,7 @@ const FamilyTeamScoutingReportsTab = ({ member }) => {
         {
           credentials: "include",
           headers: { accept: "application/json" },
-        }
+        },
       );
 
       if (!res.ok) {
@@ -140,7 +140,7 @@ const FamilyTeamScoutingReportsTab = ({ member }) => {
         {
           credentials: "include",
           headers: { accept: "application/json" },
-        }
+        },
       );
 
       if (!res.ok) {
@@ -319,6 +319,7 @@ const FamilyTeamScoutingReportsTab = ({ member }) => {
                   type="button"
                   variant="outline"
                   disabled={submittingPassword}
+                  className="btn-cancel"
                   onClick={() => {
                     setPasswordModalOpen(false);
                     setActiveTeam(null);
@@ -330,7 +331,7 @@ const FamilyTeamScoutingReportsTab = ({ member }) => {
                 <Button
                   type="submit"
                   disabled={submittingPassword || !password.trim()}
-                  className="bg-ms-blue-gray hover:bg-ms-blue text-white"
+                  className="btn-submit"
                 >
                   {submittingPassword ? "Verifying…" : "Unlock Team"}
                 </Button>

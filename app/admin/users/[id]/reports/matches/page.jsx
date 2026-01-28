@@ -94,7 +94,7 @@ const AdminUserMatchesPage = async ({ params, searchParams }) => {
     MatchReport.countDocuments(filter),
     MatchReport.find(filter)
       .select(
-        "createdAt eventName opponentName result allowPublic teamSlug weightClass division video url slug"
+        "createdAt eventName opponentName result allowPublic teamSlug weightClass division video url slug",
       )
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
@@ -157,7 +157,7 @@ const AdminUserMatchesPage = async ({ params, searchParams }) => {
             value="1"
           />
           <button
-            className="btn btn-white-sm self-start"
+            className="btn-submit"
             type="submit"
           >
             Apply

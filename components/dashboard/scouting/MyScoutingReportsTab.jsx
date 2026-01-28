@@ -243,12 +243,12 @@ const MyScoutingReportsTab = ({ user }) => {
             My Reports
           </h1>
           <Button
+            className="btn-add"
             onClick={async () => {
               setSelectedReport(null);
               await loadStylesAndTechniques();
               setOpen(true);
             }}
-            className="btn-add"
           >
             <Plus size={16} /> Add Scouting Report
           </Button>

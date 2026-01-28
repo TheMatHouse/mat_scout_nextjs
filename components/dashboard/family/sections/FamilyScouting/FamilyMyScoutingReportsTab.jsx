@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { toast } from "react-toastify";
-import { Eye, Edit, Trash, FileDown } from "lucide-react";
+import { Eye, Edit, Trash, FileDown, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ReportDataTable } from "@/components/shared/report-data-table";
@@ -104,7 +104,7 @@ function FamilyMyScoutingReportsTab({ member }) {
     try {
       const res = await fetch(
         `/api/dashboard/${userId}/family/${memberId}/scoutingReports`,
-        { cache: "no-store", credentials: "same-origin" }
+        { cache: "no-store", credentials: "same-origin" },
       );
       if (!res.ok) throw new Error("Failed to load reports");
 
@@ -130,7 +130,7 @@ function FamilyMyScoutingReportsTab({ member }) {
 
     const res = await fetch(
       `/api/dashboard/${userId}/family/${memberId}/scoutingReports/${report._id}`,
-      { method: "DELETE", credentials: "same-origin" }
+      { method: "DELETE", credentials: "same-origin" },
     );
 
     if (res.ok) {
@@ -194,13 +194,13 @@ function FamilyMyScoutingReportsTab({ member }) {
           </h2>
 
           <Button
-            className="btn btn-primary"
+            className="btn-add"
             onClick={() => {
               setSelectedReport(null);
               setOpen(true);
             }}
           >
-            Add Scouting Report
+            <Plus size={16} /> Add Scouting Report
           </Button>
         </div>
 

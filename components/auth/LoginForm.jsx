@@ -58,7 +58,7 @@ export default function LoginForm({ redirect = "/dashboard" }) {
   // Stash redirect for OAuth callbacks to read
   const setRedirectCookie = () => {
     document.cookie = `post_auth_redirect=${encodeURIComponent(
-      redirect
+      redirect,
     )}; Path=/; Max-Age=600; SameSite=Lax`;
   };
 
@@ -126,7 +126,7 @@ export default function LoginForm({ redirect = "/dashboard" }) {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 rounded-lg font-semibold shadow-md text-white bg-[var(--ms-blue)] hover:bg-[var(--ms-blue-gray)] transition disabled:opacity-60"
+              className="w-full btn-submit"
             >
               {loading ? "Logging in…" : "Log In"}
             </button>

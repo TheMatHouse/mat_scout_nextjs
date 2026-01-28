@@ -115,7 +115,7 @@ export default function AddPromotionForm({ userStyleId, onAdded }) {
       <Button
         type="submit"
         disabled={saving}
-        className="btn btn-primary"
+        className="btn-submit"
       >
         {saving ? "Adding..." : "Add Promotion"}
       </Button>

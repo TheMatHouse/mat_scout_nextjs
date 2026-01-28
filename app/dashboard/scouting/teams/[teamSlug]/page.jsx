@@ -118,7 +118,7 @@ const buildPreviewPayload = (r) => {
                 url: toSafeStr(v.url || v.videoURL || v.urlCanonical),
                 startSeconds: toNonNegInt(v.startSeconds),
               }
-            : null
+            : null,
         )
         .filter(Boolean)
     : [];
@@ -230,7 +230,7 @@ function DashboardTeamScoutingReportsPage() {
           {
             credentials: "include",
             headers: { accept: "application/json" },
-          }
+          },
         );
 
         if (!res.ok) {
@@ -286,10 +286,10 @@ function DashboardTeamScoutingReportsPage() {
             (err) => {
               console.warn(
                 "Dashboard verifyPasswordLocally (cached) failed:",
-                err
+                err,
               );
               return false;
-            }
+            },
           );
           if (ok) {
             setUnlocked(true);
@@ -330,7 +330,7 @@ function DashboardTeamScoutingReportsPage() {
         (err) => {
           console.warn("Dashboard verifyPasswordLocally failed:", err);
           return false;
-        }
+        },
       );
 
       if (!ok) {
@@ -345,7 +345,7 @@ function DashboardTeamScoutingReportsPage() {
         } catch (storageErr) {
           console.warn(
             "Unable to cache team password in sessionStorage:",
-            storageErr
+            storageErr,
           );
         }
       }
@@ -377,8 +377,8 @@ function DashboardTeamScoutingReportsPage() {
       new Set(
         (reportsList || [])
           .map((r) => (r?.matchType || "").trim())
-          .filter(Boolean)
-      )
+          .filter(Boolean),
+      ),
     );
     const fetched = {};
     await Promise.all(
@@ -390,7 +390,7 @@ function DashboardTeamScoutingReportsPage() {
               cache: "no-store",
               credentials: "same-origin",
               headers: { accept: "application/json" },
-            }
+            },
           );
           const data = await res.json().catch(() => ({}));
           const divs = Array.isArray(data?.divisions) ? data.divisions : [];
@@ -400,7 +400,7 @@ function DashboardTeamScoutingReportsPage() {
         } catch {
           // non-fatal
         }
-      })
+      }),
     );
 
     if (Object.keys(entries).length || Object.keys(fetched).length) {
@@ -413,8 +413,8 @@ function DashboardTeamScoutingReportsPage() {
       new Set(
         (reportsList || [])
           .map((r) => getDivisionId(r?.division))
-          .filter(Boolean)
-      )
+          .filter(Boolean),
+      ),
     );
     if (!divIds.length) return;
 
@@ -423,7 +423,7 @@ function DashboardTeamScoutingReportsPage() {
       divIds.map(async (id) => {
         const weights = await fetchDivisionWeights(id);
         if (weights) entries[id] = weights;
-      })
+      }),
     );
     if (Object.keys(entries).length) {
       setWeightsMap((prev) => ({ ...prev, ...entries }));
@@ -437,8 +437,8 @@ function DashboardTeamScoutingReportsPage() {
 
       const res = await fetch(
         `/api/teams/${encodeURIComponent(
-          slug
-        )}/scouting-reports?ts=${Date.now()}`
+          slug,
+        )}/scouting-reports?ts=${Date.now()}`,
       );
       if (!res.ok) throw new Error("Failed to load scouting reports");
       const data = await res.json().catch(() => ({}));
@@ -462,10 +462,10 @@ function DashboardTeamScoutingReportsPage() {
                   console.warn(
                     "Dashboard decryptScoutingBody failed for report",
                     r._id,
-                    err
+                    err,
                   );
                   return null;
-                }
+                },
               );
 
               if (decrypted) {
@@ -482,12 +482,12 @@ function DashboardTeamScoutingReportsPage() {
               // Legacy: notes-only encryption
               const result = await maybeDecryptNotes(
                 team,
-                r.athleteAttackNotes
+                r.athleteAttackNotes,
               ).catch((err) => {
                 console.warn(
                   "Dashboard maybeDecryptNotes failed for report",
                   r._id,
-                  err
+                  err,
                 );
                 return { plaintext: null };
               });
@@ -503,7 +503,7 @@ function DashboardTeamScoutingReportsPage() {
             console.warn(
               "Dashboard decrypt error (ignored) for report",
               r._id,
-              err
+              err,
             );
           }
 
@@ -542,7 +542,7 @@ function DashboardTeamScoutingReportsPage() {
           `/api/teams/${encodeURIComponent(slug)}/members?ts=${Date.now()}`,
           {
             cache: "no-store",
-          }
+          },
         );
         const json = await res.json().catch(() => ({}));
         const list = Array.isArray(json.members) ? json.members : [];
@@ -564,7 +564,7 @@ function DashboardTeamScoutingReportsPage() {
       Array.isArray(r?.reportFor) && r.reportFor.length
         ? r.reportFor.map(
             (rf) =>
-              membersMap.get(String(r.athleteId ?? rf.athleteId)) || "Unknown"
+              membersMap.get(String(r.athleteId ?? rf.athleteId)) || "Unknown",
           )
         : [];
 
@@ -580,7 +580,7 @@ function DashboardTeamScoutingReportsPage() {
       if (r?.weightLabel && String(r.weightLabel).trim()) {
         weightDisplay = ensureWeightDisplay(
           String(r.weightLabel).trim(),
-          r?.weightUnit
+          r?.weightUnit,
         );
       } else {
         const divId = divisionId;
@@ -593,7 +593,7 @@ function DashboardTeamScoutingReportsPage() {
               (it) =>
                 String(it._id) === String(weightId) ||
                 String(it.label).toLowerCase() ===
-                  String(weightId).toLowerCase()
+                  String(weightId).toLowerCase(),
             );
             if (item?.label) {
               const unit = r?.weightUnit || w.unit || "";
@@ -721,12 +721,12 @@ function DashboardTeamScoutingReportsPage() {
                   if (report.crypto && report.crypto.ciphertextB64 && team) {
                     const decrypted = await decryptScoutingBody(
                       team,
-                      report
+                      report,
                     ).catch((err) => {
                       console.warn(
                         "Dashboard preview decryptScoutingBody failed for report",
                         report._id,
-                        err
+                        err,
                       );
                       return null;
                     });
@@ -744,12 +744,12 @@ function DashboardTeamScoutingReportsPage() {
                   } else if (report.athleteAttackNotes && team) {
                     const res = await maybeDecryptNotes(
                       team,
-                      report.athleteAttackNotes
+                      report.athleteAttackNotes,
                     ).catch((err) => {
                       console.warn(
                         "Dashboard preview maybeDecryptNotes failed for report",
                         report._id,
-                        err
+                        err,
                       );
                       return { plaintext: null };
                     });
@@ -766,7 +766,7 @@ function DashboardTeamScoutingReportsPage() {
                   console.warn(
                     "Dashboard preview decrypt error (ignored) for report",
                     report._id,
-                    err
+                    err,
                   );
                   effective = report;
                 }
@@ -854,7 +854,7 @@ function DashboardTeamScoutingReportsPage() {
               <Button
                 type="submit"
                 disabled={submittingPassword || !password}
-                className="bg-ms-blue-gray hover:bg-ms-blue text-white"
+                className="btn-submit"
               >
                 {submittingPassword ? "Unlocking…" : "Unlock"}
               </Button>

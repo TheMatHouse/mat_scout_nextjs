@@ -211,14 +211,14 @@ function MemberRow({
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setConfirmRemove(false)}
-                className="btn btn-secondary"
+                className="btn-cancel"
               >
                 Cancel
               </button>
               <button
                 onClick={handleRemove}
                 disabled={saving}
-                className="btn btn-destructive"
+                className="btn-delete"
               >
                 Remove
               </button>

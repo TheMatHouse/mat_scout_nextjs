@@ -111,7 +111,7 @@ export default function ContactClient() {
 
       <Button
         type="submit"
-        className="btn-primary w-full"
+        className="btn-submit"
         disabled={loading}
       >
         {loading ? "Sending..." : "Send Message"}

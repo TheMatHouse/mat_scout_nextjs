@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import Editor from "@/components/shared/Editor";
+import { Plus } from "lucide-react";
 
 const ITEM_TYPES = ["warm-up", "drill", "technique", "cool-down"];
 
@@ -80,7 +81,7 @@ function PracticeNoteModal({ note, onSaved, setOpen }) {
         youtubeUrl: i.videoUrl || "",
         timestamp:
           typeof i.videoTimestamp === "number" ? String(i.videoTimestamp) : "",
-      }))
+      })),
     );
 
     setGeneralNotes(note.generalNotes || "");
@@ -99,7 +100,7 @@ function PracticeNoteModal({ note, onSaved, setOpen }) {
   /* ---------------- helpers ---------------- */
   function updateItem(i, field, value) {
     setItems((prev) =>
-      prev.map((item, idx) => (idx === i ? { ...item, [field]: value } : item))
+      prev.map((item, idx) => (idx === i ? { ...item, [field]: value } : item)),
     );
   }
 
@@ -168,7 +169,7 @@ function PracticeNoteModal({ note, onSaved, setOpen }) {
         method: isEdit ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      }
+      },
     );
 
     if (res.ok) {
@@ -333,9 +334,9 @@ function PracticeNoteModal({ note, onSaved, setOpen }) {
           <button
             type="button"
             onClick={addItem}
-            className="px-4 py-2 rounded-lg bg-black text-white dark:bg-white dark:text-black font-semibold"
+            className="btn-add"
           >
-            ➕ Add Practice Item
+            <Plus size={16} /> Add Practice Item
           </button>
         </div>
 
@@ -442,7 +443,7 @@ function PracticeNoteModal({ note, onSaved, setOpen }) {
 
       <button
         type="submit"
-        className="w-full py-3 rounded-lg bg-black text-white dark:bg-white dark:text-black font-semibold"
+        className="w-full btn-submit"
       >
         {isEdit ? "Save Changes" : "Create Practice Note"}
       </button>

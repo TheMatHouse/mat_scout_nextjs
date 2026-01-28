@@ -8,6 +8,7 @@ import StyleCard from "../../StyleCard";
 import StyleForm from "../../forms/StyleForm";
 import ModalLayout from "@/components/shared/ModalLayout";
 import PromotionsForm from "../../forms/PromotionsForm";
+import { Plus } from "lucide-react";
 
 function SkeletonGrid({ count = 4 }) {
   return (
@@ -41,7 +42,7 @@ const FamilyStyles = ({ member }) => {
     try {
       setLoadingStyles(true);
       const res = await fetch(
-        `/api/dashboard/${member.userId}/family/${member._id}/styles`
+        `/api/dashboard/${member.userId}/family/${member._id}/styles`,
       );
       const data = await res.json();
       setStyles(Array.isArray(data) ? data : []);
@@ -56,7 +57,7 @@ const FamilyStyles = ({ member }) => {
     try {
       setLoadingStyles(true);
       const res = await fetch(
-        `/api/dashboard/${member.userId}/family/${member._id}/styles`
+        `/api/dashboard/${member.userId}/family/${member._id}/styles`,
       );
       if (!res.ok) throw new Error("Failed to fetch updated styles.");
       const updatedStyles = await res.json();
@@ -70,7 +71,7 @@ const FamilyStyles = ({ member }) => {
 
   const handleDeleteStyle = (deletedStyleId) => {
     setStyles((prevStyles) =>
-      prevStyles.filter((style) => style._id !== deletedStyleId)
+      prevStyles.filter((style) => style._id !== deletedStyleId),
     );
   };
 
@@ -83,7 +84,7 @@ const FamilyStyles = ({ member }) => {
   const styleSupportsPromotions = (s) => norm(s?.styleName) !== "wrestling";
   const promotableStyles = useMemo(
     () => styles.filter(styleSupportsPromotions),
-    [styles]
+    [styles],
   );
 
   const openPromotionModal = () => {
@@ -101,8 +102,8 @@ const FamilyStyles = ({ member }) => {
     if (updatedStyle?._id) {
       setStyles((prev) =>
         prev.map((s) =>
-          String(s._id) === String(updatedStyle._id) ? updatedStyle : s
-        )
+          String(s._id) === String(updatedStyle._id) ? updatedStyle : s,
+        ),
       );
     } else {
       await handleStylesRefresh();
@@ -119,10 +120,10 @@ const FamilyStyles = ({ member }) => {
         </h1>
         <div className="flex items-center gap-2">
           <Button
-            className="btn btn-primary"
+            className="btn-add"
             onClick={() => setOpen(true)}
           >
-            Add Style
+            <Plus size={16} /> Add Style
           </Button>
           {promotableStyles.length > 0 && (
             <Button

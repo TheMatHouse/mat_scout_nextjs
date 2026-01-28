@@ -75,7 +75,7 @@ export default function DeleteAccount({ user }) {
         <AlertDialogTrigger asChild>
           <button
             type="button"
-            className="btn btn-danger"
+            className="btn-delete"
           >
             Delete Account
           </button>
@@ -91,9 +91,7 @@ export default function DeleteAccount({ user }) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="alert-cancel">
-              Cancel
-            </AlertDialogCancel>
+            <AlertDialogCancel className="btn-cancel">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               disabled={loading}

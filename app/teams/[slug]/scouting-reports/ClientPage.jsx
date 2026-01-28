@@ -16,6 +16,7 @@ import ScoutingReportCard from "@/components/shared/ScoutingReportCard";
 import { decryptScoutingBody } from "@/lib/crypto/teamLock";
 import { canView, canEdit, canDelete, canCreate } from "./logic/roleUtils";
 
+import { Plus } from "lucide-react";
 /* ---------------- helpers ---------------- */
 
 const genderLabel = (g) => {
@@ -431,13 +432,13 @@ function TeamScoutingReportsPage() {
 
           {team && user && canCreate(team, teamMembers, user) && (
             <button
-              className="rounded-md bg-ms-blue px-4 py-2 text-white"
+              className="btn-add"
               onClick={() => {
                 setSelectedReport(null);
                 setOpen(true);
               }}
             >
-              ➕ Add Scouting Report
+              <Plus size={16} /> Add Scouting Report
             </button>
           )}
         </div>

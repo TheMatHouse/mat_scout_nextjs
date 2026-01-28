@@ -203,7 +203,7 @@ const TeamUnlockGate = ({
             <Button
               type="submit"
               disabled={submitting || !password}
-              className="bg-ms-blue-gray hover:bg-ms-blue text-white"
+              className="btn-submit"
             >
               {submitting ? "Unlocking…" : "Unlock"}
             </Button>

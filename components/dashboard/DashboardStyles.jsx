@@ -9,6 +9,7 @@ import ModalLayout from "@/components/shared/ModalLayout";
 import StyleCard from "./StyleCard";
 import StyleForm from "./forms/StyleForm";
 import PromotionsForm from "./forms/PromotionsForm";
+import { Plus } from "lucide-react";
 
 /* --------------------- small utils --------------------- */
 const norm = (v) =>
@@ -166,7 +167,7 @@ function DashboardStyles() {
       setMyStyles(styles);
       if (styles.length === 0) {
         console.info(
-          "[styles] No owned styles found after normalization/filters."
+          "[styles] No owned styles found after normalization/filters.",
         );
       }
     } catch (err) {
@@ -186,14 +187,14 @@ function DashboardStyles() {
       });
       if (res.status === 404) {
         console.warn(
-          `[match-reports] 404 at /api/dashboard/${userId}/matchReports`
+          `[match-reports] 404 at /api/dashboard/${userId}/matchReports`,
         );
         setMatchReports([]);
       } else if (!res.ok) {
         const body = await res.text().catch(() => "");
         console.warn(
           `[match-reports] ${res.status} at /api/dashboard/${userId}/matchReports`,
-          body
+          body,
         );
         setMatchReports([]);
       } else {
@@ -223,7 +224,7 @@ function DashboardStyles() {
 
   const handleDeleteStyle = (deletedStyleId) => {
     setMyStyles((prev) =>
-      prev.filter((s) => String(s._id) !== String(deletedStyleId))
+      prev.filter((s) => String(s._id) !== String(deletedStyleId)),
     );
     setStylesVersion((v) => v + 1);
   };
@@ -232,13 +233,13 @@ function DashboardStyles() {
 
   const hasPromotable = useMemo(
     () => myStyles.some(styleSupportsPromotions),
-    [myStyles]
+    [myStyles],
   );
 
   const selectedStyle = useMemo(
     () =>
       myStyles.find((s) => String(s._id) === String(selectedStyleId)) || null,
-    [myStyles, selectedStyleId]
+    [myStyles, selectedStyleId],
   );
 
   const openPromotionModal = () => {
@@ -252,8 +253,8 @@ function DashboardStyles() {
         prev.map((s) =>
           String(s._id) === String(updatedStyle._id)
             ? normalizeStyleName(updatedStyle)
-            : s
-        )
+            : s,
+        ),
       );
     }
     if (user?._id) {
@@ -298,17 +299,18 @@ function DashboardStyles() {
         <h1 className="text-2xl font-bold">My Styles/Sports</h1>
         <div className="flex items-center gap-2">
           <Button
-            className="btn btn-primary"
+            className="btn-add"
             onClick={() => setOpen(true)}
           >
-            Add Style
+            <Plus size={16} /> Add Style
           </Button>
           {hasPromotable && (
             <Button
               variant="secondary"
+              class="btn-add"
               onClick={openPromotionModal}
             >
-              Add Promotion
+              <Plus size={16} /> Add Promotion
             </Button>
           )}
         </div>

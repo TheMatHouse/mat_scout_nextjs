@@ -16,19 +16,20 @@ import {
   encryptScoutingBody,
   decryptScoutingBody,
 } from "@/lib/crypto/teamLock";
+import { Plus } from "lucide-react";
 
 const sortByLabel = (arr) =>
   [...arr].sort((a, b) =>
     String(a?.label ?? "").localeCompare(String(a?.label ?? ""), undefined, {
       sensitivity: "base",
-    })
+    }),
   );
 
 const sortByName = (arr) =>
   [...arr].sort((a, b) =>
     String(a?.name ?? "").localeCompare(String(b?.name ?? ""), undefined, {
       sensitivity: "base",
-    })
+    }),
   );
 
 // normalize division select value -> string id
@@ -209,20 +210,20 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
 
   const [matchType, setMatchType] = useState(report?.matchType || "");
   const [athleteFirstName, setAthleteFirstName] = useState(
-    report?.athleteFirstName || ""
+    report?.athleteFirstName || "",
   );
   const [athleteLastName, setAthleteLastName] = useState(
-    report?.athleteLastName || ""
+    report?.athleteLastName || "",
   );
   const [athleteNationalRank, setAthleteNationalRank] = useState(
-    report?.athleteNationalRank || ""
+    report?.athleteNationalRank || "",
   );
   const [athleteWorldRank, setAthleteWorldRank] = useState(
-    report?.athleteWorldRank || ""
+    report?.athleteWorldRank || "",
   );
   const [athleteClub, setAthleteClub] = useState(report?.athleteClub || "");
   const [athleteCountry, setAthleteCountry] = useState(
-    report?.athleteCountry || ""
+    report?.athleteCountry || "",
   );
   const [athleteGrip, setAthleteGrip] = useState(report?.athleteGrip || "");
   const [athleteAttackNotes, setAthleteAttackNotes] = useState("");
@@ -230,7 +231,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
   const [athleteSelected, setAthleteSelected] = useState(
     Array.isArray(report?.athleteAttacks)
       ? report.athleteAttacks.map((t, i) => ({ value: i, label: t }))
-      : []
+      : [],
   );
   const [videos, setVideos] = useState(
     Array.isArray(report?.videos)
@@ -241,9 +242,9 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
                 ...v,
                 startSeconds:
                   Math.max(0, parseInt(v?.startSeconds ?? 0, 10)) || 0,
-              }
+              },
         )
-      : []
+      : [],
   );
   const [newVideos, setNewVideos] = useState([]);
   const [reportFor, setReportFor] = useState(
@@ -252,7 +253,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
           athleteId: rf.athleteId,
           athleteType: rf.athleteType,
         }))
-      : []
+      : [],
   );
 
   /* --------------------- DIVISIONS & WEIGHTS (team version) ---------------------- */
@@ -260,12 +261,12 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
   const [divisionsLoading, setDivisionsLoading] = useState(false);
 
   const [divisionId, setDivisionId] = useState(() =>
-    toDivisionId(report?.division)
+    toDivisionId(report?.division),
   );
 
   const [weightOptions, setWeightOptions] = useState([]); // [{value,label}]
   const [weightCategoryId, setWeightCategoryId] = useState(() =>
-    String(report?.weightCategory ?? report?.weightItemId ?? "")
+    String(report?.weightCategory ?? report?.weightItemId ?? ""),
   );
   const [weightLabel, setWeightLabel] = useState(report?.weightLabel || "");
   const [weightUnit, setWeightUnit] = useState(report?.weightUnit || "");
@@ -302,7 +303,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
       setAthleteSelected(
         Array.isArray(report.athleteAttacks)
           ? report.athleteAttacks.map((t, i) => ({ value: i, label: t }))
-          : []
+          : [],
       );
 
       setVideos(
@@ -314,9 +315,9 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
                     ...v,
                     startSeconds:
                       Math.max(0, parseInt(v?.startSeconds ?? 0, 10)) || 0,
-                  }
+                  },
             )
-          : []
+          : [],
       );
       setNewVideos([]);
       newVideosRef.current = [];
@@ -328,12 +329,12 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
               athleteId: rf.athleteId,
               athleteType: rf.athleteType,
             }))
-          : []
+          : [],
       );
 
       setDivisionId(toDivisionId(report.division));
       setWeightCategoryId(
-        String(report.weightCategory ?? report.weightItemId ?? "")
+        String(report.weightCategory ?? report.weightItemId ?? ""),
       );
       setWeightLabel(report.weightLabel || "");
       setWeightUnit(report.weightUnit || "");
@@ -360,7 +361,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
                       value: i,
                       label: t,
                     }))
-                  : []
+                  : [],
               );
               setAthleteAttackNotes(decrypted.athleteAttackNotes || "");
               return;
@@ -372,7 +373,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
         } catch (err) {
           console.warn(
             "[ScoutingReportForm] decrypt failed; falling back to stored report body",
-            err
+            err,
           );
           setAthleteAttackNotes(report.athleteAttackNotes || "");
         }
@@ -413,7 +414,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
         const data = await res.json();
         const opts = (Array.isArray(data) ? data : [])
           .map((s) =>
-            s?.styleName ? { value: s.styleName, label: s.styleName } : null
+            s?.styleName ? { value: s.styleName, label: s.styleName } : null,
           )
           .filter(Boolean)
           .sort((a, b) => a.label.localeCompare(b.label));
@@ -434,7 +435,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
       try {
         setLoadingMembers(true);
         const res = await fetch(
-          `/api/teams/${teamSlug}/members?ts=${Date.now()}`
+          `/api/teams/${teamSlug}/members?ts=${Date.now()}`,
         );
         const data = await res.json();
         const membersList = Array.isArray(data.members) ? data.members : [];
@@ -479,7 +480,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
         setLoadedTechniques(
           Array.isArray(data)
             ? data.sort((a, b) => a.name.localeCompare(b.name))
-            : []
+            : [],
         );
       } catch {
         setLoadedTechniques([]);
@@ -489,16 +490,16 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
 
   const suggestions = useMemo(
     () => loadedTechniques.map((t, i) => ({ value: i, label: t.name })),
-    [loadedTechniques]
+    [loadedTechniques],
   );
 
   const onAthleteAdd = useCallback(
     (tag) => setAthleteSelected((prev) => [...prev, tag]),
-    []
+    [],
   );
   const onAthleteDelete = useCallback(
     (i) => setAthleteSelected((prev) => prev.filter((_, idx) => idx !== i)),
-    []
+    [],
   );
 
   /* --------------------- DIVISIONS after style ---------------------- */
@@ -537,7 +538,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
             cache: "no-store",
             credentials: "same-origin",
             headers: { accept: "application/json" },
-          }
+          },
         );
         const data = await res.json().catch(() => ({}));
         if (!alive) return;
@@ -555,7 +556,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
           !appliedInitialDivisionRef.current
         ) {
           const hasIt = opts.some(
-            (o) => String(o.value) === String(initialDivisionId)
+            (o) => String(o.value) === String(initialDivisionId),
           );
           if (hasIt) setDivisionId(String(initialDivisionId));
           appliedInitialDivisionRef.current = true;
@@ -616,7 +617,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
           setWeightsError(
             res.status === 404
               ? ""
-              : `Failed to load weights (HTTP ${res.status}).`
+              : `Failed to load weights (HTTP ${res.status}).`,
           );
           return;
         }
@@ -659,7 +660,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
         if (!appliedInitialWeightRef.current) {
           if (initialWeightCategoryId) {
             const byId = opts.find(
-              (o) => String(o.value) === String(initialWeightCategoryId)
+              (o) => String(o.value) === String(initialWeightCategoryId),
             );
             if (byId) {
               setWeightCategoryId(String(initialWeightCategoryId));
@@ -675,7 +676,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
               .toLowerCase();
             if (savedLabel) {
               const byLabel = opts.find(
-                (o) => String(o.label).trim().toLowerCase() === savedLabel
+                (o) => String(o.label).trim().toLowerCase() === savedLabel,
               );
               if (byLabel) {
                 setWeightCategoryId(String(byLabel.value));
@@ -779,7 +780,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
       athleteCountry,
       athleteGrip,
       athleteAttacks: athleteSelected.map((i) =>
-        String(i.label || "").toLowerCase()
+        String(i.label || "").toLowerCase(),
       ),
       athleteAttackNotes,
     };
@@ -835,7 +836,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message || "Failed to save report");
       toast.success(
-        data?.message || (report ? "Report updated" : "Report created")
+        data?.message || (report ? "Report updated" : "Report created"),
       );
       setOpen(false);
       onSuccess?.();
@@ -917,7 +918,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
             value={weightCategoryId}
             onChange={(val) => {
               const opt = (weightOptions || []).find(
-                (o) => String(o.value) === String(val)
+                (o) => String(o.value) === String(val),
               );
               setWeightCategoryId(String(val));
               setWeightLabel(opt?.label ?? "");
@@ -1036,7 +1037,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
             }
 
             const idMatch = (url || "").match(
-              /(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/i
+              /(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/i,
             );
             const embedId = idMatch ? idMatch[1] : null;
 
@@ -1063,7 +1064,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
                       const existing = next[idx] || {};
                       const prevStart = Math.max(
                         0,
-                        parseInt(existing.startSeconds ?? 0, 10)
+                        parseInt(existing.startSeconds ?? 0, 10),
                       );
                       next[idx] = {
                         ...existing,
@@ -1126,7 +1127,7 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
             const url = vid.url || "";
             const startSeconds = Math.max(
               0,
-              parseInt(vid?.startSeconds ?? 0, 10)
+              parseInt(vid?.startSeconds ?? 0, 10),
             );
             const idMatch = url.match(/(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/i);
             const embedId = idMatch ? idMatch[1] : null;
@@ -1157,8 +1158,8 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
                             typeof vid.startSeconds === "number"
                               ? vid.startSeconds
                               : vid?.startSeconds || 0,
-                            10
-                          )
+                            10,
+                          ),
                         );
                     handleNewVideoChange(idx, "url", nextUrl);
                     handleNewVideoChange(idx, "startSeconds", safe);
@@ -1203,20 +1204,22 @@ const ScoutingReportForm = ({ team, report, user, onSuccess, setOpen }) => {
         <Button
           type="button"
           variant="outline"
+          className="btn-add"
           onClick={handleAddNewVideo}
         >
-          ➕ Add {newVideos.length ? "Another" : "a"} Video
+          <Plus size={16} /> Add {newVideos.length ? "Another" : "a"} Video
         </Button>
       </div>
       {/* ---------- END VIDEOS SECTION ---------- */}
-
-      <Button
-        type="submit"
-        className="bg-ms-blue-gray hover:bg-ms-blue text-white"
-        disabled={divisionsLoading || weightsLoading}
-      >
-        {report ? "Update Report" : "Submit Report"}
-      </Button>
+      <div className="mt-4 pt-4">
+        <Button
+          type="submit"
+          className="btn-submit"
+          disabled={divisionsLoading || weightsLoading}
+        >
+          {report ? "Update Report" : "Submit Report"}
+        </Button>
+      </div>
     </form>
   );
 };

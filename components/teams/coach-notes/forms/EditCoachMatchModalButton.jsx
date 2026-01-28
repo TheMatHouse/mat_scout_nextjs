@@ -98,13 +98,13 @@ function EditCoachMatchModalButton({
         const arr = Array.isArray(data)
           ? data
           : Array.isArray(data?.techniques)
-          ? data.techniques
-          : [];
+            ? data.techniques
+            : [];
         if (alive)
           setLoadedTechniques(
             arr
               .map((t, i) => ({ value: i, label: t.name }))
-              .sort((a, b) => a.label.localeCompare(b.label))
+              .sort((a, b) => a.label.localeCompare(b.label)),
           );
       } catch {
         if (alive) setLoadedTechniques([]);
@@ -171,7 +171,7 @@ function EditCoachMatchModalButton({
       try {
         const res = await fetch(
           `/api/teams/${slug}/coach-notes/events/${eventId}/entries/${entryId}/matches/${matchId}`,
-          { cache: "no-store" }
+          { cache: "no-store" },
         );
         const data = await res.json();
         if (res.ok && data.match) hydrate(data.match);
@@ -225,7 +225,7 @@ function EditCoachMatchModalButton({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
-      }
+      },
     );
 
     const data = await res.json();
@@ -408,13 +408,13 @@ function EditCoachMatchModalButton({
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="px-4 py-2 rounded border"
+              className="btn-cancel"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 rounded shadow bg-black text-white dark:bg-white dark:text-black"
+              className="btn-submit"
             >
               Save Changes
             </button>

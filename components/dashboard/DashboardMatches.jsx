@@ -1,339 +1,403 @@
-// components/dashboard/scouting/MyScoutingReportsTab.jsx
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "react-toastify";
-import { FileDown } from "lucide-react";
+
+import MatchReportForm from "./forms/MatchReportForm";
+import PreviewReportModal from "./PreviewReportModal";
 
 import { Button } from "@/components/ui/button";
-import PreviewReportModal from "@/components/shared/PreviewReportModal";
-import ScoutingReportForm from "@/components/dashboard/forms/ScoutingReportForm";
+import { Printer, X, Plus } from "lucide-react";
 import ModalLayout from "@/components/shared/ModalLayout";
 import Spinner from "@/components/shared/Spinner";
-import ShareReportModal from "@/components/dashboard/ShareReportModal";
-import DashboardScoutingReportCard from "@/components/shared/DashboardScoutingReportCard";
+import MatchReportCard from "@/components/shared/MatchReportCard";
+import ShareReportModal from "./ShareReportModal";
 
 /* ---------------- helpers ---------------- */
-const genderLabel = (g) => {
-  const s = String(g ?? "").toLowerCase();
-  if (s === "male") return "Men";
-  if (s === "female") return "Women";
-  if (s === "coed" || s === "open") return "Coed";
-  return s || "";
-};
+const genderWord = (g) =>
+  g === "male" ? "Men" : g === "female" ? "Women" : g === "coed" ? "Coed" : "";
 
-const computeDivisionDisplay = (division) => {
-  if (!division) return "—";
-  if (typeof division === "string") return division;
-  if (typeof division === "object") {
-    const name = division?.name || "";
-    const glab = genderLabel(division?.gender);
-    return name ? (glab ? `${name} — ${glab}` : name) : "—";
+function getDivisionDisplay(m) {
+  const d = m?.division;
+  if (d && typeof d === "object") {
+    const name = d.name || "";
+    const g = genderWord(d.gender);
+    return g ? `${name} — ${g}` : name || "—";
   }
+  if (typeof m?.division === "string") return m.division;
   return "—";
-};
-
-function ensureWeightDisplay(label, unit) {
-  if (!label) return "";
-  const low = String(label).toLowerCase();
-  if (low.includes("kg") || low.includes("lb")) return label;
-  return unit ? `${label} ${unit}` : label;
 }
+/* ----------------------------------------- */
 
-const toSafeStr = (v) => (v == null ? "" : String(v));
-const toNonNegInt = (v) => {
-  const n = parseInt(v, 10);
-  return Number.isFinite(n) && n > 0 ? n : 0;
-};
-
-const buildPreviewPayload = (r) => {
-  const divisionDisplay = computeDivisionDisplay(r?.division);
-  const weightLabel = toSafeStr(r?.weightLabel).trim();
-  const weightUnit = toSafeStr(r?.weightUnit).trim();
-  let weightDisplay = weightLabel;
-  if (weightDisplay && weightUnit && !/\b(kg|lb)s?\b/i.test(weightDisplay)) {
-    weightDisplay = `${weightDisplay} ${weightUnit}`;
-  }
-
-  const videos = Array.isArray(r?.videos)
-    ? r.videos
-        .map((v) =>
-          v && typeof v === "object"
-            ? {
-                title: toSafeStr(v.title),
-                notes: toSafeStr(v.notes),
-                url: toSafeStr(v.url),
-                startSeconds: toNonNegInt(v.startSeconds),
-              }
-            : null,
-        )
-        .filter(Boolean)
-    : [];
-
-  return {
-    ...r,
-    divisionDisplay,
-    division: divisionDisplay,
-    weightDisplay: weightDisplay || "—",
-    videos,
-  };
-};
-
-function MyScoutingReportsTab({ user }) {
+function DashboardMatches({ user }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [scoutingReports, setScoutingReports] = useState([]);
-  const [reportsLoading, setReportsLoading] = useState(false);
+  const initialTab = searchParams.get("view") === "shared" ? "shared" : "mine";
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  const [matchReports, setMatchReports] = useState([]);
+  const [matchesLoading, setMatchesLoading] = useState(true);
+
+  const [sharedGroups, setSharedGroups] = useState([]);
+  const [sharedLoading, setSharedLoading] = useState(false);
 
   const [open, setOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [selectedReport, setSelectedReport] = useState(null);
-  const [previewPayload, setPreviewPayload] = useState(null);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [shareReport, setShareReport] = useState(null);
+  const [selectedMatch, setSelectedMatch] = useState(null);
 
   const [stylesLoading, setStylesLoading] = useState(false);
   const [stylesForForm, setStylesForForm] = useState([]);
 
-  const [techniquesLoading, setTechniquesLoading] = useState(false);
-  const [techniquesForForm, setTechniquesForForm] = useState([]);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareMatch, setShareMatch] = useState(null);
 
-  const didFetchRef = useRef(false);
+  /* ---------------- Filters ---------------- */
+  const [yearFilter, setYearFilter] = useState("All");
+  const [eventFilter, setEventFilter] = useState("All");
+  const [resultFilter, setResultFilter] = useState("All");
+  const [printStyle, setPrintStyle] = useState("__all__");
 
-  /* ---------------- FILTER STATE ---------------- */
-  const [filterAthlete, setFilterAthlete] = useState("");
-  const [filterCountry, setFilterCountry] = useState("");
-  const [filterDivision, setFilterDivision] = useState("");
-  const [filterWeight, setFilterWeight] = useState("");
-
-  /* ---------------- pagination ---------------- */
-  const PAGE_SIZE = 12;
-  const [currentPage, setCurrentPage] = useState(1);
-
-  /* ---------------- FETCH REPORTS ---------------- */
   useEffect(() => {
     if (!user?._id) return;
-    if (didFetchRef.current) return;
-    didFetchRef.current = true;
-    fetchReports();
-  }, [user?._id]);
+    if (activeTab === "mine") fetchMatches();
+    else fetchShared();
+  }, [user?._id, activeTab]);
 
-  async function fetchReports() {
+  async function fetchMatches() {
+    setMatchesLoading(true);
     try {
-      setReportsLoading(true);
-      const uid = encodeURIComponent(String(user._id));
-      const res = await fetch(`/api/dashboard/${uid}/scoutingReports`, {
+      const res = await fetch(`/api/dashboard/${user._id}/matchReports`, {
         cache: "no-store",
       });
-      const raw = await res.json();
-      const normalized = (raw || []).map((r) => {
-        const athleteDisplay =
-          `${r?.athleteFirstName || ""} ${r?.athleteLastName || ""}`.trim();
-        return {
-          ...r,
-          athleteDisplay,
-          countryDisplay: r?.athleteCountry || "",
-          divisionDisplay: computeDivisionDisplay(r?.division),
-          weightDisplay: ensureWeightDisplay(r?.weightLabel, r?.weightUnit),
-        };
-      });
-      setScoutingReports(normalized);
+      const data = await res.json();
+      setMatchReports(Array.isArray(data) ? data : []);
     } catch {
-      toast.error("Failed to load scouting reports");
+      toast.error("Could not load match reports.");
     } finally {
-      setReportsLoading(false);
+      setMatchesLoading(false);
     }
   }
 
-  /* ================= STYLE + TECHNIQUE LOADER (MATCH REPORTS CLONE, FIXED) ================= */
-  const loadStylesAndTechniques = useCallback(async () => {
+  async function fetchShared() {
+    setSharedLoading(true);
+    try {
+      const res = await fetch(
+        `/api/dashboard/${user._id}/matchReports/shared`,
+        { cache: "no-store" },
+      );
+      const data = await res.json();
+      setSharedGroups(Array.isArray(data) ? data : []);
+    } catch {
+      toast.error("Could not load shared reports.");
+    } finally {
+      setSharedLoading(false);
+    }
+  }
+
+  /* LOAD USER STYLES FOR MATCH MODAL */
+  const loadStylesForModal = useCallback(async () => {
     if (!user?._id) return;
-
-    console.log("🔥 SCOUT STYLES LOADER CALLED");
-
-    // -------- STYLES --------
     setStylesLoading(true);
     try {
       const res = await fetch(`/api/dashboard/${user._id}/userStyles`, {
         cache: "no-store",
       });
-
-      console.log("🔥 STYLES STATUS:", res.status);
-
       const data = await res.json();
-      console.log("🔥 RAW STYLES DATA:", data);
-
-      // 🔥 IMPORTANT FIX: route returns ARRAY
       const styles = Array.isArray(data)
         ? data
         : data?.styles || data?.userStyles || [];
-
-      console.log("🔥 NORMALIZED STYLES:", styles);
-
       setStylesForForm(styles);
-    } catch (err) {
-      console.error("❌ STYLE LOAD ERROR:", err);
-      setStylesForForm([]);
     } finally {
       setStylesLoading(false);
     }
-
-    // -------- TECHNIQUES --------
-    setTechniquesLoading(true);
-    try {
-      const res = await fetch(`/api/techniques`, { cache: "no-store" });
-      const data = await res.json();
-      setTechniquesForForm(data?.techniques || data || []);
-    } catch {
-      setTechniquesForForm([]);
-    } finally {
-      setTechniquesLoading(false);
-    }
   }, [user?._id]);
 
-  /* ---------------- FILTERING ---------------- */
-  const filteredReports = useMemo(() => {
-    return scoutingReports.filter((r) => {
-      if (filterAthlete && r.athleteDisplay !== filterAthlete) return false;
-      if (filterCountry && r.countryDisplay !== filterCountry) return false;
-      if (filterDivision && r.divisionDisplay !== filterDivision) return false;
-      if (filterWeight && r.weightDisplay !== filterWeight) return false;
-      return true;
-    });
-  }, [
-    scoutingReports,
-    filterAthlete,
-    filterCountry,
-    filterDivision,
-    filterWeight,
-  ]);
+  /* ---------- Filter Sources ---------- */
+  const allReports = useMemo(() => {
+    if (activeTab === "mine") return matchReports;
+    return sharedGroups.flatMap((g) => g.reports || []);
+  }, [matchReports, sharedGroups, activeTab]);
 
-  const pagedReports = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return filteredReports.slice(start, start + PAGE_SIZE);
-  }, [filteredReports, currentPage]);
+  const yearsAvailable = useMemo(() => {
+    const years = allReports
+      .map((r) => new Date(r.matchDate).getFullYear())
+      .filter(Boolean);
+    return [...new Set(years)].sort((a, b) => b - a);
+  }, [allReports]);
 
-  useEffect(
-    () => setCurrentPage(1),
-    [filterAthlete, filterCountry, filterDivision, filterWeight],
+  const eventsAvailable = useMemo(() => {
+    return [...new Set(allReports.map((r) => r.eventName).filter(Boolean))];
+  }, [allReports]);
+
+  const printableStyles = useMemo(() => {
+    return [...new Set(allReports.map((r) => r.matchType).filter(Boolean))];
+  }, [allReports]);
+
+  const applyFilters = (r) => {
+    if (yearFilter !== "All") {
+      const y = new Date(r.matchDate).getFullYear();
+      if (y !== Number(yearFilter)) return false;
+    }
+    if (eventFilter !== "All" && r.eventName !== eventFilter) return false;
+    if (resultFilter === "W" && !String(r.result).toLowerCase().startsWith("w"))
+      return false;
+    if (resultFilter === "L" && !String(r.result).toLowerCase().startsWith("l"))
+      return false;
+    if (printStyle !== "__all__" && r.matchType !== printStyle) return false;
+    return true;
+  };
+
+  const filteredMine = useMemo(
+    () => matchReports.filter(applyFilters),
+    [matchReports, yearFilter, eventFilter, resultFilter, printStyle],
   );
 
-  const exportUrl = `/api/records/scouting?download=1`;
+  const filteredShared = useMemo(() => {
+    return sharedGroups.map((g) => ({
+      ...g,
+      reports: g.reports.filter(applyFilters),
+    }));
+  }, [sharedGroups, yearFilter, eventFilter, resultFilter, printStyle]);
 
-  // 🔥 PROOF LOG
-  useEffect(() => {
-    console.log("🔥 SCOUT TAB stylesForForm STATE:", stylesForForm);
-  }, [stylesForForm]);
-  console.log(stylesForForm);
+  const hasActiveFilters =
+    yearFilter !== "All" ||
+    eventFilter !== "All" ||
+    resultFilter !== "All" ||
+    printStyle !== "__all__";
+
+  const clearFilters = () => {
+    setYearFilter("All");
+    setEventFilter("All");
+    setResultFilter("All");
+    setPrintStyle("__all__");
+  };
+
+  const handlePrint = () => {
+    const base =
+      printStyle === "__all__"
+        ? `/api/records/style/all`
+        : `/api/records/style/${encodeURIComponent(printStyle)}`;
+    window.open(base, "_blank");
+  };
+
   return (
-    <>
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            My Scouting Reports
-          </h1>
-
-          <Button
-            className="btn btn-primary"
-            onClick={async () => {
-              setSelectedReport(null);
-              setOpen(true);
-              await loadStylesAndTechniques(); // SAME ORDER AS MATCH REPORTS
+    <div className="px-4 md:px-6 lg:px-8">
+      {/* Tabs */}
+      <div className="flex gap-3 mb-4">
+        {["mine", "shared"].map((t) => (
+          <button
+            key={t}
+            onClick={() => {
+              setActiveTab(t);
+              router.replace(
+                t === "shared"
+                  ? "/dashboard/matches?view=shared"
+                  : "/dashboard/matches",
+              );
             }}
+            className={`px-4 py-2 rounded-lg border font-medium ${
+              activeTab === t
+                ? "bg-gray-900 text-white border-gray-900"
+                : "border-gray-600 text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-800"
+            }`}
           >
-            Add Scouting Report
-          </Button>
-        </div>
-
-        <div className="flex justify-end mt-3">
-          <Button
-            variant="outline"
-            onClick={() => window.open(exportUrl, "_blank")}
-            className="flex items-center gap-2"
-          >
-            <FileDown className="w-4 h-4" />
-            Export to Excel
-          </Button>
-        </div>
+            {t === "mine" ? "My Reports" : "Shared With Me"}
+          </button>
+        ))}
       </div>
 
-      {/* REPORT GRID */}
-      {reportsLoading ? (
-        <div className="flex justify-center items-center h-[40vh]">
-          <Spinner size={52} />
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {pagedReports.map((report) => (
-            <DashboardScoutingReportCard
-              key={report._id}
-              report={report}
-              onView={() => {
-                setPreviewPayload(buildPreviewPayload(report));
-                setPreviewOpen(true);
-              }}
-              onEdit={async () => {
-                setSelectedReport(report);
-                setOpen(true);
-                await loadStylesAndTechniques();
-              }}
-              onShare={() => {
-                setShareReport(report);
-                setShareOpen(true);
-              }}
-            />
-          ))}
+      {activeTab === "mine" && (
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold">Your Reports</h2>
+          <Button
+            className="btn-add"
+            onClick={async () => {
+              setSelectedMatch(null);
+              await loadStylesForModal();
+              setOpen(true);
+            }}
+          >
+            <Plus size={16} /> Add Match Report
+          </Button>
         </div>
       )}
+
+      {/* FILTER BAR */}
+      {(activeTab === "mine" || allReports.length > 0) && (
+        <div className="flex items-center gap-3 mb-6 overflow-x-auto whitespace-nowrap">
+          <select
+            value={printStyle}
+            onChange={(e) => setPrintStyle(e.target.value)}
+            className="px-3 py-2 rounded border bg-gray-900 text-gray-100"
+          >
+            <option value="__all__">All Styles</option>
+            {printableStyles.map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+
+          <select
+            value={yearFilter}
+            onChange={(e) => setYearFilter(e.target.value)}
+            className="px-3 py-2 rounded border bg-gray-900 text-gray-100"
+          >
+            <option value="All">All Years</option>
+            {yearsAvailable.map((y) => (
+              <option key={y}>{y}</option>
+            ))}
+          </select>
+
+          <select
+            value={eventFilter}
+            onChange={(e) => setEventFilter(e.target.value)}
+            className="px-3 py-2 rounded border bg-gray-900 text-gray-100"
+          >
+            <option value="All">All Events</option>
+            {eventsAvailable.map((e) => (
+              <option key={e}>{e}</option>
+            ))}
+          </select>
+
+          <select
+            value={resultFilter}
+            onChange={(e) => setResultFilter(e.target.value)}
+            className="px-3 py-2 rounded border bg-gray-900 text-gray-100"
+          >
+            <option value="All">All</option>
+            <option value="W">Wins</option>
+            <option value="L">Losses</option>
+          </select>
+
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="px-3 py-2 rounded border border-red-500 text-red-400 flex items-center gap-1"
+            >
+              <X size={14} /> Clear
+            </button>
+          )}
+
+          {activeTab === "mine" && (
+            <Button
+              onClick={handlePrint}
+              className="ml-auto bg-gray-900 hover:bg-gray-800 text-white border border-gray-700"
+            >
+              <Printer className="mr-2 h-4 w-4" /> Print
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* CONTENT */}
+      {activeTab === "mine" &&
+        (matchesLoading ? (
+          <Spinner size={64} />
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredMine.map((m) => (
+              <MatchReportCard
+                key={m._id}
+                match={{ ...m, divisionDisplay: getDivisionDisplay(m) }}
+                onView={(match) => {
+                  setSelectedMatch(match);
+                  setPreviewOpen(true);
+                }}
+                onEdit={async (match) => {
+                  setSelectedMatch(match);
+                  await loadStylesForModal();
+                  setOpen(true);
+                }}
+                onShare={(match) => {
+                  setShareMatch(match);
+                  setShareOpen(true);
+                }}
+              />
+            ))}
+          </div>
+        ))}
+
+      {activeTab === "shared" &&
+        (sharedLoading ? (
+          <Spinner size={64} />
+        ) : filteredShared.every((g) => g.reports.length === 0) ? (
+          <p className="text-center text-gray-900 dark:text-gray-100 mt-10">
+            No one has shared any match reports with you.
+          </p>
+        ) : (
+          <div className="space-y-10">
+            {filteredShared.map((g) =>
+              g.reports.length === 0 ? null : (
+                <div key={g.owner?._id}>
+                  <h2 className="text-lg font-semibold mb-4">
+                    {g.owner?.name || g.owner?.username}
+                  </h2>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {g.reports.map((m) => (
+                      <MatchReportCard
+                        key={m._id}
+                        match={{ ...m, divisionDisplay: getDivisionDisplay(m) }}
+                        onView={() => {
+                          setSelectedMatch({
+                            ...m,
+                            divisionDisplay: getDivisionDisplay(m),
+                          });
+                          setPreviewOpen(true);
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ),
+            )}
+          </div>
+        ))}
 
       {/* MODAL */}
       <ModalLayout
         isOpen={open}
         onClose={() => setOpen(false)}
-        title={selectedReport ? "Edit Scouting Report" : "Add Scouting Report"}
+        title={selectedMatch ? "Edit Match" : "Add Match"}
         withCard
       >
-        {stylesLoading || techniquesLoading ? (
+        {stylesLoading ? (
           <Spinner size={40} />
         ) : (
-          <ScoutingReportForm
-            user={user}
-            report={selectedReport}
+          <MatchReportForm
+            athlete={user}
             styles={stylesForForm}
-            techniques={techniquesForForm}
+            match={selectedMatch}
             setOpen={setOpen}
-            onSuccess={fetchReports}
+            onSuccess={fetchMatches}
+            userType="user"
           />
         )}
       </ModalLayout>
 
-      {/* Preview */}
-      {previewOpen && previewPayload && (
+      {previewOpen && selectedMatch && (
         <PreviewReportModal
           previewOpen={previewOpen}
           setPreviewOpen={setPreviewOpen}
-          report={previewPayload}
-          reportType="scouting"
+          report={selectedMatch}
+          reportType="match"
         />
       )}
 
-      {/* Share */}
-      {shareOpen && shareReport && (
+      {shareOpen && shareMatch && (
         <ShareReportModal
           open={shareOpen}
           onClose={() => {
             setShareOpen(false);
-            setShareReport(null);
+            setShareMatch(null);
           }}
           ownerId={user._id}
-          documentType="personal-scout"
-          documentId={shareReport._id}
+          documentType="match-report"
+          documentId={shareMatch._id}
         />
       )}
-    </>
+    </div>
   );
 }
 
-export default MyScoutingReportsTab;
+export default DashboardMatches;

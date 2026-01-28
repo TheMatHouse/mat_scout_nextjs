@@ -70,7 +70,7 @@ export default function DeleteTeamSection({ teamSlug, teamName }) {
         <AlertDialogTrigger asChild>
           <button
             type="button"
-            className="btn btn-danger"
+            className="btn-delete"
           >
             Delete Team
           </button>
@@ -86,9 +86,7 @@ export default function DeleteTeamSection({ teamSlug, teamName }) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="alert-cancel">
-              Cancel
-            </AlertDialogCancel>
+            <AlertDialogCancel className="btn-cancel">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               disabled={loading}

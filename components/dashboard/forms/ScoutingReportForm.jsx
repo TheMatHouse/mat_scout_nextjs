@@ -14,6 +14,7 @@ import TechniqueTagInput from "../../shared/TechniqueTagInput";
 import FormField from "@/components/shared/FormField";
 import FormSelect from "@/components/shared/FormSelect";
 import CountrySelect from "@/components/shared/CountrySelect";
+import { Plus } from "lucide-react";
 
 /* ----------------- helpers ----------------- */
 function extractArray(payload) {
@@ -1160,6 +1161,7 @@ const ScoutingReportForm = ({
             <Button
               type="button"
               variant="outline"
+              className="btn-add"
               onClick={() =>
                 setNewVideos((prev) => [
                   ...prev,
@@ -1167,14 +1169,14 @@ const ScoutingReportForm = ({
                 ])
               }
             >
-              ➕ Add {newVideos.length ? "Another" : "a"} Video
+              <Plus size={16} /> Add {newVideos.length ? "Another" : "a"} Video
             </Button>
           </div>
 
-          <div className="pt-4">
+          <div className="mt-4pt-4">
             <Button
               type="submit"
-              className="btn btn-primary"
+              className="btn-submit"
               disabled={!hasStyle || divisionsLoading || weightsLoading}
             >
               {report ? "Update" : "Submit"} Report
