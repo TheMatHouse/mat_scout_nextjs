@@ -75,8 +75,8 @@ export async function PATCH(request, context) {
         data.allowPublic === "Public" || data.allowPublic === true
           ? true
           : data.allowPublic === "Private" || data.allowPublic === false
-          ? false
-          : undefined,
+            ? false
+            : undefined,
       bio: typeof data.bio === "string" ? data.bio : undefined,
     };
 
@@ -93,7 +93,7 @@ export async function PATCH(request, context) {
       if (!userDoc) {
         return NextResponse.json(
           { message: "User not found" },
-          { status: 404 }
+          { status: 404 },
         );
       }
       Object.assign(userDoc, baseUpdate);
@@ -103,7 +103,7 @@ export async function PATCH(request, context) {
       updatedUser = await User.findByIdAndUpdate(
         userId,
         { $set: baseUpdate },
-        { new: true, runValidators: true }
+        { new: true, runValidators: true },
       );
     }
 
@@ -131,7 +131,7 @@ export async function PATCH(request, context) {
       } catch (e) {
         console.warn(
           "[notifyFollowers] profile updated fanout failed:",
-          e?.message
+          e?.message,
         );
       }
     }
@@ -141,7 +141,7 @@ export async function PATCH(request, context) {
 
     return NextResponse.json(
       { message: "User updated successfully", user: safe },
-      { status: 200, headers: { "Cache-Control": "no-store" } }
+      { status: 200, headers: { "Cache-Control": "no-store" } },
     );
   } catch (err) {
     console.error("Error updating user:", err);
@@ -151,13 +151,13 @@ export async function PATCH(request, context) {
       const field = Object.keys(err?.keyPattern || {})[0] || "field";
       return NextResponse.json(
         { message: `That ${field} is already taken.` },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
     return NextResponse.json(
       { message: "Server error", error: err.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

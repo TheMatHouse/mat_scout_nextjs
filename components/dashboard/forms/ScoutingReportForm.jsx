@@ -226,6 +226,7 @@ const ScoutingReportForm = ({
   setOpen,
   onSuccess,
 }) => {
+  console.log("SCOUTING FORM STYLES PROP:", styles);
   const router = useRouter();
   const { user } = useUser();
   const viewerUserId = user?._id;
