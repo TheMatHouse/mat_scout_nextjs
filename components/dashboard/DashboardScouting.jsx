@@ -4,13 +4,15 @@
 import { useState } from "react";
 import MyScoutingReportsTab from "@/components/dashboard/scouting/MyScoutingReportsTab";
 import TeamScoutingReportsTab from "@/components/dashboard/scouting/TeamScoutingReportsTab";
+import SharedScoutingReportsTab from "./scouting/SharedScoutingReportsTab";
 
 function DashboardScouting({ user, refreshUser }) {
-  const [activeTab, setActiveTab] = useState("mine"); // "mine" | "team"
+  const [activeTab, setActiveTab] = useState("mine"); // "mine" | "team" | "shared"
 
   const tabs = [
     { id: "mine", label: "My Reports" },
     { id: "team", label: "Team Reports" },
+    { id: "shared", label: "Shared With Me" },
   ];
 
   return (
@@ -61,6 +63,7 @@ function DashboardScouting({ user, refreshUser }) {
           />
         )}
         {activeTab === "team" && <TeamScoutingReportsTab user={user} />}
+        {activeTab === "shared" && <SharedScoutingReportsTab user={user} />}
       </div>
     </section>
   );

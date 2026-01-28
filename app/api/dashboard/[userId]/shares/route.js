@@ -10,10 +10,11 @@ import User from "@/models/userModel";
 import FamilyMember from "@/models/familyMemberModel";
 import PrivateShare from "@/models/privateShareModel";
 import PendingPrivateShareInvite from "@/models/pendingPrivateShareInviteModel";
+import MatchReport from "@/models/matchReportModel";
+import ScoutingReport from "@/models/scoutingReportModel";
 
 import { createNotification } from "@/lib/createNotification";
 import { sendEmail } from "@/lib/email/email";
-import { Mail } from "@/lib/email/mailer";
 import { baseEmailTemplate } from "@/lib/email/templates/baseEmailTemplate";
 
 function json(status, payload) {
@@ -29,6 +30,14 @@ function getBaseUrl() {
     process.env.NEXT_PUBLIC_DOMAIN ||
     "https://matscout.com"
   ).replace(/\/$/, "");
+}
+
+function getSharedDashboardPath(documentType) {
+  // Match reports use query param; scouting uses tabs in your dashboard UI
+  if (documentType === "match-report") return "/dashboard/matches?view=shared";
+  if (documentType === "personal-scout")
+    return "/dashboard/scouting?tab=shared";
+  return "/dashboard";
 }
 
 /**
@@ -72,7 +81,7 @@ async function ensurePrivateShareIndexes() {
       name: "privateShare_scope_one_unique",
       partialFilterExpression: { scope: "one" },
       background: true,
-    }
+    },
   );
 
   // 4️⃣ UNIQUE for scope === "all" (NO documentId)
@@ -87,22 +96,22 @@ async function ensurePrivateShareIndexes() {
       name: "privateShare_scope_all_unique",
       partialFilterExpression: { scope: "all" },
       background: true,
-    }
+    },
   );
 }
 
 async function safeSideEffect(fn, label, meta = {}) {
   try {
     await fn();
+    console.log(`[PrivateShare] ${label} OK`, meta);
     return null;
   } catch (err) {
-    // Don't fail the request after the DB write succeeds.
-    // Log server-side so you can inspect in Vercel logs.
-    console.error(`[PrivateShare] ${label} failed`, {
+    console.error(`[PrivateShare] ${label} FAILED`, {
       ...meta,
-      error: String(err?.message || err),
+      error: err?.message || String(err),
+      stack: err?.stack,
     });
-    return String(err?.message || err);
+    return err?.message || String(err);
   }
 }
 
@@ -186,7 +195,7 @@ export async function GET(req, ctx) {
 }
 
 /* ============================================================
-   POST — create share or invite (HARDENED + IDEMPOTENT)
+   POST — create share or invite
    ============================================================ */
 export async function POST(req, ctx) {
   const warnings = [];
@@ -198,10 +207,45 @@ export async function POST(req, ctx) {
     await ensurePrivateShareIndexes();
 
     const body = await req.json().catch(() => ({}));
+
     const { documentType, documentId, scope } = body;
+    const ALLOWED_TYPES = ["match-report", "personal-scout"];
+
+    if (!ALLOWED_TYPES.includes(documentType)) {
+      return json(400, { message: "Invalid documentType" });
+    }
 
     if (!documentType || !scope || (scope === "one" && !documentId)) {
       return json(400, { message: "Missing fields" });
+    }
+
+    // Ownership enforcement for share creation
+    if (documentType === "match-report") {
+      const report =
+        await MatchReport.findById(documentId).select("createdById");
+      if (!report || String(report.createdById) !== String(userId)) {
+        return json(403, { message: "You do not own this match report" });
+      }
+    }
+
+    if (documentType === "personal-scout") {
+      const report =
+        await ScoutingReport.findById(documentId).select("createdById");
+      if (!report || String(report.createdById) !== String(userId)) {
+        return json(403, { message: "You do not own this scouting report" });
+      }
+    }
+
+    // Prevent re-sharing reports that were shared with this user
+    const alreadySharedToMe = await PrivateShare.findOne({
+      documentType,
+      documentId,
+      "sharedWith.athleteType": "user",
+      "sharedWith.athleteId": userId,
+    }).lean();
+
+    if (alreadySharedToMe) {
+      return json(403, { message: "Cannot re-share shared reports" });
     }
 
     const reportLabel =
@@ -211,9 +255,8 @@ export async function POST(req, ctx) {
       documentType === "match-report" ? "match reports" : "scouting reports";
 
     const sender = await User.findById(userId).select("firstName lastName");
-    const senderName = `${sender?.firstName || ""} ${
-      sender?.lastName || ""
-    }`.trim();
+    const senderName =
+      `${sender?.firstName || ""} ${sender?.lastName || ""}`.trim();
 
     if (!senderName) {
       return json(500, { message: "Sender name missing" });
@@ -252,9 +295,12 @@ export async function POST(req, ctx) {
 
       const now = new Date();
 
-      let result;
+      // ✅ IMPORTANT FIX:
+      // Do NOT rely on mongoose findOneAndUpdate rawResult shape to determine insert vs update.
+      // Use updateOne() which always gives upsertedId reliably.
+      let upsertInfo;
       try {
-        result = await PrivateShare.findOneAndUpdate(
+        upsertInfo = await PrivateShare.updateOne(
           shareQuery,
           {
             $setOnInsert: {
@@ -272,15 +318,10 @@ export async function POST(req, ctx) {
               updatedAt: now,
             },
           },
-          {
-            upsert: true,
-            new: true,
-            setDefaultsOnInsert: true,
-            rawResult: true,
-          }
+          { upsert: true },
         );
       } catch (err) {
-        // If unique conflict happens, treat as idempotent success by fetching existing doc
+        // If unique conflict happens, treat as idempotent success
         if (err?.code === 11000) {
           const existing = await PrivateShare.findOne(shareQuery).lean();
           if (existing) {
@@ -290,51 +331,56 @@ export async function POST(req, ctx) {
         throw err;
       }
 
-      // rawResult can be shaped differently depending on mongoose version;
-      // always normalize by fetching if needed.
-      let share = result?.value || null;
-      if (!share) {
-        share = await PrivateShare.findOne(shareQuery).lean();
-      }
-
+      const share = await PrivateShare.findOne(shareQuery).lean();
       if (!share) {
         return json(500, { message: "Failed to create share" });
       }
 
-      const wasInserted = result?.lastErrorObject
-        ? !result.lastErrorObject.updatedExisting
-        : false;
+      const wasInserted =
+        !!upsertInfo?.upsertedId ||
+        (Array.isArray(upsertInfo?.upserted) && upsertInfo.upserted.length > 0);
 
-      // If it already existed, we're done (idempotent + no duplicate notifications/emails).
-      if (!wasInserted) {
-        return json(200, { type: "share", share });
-      }
+      const sharedPath = getSharedDashboardPath(documentType);
 
-      /* ---------- Notification (non-fatal) ---------- */
+      const notifText =
+        scope === "all"
+          ? `${senderName} shared all ${reportsLabel} with ${notifyLabel}.`
+          : `${senderName} shared a ${reportLabel} with ${notifyLabel}.`;
+
+      /* ---------- Notification ---------- */
       const notifErr = await safeSideEffect(
         async () => {
+          // Provide BOTH shapes so createNotification works no matter which signature it expects.
           await createNotification({
+            user: notifyUser._id,
             userId: notifyUser._id,
-            type: "Report Shared",
-            body:
-              scope === "all"
-                ? `${senderName} shared all ${reportsLabel} with ${notifyLabel}.`
-                : `${senderName} shared a ${reportLabel} with ${notifyLabel}.`,
-            link: "/dashboard/matches?view=shared",
+
+            notificationType: "private_share",
+            type: "private_share",
+
+            notificationBody: notifText,
+            body: notifText,
+            message: notifText,
+            title: "Report Shared",
+
+            notificationLink: sharedPath,
+            link: sharedPath,
           });
         },
         "createNotification",
         {
-          userId,
+          ownerId: String(userId),
           notifyUserId: String(notifyUser._id),
           shareId: String(share._id),
-        }
+          documentType,
+          scope,
+          wasInserted,
+        },
       );
       if (notifErr) warnings.push({ type: "notification", message: notifErr });
 
-      /* ---------- Email (non-fatal) ---------- */
-      const dashboardUrl = `${getBaseUrl()}/dashboard/matches?view=shared`;
-
+      /* ---------- Email ---------- */
+      const dashboardUrl = `${getBaseUrl()}${sharedPath}`;
       const subject =
         scope === "all"
           ? `New ${reportsLabel} shared with you`
@@ -343,16 +389,20 @@ export async function POST(req, ctx) {
       const html = baseEmailTemplate({
         title: "Report Shared",
         message: `
-          <p>Hi ${notifyUser.firstName},</p>
+          <p>Hi ${notifyUser.firstName || ""},</p>
 
           <p>
             <strong>${senderName}</strong> has shared ${
-          scope === "all" ? `all of their ${reportsLabel}` : `a ${reportLabel}`
-        } with ${notifyLabel}.
+              scope === "all"
+                ? `all of their ${reportsLabel}`
+                : `a ${reportLabel}`
+            } with ${notifyLabel}.
           </p>
 
           <p>
-            <strong>Dashboard → Matches → Shared With Me</strong>
+            <strong>Dashboard → ${
+              documentType === "match-report" ? "Matches" : "Scouting"
+            } → Shared With Me</strong>
           </p>
         `,
         ctaUrl: dashboardUrl,
@@ -361,26 +411,30 @@ export async function POST(req, ctx) {
 
       const emailErr = await safeSideEffect(
         async () => {
-          await Mail.sendEmail({
-            type: Mail.kinds.SCOUTING_REPORT,
-            toUser: notifyUser,
+          if (!notifyUser.email) return;
+          await sendEmail({
+            to: notifyUser.email,
             subject,
             html,
-            relatedUserId: notifyUser._id.toString(),
           });
         },
         "sendEmail",
         {
-          userId,
+          ownerId: String(userId),
           notifyUserId: String(notifyUser._id),
           shareId: String(share._id),
-        }
+          documentType,
+          scope,
+          wasInserted,
+          to: String(notifyUser.email || ""),
+        },
       );
       if (emailErr) warnings.push({ type: "email", message: emailErr });
 
       return json(200, {
         type: "share",
         share,
+        wasInserted,
         ...(warnings.length ? { warnings } : {}),
       });
     }
@@ -402,7 +456,6 @@ export async function POST(req, ctx) {
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       });
 
-      // ✅ IMPORTANT: Invite emails must go to /share/<token>, NOT /dashboard.
       const inviteUrl = `${getBaseUrl()}/share/${invite.token}`;
 
       const subject =
@@ -417,8 +470,8 @@ export async function POST(req, ctx) {
 
           <p>
             <strong>${senderName}</strong> has invited you to view ${
-          scope === "all" ? reportsLabel : `a ${reportLabel}`
-        } on MatScout.
+              scope === "all" ? reportsLabel : `a ${reportLabel}`
+            } on MatScout.
           </p>
 
           <p>
@@ -431,8 +484,6 @@ export async function POST(req, ctx) {
 
       const inviteEmailErr = await safeSideEffect(
         async () => {
-          // NOTE: Only email functionality changed here:
-          // For non-users, use the raw-email helper (sendEmail) which accepts { to, subject, html }.
           await sendEmail({
             to: email,
             subject,
@@ -441,10 +492,12 @@ export async function POST(req, ctx) {
         },
         "sendInviteEmail",
         {
-          userId,
+          ownerId: String(userId),
           email,
           inviteId: String(invite._id),
-        }
+          documentType,
+          scope,
+        },
       );
       if (inviteEmailErr)
         warnings.push({ type: "email", message: inviteEmailErr });
@@ -460,7 +513,6 @@ export async function POST(req, ctx) {
 
     return json(400, { message: "Missing target" });
   } catch (err) {
-    // If anything throws, we still want clean JSON back.
     return json(500, {
       message: "Failed to create share",
       details: String(err?.message || err),
