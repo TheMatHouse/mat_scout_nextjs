@@ -64,7 +64,7 @@ export default function AdminReportsPage() {
       const toISO = (d) => d.toISOString().slice(0, 10);
       const end = toISO(today);
       const start = toISO(
-        new Date(today.getFullYear(), today.getMonth(), today.getDate() - 27)
+        new Date(today.getFullYear(), today.getMonth(), today.getDate() - 27),
       );
       setStartDate(start);
       setEndDate(end);
@@ -178,7 +178,7 @@ export default function AdminReportsPage() {
             </button>
             <a
               href={csvHref}
-              className="px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800"
+              className="btn-file"
             >
               Export CSV
             </a>

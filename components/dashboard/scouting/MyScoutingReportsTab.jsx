@@ -242,7 +242,7 @@ const MyScoutingReportsTab = ({ user }) => {
           <Button
             variant="outline"
             onClick={() => window.open(exportUrl, "_blank")}
-            className="flex items-center gap-2"
+            className="flex btn-file"
           >
             <FileDown className="w-4 h-4" />
             Export to Excel

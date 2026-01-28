@@ -208,6 +208,7 @@ function FamilyMyScoutingReportsTab({ member }) {
           <Button
             variant="outline"
             onClick={() => window.open(exportUrl, "_blank")}
+            class="btn-file"
           >
             <FileDown className="w-4 h-4 mr-2" />
             Export to Excel
