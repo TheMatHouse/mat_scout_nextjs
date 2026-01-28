@@ -228,7 +228,8 @@ const MyScoutingReportsTab = ({ user }) => {
           </h1>
 
           <Button
-            className="btn-add"
+            type="button"
+            className="btn-add relative z-[50] pointer-events-auto touch-manipulation"
             onClick={() => {
               setSelectedReport(null);
               setOpen(true);
