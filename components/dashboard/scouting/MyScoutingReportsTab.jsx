@@ -243,7 +243,7 @@ const MyScoutingReportsTab = ({ user }) => {
         <div className="flex justify-end mt-3">
           <Button
             onClick={() => window.open(exportUrl, "_blank")}
-            className="btn-file"
+            className="flex btn-file"
           >
             <FileDown className="w-4 h-4" />
             Export to Excel

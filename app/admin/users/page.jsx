@@ -189,7 +189,7 @@ const AdminUsersPage = () => {
 
         <button
           onClick={() => exportUsersCsv(sortedUsers)}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white"
+          className="inline-flex items-center gap-2 btn-file"
         >
           <Download size={16} />
           Export CSV
