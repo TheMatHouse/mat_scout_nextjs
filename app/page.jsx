@@ -1,7 +1,7 @@
 // app/page.jsx
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth-server"; // ✅ Updated import
-import HomePage from "./home/page";
+import HomePage from "./home/test-2";
 
 export const metadata = {
   title: "MatScout – Track, Scout, and Manage Grappling Athletes",

@@ -1,373 +1,412 @@
-// app/home/page.jsx  (updated for your palette)
 "use client";
-
+import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef } from "react";
 
-export default function HomePage() {
-  const demoBtnRef = useRef(null);
+/**
+ * Premium Product Platform (neutral-forward) homepage.
+ * Uses existing assets only.
+ */
 
-  // Animate feature cards when they enter viewport
-  useEffect(() => {
-    const io = new IntersectionObserver(
-      (entries) =>
-        entries.forEach((e) =>
-          e.target.classList.toggle("is-visible", e.isIntersecting)
-        ),
-      { threshold: 0.25 }
-    );
-    document.querySelectorAll(".fade-up").forEach((el) => io.observe(el));
-    return () => io.disconnect();
-  }, []);
-
+const HomePage = () => {
   return (
-    <>
-      {/* ---------- HERO ---------- */}
-      {/* ---------- HERO (updated buttons + accent words) ---------- */}
-      <section className="relative isolate flex items-center justify-center px-6 pt-24 pb-32 lg:pt-32 lg:pb-40">
-        {/* subtle tatami texture */}
-        <div className="pointer-events-none absolute inset-0 -z-10 bg-[var(--color-bg)]">
-          <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-black/20 opacity-40" />
-          <svg
-            className="absolute inset-0 h-full w-full opacity-[0.03]"
-            xmlns="http://www.w3.org/2000/svg"
-            width="100%"
-            height="100%"
-          >
-            <defs>
-              <pattern
-                id="tatami"
-                width="40"
-                height="40"
-                patternUnits="userSpaceOnUse"
-              >
-                <rect
-                  width="40"
-                  height="40"
-                  fill="none"
-                />
-                <path
-                  d="M0 20h40M20 0v40"
-                  stroke="currentColor"
-                  strokeWidth="1"
-                />
-              </pattern>
-            </defs>
-            <rect
-              width="100%"
-              height="100%"
-              fill="url(#tatami)"
-            />
-          </svg>
+    <div className="min-h-screen w-full overflow-x-hidden bg-[var(--color-bg)] text-[var(--color-text)]">
+      {/* ================= BACKDROP ================= */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        {/* soft grid / texture */}
+        <div className="absolute inset-0 opacity-[0.10] dark:opacity-[0.18]">
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage:
+                "linear-gradient(to right, rgba(0,0,0,0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.08) 1px, transparent 1px)",
+              backgroundSize: "64px 64px",
+            }}
+          />
         </div>
 
-        <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-2 lg:gap-20">
+        {/* subtle accent wash (neutral-forward, red as accent) */}
+        <div className="absolute -top-48 left-1/2 h-[520px] w-[980px] -translate-x-1/2 rounded-full blur-[120px] opacity-20 dark:opacity-25 bg-[var(--ms-light-red)]" />
+        <div className="absolute top-40 -left-56 h-[520px] w-[520px] rounded-full blur-[120px] opacity-10 dark:opacity-15 bg-[var(--ms-blue-gray)]" />
+      </div>
+
+      {/* ================= HERO ================= */}
+      <section className="relative px-6 lg:px-24 pt-20 lg:pt-28 pb-16 lg:pb-24">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
           {/* Left: copy */}
-          <div className="flex flex-col justify-center text-center lg:text-left">
-            <h1 className="text-5xl font-extrabold tracking-tight text-[var(--color-text)] sm:text-6xl lg:text-7xl">
-              Track. Scout.{" "}
-              <span className="text-[var(--ms-light-red)]">Dominate.</span>
-            </h1>
-            <p className="mt-6 text-lg leading-8 text-[var(--color-text)]/80">
-              The all-in-one hub for{" "}
-              <span className="inline-block">
-                <span className="animate-cycle text-[var(--ms-light-red)]">
-                  Judo
-                </span>{" "}
-                •{" "}
-                <span className="animate-cycle animation-delay-1000 text-[var(--ms-light-red)]">
-                  BJJ
-                </span>{" "}
-                •{" "}
-                <span className="animate-cycle animation-delay-2000 text-[var(--ms-light-red)]">
-                  Wrestling
+          <div className="lg:col-span-6 space-y-8">
+            <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 dark:border-gray-800 bg-white/70 dark:bg-zinc-900/60 backdrop-blur px-3 py-1.5">
+              <span className="h-2 w-2 rounded-full bg-[var(--ms-light-red)]" />
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                Built for coaches, athletes, and teams
+              </span>
+            </div>
+
+            <div className="space-y-4">
+              <h1 className="text-4xl sm:text-5xl xl:text-6xl font-semibold tracking-tight leading-[1.05] text-gray-900 dark:text-gray-100">
+                A clean, modern home for your{" "}
+                <span className="relative inline-block">
+                  <span className="relative z-10">grappling program</span>
+                  <span className="absolute -bottom-1 left-0 right-0 h-3 rounded-md bg-[var(--ms-light-red)]/20" />
                 </span>
-              </span>{" "}
-              athletes and coaches. Log matches, build scouting reports, and
-              grow your program—faster than ever.
-            </p>
+              </h1>
 
-            <div className="mt-10 flex flex-wrap gap-4 justify-center lg:justify-start">
-              {/* RED primary CTA */}
+              <p className="text-lg sm:text-xl leading-relaxed max-w-xl text-gray-900 dark:text-gray-100 opacity-90">
+                Track performance, organize team workflows, and scout opponents
+                in one secure platform designed to feel simple — even when your
+                program isn’t.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
               <Link
-                href="/signup"
-                className="rounded-lg bg-[var(--ms-light-red)] px-5 py-3 text-base font-semibold text-[var(--ms-nav-text)] shadow-lg hover:bg-[var(--ms-dark-red)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ms-light-red)]"
+                href="/register"
+                className="inline-flex items-center justify-center rounded-xl px-6 py-3.5 font-semibold bg-red-600 text-white hover:bg-red-700 transition shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--ms-light-red)]"
               >
-                Start Free
+                Get started
               </Link>
-              {/* Subtle secondary CTA */}
-              <button
-                ref={useRef(null)}
-                onClick={() => alert("Demo modal placeholder")}
-                className="rounded-lg bg-white/10 px-5 py-3 text-base font-semibold text-[var(--color-text)] ring-1 ring-inset ring-white/20 hover:bg-white/20"
+
+              <Link
+                href="/features"
+                className="inline-flex items-center justify-center rounded-xl px-6 py-3.5 font-semibold border border-gray-300 dark:border-gray-700 bg-white/60 dark:bg-zinc-900/50 backdrop-blur hover:bg-white dark:hover:bg-zinc-900 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--ms-light-red)]"
               >
-                Watch 60-s Demo
-              </button>
-            </div>
-          </div>
+                Explore features
+              </Link>
 
-          {/* Right: phone mock (unchanged) */}
-          <div className="relative mx-auto w-full max-w-sm lg:mx-0">
-            <div className="relative z-10 rounded-[2.5rem] bg-black p-3 shadow-2xl">
-              <div className="rounded-[2rem] bg-[var(--color-card)] p-6 ring-1 ring-white/10">
-                <div className="mb-4 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-[var(--ms-light-red)]">
-                    MatScout
-                  </span>
-                  <span className="text-xs text-[var(--color-text)]/60">
-                    2 min ago
-                  </span>
+              <div className="hidden sm:flex items-center gap-4 pl-2 text-sm text-gray-900 dark:text-gray-100 opacity-80">
+                <div className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-gray-400 dark:bg-gray-600" />
+                  Secure by design
                 </div>
-                <div className="space-y-3">
-                  <div className="rounded-xl bg-white/5 p-4 ring-1 ring-white/10">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold">John Doe</p>
-                        <p className="text-sm text-[var(--color-text)]/60">
-                          77 kg • Blue Belt
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-bold">W 5-2</p>
-                        <p className="text-xs text-green-400">Points</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="rounded-xl bg-white/5 p-4 ring-1 ring-white/10">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold">Jane Smith</p>
-                        <p className="text-sm text-[var(--color-text)]/60">
-                          63 kg • Purple Belt
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-bold">W 8-0</p>
-                        <p className="text-xs text-green-400">Technical</p>
-                      </div>
-                    </div>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-gray-400 dark:bg-gray-600" />
+                  Built for real teams
                 </div>
               </div>
             </div>
-            <span className="absolute -inset-4 block rounded-full bg-[var(--ms-light-red)]/30 blur-2xl" />
+          </div>
+
+          {/* Right: hero frame */}
+          <div className="lg:col-span-6">
+            <div className="relative">
+              {/* frame */}
+              <div className="relative rounded-3xl border border-gray-200 dark:border-gray-800 bg-white/70 dark:bg-zinc-900/60 backdrop-blur shadow-[0_20px_60px_rgba(0,0,0,0.12)] overflow-hidden">
+                {/* top chrome */}
+                <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200/70 dark:border-gray-800/70">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full bg-gray-300 dark:bg-gray-700" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-gray-300 dark:bg-gray-700" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-gray-300 dark:bg-gray-700" />
+                  </div>
+                  <div className="text-xs font-medium text-gray-900 dark:text-gray-100 opacity-70">
+                    MatScout Dashboard Preview
+                  </div>
+                </div>
+
+                {/* image */}
+                <div className="relative w-full aspect-[16/10]">
+                  <Image
+                    src="/assets/judo-throw-hero.png"
+                    alt="MatScout"
+                    fill
+                    sizes="(max-width: 1024px) 92vw, 720px"
+                    className="object-contain p-6"
+                    priority
+                  />
+                </div>
+
+                {/* bottom strip */}
+                <div className="px-5 py-4 border-t border-gray-200/70 dark:border-gray-800/70 flex flex-wrap items-center gap-3">
+                  <Pill>Scouting</Pill>
+                  <Pill>Teams</Pill>
+                  <Pill>Attendance</Pill>
+                  <Pill>Practice notes</Pill>
+                  <div className="ml-auto text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    Red accent, neutral design
+                  </div>
+                </div>
+              </div>
+
+              {/* subtle accent edge */}
+              <div className="absolute -inset-1 rounded-[28px] bg-[var(--ms-light-red)]/10 blur-2xl -z-10" />
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ---------- FEATURES ---------- */}
-      {/* ---------- FEATURES (with images) ---------- */}
-      <section className="mx-auto max-w-7xl px-6 pb-24">
-        <div className="grid gap-8 sm:grid-cols-3">
-          {[
-            {
-              title: "Track",
-              body: "Log every throw, takedown, and submission. Visual dashboards show progress across seasons.",
-              svg: (
-                <svg
-                  viewBox="0 0 640 360"
-                  className="h-auto w-full rounded-xl object-cover"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <rect
-                    width="640"
-                    height="360"
-                    fill="#edf2f4"
-                  />
-                  <path
-                    d="M0 180h640M320 0v360"
-                    stroke="#8d99ae"
-                    strokeWidth="2"
-                    opacity=".4"
-                  />
-                  <circle
-                    cx="320"
-                    cy="180"
-                    r="60"
-                    fill="#2b2d42"
-                  />
-                  <text
-                    x="320"
-                    y="188"
-                    textAnchor="middle"
-                    className="fill-[var(--ms-nav-text)] text-[28px] font-bold"
-                    fontFamily="Roboto, sans-serif"
-                  >
-                    TRACK
-                  </text>
-                </svg>
-              ),
-            },
-            {
-              title: "Scout",
-              body: "Build opponent profiles with video links, notes, and historical match data in seconds.",
-              svg: (
-                <svg
-                  viewBox="0 0 640 360"
-                  className="h-auto w-full rounded-xl object-cover"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <rect
-                    width="640"
-                    height="360"
-                    fill="#edf2f4"
-                  />
-                  <rect
-                    x="120"
-                    y="80"
-                    width="400"
-                    height="200"
-                    rx="12"
-                    fill="#fff"
-                    stroke="#8d99ae"
-                    strokeWidth="2"
-                  />
-                  <circle
-                    cx="180"
-                    cy="140"
-                    r="24"
-                    fill="#2b2d42"
-                  />
-                  <rect
-                    x="220"
-                    y="126"
-                    width="200"
-                    height="12"
-                    rx="6"
-                    fill="#8d99ae"
-                  />
-                  <rect
-                    x="220"
-                    y="150"
-                    width="160"
-                    height="10"
-                    rx="5"
-                    fill="#c3ccd9"
-                  />
-                  <text
-                    x="320"
-                    y="260"
-                    textAnchor="middle"
-                    className="fill-[var(--ms-light-red)] text-[24px] font-bold"
-                    fontFamily="Roboto, sans-serif"
-                  >
-                    SCOUT
-                  </text>
-                </svg>
-              ),
-            },
-            {
-              title: "Grow",
-              body: "Share public profiles with recruiters and fans. Grow your club with built-in analytics.",
-              svg: (
-                <svg
-                  viewBox="0 0 640 360"
-                  className="h-auto w-full rounded-xl object-cover"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <rect
-                    width="640"
-                    height="360"
-                    fill="#edf2f4"
-                  />
-                  <path
-                    d="M80 280 L160 200 L240 240 L320 160 L400 220 L480 180 L560 260"
-                    stroke="#2b2d42"
-                    strokeWidth="4"
-                    fill="none"
-                  />
-                  <circle
-                    cx="160"
-                    cy="200"
-                    r="8"
-                    fill="#ef233c"
-                  />
-                  <circle
-                    cx="240"
-                    cy="240"
-                    r="8"
-                    fill="#ef233c"
-                  />
-                  <circle
-                    cx="320"
-                    cy="160"
-                    r="8"
-                    fill="#ef233c"
-                  />
-                  <circle
-                    cx="400"
-                    cy="220"
-                    r="8"
-                    fill="#ef233c"
-                  />
-                  <circle
-                    cx="480"
-                    cy="180"
-                    r="8"
-                    fill="#ef233c"
-                  />
-                  <text
-                    x="320"
-                    y="320"
-                    textAnchor="middle"
-                    className="fill-[var(--ms-blue)] text-[24px] font-bold"
-                    fontFamily="Roboto, sans-serif"
-                  >
-                    GROW
-                  </text>
-                </svg>
-              ),
-            },
-          ].map((f) => (
-            <div
-              key={f.title}
-              className="fade-up flex flex-col gap-4 rounded-2xl bg-white/5 p-5 ring-1 ring-white/10"
+      {/* ================= BENTO VALUE ================= */}
+      <section className="relative px-6 lg:px-24 pb-10 lg:pb-16">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
+            <div className="space-y-2">
+              <h2 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">
+                Everything in one place
+              </h2>
+              <p className="text-gray-900 dark:text-gray-100 opacity-80 max-w-2xl">
+                A professional workflow that scales from a small club to a full
+                program — without feeling complicated.
+              </p>
+            </div>
+
+            <Link
+              href="/features"
+              className="inline-flex items-center justify-center rounded-xl px-5 py-3 font-semibold border border-gray-300 dark:border-gray-700 bg-white/60 dark:bg-zinc-900/50 backdrop-blur hover:bg-white dark:hover:bg-zinc-900 transition"
             >
-              {f.svg}
-              <div>
-                <h3 className="text-xl font-semibold text-[var(--ms-light-red)]">
-                  {f.title}
-                </h3>
-                <p className="mt-2 text-[var(--color-text)]/80">{f.body}</p>
+              See everything →
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <BentoCard className="lg:col-span-5">
+              <BentoTitle>Coach-ready organization</BentoTitle>
+              <BentoText>
+                Run team operations in one dashboard: athletes, notes, sessions,
+                and match history — with roles and access control.
+              </BentoText>
+              <BentoFooter>Designed for real coaching workflows</BentoFooter>
+            </BentoCard>
+
+            <BentoCard className="lg:col-span-7">
+              <BentoTitle>Performance you can act on</BentoTitle>
+              <BentoText>
+                Turn training and competition data into clarity. Track what
+                works, what doesn’t, and what to improve next.
+              </BentoText>
+              <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <MiniMetric
+                  label="Scouting"
+                  value="Faster prep"
+                />
+                <MiniMetric
+                  label="Attendance"
+                  value="Consistency"
+                />
+                <MiniMetric
+                  label="Reports"
+                  value="Better plans"
+                />
+                <MiniMetric
+                  label="Teams"
+                  value="Cleaner ops"
+                />
               </div>
-            </div>
-          ))}
+            </BentoCard>
+
+            <BentoCard className="lg:col-span-7">
+              <BentoTitle>Secure by design</BentoTitle>
+              <BentoText>
+                Your program data stays yours. Privacy and control are
+                first-class features — not a checkbox.
+              </BentoText>
+              <BentoFooter>Built to earn trust</BentoFooter>
+            </BentoCard>
+
+            <BentoCard className="lg:col-span-5">
+              <BentoTitle>Simple for athletes</BentoTitle>
+              <BentoText>
+                Athletes get a clean home for match history, training context,
+                and development — with zero clutter.
+              </BentoText>
+              <BentoFooter>Easy to use on mobile</BentoFooter>
+            </BentoCard>
+          </div>
         </div>
       </section>
 
-      {/* ---------- CSS ANIMATIONS (inline to avoid extra file) ---------- */}
-      <style jsx>{`
-        .animate-cycle {
-          display: inline-block;
-          animation: cycle 3s ease-in-out infinite;
-        }
-        .animation-delay-1000 {
-          animation-delay: 1s;
-        }
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-        @keyframes cycle {
-          0%,
-          33.33% {
-            opacity: 1;
-          }
-          33.34%,
-          100% {
-            opacity: 0.3;
-          }
-        }
+      {/* ================= FEATURE ROWS (WITH YOUR IMAGES) ================= */}
+      <section className="relative px-6 lg:px-24 py-16 lg:py-24">
+        <div className="max-w-7xl mx-auto space-y-14">
+          <FeatureRow
+            title="Coaches"
+            subtitle="Run the program like a pro"
+            desc="Manage multiple teams, view athlete data, and keep everything organized without a messy spreadsheet workflow."
+            img="/assets/coaches.png"
+            href="/features#coaches"
+            flip={false}
+          />
 
-        .fade-up {
-          opacity: 0;
-          transform: translateY(20px);
-          transition: opacity 0.6s ease, transform 0.6s ease;
-        }
-        .fade-up.is-visible {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      `}</style>
-    </>
+          <FeatureRow
+            title="Athletes"
+            subtitle="Own your development"
+            desc="Match history, performance context, and growth — presented cleanly so athletes can actually use it."
+            img="/assets/athletes.png"
+            href="/features#athletes"
+            flip
+          />
+
+          <FeatureRow
+            title="Teams & Families"
+            subtitle="Everyone stays aligned"
+            desc="Bring the right people into the loop — staff, teammates, and parents — with clear roles and a secure experience."
+            img="/assets/community.png"
+            href="/features#everyone"
+            flip={false}
+          />
+        </div>
+      </section>
+
+      {/* ================= CTA ================= */}
+      <section className="relative px-6 lg:px-24 pb-24">
+        <div className="max-w-7xl mx-auto">
+          <div className="rounded-3xl border border-gray-200 dark:border-gray-800 bg-white/70 dark:bg-zinc-900/60 backdrop-blur p-8 sm:p-10 shadow-[0_20px_60px_rgba(0,0,0,0.10)]">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
+              <div className="space-y-2">
+                <h3 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-gray-100">
+                  Ready to make your program feel organized?
+                </h3>
+                <p className="text-gray-900 dark:text-gray-100 opacity-80 max-w-2xl">
+                  Start free and build a home for your team that looks and feels
+                  professional — in light mode and dark mode.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/register"
+                  className="inline-flex items-center justify-center rounded-xl px-6 py-3.5 font-semibold bg-red-600 text-white hover:bg-red-700 transition shadow-sm"
+                >
+                  Create an account
+                </Link>
+
+                <Link
+                  href="/features"
+                  className="inline-flex items-center justify-center rounded-xl px-6 py-3.5 font-semibold border border-gray-300 dark:border-gray-700 bg-white/60 dark:bg-zinc-900/50 backdrop-blur hover:bg-white dark:hover:bg-zinc-900 transition"
+                >
+                  Browse features
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
   );
-}
+};
+
+/* ================= SMALL PARTS ================= */
+
+const Pill = ({ children }) => {
+  return (
+    <span className="inline-flex items-center rounded-full border border-gray-200 dark:border-gray-800 bg-white/70 dark:bg-zinc-900/50 px-3 py-1 text-sm font-medium text-gray-900 dark:text-gray-100">
+      {children}
+    </span>
+  );
+};
+
+const BentoCard = ({ className = "", children }) => {
+  return (
+    <div
+      className={[
+        "rounded-3xl border border-gray-200 dark:border-gray-800",
+        "bg-white/70 dark:bg-zinc-900/60 backdrop-blur",
+        "p-7 shadow-sm hover:shadow-[0_18px_50px_rgba(0,0,0,0.10)] transition",
+        className,
+      ].join(" ")}
+    >
+      {children}
+    </div>
+  );
+};
+
+const BentoTitle = ({ children }) => {
+  return (
+    <div className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+      {children}
+    </div>
+  );
+};
+
+const BentoText = ({ children }) => {
+  return (
+    <p className="mt-2 text-gray-900 dark:text-gray-100 opacity-80 leading-relaxed">
+      {children}
+    </p>
+  );
+};
+
+const BentoFooter = ({ children }) => {
+  return (
+    <div className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100 opacity-85">
+      <span className="h-2 w-2 rounded-full bg-[var(--ms-light-red)]" />
+      {children}
+    </div>
+  );
+};
+
+const MiniMetric = ({ label, value }) => {
+  return (
+    <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/70 dark:bg-zinc-900/50 p-4">
+      <div className="text-xs font-semibold uppercase tracking-wide text-gray-900 dark:text-gray-100 opacity-70">
+        {label}
+      </div>
+      <div className="mt-1 text-base font-semibold text-gray-900 dark:text-gray-100">
+        {value}
+      </div>
+    </div>
+  );
+};
+
+const FeatureRow = ({ title, subtitle, desc, img, href, flip }) => {
+  return (
+    <div
+      className={[
+        "grid grid-cols-1 lg:grid-cols-12 gap-8 items-center",
+        flip ? "" : "",
+      ].join(" ")}
+    >
+      <div
+        className={["lg:col-span-6", flip ? "lg:order-2" : "lg:order-1"].join(
+          " "
+        )}
+      >
+        <div className="rounded-3xl border border-gray-200 dark:border-gray-800 bg-white/70 dark:bg-zinc-900/60 backdrop-blur overflow-hidden shadow-sm">
+          <div className="relative w-full aspect-[16/10]">
+            <Image
+              src={img}
+              alt={title}
+              fill
+              sizes="(max-width: 1024px) 92vw, 640px"
+              className="object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/35 to-transparent" />
+          </div>
+
+          <div className="px-6 py-5 flex items-center justify-between gap-4 border-t border-gray-200/70 dark:border-gray-800/70">
+            <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              {title}
+            </div>
+            <div className="h-1.5 w-14 rounded-full bg-[var(--ms-light-red)]/60" />
+          </div>
+        </div>
+      </div>
+
+      <div
+        className={[
+          "lg:col-span-6 space-y-4",
+          flip ? "lg:order-1" : "lg:order-2",
+        ].join(" ")}
+      >
+        <div className="inline-flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100 opacity-80">
+          <span className="h-2 w-2 rounded-full bg-[var(--ms-light-red)]" />
+          {title}
+        </div>
+
+        <h3 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-gray-100">
+          {subtitle}
+        </h3>
+
+        <p className="text-gray-900 dark:text-gray-100 opacity-80 leading-relaxed max-w-xl">
+          {desc}
+        </p>
+
+        <Link
+          href={href}
+          className="inline-flex items-center gap-2 font-semibold text-red-600 hover:text-red-700 transition"
+        >
+          Learn more <span aria-hidden>→</span>
+        </Link>
+      </div>
+    </div>
+  );
+};
+
+export default HomePage;

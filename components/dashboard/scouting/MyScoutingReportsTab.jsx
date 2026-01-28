@@ -101,12 +101,6 @@ const MyScoutingReportsTab = ({ user }) => {
 
   const didFetchRef = useRef(false);
 
-  /* ---------------- FILTER STATE ---------------- */
-  const [filterAthlete, setFilterAthlete] = useState("");
-  const [filterCountry, setFilterCountry] = useState("");
-  const [filterDivision, setFilterDivision] = useState("");
-  const [filterWeight, setFilterWeight] = useState("");
-
   /* ---------------- pagination ---------------- */
   const PAGE_SIZE = 12;
   const [currentPage, setCurrentPage] = useState(1);
@@ -146,7 +140,7 @@ const MyScoutingReportsTab = ({ user }) => {
     }
   };
 
-  /* ================= MATCH REPORTS STYLE LOADER CLONE + HARD PROOF LOGGING ================= */
+  /* ================= STYLE + TECHNIQUE LOADER ================= */
   const loadStylesAndTechniques = useCallback(async () => {
     if (!user?._id) return;
 
@@ -157,22 +151,14 @@ const MyScoutingReportsTab = ({ user }) => {
     try {
       const res = await fetch(`/api/dashboard/${user._id}/userStyles`, {
         cache: "no-store",
-        credentials: "include", // <<< THIS WAS MISSING
-        headers: {
-          "Content-Type": "application/json",
-        },
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
       });
 
-      console.log("🔥 STYLES FETCH STATUS:", res.status);
-
       const data = await res.json();
-      console.log("🔥 RAW STYLES RESPONSE:", data);
-
       const styles = Array.isArray(data)
         ? data
         : data?.styles || data?.userStyles || [];
-
-      console.log("🔥 NORMALIZED STYLES:", styles);
 
       setStylesForForm(styles);
     } catch (err) {
@@ -187,61 +173,34 @@ const MyScoutingReportsTab = ({ user }) => {
     try {
       const res = await fetch(`/api/techniques`, {
         cache: "no-store",
-        credentials: "include", // <<< ADD THIS TOO
+        credentials: "include",
       });
-
       const data = await res.json();
-      console.log("🔥 TECHNIQUES:", data);
-
       setTechniquesForForm(data?.techniques || data || []);
-    } catch (err) {
-      console.error("❌ TECH FETCH ERROR:", err);
+    } catch {
       setTechniquesForForm([]);
     } finally {
       setTechniquesLoading(false);
     }
   }, [user?._id]);
 
-  /* ---------------- FILTERING ---------------- */
-  const filteredReports = useMemo(() => {
-    return scoutingReports.filter((r) => {
-      if (filterAthlete && r.athleteDisplay !== filterAthlete) return false;
-      if (filterCountry && r.countryDisplay !== filterCountry) return false;
-      if (filterDivision && r.divisionDisplay !== filterDivision) return false;
-      if (filterWeight && r.weightDisplay !== filterWeight) return false;
-      return true;
-    });
-  }, [
-    scoutingReports,
-    filterAthlete,
-    filterCountry,
-    filterDivision,
-    filterWeight,
-  ]);
-
+  /* ---------------- pagination ---------------- */
   const pagedReports = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
-    return filteredReports.slice(start, start + PAGE_SIZE);
-  }, [filteredReports, currentPage]);
-
-  useEffect(
-    () => setCurrentPage(1),
-    [filterAthlete, filterCountry, filterDivision, filterWeight],
-  );
+    return scoutingReports.slice(start, start + PAGE_SIZE);
+  }, [scoutingReports, currentPage]);
 
   const exportUrl = `/api/records/scouting?download=1`;
-  useEffect(() => {
-    console.log("🔥 STYLES STATE IN TAB:", stylesForForm);
-  }, [stylesForForm]);
+
   return (
     <>
       {/* Header */}
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
-          {" "}
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             My Reports
           </h1>
+
           <Button
             className="btn-add"
             onClick={async () => {
@@ -250,15 +209,14 @@ const MyScoutingReportsTab = ({ user }) => {
               setOpen(true);
             }}
           >
-            <Plus size={16} /> Add Scouting Report
+            <Plus size={16} /> Add Match Report
           </Button>
         </div>
 
         <div className="flex justify-end mt-3">
           <Button
-            variant="outline"
+            className="btn-file"
             onClick={() => window.open(exportUrl, "_blank")}
-            className="flex items-center gap-2"
           >
             <FileDown className="w-4 h-4" />
             Export to Excel
@@ -295,14 +253,14 @@ const MyScoutingReportsTab = ({ user }) => {
         </div>
       )}
 
-      {/* SCOUTING MODAL */}
+      {/* MODAL */}
       <ModalLayout
         isOpen={open}
         onClose={() => setOpen(false)}
         title={selectedReport ? "Edit Scouting Report" : "Add Scouting Report"}
         withCard
       >
-        {stylesLoading || techniquesLoading || stylesForForm.length === 0 ? (
+        {stylesLoading || techniquesLoading ? (
           <Spinner size={40} />
         ) : (
           <ScoutingReportForm

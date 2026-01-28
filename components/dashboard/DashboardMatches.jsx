@@ -8,7 +8,7 @@ import MatchReportForm from "./forms/MatchReportForm";
 import PreviewReportModal from "./PreviewReportModal";
 
 import { Button } from "@/components/ui/button";
-import { Printer, X, Plus } from "lucide-react";
+import { Plus, Printer, X } from "lucide-react";
 import ModalLayout from "@/components/shared/ModalLayout";
 import Spinner from "@/components/shared/Spinner";
 import MatchReportCard from "@/components/shared/MatchReportCard";
@@ -96,18 +96,22 @@ function DashboardMatches({ user }) {
     }
   }
 
-  /* LOAD USER STYLES FOR MATCH MODAL */
+  /* LOAD USER STYLES FOR MATCH MODAL (ARRAY SAFE) */
   const loadStylesForModal = useCallback(async () => {
     if (!user?._id) return;
+
     setStylesLoading(true);
     try {
       const res = await fetch(`/api/dashboard/${user._id}/userStyles`, {
         cache: "no-store",
       });
       const data = await res.json();
+
+      // IMPORTANT: route returns ARRAY
       const styles = Array.isArray(data)
         ? data
         : data?.styles || data?.userStyles || [];
+
       setStylesForForm(styles);
     } finally {
       setStylesLoading(false);
@@ -282,7 +286,7 @@ function DashboardMatches({ user }) {
           {activeTab === "mine" && (
             <Button
               onClick={handlePrint}
-              className="ml-auto bg-gray-900 hover:bg-gray-800 text-white border border-gray-700"
+              className="btn-print ml-auto"
             >
               <Printer className="mr-2 h-4 w-4" /> Print
             </Button>
