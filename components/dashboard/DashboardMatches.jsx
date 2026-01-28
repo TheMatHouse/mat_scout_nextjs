@@ -96,7 +96,7 @@ function DashboardMatches({ user }) {
     }
   }
 
-  /* LOAD USER STYLES FOR MATCH MODAL (ARRAY SAFE) */
+  /* ================= FIXED STYLE LOADER (ARRAY SAFE + DEBUG) ================= */
   const loadStylesForModal = useCallback(async () => {
     if (!user?._id) return;
 
@@ -104,15 +104,21 @@ function DashboardMatches({ user }) {
     try {
       const res = await fetch(`/api/dashboard/${user._id}/userStyles`, {
         cache: "no-store",
+        credentials: "include",
       });
+
       const data = await res.json();
 
-      // IMPORTANT: route returns ARRAY
       const styles = Array.isArray(data)
         ? data
         : data?.styles || data?.userStyles || [];
 
+      console.log("🔥 MATCH STYLES LOADED:", styles);
+
       setStylesForForm(styles);
+    } catch (err) {
+      console.error("❌ Failed to load styles:", err);
+      setStylesForForm([]);
     } finally {
       setStylesLoading(false);
     }
@@ -219,11 +225,12 @@ function DashboardMatches({ user }) {
             className="btn-add"
             onClick={async () => {
               setSelectedMatch(null);
-              await loadStylesForModal();
-              setOpen(true);
+              await loadStylesForModal(); // LOAD FIRST
+              setOpen(true); // THEN OPEN
             }}
           >
-            <Plus size={16} /> Add Match Report
+            <Plus size={16} />
+            Add Match Report
           </Button>
         </div>
       )}
@@ -286,9 +293,9 @@ function DashboardMatches({ user }) {
           {activeTab === "mine" && (
             <Button
               onClick={handlePrint}
-              className="btn-print ml-auto"
+              className="ml-auto btn-print"
             >
-              <Printer className="mr-2 h-4 w-4" /> Print
+              <Printer size={16} /> Print
             </Button>
           )}
         </div>

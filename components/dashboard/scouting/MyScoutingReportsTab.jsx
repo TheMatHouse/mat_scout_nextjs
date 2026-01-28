@@ -101,6 +101,12 @@ const MyScoutingReportsTab = ({ user }) => {
 
   const didFetchRef = useRef(false);
 
+  /* ---------------- FILTER STATE ---------------- */
+  const [filterAthlete, setFilterAthlete] = useState("");
+  const [filterCountry, setFilterCountry] = useState("");
+  const [filterDivision, setFilterDivision] = useState("");
+  const [filterWeight, setFilterWeight] = useState("");
+
   /* ---------------- pagination ---------------- */
   const PAGE_SIZE = 12;
   const [currentPage, setCurrentPage] = useState(1);
@@ -140,11 +146,9 @@ const MyScoutingReportsTab = ({ user }) => {
     }
   };
 
-  /* ================= STYLE + TECHNIQUE LOADER ================= */
+  /* ================= STYLE + TECHNIQUE LOADER (MATCH REPORTS CLONE) ================= */
   const loadStylesAndTechniques = useCallback(async () => {
     if (!user?._id) return;
-
-    console.log("🔥 SCOUTING LOADER CALLED");
 
     // -------- STYLES --------
     setStylesLoading(true);
@@ -152,17 +156,19 @@ const MyScoutingReportsTab = ({ user }) => {
       const res = await fetch(`/api/dashboard/${user._id}/userStyles`, {
         cache: "no-store",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
       });
 
       const data = await res.json();
+
       const styles = Array.isArray(data)
         ? data
         : data?.styles || data?.userStyles || [];
 
+      console.log("🔥 SCOUT STYLES:", styles);
+
       setStylesForForm(styles);
     } catch (err) {
-      console.error("❌ STYLES FETCH ERROR:", err);
+      console.error("❌ STYLE LOAD ERROR:", err);
       setStylesForForm([]);
     } finally {
       setStylesLoading(false);
@@ -184,11 +190,32 @@ const MyScoutingReportsTab = ({ user }) => {
     }
   }, [user?._id]);
 
-  /* ---------------- pagination ---------------- */
+  /* ---------------- FILTERING ---------------- */
+  const filteredReports = useMemo(() => {
+    return scoutingReports.filter((r) => {
+      if (filterAthlete && r.athleteDisplay !== filterAthlete) return false;
+      if (filterCountry && r.countryDisplay !== filterCountry) return false;
+      if (filterDivision && r.divisionDisplay !== filterDivision) return false;
+      if (filterWeight && r.weightDisplay !== filterWeight) return false;
+      return true;
+    });
+  }, [
+    scoutingReports,
+    filterAthlete,
+    filterCountry,
+    filterDivision,
+    filterWeight,
+  ]);
+
   const pagedReports = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
-    return scoutingReports.slice(start, start + PAGE_SIZE);
-  }, [scoutingReports, currentPage]);
+    return filteredReports.slice(start, start + PAGE_SIZE);
+  }, [filteredReports, currentPage]);
+
+  useEffect(
+    () => setCurrentPage(1),
+    [filterAthlete, filterCountry, filterDivision, filterWeight],
+  );
 
   const exportUrl = `/api/records/scouting?download=1`;
 
@@ -205,18 +232,18 @@ const MyScoutingReportsTab = ({ user }) => {
             className="btn-add"
             onClick={async () => {
               setSelectedReport(null);
-              await loadStylesAndTechniques();
-              setOpen(true);
+              await loadStylesAndTechniques(); // LOAD FIRST
+              setOpen(true); // THEN OPEN
             }}
           >
-            <Plus size={16} /> Add Match Report
+            <Plus size={16} /> Add Scouting Report
           </Button>
         </div>
 
         <div className="flex justify-end mt-3">
           <Button
-            className="btn-file"
             onClick={() => window.open(exportUrl, "_blank")}
+            className="btn-file"
           >
             <FileDown className="w-4 h-4" />
             Export to Excel
@@ -253,7 +280,7 @@ const MyScoutingReportsTab = ({ user }) => {
         </div>
       )}
 
-      {/* MODAL */}
+      {/* SCOUTING MODAL */}
       <ModalLayout
         isOpen={open}
         onClose={() => setOpen(false)}
