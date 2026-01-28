@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { toast } from "react-toastify";
-import { FileDown } from "lucide-react";
+import { FileDown, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import PreviewReportModal from "@/components/shared/PreviewReportModal";
@@ -237,11 +237,11 @@ const MyScoutingReportsTab = ({ user }) => {
     <>
       {/* Header */}
       <div className="mb-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
+          {" "}
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            My Scouting Reports
+            My Reports
           </h1>
-
           <Button
             className="btn btn-primary"
             onClick={async () => {
@@ -249,8 +249,12 @@ const MyScoutingReportsTab = ({ user }) => {
               await loadStylesAndTechniques(); // <<< WAIT FOR DATA
               setOpen(true);
             }}
+            onTouchStart={() => {
+              setSelectedReport(null);
+              setOpen(true);
+            }}
           >
-            Add Scouting Report
+            <Plus size={16} /> Add Scouting Report
           </Button>
         </div>
 
