@@ -4,15 +4,15 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { toast } from "react-toastify";
-import { ArrowUpDown, Eye, Edit, Trash, FileDown } from "lucide-react";
+import { FileDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { ReportDataTable } from "@/components/shared/report-data-table";
 import PreviewReportModal from "@/components/shared/PreviewReportModal";
 import ScoutingReportForm from "@/components/dashboard/forms/ScoutingReportForm";
 import ModalLayout from "@/components/shared/ModalLayout";
 import Spinner from "@/components/shared/Spinner";
-import MatchReportCard from "@/components/shared/MatchReportCard";
+import ShareReportModal from "@/components/dashboard/ShareReportModal";
+import DashboardScoutingReportCard from "@/components/shared/DashboardScoutingReportCard";
 
 /* ---------------- safe display helpers --------------- */
 const genderLabel = (g) => {
@@ -133,7 +133,7 @@ const buildPreviewPayload = (r) => {
                 url: toSafeStr(v.url || v.videoURL),
                 startSeconds: toNonNegInt(v.startSeconds),
               }
-            : null
+            : null,
         )
         .filter(Boolean)
     : [];
@@ -215,6 +215,8 @@ const MyScoutingReportsTab = ({ user }) => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null); // raw for edit
   const [previewPayload, setPreviewPayload] = useState(null); // sanitized for preview
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareReport, setShareReport] = useState(null);
 
   // styles for the form
   const [stylesLoading, setStylesLoading] = useState(false);
@@ -253,7 +255,7 @@ const MyScoutingReportsTab = ({ user }) => {
       });
       if (!res.ok)
         throw new Error(
-          `Failed to fetch scouting reports (HTTP ${res.status})`
+          `Failed to fetch scouting reports (HTTP ${res.status})`,
         );
 
       const raw = await res.json();
@@ -325,8 +327,8 @@ const MyScoutingReportsTab = ({ user }) => {
 
     const styles = Array.from(
       new Set(
-        (reports || []).map((r) => (r?.matchType || "").trim()).filter(Boolean)
-      )
+        (reports || []).map((r) => (r?.matchType || "").trim()).filter(Boolean),
+      ),
     );
     if (!styles.length) return;
 
@@ -340,7 +342,7 @@ const MyScoutingReportsTab = ({ user }) => {
               cache: "no-store",
               credentials: "same-origin",
               headers: { accept: "application/json" },
-            }
+            },
           );
           const data = await res.json().catch(() => ({}));
           const divs = Array.isArray(data?.divisions) ? data.divisions : [];
@@ -350,7 +352,7 @@ const MyScoutingReportsTab = ({ user }) => {
         } catch {
           /* non-fatal */
         }
-      })
+      }),
     );
     if (Object.keys(fetched).length) {
       setDivisionMap((prev) => ({ ...prev, ...fetched }));
@@ -360,8 +362,8 @@ const MyScoutingReportsTab = ({ user }) => {
   const hydrateWeightsMap = async (reports) => {
     const divIds = Array.from(
       new Set(
-        (reports || []).map((r) => getDivisionId(r?.division)).filter(Boolean)
-      )
+        (reports || []).map((r) => getDivisionId(r?.division)).filter(Boolean),
+      ),
     );
     if (!divIds.length) return;
 
@@ -370,7 +372,7 @@ const MyScoutingReportsTab = ({ user }) => {
       divIds.map(async (id) => {
         const weights = await fetchDivisionWeights(id);
         if (weights) entries[id] = weights;
-      })
+      }),
     );
     if (Object.keys(entries).length) {
       setWeightsMap((prev) => ({ ...prev, ...entries }));
@@ -478,7 +480,7 @@ const MyScoutingReportsTab = ({ user }) => {
       if (resp.status === 200) {
         toast.success(data?.message || "Scouting report deleted.");
         setScoutingReports((prev) =>
-          prev.filter((r) => String(r._id) !== String(report._id))
+          prev.filter((r) => String(r._id) !== String(report._id)),
         );
         setPreviewPayload(null);
         setSelectedReport(null);
@@ -497,7 +499,7 @@ const MyScoutingReportsTab = ({ user }) => {
       }
 
       toast.error(
-        data?.message || `Failed to delete report (HTTP ${resp.status}).`
+        data?.message || `Failed to delete report (HTTP ${resp.status}).`,
       );
     } catch (err) {
       console.error("Delete error:", err);
@@ -518,7 +520,7 @@ const MyScoutingReportsTab = ({ user }) => {
       if (r?.weightLabel && String(r.weightLabel).trim()) {
         weightDisplay = ensureWeightDisplay(
           String(r.weightLabel).trim(),
-          r?.weightUnit
+          r?.weightUnit,
         );
       } else {
         const divId = getDivisionId(r?.division);
@@ -528,7 +530,7 @@ const MyScoutingReportsTab = ({ user }) => {
             (it) =>
               String(it._id) === String(r.weightItemId) ||
               String(it.label).toLowerCase() ===
-                String(r.weightItemId).toLowerCase()
+                String(r.weightItemId).toLowerCase(),
           );
           if (item?.label) {
             const unit = r?.weightUnit || w.unit || "";
@@ -540,145 +542,6 @@ const MyScoutingReportsTab = ({ user }) => {
       return { ...r, divisionDisplay: divDisplay, weightDisplay };
     });
   }, [scoutingReports, weightsMap]);
-
-  // ===== Columns =====
-  const columns = useMemo(
-    () => [
-      {
-        accessorKey: "matchType",
-        header: ({ column }) => (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Type <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        ),
-      },
-      { accessorKey: "athleteFirstName", header: "Athlete First" },
-      {
-        accessorKey: "athleteLastName",
-        header: ({ column }) => (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Athlete Last <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        ),
-      },
-      { accessorKey: "athleteNationalRank", header: "National Rank" },
-      { accessorKey: "athleteWorldRank", header: "World Rank" },
-      {
-        accessorKey: "athleteClub",
-        header: "Club",
-        meta: { className: "hidden md:table-cell" },
-      },
-      {
-        accessorKey: "athleteCountry",
-        header: ({ column }) => (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Country <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        ),
-      },
-      {
-        accessorKey: "divisionDisplay",
-        header: ({ column }) => (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Division <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        ),
-        meta: { className: "hidden md:table-cell" },
-        sortingFn: (rowA, rowB) =>
-          String(rowA.getValue("divisionDisplay")).localeCompare(
-            String(rowB.getValue("divisionDisplay")),
-            undefined,
-            { sensitivity: "base" }
-          ),
-      },
-      {
-        accessorKey: "weightDisplay",
-        header: ({ column }) => (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Weight Class <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        ),
-        meta: { className: "hidden md:table-cell" },
-        sortingFn: (rowA, rowB) =>
-          String(rowA.getValue("weightDisplay")).localeCompare(
-            String(rowB.getValue("weightDisplay")),
-            undefined,
-            { numeric: true }
-          ),
-      },
-      {
-        accessorKey: "createdByName",
-        header: ({ column }) => (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Created By <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        ),
-        cell: ({ row }) => row.original.createdByName || "—",
-      },
-      {
-        id: "actions",
-        header: "Actions",
-        enableSorting: false,
-        cell: ({ row }) => {
-          const report = row.original;
-          return (
-            <div className="flex justify-center gap-3">
-              <button
-                onClick={() => {
-                  setPreviewPayload(buildPreviewPayload(report)); // << sanitized
-                  setPreviewOpen(true);
-                }}
-                title="View Details"
-                className="icon-btn"
-              >
-                <Eye className="w-5 h-5 text-blue-500" />
-              </button>
-              <button
-                onClick={async () => {
-                  setSelectedReport(report); // raw for edit
-                  setOpen(true);
-                  await Promise.all([
-                    loadStylesForModal(),
-                    loadTechniquesForModal(),
-                  ]);
-                }}
-                title="Edit Report"
-                className="icon-btn"
-              >
-                <Edit className="w-5 h-5 text-green-500" />
-              </button>
-              <button
-                onClick={() => handleDeleteReport(report)}
-                title="Delete Report"
-                className="icon-btn"
-              >
-                <Trash className="w-5 h-5 text-red-500" />
-              </button>
-            </div>
-          );
-        },
-      },
-    ],
-    [loadStylesForModal, loadTechniquesForModal]
-  );
 
   const openingModal = stylesLoading || techniquesLoading;
 
@@ -774,72 +637,35 @@ const MyScoutingReportsTab = ({ user }) => {
         </div>
       ) : (
         <>
-          {/* Mobile cards — shared MatchReportCard with scouting field mapping */}
-          <div className="grid grid-cols-1 sm:hidden gap-4 mb-6">
+          {/* Scouting cards (mobile + desktop) */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-6">
             {tableData.length > 0 ? (
-              tableData.map((report) => {
-                const athleteName = [
-                  report.athleteFirstName,
-                  report.athleteLastName,
-                ]
-                  .filter(Boolean)
-                  .join(" ");
-
-                return (
-                  <MatchReportCard
-                    key={
-                      report._id || `${athleteName}-${report.matchDate || ""}`
-                    }
-                    personLabel="Athlete"
-                    match={{
-                      _id: report._id,
-                      matchType: report.matchType || "",
-                      matchDate: report.matchDate || null,
-                      opponentName: athleteName || "—",
-                      eventName: report.eventName || "",
-                      divisionDisplay:
-                        typeof report.divisionDisplay === "string"
-                          ? report.divisionDisplay
-                          : "",
-                      weightDisplay: report.weightDisplay || "",
-                      method: report.athleteGrip || "",
-                      myRank:
-                        report.athleteNationalRank ||
-                        report.athleteWorldRank ||
-                        "",
-                      opponentRank: "",
-                      result: "",
-                      score: "",
-                    }}
-                    onView={() => {
-                      setPreviewPayload(buildPreviewPayload(report));
-                      setPreviewOpen(true);
-                    }}
-                    onEdit={async () => {
-                      setSelectedReport(report);
-                      setOpen(true);
-                      await Promise.all([
-                        loadStylesForModal(),
-                        loadTechniquesForModal(),
-                      ]);
-                    }}
-                    onDelete={() => handleDeleteReport(report)}
-                  />
-                );
-              })
+              tableData.map((report) => (
+                <DashboardScoutingReportCard
+                  key={report._id}
+                  report={report}
+                  onView={() => {
+                    setPreviewPayload(buildPreviewPayload(report));
+                    setPreviewOpen(true);
+                  }}
+                  onEdit={async () => {
+                    setSelectedReport(report);
+                    setOpen(true);
+                    await Promise.all([
+                      loadStylesForModal(),
+                      loadTechniquesForModal(),
+                    ]);
+                  }}
+                  onShare={() => {
+                    setShareReport(report);
+                    setShareOpen(true);
+                  }}
+                  onDelete={() => handleDeleteReport(report)}
+                />
+              ))
             ) : (
               <p className="text-gray-400">No scouting reports found.</p>
             )}
-          </div>
-
-          {/* Desktop table */}
-          <div className="hidden md:block overflow-x-auto">
-            <div className="min-w-[800px]">
-              <ReportDataTable
-                columns={columns}
-                data={tableData}
-              />
-            </div>
           </div>
         </>
       )}
@@ -849,8 +675,21 @@ const MyScoutingReportsTab = ({ user }) => {
         <PreviewReportModal
           previewOpen={previewOpen}
           setPreviewOpen={setPreviewOpen}
-          report={previewPayload} // << primitive-only payload
+          report={previewPayload}
           reportType="scouting"
+        />
+      )}
+
+      {shareOpen && shareReport && (
+        <ShareReportModal
+          open={shareOpen}
+          onClose={() => {
+            setShareOpen(false);
+            setShareReport(null);
+          }}
+          ownerId={user._id}
+          documentType="personal-scout"
+          documentId={shareReport._id}
         />
       )}
     </>
