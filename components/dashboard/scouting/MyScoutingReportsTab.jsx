@@ -222,11 +222,11 @@ const MyScoutingReportsTab = ({ user }) => {
     <>
       {/* Header */}
       <div className="mb-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
+          {" "}
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            My Scouting Reports
+            My Reports
           </h1>
-
           <Button
             type="button"
             className="btn-add"
