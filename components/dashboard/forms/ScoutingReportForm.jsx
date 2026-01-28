@@ -225,6 +225,7 @@ const ScoutingReportForm = ({
   setOpen,
   onSuccess,
 }) => {
+  console.log("SCOUTING FORM STYLES PROP:", styles);
   const router = useRouter();
   const { user } = useUser();
   const viewerUserId = user?._id;
@@ -242,13 +243,13 @@ const ScoutingReportForm = ({
   /* --------------------- DIVISIONS & WEIGHTS ---------------------- */
   const [divisions, setDivisions] = useState([]); // [{value,label,gender}]
   const [divisionId, setDivisionId] = useState(() =>
-    toDivisionId(report?.division)
+    toDivisionId(report?.division),
   );
   const [divisionsLoading, setDivisionsLoading] = useState(false);
 
   const [weightOptions, setWeightOptions] = useState([]); // [{value,label}]
   const [weightCategoryId, setWeightCategoryId] = useState(
-    () => String(report?.weightCategory ?? report?.weightItemId ?? "") // support legacy
+    () => String(report?.weightCategory ?? report?.weightItemId ?? ""), // support legacy
   );
   const [weightLabel, setWeightLabel] = useState(report?.weightLabel || "");
   const [weightUnit, setWeightUnit] = useState(report?.weightUnit || "");
@@ -257,7 +258,7 @@ const ScoutingReportForm = ({
 
   // Gate: style
   const [matchType, setMatchType] = useState(
-    report?.matchType || report?.style || report?.styleName || ""
+    report?.matchType || report?.style || report?.styleName || "",
   );
 
   const styleOptions = useMemo(() => {
@@ -268,7 +269,8 @@ const ScoutingReportForm = ({
     if (
       matchType &&
       !base.some(
-        (o) => String(o.value).toLowerCase() === String(matchType).toLowerCase()
+        (o) =>
+          String(o.value).toLowerCase() === String(matchType).toLowerCase(),
       )
     ) {
       base.unshift({ value: matchType, label: `${matchType} (from report)` });
@@ -300,7 +302,7 @@ const ScoutingReportForm = ({
       !!matchType &&
       String(matchType).toLowerCase() ===
         String(
-          report.matchType || report.style || report.styleName || ""
+          report.matchType || report.style || report.styleName || "",
         ).toLowerCase();
 
     // Reset only if user actually changed style away from saved one
@@ -330,7 +332,7 @@ const ScoutingReportForm = ({
             cache: "no-store",
             credentials: "same-origin",
             headers: { accept: "application/json" },
-          }
+          },
         );
         const data = await res.json().catch(() => ({}));
         if (!alive) return;
@@ -349,7 +351,7 @@ const ScoutingReportForm = ({
           !appliedInitialDivisionRef.current
         ) {
           const hasIt = opts.some(
-            (o) => String(o.value) === String(initialDivisionId)
+            (o) => String(o.value) === String(initialDivisionId),
           );
           if (hasIt) setDivisionId(String(initialDivisionId));
           appliedInitialDivisionRef.current = true;
@@ -415,7 +417,7 @@ const ScoutingReportForm = ({
           setWeightsError(
             res.status === 404
               ? ""
-              : `Failed to load weights (HTTP ${res.status}).`
+              : `Failed to load weights (HTTP ${res.status}).`,
           );
           return;
         }
@@ -467,7 +469,7 @@ const ScoutingReportForm = ({
         if (!appliedInitialWeightRef.current) {
           if (initialWeightCategoryId) {
             const byId = opts.find(
-              (o) => String(o.value) === String(initialWeightCategoryId)
+              (o) => String(o.value) === String(initialWeightCategoryId),
             );
             if (byId) {
               setWeightCategoryId(String(initialWeightCategoryId));
@@ -483,7 +485,7 @@ const ScoutingReportForm = ({
               .toLowerCase();
             if (savedLabel) {
               const byLabel = opts.find(
-                (o) => String(o.label).trim().toLowerCase() === savedLabel
+                (o) => String(o.label).trim().toLowerCase() === savedLabel,
               );
               if (byLabel) {
                 setWeightCategoryId(String(byLabel.value));
@@ -518,33 +520,33 @@ const ScoutingReportForm = ({
 
   /* --------------------- rest of form state ---------------------- */
   const [athleteFirstName, setAthleteFirstName] = useState(
-    report?.athleteFirstName || ""
+    report?.athleteFirstName || "",
   );
   const [athleteLastName, setAthleteLastName] = useState(
-    report?.athleteLastName || ""
+    report?.athleteLastName || "",
   );
   const [athleteNationalRank, setAthleteNationalRank] = useState(
-    report?.athleteNationalRank || ""
+    report?.athleteNationalRank || "",
   );
   const [athleteWorldRank, setAthleteWorldRank] = useState(
-    report?.athleteWorldRank || ""
+    report?.athleteWorldRank || "",
   );
 
   const [athleteClub, setAthleteClub] = useState(report?.athleteClub || "");
   const [athleteCountry, setAthleteCountry] = useState(
-    report?.athleteCountry || ""
+    report?.athleteCountry || "",
   );
   const [athleteRank, setAthleteRank] = useState(report?.athleteRank || "");
   const [athleteGrip, setAthleteGrip] = useState(report?.athleteGrip || "");
   const [athleteAttackNotes, setAthleteAttackNotes] = useState(
-    report?.athleteAttackNotes || ""
+    report?.athleteAttackNotes || "",
   );
   const [accessList, setAccessList] = useState(report?.accessList || []);
 
   // techniques
   const [loadedTechniques, setLoadedTechniques] = useState([]);
   const [athleteSelected, setAthleteSelected] = useState(
-    report?.athleteAttacks?.map((item, i) => ({ value: i, label: item })) || []
+    report?.athleteAttacks?.map((item, i) => ({ value: i, label: item })) || [],
   );
 
   // ----- videos -----
@@ -556,7 +558,7 @@ const ScoutingReportForm = ({
         : {
             ...v,
             startSeconds: Math.max(0, parseInt(v?.startSeconds ?? 0, 10)) || 0,
-          }
+          },
     );
   }, [report?.videos]);
 
@@ -576,9 +578,9 @@ const ScoutingReportForm = ({
           const label =
             typeof t === "string"
               ? t
-              : t?.name ?? t?.label ?? t?.title ?? t?.technique ?? "";
+              : (t?.name ?? t?.label ?? t?.title ?? t?.technique ?? "");
           return { label, value: t?._id ?? t?.id ?? i };
-        })
+        }),
       );
       return;
     }
@@ -597,9 +599,9 @@ const ScoutingReportForm = ({
             const label =
               typeof t === "string"
                 ? t
-                : t?.name ?? t?.label ?? t?.title ?? t?.technique ?? "";
+                : (t?.name ?? t?.label ?? t?.title ?? t?.technique ?? "");
             return { label, value: t?._id ?? t?.id ?? i };
-          })
+          }),
         );
       } catch {
         setLoadedTechniques([]);
@@ -610,18 +612,18 @@ const ScoutingReportForm = ({
   const suggestions = useMemo(
     () =>
       [...loadedTechniques].sort((a, b) =>
-        a.label.localeCompare(b.label, undefined, { sensitivity: "base" })
+        a.label.localeCompare(b.label, undefined, { sensitivity: "base" }),
       ),
-    [loadedTechniques]
+    [loadedTechniques],
   );
 
   const onAthleteAdd = useCallback(
     (tag) => setAthleteSelected((prev) => [...prev, tag]),
-    []
+    [],
   );
   const onAthleteDelete = useCallback(
     (i) => setAthleteSelected((prev) => prev.filter((_, idx) => idx !== i)),
-    []
+    [],
   );
 
   /* --------------------- submit ---------------------- */
@@ -666,8 +668,8 @@ const ScoutingReportForm = ({
               typeof v.startSeconds === "number"
                 ? v.startSeconds
                 : v?.startSeconds || 0,
-              10
-            )
+              10,
+            ),
           ),
         })),
       newVideos: (newVideos || []).map((v) => ({
@@ -678,8 +680,8 @@ const ScoutingReportForm = ({
             typeof v.startSeconds === "number"
               ? v.startSeconds
               : v?.startSeconds || 0,
-            10
-          )
+            10,
+          ),
         ),
       })),
       deletedVideos,
@@ -693,8 +695,8 @@ const ScoutingReportForm = ({
           ? `${base}/${athlete.userId}/family/${athlete._id}/scoutingReports/${report._id}`
           : `${base}/${athlete.userId}/family/${athlete._id}/scoutingReports`
         : report
-        ? `${base}/${viewerUserId}/scoutingReports/${report._id}`
-        : `${base}/${viewerUserId}/scoutingReports`;
+          ? `${base}/${viewerUserId}/scoutingReports/${report._id}`
+          : `${base}/${viewerUserId}/scoutingReports`;
 
     try {
       const res = await fetch(url, {
@@ -834,7 +836,7 @@ const ScoutingReportForm = ({
                 value={weightCategoryId}
                 onChange={(val) => {
                   const opt = (weightOptions || []).find(
-                    (o) => String(o.value) === String(val)
+                    (o) => String(o.value) === String(val),
                   );
                   setWeightCategoryId(String(val));
                   setWeightLabel(opt?.label ?? "");
@@ -951,7 +953,7 @@ const ScoutingReportForm = ({
                 : Math.max(0, parseInt(vid?.startSeconds || 0, 10));
 
               const idMatch = (url || "").match(
-                /(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/i
+                /(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/i,
               );
               const embedId = idMatch ? idMatch[1] : null;
 
@@ -998,7 +1000,7 @@ const ScoutingReportForm = ({
                           const parsed = parseTimestampFromUrl(e.target.value);
                           const prev = Math.max(
                             0,
-                            parseInt(next[idx]?.startSeconds || 0, 10)
+                            parseInt(next[idx]?.startSeconds || 0, 10),
                           );
                           next[idx] = {
                             ...(next[idx] || {}),
@@ -1017,7 +1019,7 @@ const ScoutingReportForm = ({
                             ...(next[idx] || {}),
                             startSeconds: Math.max(
                               0,
-                              parseInt(nextSecs || 0, 10)
+                              parseInt(nextSecs || 0, 10),
                             ),
                           };
                           setVideos(next);
@@ -1029,7 +1031,7 @@ const ScoutingReportForm = ({
                           className="mt-3 w-full h-52"
                           src={`https://www.youtube.com/embed/${embedId}?start=${Math.max(
                             0,
-                            parseInt(videos[idx]?.startSeconds || 0, 10)
+                            parseInt(videos[idx]?.startSeconds || 0, 10),
                           )}`}
                           allowFullScreen
                         />
@@ -1046,7 +1048,7 @@ const ScoutingReportForm = ({
                                 String(vid._id),
                               ]);
                             setVideos((prev) =>
-                              prev.filter((_, i) => i !== idx)
+                              prev.filter((_, i) => i !== idx),
                             );
                           }}
                         >
@@ -1062,12 +1064,12 @@ const ScoutingReportForm = ({
             {newVideos.map((vid, idx) => {
               const url = vid.url || "";
               const idMatch = url.match(
-                /(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/i
+                /(?:v=|\/embed\/|youtu\.be\/)([^&?/]+)/i,
               );
               const embedId = idMatch ? idMatch[1] : null;
               const startSeconds = Math.max(
                 0,
-                parseInt(vid?.startSeconds || 0, 10)
+                parseInt(vid?.startSeconds || 0, 10),
               );
 
               return (
@@ -1110,7 +1112,7 @@ const ScoutingReportForm = ({
                           ? parsed
                           : Math.max(
                               0,
-                              parseInt(next[idx]?.startSeconds || 0, 10)
+                              parseInt(next[idx]?.startSeconds || 0, 10),
                             ),
                       };
                       setNewVideos(next);
@@ -1134,7 +1136,7 @@ const ScoutingReportForm = ({
                       className="mt-3 w-full h-52"
                       src={`https://www.youtube.com/embed/${embedId}?start=${Math.max(
                         0,
-                        parseInt(newVideos[idx]?.startSeconds || 0, 10)
+                        parseInt(newVideos[idx]?.startSeconds || 0, 10),
                       )}`}
                       allowFullScreen
                     />

@@ -1,4 +1,3 @@
-// components/dashboard/scouting/MyScoutingReportsTab.jsx
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -34,32 +33,11 @@ const computeDivisionDisplay = (division) => {
   return "—";
 };
 
-/* ---------- helpers ---------- */
-function extractArray(payload) {
-  if (Array.isArray(payload)) return payload;
-  if (payload && Array.isArray(payload.userStyles)) return payload.userStyles;
-  if (payload && Array.isArray(payload.styles)) return payload.styles;
-  if (payload && Array.isArray(payload.items)) return payload.items;
-  if (payload && Array.isArray(payload.data)) return payload.data;
-  if (payload && Array.isArray(payload.results)) return payload.results;
-  return [];
-}
-
 function ensureWeightDisplay(label, unit) {
   if (!label) return "";
   const low = String(label).toLowerCase();
   if (low.includes("kg") || low.includes("lb")) return label;
   return unit ? `${label} ${unit}` : label;
-}
-
-function getDivisionId(div) {
-  if (!div) return "";
-  if (typeof div === "string") return div;
-  if (typeof div === "object") {
-    if (div._id) return String(div._id);
-    if (div.id) return String(div.id);
-  }
-  return "";
 }
 
 /* ---------- preview payload ---------- */
@@ -129,13 +107,11 @@ const MyScoutingReportsTab = ({ user }) => {
   const [filterDivision, setFilterDivision] = useState("");
   const [filterWeight, setFilterWeight] = useState("");
 
-  const hasActiveFilters =
-    filterAthlete || filterCountry || filterDivision || filterWeight;
-
   /* ---------------- pagination ---------------- */
   const PAGE_SIZE = 12;
   const [currentPage, setCurrentPage] = useState(1);
 
+  /* ---------------- FETCH REPORTS ---------------- */
   useEffect(() => {
     if (!user?._id) return;
     if (didFetchRef.current) return;
@@ -170,11 +146,65 @@ const MyScoutingReportsTab = ({ user }) => {
     }
   };
 
-  /* ---------------- FILTERING LOGIC ---------------- */
-  const normalizedReports = scoutingReports;
+  /* ================= MATCH REPORTS STYLE LOADER CLONE + HARD PROOF LOGGING ================= */
+  const loadStylesAndTechniques = useCallback(async () => {
+    if (!user?._id) return;
 
+    console.log("🔥 SCOUTING LOADER CALLED");
+
+    // -------- STYLES --------
+    setStylesLoading(true);
+    try {
+      const res = await fetch(`/api/dashboard/${user._id}/userStyles`, {
+        cache: "no-store",
+        credentials: "include", // <<< THIS WAS MISSING
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      console.log("🔥 STYLES FETCH STATUS:", res.status);
+
+      const data = await res.json();
+      console.log("🔥 RAW STYLES RESPONSE:", data);
+
+      const styles = Array.isArray(data)
+        ? data
+        : data?.styles || data?.userStyles || [];
+
+      console.log("🔥 NORMALIZED STYLES:", styles);
+
+      setStylesForForm(styles);
+    } catch (err) {
+      console.error("❌ STYLES FETCH ERROR:", err);
+      setStylesForForm([]);
+    } finally {
+      setStylesLoading(false);
+    }
+
+    // -------- TECHNIQUES --------
+    setTechniquesLoading(true);
+    try {
+      const res = await fetch(`/api/techniques`, {
+        cache: "no-store",
+        credentials: "include", // <<< ADD THIS TOO
+      });
+
+      const data = await res.json();
+      console.log("🔥 TECHNIQUES:", data);
+
+      setTechniquesForForm(data?.techniques || data || []);
+    } catch (err) {
+      console.error("❌ TECH FETCH ERROR:", err);
+      setTechniquesForForm([]);
+    } finally {
+      setTechniquesLoading(false);
+    }
+  }, [user?._id]);
+
+  /* ---------------- FILTERING ---------------- */
   const filteredReports = useMemo(() => {
-    return normalizedReports.filter((r) => {
+    return scoutingReports.filter((r) => {
       if (filterAthlete && r.athleteDisplay !== filterAthlete) return false;
       if (filterCountry && r.countryDisplay !== filterCountry) return false;
       if (filterDivision && r.divisionDisplay !== filterDivision) return false;
@@ -182,30 +212,13 @@ const MyScoutingReportsTab = ({ user }) => {
       return true;
     });
   }, [
-    normalizedReports,
+    scoutingReports,
     filterAthlete,
     filterCountry,
     filterDivision,
     filterWeight,
   ]);
 
-  const sortAlpha = (arr) =>
-    [...arr].sort((a, b) =>
-      String(a).localeCompare(String(b), undefined, { sensitivity: "base" }),
-    );
-
-  const buildOptions = (selector) =>
-    sortAlpha(
-      Array.from(new Set(normalizedReports.map(selector).filter(Boolean))),
-    );
-
-  const athleteOptions = buildOptions((r) => r.athleteDisplay);
-  const countryOptions = buildOptions((r) => r.countryDisplay);
-  const divisionOptions = buildOptions((r) => r.divisionDisplay);
-  const weightOptions = buildOptions((r) => r.weightDisplay);
-
-  /* ---------------- pagination ---------------- */
-  const totalPages = Math.ceil(filteredReports.length / PAGE_SIZE);
   const pagedReports = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
     return filteredReports.slice(start, start + PAGE_SIZE);
@@ -217,7 +230,9 @@ const MyScoutingReportsTab = ({ user }) => {
   );
 
   const exportUrl = `/api/records/scouting?download=1`;
-
+  useEffect(() => {
+    console.log("🔥 STYLES STATE IN TAB:", stylesForForm);
+  }, [stylesForForm]);
   return (
     <>
       {/* Header */}
@@ -229,8 +244,9 @@ const MyScoutingReportsTab = ({ user }) => {
 
           <Button
             className="btn btn-primary"
-            onClick={() => {
+            onClick={async () => {
               setSelectedReport(null);
+              await loadStylesAndTechniques(); // <<< WAIT FOR DATA
               setOpen(true);
             }}
           >
@@ -250,67 +266,6 @@ const MyScoutingReportsTab = ({ user }) => {
         </div>
       </div>
 
-      {/* FILTER BAR */}
-      <div className="mb-6 flex gap-3 flex-wrap">
-        <select
-          className="w-44 border rounded px-3 py-2"
-          value={filterAthlete}
-          onChange={(e) => setFilterAthlete(e.target.value)}
-        >
-          <option value="">Athlete</option>
-          {athleteOptions.map((v) => (
-            <option key={v}>{v}</option>
-          ))}
-        </select>
-
-        <select
-          className="w-40 border rounded px-3 py-2"
-          value={filterCountry}
-          onChange={(e) => setFilterCountry(e.target.value)}
-        >
-          <option value="">Country</option>
-          {countryOptions.map((v) => (
-            <option key={v}>{v}</option>
-          ))}
-        </select>
-
-        <select
-          className="w-48 border rounded px-3 py-2"
-          value={filterDivision}
-          onChange={(e) => setFilterDivision(e.target.value)}
-        >
-          <option value="">Division</option>
-          {divisionOptions.map((v) => (
-            <option key={v}>{v}</option>
-          ))}
-        </select>
-
-        <select
-          className="w-36 border rounded px-3 py-2"
-          value={filterWeight}
-          onChange={(e) => setFilterWeight(e.target.value)}
-        >
-          <option value="">Weight</option>
-          {weightOptions.map((v) => (
-            <option key={v}>{v}</option>
-          ))}
-        </select>
-
-        {hasActiveFilters && (
-          <button
-            onClick={() => {
-              setFilterAthlete("");
-              setFilterCountry("");
-              setFilterDivision("");
-              setFilterWeight("");
-            }}
-            className="border rounded px-3 py-2 text-sm"
-          >
-            Clear
-          </button>
-        )}
-      </div>
-
       {/* REPORT GRID */}
       {reportsLoading ? (
         <div className="flex justify-center items-center h-[40vh]">
@@ -318,35 +273,51 @@ const MyScoutingReportsTab = ({ user }) => {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {pagedReports.length ? (
-            pagedReports.map((report) => (
-              <DashboardScoutingReportCard
-                key={report._id}
-                report={report}
-                onView={() => {
-                  setPreviewPayload(buildPreviewPayload(report));
-                  setPreviewOpen(true);
-                }}
-                onEdit={() => {
-                  setSelectedReport(report);
-                  setOpen(true);
-                }}
-                onShare={() => {
-                  setShareReport(report);
-                  setShareOpen(true);
-                }}
-                onDelete={() => handleDeleteReport(report)}
-              />
-            ))
-          ) : (
-            <p className="text-gray-900 dark:text-gray-100">
-              No scouting reports found.
-            </p>
-          )}
+          {pagedReports.map((report) => (
+            <DashboardScoutingReportCard
+              key={report._id}
+              report={report}
+              onView={() => {
+                setPreviewPayload(buildPreviewPayload(report));
+                setPreviewOpen(true);
+              }}
+              onEdit={async () => {
+                setSelectedReport(report);
+                await loadStylesAndTechniques();
+                setOpen(true);
+              }}
+              onShare={() => {
+                setShareReport(report);
+                setShareOpen(true);
+              }}
+            />
+          ))}
         </div>
       )}
 
-      {/* Preview modal */}
+      {/* SCOUTING MODAL */}
+      <ModalLayout
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        title={selectedReport ? "Edit Scouting Report" : "Add Scouting Report"}
+        withCard
+      >
+        {stylesLoading || techniquesLoading ? (
+          <Spinner size={40} />
+        ) : (
+          <ScoutingReportForm
+            athlete={user}
+            userType="user"
+            report={selectedReport}
+            styles={stylesForForm}
+            techniques={techniquesForForm}
+            setOpen={setOpen}
+            onSuccess={fetchReports}
+          />
+        )}
+      </ModalLayout>
+
+      {/* Preview */}
       {previewOpen && previewPayload && (
         <PreviewReportModal
           previewOpen={previewOpen}
@@ -356,6 +327,7 @@ const MyScoutingReportsTab = ({ user }) => {
         />
       )}
 
+      {/* Share */}
       {shareOpen && shareReport && (
         <ShareReportModal
           open={shareOpen}

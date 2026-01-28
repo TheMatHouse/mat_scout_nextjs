@@ -1,3 +1,4 @@
+// app/api/dashboard/[userId]/userStyles/route.js
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import User from "@/models/userModel";
@@ -34,7 +35,7 @@ export async function POST(request, context) {
     if (existing) {
       return NextResponse.json(
         { message: "Style already added" },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -56,13 +57,13 @@ export async function POST(request, context) {
 
     return NextResponse.json(
       { message: "Style saved", data: newStyle },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (err) {
     console.error("POST Error:", err);
     return NextResponse.json(
       { message: "Server error: " + err.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -72,16 +73,22 @@ export async function GET(request, context) {
     await connectDB();
     const { userId } = await context.params;
 
-    const user = await User.findById(userId).populate("userStyles");
-    if (!user)
-      return NextResponse.json({ message: "User not found" }, { status: 404 });
+    if (!userId || !Types.ObjectId.isValid(userId)) {
+      return NextResponse.json({ message: "Invalid user ID" }, { status: 400 });
+    }
 
-    return NextResponse.json(user.userStyles, { status: 200 });
+    // ✅ FIX: return actual UserStyle rows for this user,
+    // not the User document's userStyles ref array (which may be empty for older accounts)
+    const styles = await UserStyle.find({ userId })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return NextResponse.json(styles, { status: 200 });
   } catch (err) {
     console.error("GET Error:", err);
     return NextResponse.json(
       { message: "Error fetching styles" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
