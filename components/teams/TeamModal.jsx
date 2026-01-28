@@ -39,7 +39,7 @@ export default function TeamModal({ open, setOpen, onSuccess }) {
       setCheckingSlug(true);
       try {
         const res = await fetch(
-          `/api/teams/check-team-slug?teamSlug=${teamSlug}`
+          `/api/teams/check-team-slug?teamSlug=${teamSlug}`,
         );
         const data = await res.json();
         setSlugAvailable(data.available);
@@ -142,7 +142,7 @@ export default function TeamModal({ open, setOpen, onSuccess }) {
           <Button
             type="submit"
             disabled={!slugAvailable || checkingSlug || teamSlug.length < 3}
-            className="btn btn-primary"
+            className="btn-submit"
           >
             Create Team
           </Button>

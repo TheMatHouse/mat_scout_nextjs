@@ -126,7 +126,7 @@ const AdminUsersPage = () => {
         `/api/admin/users?q=${encodeURIComponent(search)}`,
         {
           cache: "no-store",
-        }
+        },
       );
       const data = await res.json();
       setUsers(data.users || []);
@@ -166,7 +166,7 @@ const AdminUsersPage = () => {
 
   const sortedUsers = useMemo(() => {
     return [...users].sort(
-      (a, b) => getLastActivityTs(b) - getLastActivityTs(a)
+      (a, b) => getLastActivityTs(b) - getLastActivityTs(a),
     );
   }, [users]);
 
@@ -316,8 +316,8 @@ const AdminUsersPage = () => {
                           {actionLoadingId === u._id
                             ? "Updating…"
                             : u.isAdmin
-                            ? "Revoke Admin"
-                            : "Make Admin"}
+                              ? "Revoke Admin"
+                              : "Make Admin"}
                         </button>
 
                         <button
@@ -412,13 +412,13 @@ const AdminUsersPage = () => {
                     {actionLoadingId === u._id
                       ? "Updating…"
                       : u.isAdmin
-                      ? "Revoke Admin"
-                      : "Make Admin"}
+                        ? "Revoke Admin"
+                        : "Make Admin"}
                   </button>
 
                   <button
                     disabled
-                    className="w-full sm:w-auto px-3 py-2 rounded bg-red-600/70 text-white flex items-center justify-center gap-2 opacity-60 cursor-not-allowed"
+                    className="w-full btn-delete"
                     title="Delete coming soon"
                   >
                     <Trash2 size={16} />

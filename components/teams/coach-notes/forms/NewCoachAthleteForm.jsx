@@ -26,9 +26,9 @@ const NewCoachAthleteForm = ({ slug, eventId, onSuccess }) => {
         // server excludes already-added
         const res = await fetch(
           `/api/teams/${slug}/coach-notes/eligible-members?excludeEvent=${encodeURIComponent(
-            eventId
+            eventId,
           )}&ts=${Date.now()}`,
-          { cache: "no-store" }
+          { cache: "no-store" },
         );
         const json = await res.json().catch(() => ({}));
         let list = Array.isArray(json.members) ? json.members : [];
@@ -37,19 +37,19 @@ const NewCoachAthleteForm = ({ slug, eventId, onSuccess }) => {
         try {
           const re = await fetch(
             `/api/teams/${slug}/coach-notes/events/${eventId}/entries`,
-            { cache: "no-store" }
+            { cache: "no-store" },
           );
           if (re.ok) {
             const ej = await re.json().catch(() => ({}));
             const users = new Set(
               (ej.entries || [])
                 .map((e) => String(e?.athlete?.user || ""))
-                .filter(Boolean)
+                .filter(Boolean),
             );
             const fams = new Set(
               (ej.entries || [])
                 .map((e) => String(e?.athlete?.familyMember || ""))
-                .filter(Boolean)
+                .filter(Boolean),
             );
             list = list.filter((m) => {
               const u = String(m.userId || "");
@@ -86,19 +86,21 @@ const NewCoachAthleteForm = ({ slug, eventId, onSuccess }) => {
   const keyOf = (m) => (m.userId ? `u:${m.userId}` : `f:${m.familyMemberId}`);
   const isChecked = (m) =>
     selected.some((s) =>
-      m.userId ? s.userId === m.userId : s.familyMemberId === m.familyMemberId
+      m.userId ? s.userId === m.userId : s.familyMemberId === m.familyMemberId,
     );
 
   const toggle = (m) => {
     setSelected((prev) => {
       const exists = prev.some((s) =>
-        m.userId ? s.userId === m.userId : s.familyMemberId === m.familyMemberId
+        m.userId
+          ? s.userId === m.userId
+          : s.familyMemberId === m.familyMemberId,
       );
       if (exists) {
         return prev.filter((s) =>
           m.userId
             ? s.userId !== m.userId
-            : s.familyMemberId !== m.familyMemberId
+            : s.familyMemberId !== m.familyMemberId,
         );
       }
       return [
@@ -111,8 +113,8 @@ const NewCoachAthleteForm = ({ slug, eventId, onSuccess }) => {
   const selectAll = () =>
     setSelected(
       filtered.map((m) =>
-        m.userId ? { userId: m.userId } : { familyMemberId: m.familyMemberId }
-      )
+        m.userId ? { userId: m.userId } : { familyMemberId: m.familyMemberId },
+      ),
     );
 
   const clearAll = () => setSelected([]);
@@ -149,7 +151,7 @@ const NewCoachAthleteForm = ({ slug, eventId, onSuccess }) => {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ items: selected }),
-          }
+          },
         );
         if (bulkRes.ok) {
           const data = await bulkRes.json().catch(() => ({}));
@@ -158,7 +160,7 @@ const NewCoachAthleteForm = ({ slug, eventId, onSuccess }) => {
 
           if (created > 0)
             finishSuccess(
-              `Added ${created} ${created === 1 ? "athlete" : "athletes"}`
+              `Added ${created} ${created === 1 ? "athlete" : "athletes"}`,
             );
           if (skipped.length) {
             const msg = skipped
@@ -167,7 +169,7 @@ const NewCoachAthleteForm = ({ slug, eventId, onSuccess }) => {
                 (s) =>
                   `${s.userId || s.familyMemberId || "?"}: ${
                     s.reason || "skipped"
-                  }`
+                  }`,
               )
               .join("\n");
             toast.error(`Some were skipped:\n${msg}`);
@@ -187,9 +189,9 @@ const NewCoachAthleteForm = ({ slug, eventId, onSuccess }) => {
             body: JSON.stringify(
               it.userId
                 ? { athleteUserId: it.userId }
-                : { athleteFamilyMemberId: it.familyMemberId }
+                : { athleteFamilyMemberId: it.familyMemberId },
             ),
-          }
+          },
         );
         let detail = null;
         try {
@@ -203,7 +205,7 @@ const NewCoachAthleteForm = ({ slug, eventId, onSuccess }) => {
 
       if (okCount > 0)
         finishSuccess(
-          `Added ${okCount} ${okCount === 1 ? "athlete" : "athletes"}`
+          `Added ${okCount} ${okCount === 1 ? "athlete" : "athletes"}`,
         );
 
       if (bad.length) {
@@ -300,7 +302,7 @@ const NewCoachAthleteForm = ({ slug, eventId, onSuccess }) => {
       <div className="pt-2">
         <button
           type="submit"
-          className="px-4 py-2 rounded-xl shadow bg-black text-white dark:bg-white dark:text-black disabled:opacity-50"
+          className="btn-submit"
           disabled={selected.length === 0}
         >
           {selected.length > 0

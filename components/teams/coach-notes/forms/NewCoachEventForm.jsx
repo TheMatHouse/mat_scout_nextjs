@@ -79,7 +79,7 @@ const NewCoachEventForm = ({ slug, onSuccess }) => {
       <div className="flex items-center gap-2 pt-2">
         <button
           type="submit"
-          className="px-4 py-2 rounded-xl shadow bg-black text-white dark:bg-white dark:text-black"
+          className="btn-submit"
         >
           Create
         </button>

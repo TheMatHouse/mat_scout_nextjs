@@ -59,13 +59,20 @@ body {
 
 /* Media that often causes horizontal overflow on mobile */
 img,
-svg,
 video,
 canvas,
 iframe {
   max-width: 100%;
   height: auto;
   display: block;
+}
+
+/* SVG should NOT be block globally */
+svg {
+  max-width: 100%;
+  height: auto;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 /* Tables shouldn’t blow out the viewport */
@@ -190,6 +197,162 @@ table {
     background-color: #1e2132; /* Darker than page bg */
   }
 
+  /* ============================================================
+   MatScout Button System
+   ============================================================ */
+
+  .btn-submit {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-white
+         shadow-md transition-all focus:outline-none;
+
+    background: linear-gradient(135deg, #2b2d42, #1e2132);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  }
+
+  .btn-submit:hover {
+    background: linear-gradient(135deg, #1e2132, #2b2d42);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.55);
+    transform: translateY(-1px);
+  }
+
+  .btn-submit:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  }
+
+  .btn-add {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-white
+         shadow-sm transition-all;
+
+    background: linear-gradient(135deg, #5f6b82, #4b556a);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  }
+
+  .btn-add:hover {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .btn-add:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  }
+
+  .btn-print {
+    @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg font-medium text-white
+         shadow-sm transition-all;
+
+    background: linear-gradient(135deg, #3a4255, #2b2d42);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  }
+
+  .btn-print:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .btn-print:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  }
+
+  .btn-file {
+    @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg font-medium text-white
+         shadow-sm transition-all;
+
+    background: linear-gradient(135deg, #5b647a, #4b556a);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  }
+
+  .btn-file:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .btn-file:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  }
+
+  .btn-delete {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-white
+         shadow-sm transition-all focus:outline-none;
+
+    background: linear-gradient(
+      135deg,
+      var(--ms-light-red),
+      var(--ms-dark-red)
+    );
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+
+  .btn-delete:hover {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.55);
+    transform: translateY(-1px);
+  }
+
+  .btn-delete:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  }
+
+  .btn-neutral {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium
+         transition-all;
+
+    background: var(--ms-light-gray);
+    color: var(--ms-blue);
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  }
+
+  .dark .btn-neutral {
+    background: #3a4255;
+    color: #edf2f4;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .btn-cancel {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium
+         transition-all;
+
+    background: var(--ms-light-gray);
+    color: var(--ms-blue);
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  }
+
+  .dark .btn-cancel {
+    background: #3a4255;
+    color: #edf2f4;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .btn-cancel:hover {
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+    transform: translateY(-1px);
+  }
+
+  .btn-cancel:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  }
+
+  .btn-neutral:hover {
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+    transform: translateY(-1px);
+  }
+
+  .btn-neutral:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  }
+
   /* ---------- BUTTONS ---------- */
   .btn {
     @apply inline-flex items-center justify-center font-semibold px-4 py-2 transition-all duration-200 shadow-sm;
@@ -271,7 +434,9 @@ table {
     border-radius: 0.375rem;
     font-weight: 500;
     line-height: 1.25rem;
-    transition: background-color 0.2s ease, transform 0.15s ease;
+    transition:
+      background-color 0.2s ease,
+      transform 0.15s ease;
   }
 
   .btn-white-sm:hover {
@@ -471,7 +636,9 @@ table {
     padding: 0.5rem 0.75rem;
     width: 100%;
     font-size: 0.95rem;
-    transition: background-color 0.3s ease, color 0.3s ease,
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease,
       border-color 0.3s ease;
   }
 
@@ -656,7 +823,9 @@ aside a:hover {
   text-underline-offset: 3px;
   text-decoration-color: var(--ms-blue); /* underline matches text */
   font-weight: 600;
-  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+  transition:
+    color 0.15s ease,
+    text-decoration-color 0.15s ease;
 }
 .ms-link:hover {
   color: var(--ms-dark-red);
@@ -705,7 +874,9 @@ aside a:hover {
   outline: none;
   border: 1px solid transparent;
   overflow: hidden;
-  transition: background-color 0.18s ease, border-color 0.18s ease,
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
     box-shadow 0.18s ease;
 
   /* Light mode (OFF) */
@@ -722,7 +893,9 @@ aside a:hover {
   border-radius: 9999px;
   background-color: #ffffff; /* light thumb */
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-  transition: transform 0.18s ease, background-color 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    background-color 0.18s ease;
 }
 
 /* Light mode (ON) */

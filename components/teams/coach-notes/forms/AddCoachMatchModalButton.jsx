@@ -8,6 +8,7 @@ import CountrySelect from "@/components/shared/CountrySelect";
 import Editor from "@/components/shared/Editor";
 import TechniqueTagInput from "@/components/shared/TechniqueTagInput";
 import ClubAutosuggest from "@/components/shared/ClubAutosuggest";
+import { Plus } from "lucide-react";
 
 /* ---------------- small inputs ---------------- */
 const TextInput = ({ label, value, onChange, placeholder }) => (
@@ -107,7 +108,7 @@ const NoteBlock = ({
       list.some(
         (p) =>
           String(p?.label || "").toLowerCase() ===
-          String(tag?.label || "").toLowerCase()
+          String(tag?.label || "").toLowerCase(),
       )
     )
       return;
@@ -119,7 +120,7 @@ const NoteBlock = ({
     onFieldChange(
       idx,
       listKey,
-      list.filter((_, j) => j !== i)
+      list.filter((_, j) => j !== i),
     );
   };
 
@@ -308,7 +309,7 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
 
   const onFieldChange = (idx, key, value) => {
     setNotes((prev) =>
-      prev.map((n, i) => (i === idx ? { ...n, [key]: value } : n))
+      prev.map((n, i) => (i === idx ? { ...n, [key]: value } : n)),
     );
   };
 
@@ -322,16 +323,16 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
         const arr = Array.isArray(data)
           ? data
           : Array.isArray(data?.techniques)
-          ? data.techniques
-          : [];
+            ? data.techniques
+            : [];
         const sorted = [...arr].sort((a, b) =>
           String(a?.name ?? "").localeCompare(
             String(b?.name ?? ""),
             undefined,
             {
               sensitivity: "base",
-            }
-          )
+            },
+          ),
         );
         if (alive) setLoadedTechniques(sorted);
       } catch {
@@ -346,7 +347,7 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
 
   const suggestions = useMemo(
     () => loadedTechniques.map((t, i) => ({ value: i, label: t.name })),
-    [loadedTechniques]
+    [loadedTechniques],
   );
 
   const disabled = !slug || !eventId || !entryId;
@@ -367,7 +368,7 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(notes),
-        }
+        },
       );
 
       const data = await res.json().catch(() => ({}));
@@ -376,7 +377,7 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
       toast.success(
         Array.isArray(data?.notes) && data.notes.length > 1
           ? "Match notes added"
-          : "Match note added"
+          : "Match note added",
       );
       resetForm();
       setOpen(false);
@@ -430,9 +431,9 @@ const AddCoachMatchModalButton = ({ slug, eventId, entryId }) => {
             <button
               type="button"
               onClick={() => setNotes((prev) => [...prev, emptyNote()])}
-              className="px-4 py-2 rounded-xl border"
+              className="btn-add"
             >
-              ➕ Add another note for this athlete
+              <Plus size={16} /> Add another note for this athlete
             </button>
             <button
               type="submit"

@@ -92,7 +92,7 @@ const inferGenderFromName = (nameRaw) => {
   if (/\bcoed\b/.test(name)) return "coed";
   if (
     /\b(u[0-9]+|under\s*[0-9]+|bantam|intermediate|juvenile|cadet|junior)\b/.test(
-      name
+      name,
     )
   ) {
     return "coed";
@@ -185,7 +185,7 @@ const MatchReportForm = ({
         memberId
       ) {
         candidates = await tryFetch(
-          `/api/dashboard/${userId}/family/${memberId}/styles`
+          `/api/dashboard/${userId}/family/${memberId}/styles`,
         );
       }
 
@@ -217,8 +217,8 @@ const MatchReportForm = ({
     Array.isArray(sourceStyles) && sourceStyles.length > 0
       ? sourceStyles
       : Array.isArray(userFromCtx?.userStyles)
-      ? userFromCtx.userStyles
-      : [];
+        ? userFromCtx.userStyles
+        : [];
 
   const normalizedStyles = useMemo(() => {
     const raw = Array.isArray(sourceStylesWithCtx) ? sourceStylesWithCtx : [];
@@ -246,7 +246,7 @@ const MatchReportForm = ({
   const [matchType, setMatchType] = useState(match?.matchType || "");
   const [eventName, setEventName] = useState(match?.eventName || "");
   const [matchDate, setMatchDate] = useState(
-    match?.matchDate ? moment(match.matchDate).format("YYYY-MM-DD") : ""
+    match?.matchDate ? moment(match.matchDate).format("YYYY-MM-DD") : "",
   );
 
   // Divisions + Weights (IDs + snapshot)
@@ -254,7 +254,7 @@ const MatchReportForm = ({
   const [divisionId, setDivisionId] = useState(
     typeof match?.division === "string"
       ? match.division
-      : toIdString(match?.division?._id)
+      : toIdString(match?.division?._id),
   );
 
   const [weightOptions, setWeightOptions] = useState([]); // [{ value:itemId, label:'60 kg' }]
@@ -262,7 +262,7 @@ const MatchReportForm = ({
   const [weightCategoryId, setWeightCategoryId] = useState(
     typeof match?.weightCategory === "string"
       ? match.weightCategory
-      : toIdString(match?.weightCategory?._id)
+      : toIdString(match?.weightCategory?._id),
   );
   const [weightLabel, setWeightLabel] = useState(match?.weightLabel || "");
   const [weightUnit, setWeightUnit] = useState(match?.weightUnit || "");
@@ -279,21 +279,21 @@ const MatchReportForm = ({
   const [myRank, setMyRank] = useState("");
   const [opponentGrip, setOpponentGrip] = useState(match?.opponentGrip || "");
   const [opponentCountry, setOpponentCountry] = useState(
-    match?.opponentCountry || ""
+    match?.opponentCountry || "",
   );
   const [oppAttackNotes, setOppAttackNotes] = useState(
-    match?.opponentAttackNotes || ""
+    match?.opponentAttackNotes || "",
   );
   const [athAttackNotes, setAthAttackNotes] = useState(
-    match?.athleteAttackNotes || ""
+    match?.athleteAttackNotes || "",
   );
   const [result, setResult] = useState(match?.result || "");
   const [score, setScore] = useState(match?.score || "");
   const [videoTitle, setVideoTitle] = useState(
-    match?.video?.videoTitle || match?.videoTitle || ""
+    match?.video?.videoTitle || match?.videoTitle || "",
   );
   const [videoURL, setVideoURL] = useState(
-    match?.video?.videoURL || match?.videoURL || ""
+    match?.video?.videoURL || match?.videoURL || "",
   );
   const [isPublic, setIsPublic] = useState(!!match?.isPublic);
 
@@ -327,7 +327,7 @@ const MatchReportForm = ({
           value: `opp-${i}-${txt}`,
           label: String(txt),
         }))
-      : []
+      : [],
   );
   const [athleteSelected, setAthleteSelected] = useState(
     Array.isArray(match?.athleteAttacks)
@@ -335,43 +335,43 @@ const MatchReportForm = ({
           value: `ath-${i}-${txt}`,
           label: String(txt),
         }))
-      : []
+      : [],
   );
 
   const onOpponentAdd = useCallback(
     (tag) => setOpponentSelected((prev) => [...prev, tag]),
-    []
+    [],
   );
   const onOpponentDelete = useCallback(
     (i) => setOpponentSelected((prev) => prev.filter((_, idx) => idx !== i)),
-    []
+    [],
   );
   const onAthleteAdd = useCallback(
     (tag) => setAthleteSelected((prev) => [...prev, tag]),
-    []
+    [],
   );
   const onAthleteDelete = useCallback(
     (i) => setAthleteSelected((prev) => prev.filter((_, idx) => idx !== i)),
-    []
+    [],
   );
 
   /* --------------------- ranks (verbatim labels from DB) ---------------------- */
   const rankStyle = useMemo(
     () => styleKeyFromMatchType(matchType),
-    [matchType]
+    [matchType],
   );
 
   const filteredRanks = useMemo(() => {
     if (!rankStyle) return [];
     return (ranks || []).filter(
-      (r) => String(r.style).toLowerCase() === rankStyle
+      (r) => String(r.style).toLowerCase() === rankStyle,
     );
   }, [ranks, rankStyle]);
 
   // Use DB labels as-is
   const friendlyLabelForRank = useCallback(
     (rank) => rank?.label || rank?.code || "",
-    []
+    [],
   );
 
   const rankOptions = useMemo(() => {
@@ -391,7 +391,7 @@ const MatchReportForm = ({
     setMatchType(match.matchType || "");
     setEventName(match.eventName || "");
     setMatchDate(
-      match.matchDate ? moment(match.matchDate).format("YYYY-MM-DD") : ""
+      match.matchDate ? moment(match.matchDate).format("YYYY-MM-DD") : "",
     );
     setOpponentName(match.opponentName || "");
     setOpponentClub(match.opponentClub || "");
@@ -417,14 +417,20 @@ const MatchReportForm = ({
       ? match.opponentAttacks
       : [];
     setOpponentSelected(
-      oppArr.map((txt, i) => ({ value: `opp-${i}-${txt}`, label: String(txt) }))
+      oppArr.map((txt, i) => ({
+        value: `opp-${i}-${txt}`,
+        label: String(txt),
+      })),
     );
 
     const athArr = Array.isArray(match.athleteAttacks)
       ? match.athleteAttacks
       : [];
     setAthleteSelected(
-      athArr.map((txt, i) => ({ value: `ath-${i}-${txt}`, label: String(txt) }))
+      athArr.map((txt, i) => ({
+        value: `ath-${i}-${txt}`,
+        label: String(txt),
+      })),
     );
 
     const divId =
@@ -468,7 +474,7 @@ const MatchReportForm = ({
             cache: "no-store",
             credentials: "same-origin",
             headers: { accept: "application/json" },
-          }
+          },
         );
         const data = await res.json().catch(() => ({}));
         const opts = (data?.divisions || []).map((d) => {
@@ -690,14 +696,14 @@ const MatchReportForm = ({
       userType === "family"
         ? isEdit
           ? `${base}/family/${encodeURIComponent(
-              String(athlete?._id)
+              String(athlete?._id),
             )}/matchReports/${encodeURIComponent(reportId)}`
           : `${base}/family/${encodeURIComponent(
-              String(athlete?._id)
+              String(athlete?._id),
             )}/matchReports`
         : isEdit
-        ? `${base}/matchReports/${encodeURIComponent(reportId)}`
-        : `${base}/matchReports`;
+          ? `${base}/matchReports/${encodeURIComponent(reportId)}`
+          : `${base}/matchReports`;
 
     try {
       const res = await fetch(url, {
@@ -722,7 +728,7 @@ const MatchReportForm = ({
       } else {
         console.error("[MatchReportForm] save failed", res.status, data);
         toast.error(
-          data?.message || `Failed to save match report (${res.status}).`
+          data?.message || `Failed to save match report (${res.status}).`,
         );
       }
     } catch (err) {
@@ -892,7 +898,7 @@ const MatchReportForm = ({
                 onChange={(val) => {
                   setWeightItemId(val);
                   const found = weightOptions.find(
-                    (o) => String(o.value) === String(val)
+                    (o) => String(o.value) === String(val),
                   );
                   setWeightLabel(found?.label || "");
                 }}
@@ -1096,7 +1102,7 @@ const MatchReportForm = ({
           <div className="pt-4">
             <Button
               type="submit"
-              className="btn btn-primary"
+              className="btn-submit"
             >
               {match ? "Update" : "Submit"} Report
             </Button>

@@ -23,7 +23,7 @@ export default function FamilyMemberForm({ user, onClose, onSuccess }) {
       if (!formData.username) return;
       try {
         const res = await fetch(
-          `/api/auth/check-username?username=${formData.username}`
+          `/api/auth/check-username?username=${formData.username}`,
         );
         const { available } = await res.json();
         setUsernameStatus(available ? "available" : "taken");
@@ -153,7 +153,7 @@ export default function FamilyMemberForm({ user, onClose, onSuccess }) {
       <div className="pt-4">
         <Button
           type="submit"
-          className="bg-ms-blue-gray hover:bg-ms-blue text-white"
+          className="btn-submit"
         >
           Add Family Member
         </Button>

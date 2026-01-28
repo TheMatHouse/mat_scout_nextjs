@@ -153,7 +153,7 @@ export default function ServerBackupsList() {
                       ) : null}
                       <button
                         onClick={() => del(r.base)}
-                        className="px-2 py-1 rounded border text-red-600"
+                        className="btn-delete"
                         title="Delete backup + sidecars"
                       >
                         Delete

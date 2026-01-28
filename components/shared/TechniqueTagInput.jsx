@@ -1,5 +1,6 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 export default function TechniqueTagInput({
@@ -22,14 +23,14 @@ export default function TechniqueTagInput({
           (s) =>
             s.label.toLowerCase().includes(inputValue.toLowerCase()) &&
             !selected.some(
-              (tag) => tag.label.toLowerCase() === s.label.toLowerCase()
-            )
+              (tag) => tag.label.toLowerCase() === s.label.toLowerCase(),
+            ),
         );
 
   const handleAdd = (item) => {
     if (!item || !item.label) return;
     const exists = selected.some(
-      (tag) => tag.label.toLowerCase() === item.label.toLowerCase()
+      (tag) => tag.label.toLowerCase() === item.label.toLowerCase(),
     );
     if (!exists) {
       onAdd(item);
@@ -148,9 +149,9 @@ export default function TechniqueTagInput({
                     value: selected.length,
                   })
                 }
-                className="px-4 py-2 cursor-pointer hover:bg-[var(--color-border)]"
+                className="btn-add"
               >
-                Add “{inputValue}”
+                <Plus size={16} /> Add “{inputValue}”
               </li>
             )}
           </ul>

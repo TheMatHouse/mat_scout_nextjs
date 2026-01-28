@@ -4,7 +4,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { toast } from "react-toastify";
-import { FileDown } from "lucide-react";
+import { FileDown, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import PreviewReportModal from "@/components/shared/PreviewReportModal";
@@ -228,13 +228,13 @@ const MyScoutingReportsTab = ({ user }) => {
           </h1>
 
           <Button
-            className="btn btn-primary"
+            className="btn-add"
             onClick={() => {
               setSelectedReport(null);
               setOpen(true);
             }}
           >
-            Add Scouting Report
+            <Plus size={16} /> Add Scouting Report
           </Button>
         </div>
 

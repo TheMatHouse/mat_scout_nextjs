@@ -97,7 +97,7 @@ export default function FamilyMemberSettings({ member }) {
         {
           method: "PATCH",
           body: form,
-        }
+        },
       );
 
       const data = await res.json();
@@ -131,7 +131,7 @@ export default function FamilyMemberSettings({ member }) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify(formData),
-        }
+        },
       );
 
       if (res.ok) {
@@ -171,7 +171,7 @@ export default function FamilyMemberSettings({ member }) {
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(
-                    `https://matscout.com/family/${member.username}`
+                    `https://matscout.com/family/${member.username}`,
                   );
                   toast.success("Profile link copied!");
                 }}
@@ -291,7 +291,7 @@ export default function FamilyMemberSettings({ member }) {
         <div className="pt-4">
           <Button
             type="submit"
-            className="btn btn-primary"
+            className="btn-submit"
           >
             Save Changes
           </Button>

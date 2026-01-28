@@ -121,7 +121,7 @@ const TeamUpdateForm = ({ slug, initial = null, onSuccess, onClose }) => {
       <div className="flex justify-end gap-2 pt-2">
         <button
           type="button"
-          className="btn-white-sm"
+          className="btn-cancel"
           onClick={() => onClose?.()}
           disabled={saving}
         >
@@ -130,7 +130,7 @@ const TeamUpdateForm = ({ slug, initial = null, onSuccess, onClose }) => {
 
         <button
           type="submit"
-          className="btn btn-primary"
+          className="btn-submit"
           disabled={saving}
         >
           {saving ? "Saving…" : initial?._id ? "Save Changes" : "Post Update"}

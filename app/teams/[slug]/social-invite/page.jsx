@@ -134,7 +134,7 @@ const SocialInvitePage = () => {
         <Button
           onClick={handleRequestJoin}
           disabled={submitting}
-          className="btn btn-primary"
+          className="btn-submit"
         >
           {submitting ? "Requesting..." : "Request to Join Team"}
         </Button>

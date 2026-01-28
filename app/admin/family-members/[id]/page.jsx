@@ -64,7 +64,7 @@ export default function FamilyMemberDetailPage() {
             Back
           </Link>
           <button
-            className="px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-800 text-sm"
+            className="btn-delete"
             onClick={onDelete}
           >
             Delete
