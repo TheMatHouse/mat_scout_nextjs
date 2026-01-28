@@ -279,7 +279,7 @@ export default function NotificationSettings() {
         <Button
           onClick={handleSave}
           disabled={saving}
-          className="btn btn-primary"
+          className="btn-submit"
         >
           {saving ? "Saving..." : "Save Changes"}
         </Button>
