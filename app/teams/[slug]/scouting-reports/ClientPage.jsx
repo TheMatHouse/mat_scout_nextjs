@@ -12,7 +12,7 @@ import ModalLayout from "@/components/shared/ModalLayout";
 import Spinner from "@/components/shared/Spinner";
 import TeamUnlockGate from "@/components/teams/TeamUnlockGate";
 import ScoutingReportCard from "@/components/shared/ScoutingReportCard";
-import MatScoutPagination from "@/components/shared/MatcoutPagination";
+import MatScoutPagination from "@/components/shared/MatscoutPagination";
 
 import { decryptScoutingBody } from "@/lib/crypto/teamLock";
 import { canView, canEdit, canDelete, canCreate } from "./logic/roleUtils";
