@@ -12,6 +12,7 @@ import ModalLayout from "@/components/shared/ModalLayout";
 import Spinner from "@/components/shared/Spinner";
 import TeamUnlockGate from "@/components/teams/TeamUnlockGate";
 import ScoutingReportCard from "@/components/shared/ScoutingReportCard";
+import MatScoutPagination from "@/components/shared/MatScoutPagination";
 
 import { decryptScoutingBody } from "@/lib/crypto/teamLock";
 import { canView, canEdit, canDelete, canCreate } from "./logic/roleUtils";
@@ -546,6 +547,15 @@ function TeamScoutingReportsPage() {
             />
           ))}
         </div>
+
+        {/* PAGINATION */}
+        <MatScoutPagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pageSize={PAGE_SIZE}
+          totalItems={filteredReports.length}
+          onPageChange={setCurrentPage}
+        />
 
         {/* EDIT / CREATE */}
         <ModalLayout

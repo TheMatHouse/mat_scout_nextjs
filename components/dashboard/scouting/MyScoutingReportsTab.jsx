@@ -12,6 +12,7 @@ import ModalLayout from "@/components/shared/ModalLayout";
 import Spinner from "@/components/shared/Spinner";
 import ShareReportModal from "@/components/dashboard/ShareReportModal";
 import DashboardScoutingReportCard from "@/components/shared/DashboardScoutingReportCard";
+import MatScoutPagination from "@/components/shared/MatscoutPagination";
 
 /* ---------------- safe display helpers --------------- */
 const genderLabel = (g) => {
@@ -146,35 +147,27 @@ const MyScoutingReportsTab = ({ user }) => {
     }
   };
 
-  /* ================= STYLE + TECHNIQUE LOADER (MATCH REPORTS CLONE) ================= */
+  /* ================= STYLE + TECHNIQUE LOADER ================= */
   const loadStylesAndTechniques = useCallback(async () => {
     if (!user?._id) return;
 
-    // -------- STYLES --------
     setStylesLoading(true);
     try {
       const res = await fetch(`/api/dashboard/${user._id}/userStyles`, {
         cache: "no-store",
         credentials: "include",
       });
-
       const data = await res.json();
-
       const styles = Array.isArray(data)
         ? data
         : data?.styles || data?.userStyles || [];
-
-      console.log("🔥 SCOUT STYLES:", styles);
-
       setStylesForForm(styles);
-    } catch (err) {
-      console.error("❌ STYLE LOAD ERROR:", err);
+    } catch {
       setStylesForForm([]);
     } finally {
       setStylesLoading(false);
     }
 
-    // -------- TECHNIQUES --------
     setTechniquesLoading(true);
     try {
       const res = await fetch(`/api/techniques`, {
@@ -217,6 +210,8 @@ const MyScoutingReportsTab = ({ user }) => {
     [filterAthlete, filterCountry, filterDivision, filterWeight],
   );
 
+  const totalPages = Math.max(1, Math.ceil(filteredReports.length / PAGE_SIZE));
+
   const exportUrl = `/api/records/scouting?download=1`;
 
   return (
@@ -225,15 +220,15 @@ const MyScoutingReportsTab = ({ user }) => {
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            My Reports
+            My Reports test
           </h1>
 
           <Button
             className="btn-add"
             onClick={async () => {
               setSelectedReport(null);
-              await loadStylesAndTechniques(); // LOAD FIRST
-              setOpen(true); // THEN OPEN
+              await loadStylesAndTechniques();
+              setOpen(true);
             }}
           >
             <Plus size={16} /> Add Scouting Report
@@ -279,6 +274,15 @@ const MyScoutingReportsTab = ({ user }) => {
           ))}
         </div>
       )}
+
+      {/* PAGINATION */}
+      <MatScoutPagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        pageSize={PAGE_SIZE}
+        totalItems={filteredReports.length}
+        onPageChange={setCurrentPage}
+      />
 
       {/* SCOUTING MODAL */}
       <ModalLayout
