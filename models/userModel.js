@@ -138,7 +138,7 @@ const userSchema = new mongoose.Schema(
 
       teamUpdates: {
         inApp: { type: Boolean, default: true },
-        email: { type: Boolean, default: false },
+        email: { type: Boolean, default: true },
       },
 
       scoutingReports: {
@@ -164,7 +164,7 @@ const userSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 const User = mongoose.models.User || mongoose.model("User", userSchema);
